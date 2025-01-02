@@ -1,13 +1,20 @@
-# c_template_application
-A template for all of my c projects.
+# BeeDB
+A relational database storage engine, akin to InnoDB and PostgreSQL's storage engine, built on top of TupleIndexer, TupleStore, VolatilePageStore and MinTxEngine.
 
 ## Setup instructions
+**Install dependencies :**
+ * [Cutlery](https://github.com/RohanVDvivedi/Cutlery)
+ * [ReaderWriterLock](https://github.com/RohanVDvivedi/ReaderWriterLock)
+ * [TupleStore](https://github.com/RohanVDvivedi/TupleStore)
+ * [TupleIndexer](https://github.com/RohanVDvivedi/TupleIndexer)
+ * [MinTxEngine](https://github.com/RohanVDvivedi/MinTxEngine)
+ * [VolatilePageStore](https://github.com/RohanVDvivedi/VolatilePageStore)
 
 **Download source code :**
- * `git clone https://github.com/RohanVDvivedi/c_template_application.git`
+ * `git clone https://github.com/RohanVDvivedi/BeeDB.git`
 
 **Build from source :**
- * `cd c_template_application`
+ * `cd BeeDB`
  * `make clean all`
 
 **Install from the build :**
@@ -15,13 +22,12 @@ A template for all of my c projects.
  * ***Once you have installed from source, you may discard the build by*** `make clean`
 
 ## Using The library
- * add `-lcapp` linker flag, while compiling your application
+ * add `-lbeedb` linker flag, while compiling your application
  * do not forget to include appropriate public api headers as and when needed. this includes
-   * `#include<capp.h>`
-   * `#include<print_temp.h>`
+   * `#include<beedb.h>`
 
 ## Instructions for uninstalling library
 
 **Uninstall :**
- * `cd c_template_application`
+ * `cd BeeDB`
  * `sudo make uninstall`
