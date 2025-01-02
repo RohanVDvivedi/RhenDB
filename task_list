@@ -1,0 +1,21 @@
+ * define catalog tables and indexes on it - persistent
+ * define lock tables and indexes on it - volatile
+ * define transaction table and indexes on it - persistent
+ * define statistics tables - persistent
+ * define beedb struct
+   * with pointer access to volatile memory using VolatilePageStore, and to shared persistent memory using MinTxEngine
+   * using their corresponding page access methods and page modification methods
+ * define high level transaction struct consisteing of
+   * 64 bit transactions id
+   * last_mini_tx_id (id of the last mini transaction executed), last_logical_log_lsn (lsn of the last logical modification done)
+
+ * implement query plan tree
+   * with operators
+ * implement relational algebra operators
+   * selection -> filter with/without indexes
+   * projection -> picking columns
+   * sorting -> with/without indexes
+   * joins -> with/without indexes
+   * union, set difference and intersection
+
+ * define layout for MVCC columns and figure out how to store multiple versions
