@@ -7,6 +7,7 @@
  * define beedb struct
    * with pointer access to volatile memory using VolatilePageStore, and to shared persistent memory using MinTxEngine
    * using their corresponding page access methods and page modification methods
+   * add data structures to get access for most relevant tuple definitions
  * define high level transaction struct consisteing of
    * 64 bit transactions id
    * last_mini_tx_id (id of the last mini transaction executed), last_logical_log_lsn (lsn of the last logical modification done)
