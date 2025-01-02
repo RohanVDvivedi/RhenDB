@@ -22,3 +22,4 @@
    * union, set difference and intersection
 
  * define layout for MVCC columns and figure out how to store multiple versions
+ * define MVCC rules for different isolation levels
