@@ -3,7 +3,7 @@
 #include<persistent_store_handlers.h>
 #include<volatile_store_handlers.h>
 
-void init_beedb(beedb* bdb, const char* database_file_name,
+void initialize_beedb(beedb* bdb, const char* database_file_name,
 		uint32_t page_id_width,
 		uint32_t page_size_mte, uint32_t lsn_width, uint64_t bufferpool_frame_count, uint64_t wale_buffer_count,
 			uint64_t page_latch_wait_us, uint64_t page_lock_wait_us,
@@ -30,4 +30,10 @@ void init_beedb(beedb* bdb, const char* database_file_name,
 
 	initialize_pam_for_vps(&(bdb->vps_pam), &(bdb->vps));
 	initialize_pmm_for_vps(&(bdb->vps_pmm), &(bdb->vps));
+}
+
+void deinitialize_beedb(beedb* bdb)
+{
+	deinitialize_mini_transaction_engine(&(bdb->mte));
+	deinitialize_volatile_page_store(&(bdb->vps));
 }
