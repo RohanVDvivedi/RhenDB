@@ -8,7 +8,7 @@ struct beedb
 	const char* database_file_name;
 
 	// attributes to access persistent store
-	mini_transaction_engine mtx;
+	mini_transaction_engine mte;
 	page_access_methods mtx_pam;
 	page_modification_methods mtx_pmm;
 
