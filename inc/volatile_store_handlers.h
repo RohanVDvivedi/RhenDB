@@ -1,0 +1,4 @@
+#ifndef VOLATILE_STORE_HANDLERS_H
+#define VOLATILE_STORE_HANDLERS_H
+
+#endif
