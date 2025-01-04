@@ -1,4 +1,3 @@
- * start by implementing minimalistic page_access_methods and page_modification methods for the VolatilePageStore and MinTxEngine
 
  * define catalog tables and indexes on it - persistent
  * define lock tables and indexes on it - volatile
