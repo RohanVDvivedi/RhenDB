@@ -1,6 +1,11 @@
 #ifndef BEEDB_H
 #define BEEDB_H
 
+#include<mini_transaction_engine.h>
+#include<volatile_page_store.h>
+#include<page_access_methods.h>
+#include<page_modification_methods.h>
+
 typedef struct beedb beedb;
 struct beedb
 {
