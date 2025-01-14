@@ -22,3 +22,16 @@
 
  * define layout for MVCC columns and figure out how to store multiple versions
  * define MVCC rules for different isolation levels
+
+ * Design methodology
+   * we will use postgresql architecture over mini transactions
+   * we will have heaps (a future tuple indexer data structure) for storing tables, insert to which gives us a page_id (physical page_id) and a index (slot no) in that page
+   * indexes will always include the page_id, slot_no in the index after the indexed columns and before the covering columns
+   * inserts/deletes will always be done to all indexes and heaps in a single mini transaction
+   * updates are just delete followed by insert
+   * logical log is included in the commit message of mini transaction
+     * above above points ensure that logical replication (in future) is done independently, allowing followers to have a different set of indexes
+   * there will be vaccum, which will be thought off at the end of this project
+   * header will include xmin, xmax, is_xmin_committed?, is_xmax_committed?
+     * xmin, xmax will be 64 or lesser (atleast 48) bits wide
+     * is_x***_committed? == 1, then x*** is surely committed, else we need to check if it is aborted or not
