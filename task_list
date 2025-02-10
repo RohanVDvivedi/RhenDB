@@ -61,4 +61,5 @@
        * if empty discard it
        * if not same free space, then reinsert this entry
      * exclusive_unlock
-     * think about the inconsistency brought by the concurrent update and deletes, Ithink we can live with that
+     * think about the inconsistency brought by the concurrent update and deletes, I think we can live with that
+     * everytime an insert or scan finds a page with wrong free space reported, it sets a bit in bloomfilter and incrementing a counter if the bloomfilter hasn't yet seen the page, once the counter reaches the threshold we run a restructuring job
