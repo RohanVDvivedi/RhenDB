@@ -37,9 +37,28 @@
      * is_x***_committed? == 1, then x*** is surely committed, else we need to check if it is aborted or not
 
  * we need a heap table data structure like postgresql
-   * use a bplus_tree (call it free space tree) to store keys for free_space in bytes, page_id
+   * use a bplus_tree (call it free space tree) to store keys for (free_space in bytes, page_id)
    * allocate a page and then update it in this free_space_tree
-   * insert/delete of tuples will cause the heap page to have a different amount of free space and may need reinserting the modified heap page in the free space tree
-   * we will need shared/exclusive lock on the heap table to perform inserts/deletes and table scan, as intermitent changes to the heap table's free space tree may revisit already seen tuples OR skip some tuple entirely (in case of leaf only scans)
-   * think about lazily updating the free space tree(using a shared lock to find a page with enough free space and insert there, and then lazily at a later time reinsert this entry in free space tree with an exclusive lock)
-   * deleting the tuple is done directly from the page_id, slot_no pointed to by the index, reinsertion or removal of this page (if empty) is done lazily
+   * inserting a tuple gives you page_id, slot_no for locating the inserted tuple
+     * shared_lock
+     * loop to run iterator to find the page having enough free space
+       * if found insert it there
+     * allocate a new page
+       * keep on inserting into it until it is full
+     * insert this page as a new entry
+     * shared_unlock
+   * update/delete
+     * directly work with the page_id, slot_no
+   * full table scan
+     * shared_lock
+     * for each tuple in free space tree
+       * latch the page and read the tuple
+     * shared_unlock
+   * restructuring
+     * exclusive_lock
+     * for each tuple in free space tree
+       * latch the page and get its free space
+       * if empty discard it
+       * if not same free space, then reinsert this entry
+     * exclusive_unlock
+     * think about the inconsistency brought by the concurrent update and deletes, Ithink we can live with that
