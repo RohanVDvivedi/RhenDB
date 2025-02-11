@@ -69,3 +69,4 @@
      * this can be done by using a b+tree storing all page_ids in increasing order OR by using a bitmap index (yet to be implemented in TupleIndexer, probably using a page_table or array_table)
      * inserts/deletes and updates will now directly update the free space map tree
      * inserts and deletes that result into adding/removing a page from the heap will only update the active heap table pages (along side the scan)
+     * this can be done with a active heap pages b+tree OR a bitmap index (yet to be implemented in TupleIndexer)
