@@ -63,3 +63,9 @@
      * exclusive_unlock
      * think about the inconsistency brought by the concurrent update and deletes, I think we can live with that
      * everytime an insert or scan finds a page with wrong free space reported, it sets a bit in bloomfilter and incrementing a counter if the bloomfilter hasn't yet seen the page, once the counter reaches the threshold we run a restructuring job
+   * we need the shared/exclusive lock only to prevent the scans to not re-read tuples or skip a set of tuples, due to concurrent restructuring jobs
+     * to avoid this we are using locks
+     * instead of this lock we can also use an auxilary data structure that stores all active heap table pages, in a fixed order
+     * this can be done by using a b+tree storing all page_ids in increasing order OR by using a bitmap index (yet to be implemented in TupleIndexer, probably using a page_table or array_table)
+     * inserts/deletes and updates will now directly update the free space map tree
+     * inserts and deletes that result into adding/removing a page from the heap will only update the active heap table pages (along side the scan)
