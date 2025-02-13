@@ -40,15 +40,15 @@
    * use a bplus_tree (call it free space tree) to store keys for (free_space in bytes, page_id)
    * allocate a page and then update it in this free_space_tree
    * inserting a tuple gives you page_id, slot_no for locating the inserted tuple
-     * shared_lock
      * loop to run iterator to find the page having enough free space
        * if found insert it there
-     * allocate a new page
+     * else allocate a new page
        * keep on inserting into it until it is full
      * insert this page as a new entry
-     * shared_unlock
    * update/delete
      * directly work with the page_id, slot_no
+   * above 2 operations require us to call restructuring of the heap table eventually, restructuring is done lazily
+   * only restructuring and full table scan need the external lock
    * full table scan
      * shared_lock
      * for each tuple in free space tree
@@ -61,12 +61,11 @@
        * if empty discard it
        * if not same free space, then reinsert this entry
      * exclusive_unlock
-     * think about the inconsistency brought by the concurrent update and deletes, I think we can live with that
-     * everytime an insert or scan finds a page with wrong free space reported, it sets a bit in bloomfilter and incrementing a counter if the bloomfilter hasn't yet seen the page, once the counter reaches the threshold we run a restructuring job
-   * we need the shared/exclusive lock only to prevent the scans to not re-read tuples or skip a set of tuples, due to concurrent restructuring jobs
+     * everytime an insert, update or delete works with a page, it sets a bit in bloomfilter and incrementing a counter if the bloomfilter hasn't yet seen the page, once the counter reaches the threshold we run a restructuring job
+   * we need the shared/exclusive lock only to prevent the scans to not re-read tuples or skip a set of tuples, due to concurrent inserts/updates or deletes
      * to avoid this we are using locks
      * instead of this lock we can also use an auxilary data structure that stores all active heap table pages, in a fixed order
      * this can be done by using a b+tree storing all page_ids in increasing order OR by using a bitmap index (yet to be implemented in TupleIndexer, probably using a page_table or array_table)
      * inserts/deletes and updates will now directly update the free space map tree
-     * inserts and deletes that result into adding/removing a page from the heap will only update the active heap table pages (along side the scan)
+     * inserts and deletes that result into adding/removing a page from the heap will be the only thing that inserts/deleted the active heap table pages (along side the full table scan, that just reads it)
      * this can be done with a active heap pages b+tree OR a bitmap index (yet to be implemented in TupleIndexer)
