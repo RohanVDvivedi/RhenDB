@@ -65,7 +65,7 @@
    * we need the shared/exclusive lock only to prevent the scans to not re-read tuples or skip a set of tuples, due to concurrent inserts/updates or deletes
      * to avoid this we are using locks
      * instead of this lock we can also use an auxilary data structure that stores all active heap table pages, in a fixed order
-     * this can be done by using a b+tree storing all page_ids in increasing order OR by using a bitmap index (yet to be implemented in TupleIndexer, probably using a page_table or array_table)
-     * inserts/deletes and updates will now directly update the free space map tree
+     * this can be done by using a b+tree storing all page_ids in increasing order OR by using a bitmap index (array_table of array of bit_fields)
+     * inserts/deletes and updates will now directly update the free space map tree, as per their occupancy
      * inserts and deletes that result into adding/removing a page from the heap will be the only thing that inserts/deleted the active heap table pages (along side the full table scan, that just reads it)
-     * this can be done with a active heap pages b+tree OR a bitmap index (yet to be implemented in TupleIndexer)
+     * this can be done with an active heap pages b+tree OR a bitmap index (array_table of array of bit_fields)
