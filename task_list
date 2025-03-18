@@ -36,7 +36,7 @@
      * xmin, xmax will be 64 or lesser (atleast 48) bits wide
      * the *? are advisory bitmaps and should be kept updated when ever a heap page is being read (if only a read lock on page is held then let another writer do it asynchronously) or written
 
- * we need a heap table data structure like postgresql
+ * we need a heap table data structure like postgresql (need to build this)
    * we will need 2 bplus_trees
      * free_space_tree key = (free_space, page_id)
      * heap_pages_tree key = (page_id)
