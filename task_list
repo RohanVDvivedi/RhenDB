@@ -47,4 +47,4 @@
    * inserts first search the free_space_tree for a right fit page to insert into
    * allocating will be done best fit
    * need an order while acquiring the locks on heap pages themselves, heap_pages_tree and free_space_tree
-     * as both the trees point to heap pages we can dead lock
+     * as both the trees point to the same heap pages we can dead lock, if you operate on them in the same mini transaction
