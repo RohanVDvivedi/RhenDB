@@ -35,6 +35,7 @@
    * header will include xmin, xmax, is_xmin_committed?, is_xmax_committed?, is_xmin_aborted?, is_xmax_aborted?
      * xmin, xmax will be 64 or lesser (atleast 48) bits wide
      * the *? are advisory bitmaps and should be kept updated when ever a heap page is being read (if only a read lock on page is held then let another writer do it asynchronously) or written
+   * we will never chain mini transactions for a high level transaction, we will just ensure that the transactions read only the data that is visible to then in the most optimum way possible, just like postgresql
 
  * we need a heap table data structure like postgresql (need to build this)
    * we will need 2 bplus_trees
