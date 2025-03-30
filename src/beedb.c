@@ -1,7 +1,7 @@
-#include<beedb.h>
+#include<beedb/beedb.h>
 
-#include<persistent_store_handlers.h>
-#include<volatile_store_handlers.h>
+#include<beedb/persistent_store_handlers.h>
+#include<beedb/volatile_store_handlers.h>
 
 void initialize_beedb(beedb* bdb, const char* database_file_name,
 		uint32_t page_id_width,

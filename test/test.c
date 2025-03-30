@@ -1,4 +1,4 @@
-#include<beedb.h>
+#include<beedb/beedb.h>
 
 int main()
 {

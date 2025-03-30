@@ -1,4 +1,4 @@
-#include<volatile_store_handlers.h>
+#include<beedb/volatile_store_handlers.h>
 
 static void* get_new_page_with_write_lock_vps(void* context, const void* transaction_id, uint64_t* page_id_returned, int* abort_error)
 {
@@ -53,7 +53,7 @@ void initialize_pam_for_vps(page_access_methods* pam_p, volatile_page_store* vps
 		exit(-1);
 }
 
-#include<unWALed_page_modification_methods.h>
+#include<tupleindexer/interface/unWALed_page_modification_methods.h>
 
 void initialize_pmm_for_vps(page_modification_methods* pmm_p, volatile_page_store* vps)
 {

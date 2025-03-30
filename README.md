@@ -24,7 +24,7 @@ A relational database storage engine, akin to InnoDB and PostgreSQL's storage en
 ## Using The library
  * add `-lbeedb` linker flag, while compiling your application
  * do not forget to include appropriate public api headers as and when needed. this includes
-   * `#include<beedb.h>`
+   * `#include<beedb/beedb.h>`
 
 ## Instructions for uninstalling library
 
