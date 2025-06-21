@@ -1,4 +1,6 @@
-#include<beedb/volatile_store_handlers.h>
+#include<rondb/volatile_store_handlers.h>
+
+#include<stdlib.h>
 
 static void* get_new_page_with_write_lock_vps(void* context, const void* transaction_id, uint64_t* page_id_returned, int* abort_error)
 {

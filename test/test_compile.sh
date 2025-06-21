@@ -1,1 +1,1 @@
-gcc ./test.c -o test.out -lbeedb
+gcc ./test.c -o test.out -lrondb

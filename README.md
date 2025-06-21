@@ -1,4 +1,4 @@
-# BeeDB
+# RonDB
 A relational database storage engine, akin to InnoDB and PostgreSQL's storage engine, built on top of TupleIndexer, TupleStore, VolatilePageStore and MinTxEngine.
 
 ## Setup instructions
@@ -11,10 +11,10 @@ A relational database storage engine, akin to InnoDB and PostgreSQL's storage en
  * [VolatilePageStore](https://github.com/RohanVDvivedi/VolatilePageStore)
 
 **Download source code :**
- * `git clone https://github.com/RohanVDvivedi/BeeDB.git`
+ * `git clone https://github.com/RohanVDvivedi/RonDB.git`
 
 **Build from source :**
- * `cd BeeDB`
+ * `cd RonDB`
  * `make clean all`
 
 **Install from the build :**
@@ -22,12 +22,12 @@ A relational database storage engine, akin to InnoDB and PostgreSQL's storage en
  * ***Once you have installed from source, you may discard the build by*** `make clean`
 
 ## Using The library
- * add `-lbeedb` linker flag, while compiling your application
+ * add `-lrondb` linker flag, while compiling your application
  * do not forget to include appropriate public api headers as and when needed. this includes
-   * `#include<beedb/beedb.h>`
+   * `#include<rondb/rondb.h>`
 
 ## Instructions for uninstalling library
 
 **Uninstall :**
- * `cd BeeDB`
+ * `cd RonDB`
  * `sudo make uninstall`
