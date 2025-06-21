@@ -39,12 +39,10 @@
 
  * we need a heap table data structure like postgresql (need to build this)
    * we will need 2 bplus_trees
-     * free_space_tree key = (free_space, page_id) -> in volatile memory
-     * heap_pages_tree key = (page_id) -> persistent on disk
-   * scan over the table is done using the heap_pages_tree, and a read iterator
-   * query and update to free space is done over only the free_space_tree
-   * every release of write lock will result in updating the free space tree
-   * inserts first search the free_space_tree for a right fit page to insert into
-   * allocating will be done best fit
-   * need an order while acquiring the locks on heap pages themselves, heap_pages_tree and free_space_tree
-     * as both the trees point to the same heap pages we can dead lock, if you operate on them in the same mini transaction
+     * free_space_tree, key = (free_space, page_id) -> in volatile memory protected by a rwlock
+     * heap_pages_tree, key = (page_id) -> persistent on disk, inside a mintxending protected by deadlock avoider btree lock
+   * every access is done over the table using the heap pages tree as if it is an index pointing to pages
+   * free space tree is just an hint in volatile memory for the best page to accomodate a new tuple, its contents will not always be consistent with the heap pages tree
+   * there is a function called get_page_with_enough_space to get a page and insert a tuple on it, this function will also be responsible to rebuild the free space tree when it find plenty of wrong entries
+   * standard latch rules apply index->heap_page, heap_pages_tree->heap_page, heap_pages_tree is just like another index
+   * while accessing the free_space_tree rules apply to access and always lock in the following order, free_sapce_tree->heap_pages_tree->heap_page
