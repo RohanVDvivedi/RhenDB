@@ -7,6 +7,7 @@ A relational database storage engine, akin to InnoDB and PostgreSQL's storage en
  * [ReaderWriterLock](https://github.com/RohanVDvivedi/ReaderWriterLock)
  * [TupleStore](https://github.com/RohanVDvivedi/TupleStore)
  * [TupleIndexer](https://github.com/RohanVDvivedi/TupleIndexer)
+ * [TupleLargeTypes](https://github.com/RohanVDvivedi/TupleLargeTypes)
  * [MinTxEngine](https://github.com/RohanVDvivedi/MinTxEngine)
  * [VolatilePageStore](https://github.com/RohanVDvivedi/VolatilePageStore)
 
