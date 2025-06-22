@@ -51,4 +51,16 @@ int was_completed_transaction_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, u
 
 void deinitialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
 
+#include<rondb/mvcc_header.h>
+#include<rondb/transaction_status.h>
+
+// returns true if is_self() || (was_completed() && committed)
+int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint256 transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id));
+
+// checks if a tuple with the provided mvcchdr_p is visible for the mvccsnp_p in context
+// mvcchdr_p's is_x**_committed or is_x**_aborted, may be set accordingly if they both are unset and a concrete information is available at the time of evaluation of this function using the provided callback
+// this function returns true, if the xmin of the header is visible (is_self OR (was_completed AND committed)) and the xmax is (not visible) i.e. (is_NULL OR (!is_self AND (!was_completed OR aborted)))
+// can_delete will be set if the mvcc_snapshot possessing transaction is allowed to delete or update (delete + insert_new_version) this tuple, it would only be set if mvcc_header is_visible and xmax is_NULL OR (was_completed and aborted)
+int is_mvcc_header_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* can_delete);
+
 #endif

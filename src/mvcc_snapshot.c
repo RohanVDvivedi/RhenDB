@@ -15,3 +15,7 @@ int is_self_transaction_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint25
 int was_completed_transaction_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint256 transaction_id);
 
 void deinitialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
+
+int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint256 transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id));
+
+int is_mvcc_header_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* can_delete);
