@@ -1,3 +1,6 @@
+ PICKED TASKS
+ * implement functions in mvcc_header and mvcc_snapshot
+
 
  * define catalog tables and indexes on it - persistent
  * define lock tables and indexes on it - volatile
