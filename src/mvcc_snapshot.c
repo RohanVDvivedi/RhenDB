@@ -41,7 +41,10 @@ int is_self_transaction_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint25
 
 int was_completed_transaction_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint256 transaction_id);
 
-void deinitialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
+void deinitialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
+{
+	deinitialize_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids));
+}
 
 int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint256 transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id));
 
