@@ -72,4 +72,28 @@ int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot*
 		fetch_status_for_transaction_id_with_hints(transaction_id, get_transaction_status, were_hints_updated) == TX_COMMITTED);
 }
 
-int is_mvcc_header_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* can_delete, int* were_hints_updated);
+int is_mvcc_header_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* can_delete, int* were_hints_updated)
+{
+	// if xmin is not visible the tuple is not visible
+	if(!are_changes_for_transaction_id_visible_at_mvcc_snapshot(mvccsnp_p, &(mvcchdr_p->xmin), get_transaction_status, were_hints_updated))
+		return 0;
+
+	// if xmax is null, then tuple is alive until infinity and is visible
+	if(mvcchdr_p->is_xmax_NULL)
+		return 1;
+
+	// if the changes from xmax is visible, then the tuple is dead for you
+	if(are_changes_for_transaction_id_visible_at_mvcc_snapshot(mvccsnp_p, &(mvcchdr_p->xmax), get_transaction_status, were_hints_updated))
+		return 0;
+
+	// now we are sure that the tuple is visible to you
+
+	// lets check if it could be deleted or updated (delete then a new insert) by you
+	// this is possible only if the tuple was not deleted by you AND the deletor of the tuple aborted
+	(*can_delete) = (mvcchdr_p->is_xmax_NULL) || (
+		!is_self_transaction_for_mvcc_snapshot(mvccsnp_p, mvcchdr_p->xmax.transaction_id) &&
+		fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmax), get_transaction_status, were_hints_updated) == TX_ABORTED
+		);
+
+	return 1;
+}
