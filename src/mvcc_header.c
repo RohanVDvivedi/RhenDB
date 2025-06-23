@@ -6,6 +6,4 @@ void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_uval, const tu
 
 void write_mvcc_header(void* mvcchdr_uval, const tuple_def* mvcchdr_tdef, const mvcc_header* mvcchdr_p);
 
-transaction_status fetch_xmin_status_for_mvcc_header(mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* was_mvcc_header_updated);
-
-transaction_status fetch_xmax_status_for_mvcc_header(mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* was_mvcc_header_updated);
+transaction_status fetch_status_for_transaction_id_with_hints(transaction_id_with_hints* transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated);
