@@ -44,8 +44,9 @@ void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_uval, const tu
 
 void write_mvcc_header(void* mvcchdr_uval, const tuple_def* mvcchdr_tdef, const mvcc_header* mvcchdr_p);
 
-// returns true if an update modified the header
-// update is only performed for is_x**_commited and is_x**_aborted and only if both of them in the header are 0s
-int update_mvcc_header(mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id));
+// below two functions update the mvcc_header if it is not uptodate, and will set the was_mvcc_header_updated if it was updated
+transaction_status fetch_xmin_status_for_mvcc_header(mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* was_mvcc_header_updated);
+// for a mvcchdr_p that has is_xmax_NULL, the return value is undefined, so please check tha before hand
+transaction_status fetch_xmax_status_for_mvcc_header(mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* was_mvcc_header_updated);
 
 #endif
