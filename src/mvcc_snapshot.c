@@ -74,6 +74,8 @@ int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot*
 
 int is_mvcc_header_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* can_delete, int* were_hints_updated)
 {
+	(*can_delete) = 0;
+
 	// if xmin is not visible the tuple is not visible
 	if(!are_changes_for_transaction_id_visible_at_mvcc_snapshot(mvccsnp_p, &(mvcchdr_p->xmin), get_transaction_status, were_hints_updated))
 		return 0;
