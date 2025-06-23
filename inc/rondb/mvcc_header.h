@@ -24,20 +24,26 @@ tuple_def* get_mvcc_header_tuple_definition(uint8_t transaction_id_width);
 	if none of them are set then, the status of xm** transaction_id is unclear and you need to refer to the transaction table to figure it out
 */
 
+typedef struct transaction_id_with_hints transaction_id_with_hints;
+struct transaction_id_with_hints
+{
+	// is_committed and is_aborted must have atmost 1 of them set
+	// if both of them are unset then the status of the transaction in context is unclear and must be fetched from transaction table
+	int is_committed:1;
+	int is_aborted:1;
+
+	uint256 transaction_id;
+};
+
 // in-memory representation of the mvcc header
 typedef struct mvcc_header mvcc_header;
 struct mvcc_header
 {
-	int is_xmin_committed:1;
-	int is_xmin_aborted:1;
+	transaction_id_with_hints xmin;
 
-	int is_xmax_NULL:1; // xmax and xmax related attributes only make sense if this bit is 0
-	int is_xmax_committed:1;
-	int is_xmax_aborted:1;
+	int is_xmax_NULL:1; // xmax makes sense if this bit is 0
 
-	uint256 xmin;
-
-	uint256 xmax; // does not make sense if is_xmax_NULL is set
+	transaction_id_with_hints xmax; // does not make sense if is_xmax_NULL is set
 };
 
 void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_uval, const tuple_def* mvcchdr_tdef);
@@ -46,9 +52,7 @@ void write_mvcc_header(void* mvcchdr_uval, const tuple_def* mvcchdr_tdef, const 
 
 #include<rondb/transaction_status.h>
 
-// below two functions update the mvcc_header if it is not uptodate, and will set the was_mvcc_header_updated if it was updated
-transaction_status fetch_xmin_status_for_mvcc_header(mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* was_mvcc_header_updated);
-// for a mvcchdr_p that has is_xmax_NULL, the return value is undefined, so please check tha before hand
-transaction_status fetch_xmax_status_for_mvcc_header(mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* was_mvcc_header_updated);
+// below functions updates the hints if it is not uptodate, and will set the were_hints_updated if hints were updated
+transaction_status fetch_status_for_transaction_id_with_hints(transaction_id_with_hints* transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated);
 
 #endif
