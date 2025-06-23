@@ -35,7 +35,7 @@ int insert_in_progress_transaction_in_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, ui
 
 void finalize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
 {
-	// jsut shrink to fit
+	// just shrink to fit
 	shrink_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids));
 }
 
