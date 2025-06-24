@@ -1,5 +1,4 @@
  PICKED TASKS
- * implement functions in mvcc_header and mvcc_snapshot
  * review mvcc and its related functions
  * test mvcc ad its related functions
 
