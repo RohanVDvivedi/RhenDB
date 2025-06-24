@@ -4,6 +4,15 @@
  * test initialize mvcc snapshot for tx_id 777, in progress transactions [800, 7, 77, 70, 900, 77, 500, 555, 555, 444, 600, 700] -> [7,77,500,555,600,700]  and all remaining mod 5 transactions are aborted and rest are committed
  * check is_self, was_completed and visibility of changes for transaction ids [1, 5, 22, 25, 7, 77, 801, 805], create their transaction_id_with_hints with 0 hints and observe how they change
 
+ * create a struct with a rwlock, to build and give out snapshots
+ * takes in transaction_table's root page_id and works with it
+ * to get transaction_status
+ * assign a new transaction_id and create a mvcc snapshot from the open transaction
+ * initializes a first_transaction_id_after_crash -> 0 if not transactions
+ * all transaction_ids are assumed to be aborted or committed before this transaction_id
+ * it also store a bst of all active transaction ids, and sets any id < transaction_id_before_crash to aborted if not set, stores a lossy map of transaction_id and their status in memory for all committed and aborted tranactions
+ * it also stores unlocked attributs like mvcc_header_def
+
 
  * define catalog tables and indexes on it - persistent
  * define lock tables and indexes on it - volatile
