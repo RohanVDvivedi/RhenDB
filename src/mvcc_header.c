@@ -71,7 +71,35 @@ void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_tup, const tup
 	mvcchdr_p->xmax.is_aborted = uval.bit_field_value;
 }
 
-void write_mvcc_header(void* mvcchdr_tup, const tuple_def* mvcchdr_def, const mvcc_header* mvcchdr_p);
+void write_mvcc_header(void* mvcchdr_tup, const tuple_def* mvcchdr_def, const mvcc_header* mvcchdr_p)
+{
+	init_tuple(mvcchdr_def, mvcchdr_tup);
+
+	if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(0), mvcchdr_tup, &((user_value){.bit_field_value = mvcchdr_p->xmin.is_committed}), 0))
+		exit(-1);
+
+	if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(1), mvcchdr_tup, &((user_value){.bit_field_value = mvcchdr_p->xmin.is_aborted}), 0))
+		exit(-1);
+
+	if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(2), mvcchdr_tup, &((user_value){.large_uint_value = mvcchdr_p->xmin.transaction_id}), 0))
+		exit(-1);
+
+	if(mvcchdr_p->is_xmax_NULL)
+	{
+		if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(5), mvcchdr_tup, NULL_USER_VALUE, 0))
+			exit(-1);
+		return;
+	}
+
+	if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(3), mvcchdr_tup, &((user_value){.bit_field_value = mvcchdr_p->xmax.is_committed}), 0))
+		exit(-1);
+
+	if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(4), mvcchdr_tup, &((user_value){.bit_field_value = mvcchdr_p->xmax.is_aborted}), 0))
+		exit(-1);
+
+	if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(5), mvcchdr_tup, &((user_value){.large_uint_value = mvcchdr_p->xmax.transaction_id}), 0))
+		exit(-1);
+}
 
 transaction_status fetch_status_for_transaction_id_with_hints(transaction_id_with_hints* transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated)
 {
