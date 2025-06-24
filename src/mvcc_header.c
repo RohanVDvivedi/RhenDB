@@ -1,5 +1,7 @@
 #include<rondb/mvcc_header.h>
 
+#include<tuplestore/tuple.h>
+
 #include<stdlib.h>
 
 tuple_def* get_mvcc_header_tuple_definition(uint8_t transaction_id_width)
@@ -33,9 +35,43 @@ tuple_def* get_mvcc_header_tuple_definition(uint8_t transaction_id_width)
 	return mvcchdr_def;
 }
 
-void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_uval, const tuple_def* mvcchdr_def);
+void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_tup, const tuple_def* mvcchdr_def)
+{
+	user_value uval;
 
-void write_mvcc_header(void* mvcchdr_uval, const tuple_def* mvcchdr_def, const mvcc_header* mvcchdr_p);
+	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(0), mvcchdr_tup))
+		exit(-1);
+	mvcchdr_p->xmin.is_committed = uval.bit_field_value;
+
+	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(1), mvcchdr_tup))
+		exit(-1);
+	mvcchdr_p->xmin.is_aborted = uval.bit_field_value;
+
+	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(2), mvcchdr_tup))
+		exit(-1);
+	mvcchdr_p->xmin.transaction_id = uval.large_uint_value;
+
+	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(5), mvcchdr_tup))
+		exit(-1);
+	if(is_user_value_NULL(&uval))
+	{
+		mvcchdr_p->is_xmax_NULL = 1;
+		return;
+	}
+	else
+		mvcchdr_p->is_xmax_NULL = 0;
+	mvcchdr_p->xmax.transaction_id = uval.large_uint_value;
+
+	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(3), mvcchdr_tup))
+		exit(-1);
+	mvcchdr_p->xmax.is_committed = uval.bit_field_value;
+
+	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(4), mvcchdr_tup))
+		exit(-1);
+	mvcchdr_p->xmax.is_aborted = uval.bit_field_value;
+}
+
+void write_mvcc_header(void* mvcchdr_tup, const tuple_def* mvcchdr_def, const mvcc_header* mvcchdr_p);
 
 transaction_status fetch_status_for_transaction_id_with_hints(transaction_id_with_hints* transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated)
 {

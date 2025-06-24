@@ -46,9 +46,9 @@ struct mvcc_header
 	transaction_id_with_hints xmax; // does not make sense if is_xmax_NULL is set
 };
 
-void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_uval, const tuple_def* mvcchdr_def);
+void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_tup, const tuple_def* mvcchdr_def);
 
-void write_mvcc_header(void* mvcchdr_uval, const tuple_def* mvcchdr_def, const mvcc_header* mvcchdr_p);
+void write_mvcc_header(void* mvcchdr_tup, const tuple_def* mvcchdr_def, const mvcc_header* mvcchdr_p);
 
 #include<rondb/transaction_status.h>
 
