@@ -103,6 +103,27 @@ int main()
 
 		print_mvcc_snapshot(&snap);
 
+		uint256 test_tx_ids[] = {
+			get_uint256(1),
+			get_uint256(5),
+			get_uint256(7),
+			get_uint256(22),
+			get_uint256(25),
+			get_uint256(77),
+			get_uint256(500),
+			get_uint256(550),
+			get_uint256(777),
+			get_uint256(801),
+			get_uint256(805),
+		};
+		for(uint32_t i = 0; i < sizeof(test_tx_ids)/sizeof(uint256); i++)
+		{
+			char temp[80] = {};
+			serialize_to_decimal_uint256(temp, test_tx_ids[i]);
+			printf("%s => self=%d, completed=%d\n", temp, is_self_transaction_for_mvcc_snapshot(&snap, test_tx_ids[i]), was_completed_transaction_at_mvcc_snapshot(&snap, test_tx_ids[i]));
+		}
+		printf("\n");
+
 		deinitialize_mvcc_snapshot(&snap);
 	}
 
