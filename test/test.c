@@ -15,8 +15,8 @@ int main()
 			},
 			.is_xmax_NULL = 0,
 			.xmax = {
-				.is_committed = 0,
-				.is_aborted = 1,
+				.is_committed = 1,
+				.is_aborted = 0,
 				.transaction_id = get_uint256(543),
 			},
 		};
