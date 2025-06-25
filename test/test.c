@@ -4,33 +4,39 @@
 
 int main()
 {
-	tuple_def* mvcc_header_def = get_mvcc_header_tuple_definition(20);
+	{
+		tuple_def* mvcc_header_def = get_mvcc_header_tuple_definition(20);
 
-	mvcc_header a = {
-		.xmin = {
-			.is_committed = 0,
-			.is_aborted = 1,
-			.transaction_id = get_uint256(0x345),
-		},
-		.is_xmax_NULL = 0,
-		.xmax = {
-			.is_committed = 0,
-			.is_aborted = 1,
-			.transaction_id = get_uint256(0x543),
-		},
-	};
+		mvcc_header a = {
+			.xmin = {
+				.is_committed = 0,
+				.is_aborted = 1,
+				.transaction_id = get_uint256(0x345),
+			},
+			.is_xmax_NULL = 0,
+			.xmax = {
+				.is_committed = 0,
+				.is_aborted = 1,
+				.transaction_id = get_uint256(0x543),
+			},
+		};
 
-	char mvcc_tuple[65];
+		char mvcc_tuple[65];
 
-	print_mvcc_header(&a);printf("\n\n");
+		print_mvcc_header(&a);printf("\n\n");
 
-	write_mvcc_header(mvcc_tuple, mvcc_header_def, &a);
+		write_mvcc_header(mvcc_tuple, mvcc_header_def, &a);
 
-	mvcc_header b;
+		mvcc_header b;
 
-	read_mvcc_header(&b, mvcc_tuple, mvcc_header_def);
+		read_mvcc_header(&b, mvcc_tuple, mvcc_header_def);
 
-	print_mvcc_header(&b);printf("\n\n");
+		print_mvcc_header(&b);printf("\n\n");
+	}
+
+	{
+		
+	}
 
 	return 0;
 }
