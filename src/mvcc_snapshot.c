@@ -22,7 +22,7 @@ int insert_in_progress_transaction_in_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, ui
 		return 0;
 
 	// in_progress_transaction_id must be > last inserted one
-	if(!is_empty_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)) && compare_uint256(in_progress_transaction_id, *get_back_of_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids))) <= 0)
+	if((!is_empty_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids))) && compare_uint256(in_progress_transaction_id, *get_back_of_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids))) <= 0)
 		return 0;
 
 	// if the container is full and we can not insert, then crash, we are out of memory
