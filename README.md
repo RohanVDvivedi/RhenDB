@@ -10,6 +10,7 @@ A relational database storage engine, akin to InnoDB and PostgreSQL's storage en
  * [TupleLargeTypes](https://github.com/RohanVDvivedi/TupleLargeTypes)
  * [MinTxEngine](https://github.com/RohanVDvivedi/MinTxEngine)
  * [VolatilePageStore](https://github.com/RohanVDvivedi/VolatilePageStore)
+ * [SerializableInteger](https://github.com/RohanVDvivedi/SerializableInteger)
 
 **Download source code :**
  * `git clone https://github.com/RohanVDvivedi/RonDB.git`
@@ -23,7 +24,7 @@ A relational database storage engine, akin to InnoDB and PostgreSQL's storage en
  * ***Once you have installed from source, you may discard the build by*** `make clean`
 
 ## Using The library
- * add `-lrondb` linker flag, while compiling your application
+ * add `-lrondb -ltuplestore` linker flag, while compiling your application
  * do not forget to include appropriate public api headers as and when needed. this includes
    * `#include<rondb/rondb.h>`
 

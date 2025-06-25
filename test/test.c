@@ -8,15 +8,15 @@ int main()
 
 	mvcc_header a = {
 		.xmin = {
-			.is_committed = 1;
-			.is_aborted = 0;
-			.transaction_id = get_uint256(345);
+			.is_committed = 1,
+			.is_aborted = 0,
+			.transaction_id = get_uint256(345),
 		},
 		.is_xmax_NULL = 0,
 		.xmax = {
-			.is_committed = 1;
-			.is_aborted = 0;
-			.transaction_id = get_uint256(543);
+			.is_committed = 1,
+			.is_aborted = 0,
+			.transaction_id = get_uint256(543),
 		},
 	};
 

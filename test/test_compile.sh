@@ -1,1 +1,1 @@
-gcc ./test.c -o test.out -lrondb
+gcc ./test.c -o test.out -lrondb -ltuplestore
