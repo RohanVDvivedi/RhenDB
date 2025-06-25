@@ -44,10 +44,12 @@ int main()
 	{
 		self = get_uint256(777);
 		uint256 in_progress[] = {
+			get_uint256(777),
 			get_uint256(800),
 			get_uint256(7),
 			get_uint256(77),
 			get_uint256(70),
+			get_uint256(777),
 			get_uint256(900),
 			get_uint256(77),
 			get_uint256(500),
@@ -65,7 +67,11 @@ int main()
 		initialize_mvcc_snapshot(&snap, get_uint256(777));
 
 		for(uint32_t i = 0; i < in_progress_count; i++)
-			printf("insert => %d\n", insert_in_progress_transaction_in_mvcc_snapshot(&snap, in_progress_list[i]));
+		{
+			char temp[80];
+			serialize_to_decimal_uint256(temp, in_progress_list[i]);
+			printf("insert (%s) => %d\n", temp, insert_in_progress_transaction_in_mvcc_snapshot(&snap, in_progress_list[i]));
+		}
 		printf("\n");
 
 		finalize_mvcc_snapshot(&snap);
