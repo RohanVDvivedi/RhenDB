@@ -32,10 +32,19 @@ int main()
 		read_mvcc_header(&b, mvcc_tuple, mvcc_header_def);
 
 		print_mvcc_header(&b);printf("\n\n");
+
+		destroy_non_static_type_info_recursively(mvcc_header_def->type_info);
+		free(mvcc_header_def);
 	}
 
 	{
-		void initialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, uint256 transaction_id);
+		mvcc_snapshot snap;
+
+		initialize_mvcc_snapshot(&snap, get_uint256(777));
+
+		finalize_mvcc_snapshot(&snap);
+
+		deinitialize_mvcc_snapshot(&snap);
 	}
 
 	return 0;
