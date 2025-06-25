@@ -6,6 +6,31 @@ uint256 self;
 uint256* in_progress_list;
 uint32_t in_progress_count;
 
+transaction_status get_transaction_status(uint256 transaction_id)
+{
+	// self is always in_progress
+	if(compare_uint256(transaction_id, self) >= 0)
+		return TX_IN_PROGRESS;
+
+	// anything above 830 has not happenned yet so they are in progress
+	if(compare_uint256(transaction_id, get_uint256(830)) >= 0)
+		return TX_IN_PROGRESS;
+
+	// in_progress list transaction are still in progress
+	for(uint32_t i = 0; i < in_progress_count; i++)
+		if(are_equal_uint256(in_progress_list[i], transaction_id))
+			return TX_IN_PROGRESS;
+
+	// for any other transaction it is aborted if it gives 0 on mod 5
+	uint256 rem;
+	uint256 quo;
+	rem = div_uint256(&quo, transaction_id, get_uint256(5));
+	if(are_equal_uint256(rem, get_uint256(0)))
+		return TX_ABORTED;
+	else
+		return TX_COMMITTED;
+}
+
 int main()
 {
 	{
