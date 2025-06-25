@@ -2,6 +2,10 @@
 
 #include<rondb/mvcc_snapshot.h>
 
+uint256 self;
+uint256* in_progress_list;
+uint32_t in_progress_count;
+
 int main()
 {
 	{
@@ -38,11 +42,31 @@ int main()
 	}
 
 	{
+		self = get_uint256(777);
+		uint256 in_progress[] = {
+			get_uint256(800),
+			get_uint256(7),
+			get_uint256(77),
+			get_uint256(70),
+			get_uint256(900),
+			get_uint256(77),
+			get_uint256(500),
+			get_uint256(555),
+			get_uint256(555),
+			get_uint256(444),
+			get_uint256(600),
+			get_uint256(700),
+		};
+		in_progress_list = in_progress;
+		in_progress_count = sizeof(in_progress_list)/sizeof(uint256);
+
 		mvcc_snapshot snap;
 
 		initialize_mvcc_snapshot(&snap, get_uint256(777));
 
 		finalize_mvcc_snapshot(&snap);
+
+		print_mvcc_snapshot(&snap);
 
 		deinitialize_mvcc_snapshot(&snap);
 	}
