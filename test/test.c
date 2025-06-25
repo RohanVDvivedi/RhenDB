@@ -11,13 +11,13 @@ int main()
 			.xmin = {
 				.is_committed = 0,
 				.is_aborted = 1,
-				.transaction_id = get_uint256(0x345),
+				.transaction_id = get_uint256(345),
 			},
 			.is_xmax_NULL = 0,
 			.xmax = {
 				.is_committed = 0,
 				.is_aborted = 1,
-				.transaction_id = get_uint256(0x543),
+				.transaction_id = get_uint256(543),
 			},
 		};
 
