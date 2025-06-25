@@ -4,6 +4,8 @@
 
 int main()
 {
+	tuple_def* mvcc_header_def = get_mvcc_header_tuple_definition(20);
+
 	mvcc_header a = {
 		.xmin = {
 			.is_committed = 1;
@@ -18,11 +20,17 @@ int main()
 		},
 	};
 
+	char mvcc_tuple[65];
 
+	print_mvcc_header(&a);
 
-	write_mvcc_header(void* mvcchdr_tup, const tuple_def* mvcchdr_def, const mvcc_header* mvcchdr_p);
+	write_mvcc_header(mvcc_tuple, mvcc_header_def, &a);
 
-	read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_tup, const tuple_def* mvcchdr_def);
+	mvcc_header b;
+
+	read_mvcc_header(&b, mvcc_tuple, mvcc_header_def);
+
+	print_mvcc_header(&b);
 
 	return 0;
 }
