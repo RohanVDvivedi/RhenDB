@@ -1,7 +1,7 @@
  PICKED TASKS
  * review mvcc and its related functions
  * test mvcc_header read write functions
- * test initialize mvcc snapshot for tx_id 777, in progress transactions [800, 7, 77, 70, 900, 77, 500, 555, 555, 444, 600, 700] -> [7,77,500,555,600,700]  and all remaining mod 5 transactions are aborted and rest are committed
+ * test initialize mvcc snapshot for tx_id 777, in progress transactions [800, 7, 77, 70, 900, 77, 500, 555, 555, 444, 600, 700] -> [7,77,500,555,600,700]  and all remaining mod 5 transactions are aborted and rest are committed < 830
  * check is_self, was_completed and visibility of changes for transaction ids [1, 5, 22, 25, 7, 77, 801, 805], create their transaction_id_with_hints with 0 hints and observe how they change
 
  * create a struct with a rwlock, to build and give out snapshots
