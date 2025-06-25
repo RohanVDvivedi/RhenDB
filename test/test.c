@@ -68,7 +68,7 @@ int main()
 
 		for(uint32_t i = 0; i < in_progress_count; i++)
 		{
-			char temp[80];
+			char temp[80] = {};
 			serialize_to_decimal_uint256(temp, in_progress_list[i]);
 			printf("insert (%s) => %d\n", temp, insert_in_progress_transaction_in_mvcc_snapshot(&snap, in_progress_list[i]));
 		}
