@@ -45,18 +45,13 @@ int is_self_transaction_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint25
 	return are_equal_uint256(transaction_id, mvccsnp_p->transaction_id);
 }
 
-static int compare_uint256_by_ptrs(const void* u1, const void* u2)
-{
-	return compare_uint256(*((const uint256*)u1), *((const uint256*)u2));
-}
-
 int was_completed_transaction_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint256 transaction_id)
 {
 	index_accessed_interface iai = get_index_accessed_interface_for_front_of_sorted_transaction_list((sorted_transaction_list*)(&(mvccsnp_p->in_progress_transaction_ids)));
 
 	// (transaction_id < mvccsnp_p->transaction_id) && (transaction_id not in mvccsnp_p->in_progress_transaction_ids)
 	return (compare_uint256(transaction_id, mvccsnp_p->transaction_id) < 0) && (is_empty_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)) ||
-		INVALID_INDEX == binary_search_in_sorted_iai(&iai, 0, get_element_count_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)) - 1, &transaction_id, &simple_comparator(compare_uint256_by_ptrs), FIRST_OCCURENCE));
+		INVALID_INDEX == binary_search_in_sorted_iai(&iai, 0, get_element_count_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)) - 1, &transaction_id, &simple_comparator(compare_uint256_with_ptrs), FIRST_OCCURENCE));
 }
 
 void deinitialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
