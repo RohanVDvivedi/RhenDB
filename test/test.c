@@ -58,11 +58,15 @@ int main()
 			get_uint256(700),
 		};
 		in_progress_list = in_progress;
-		in_progress_count = sizeof(in_progress_list)/sizeof(uint256);
+		in_progress_count = sizeof(in_progress)/sizeof(uint256);
 
 		mvcc_snapshot snap;
 
 		initialize_mvcc_snapshot(&snap, get_uint256(777));
+
+		for(uint32_t i = 0; i < in_progress_count; i++)
+			printf("insert => %d\n", insert_in_progress_transaction_in_mvcc_snapshot(&snap, in_progress_list[i]));
+		printf("\n");
 
 		finalize_mvcc_snapshot(&snap);
 
