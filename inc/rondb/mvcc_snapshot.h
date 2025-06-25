@@ -62,4 +62,7 @@ int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot*
 // can_delete will be set if the mvcc_snapshot possessing transaction is allowed to delete or update (delete + insert_new_version) this tuple, it would only be set if mvcc_header is_visible and xmax is_NULL OR (was_completed and aborted)
 int is_mvcc_header_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* can_delete, int* were_hints_updated);
 
+// debug print mvcc snapshot
+void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p);
+
 #endif

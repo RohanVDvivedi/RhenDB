@@ -94,3 +94,23 @@ int is_mvcc_header_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc
 
 	return 1;
 }
+
+void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p)
+{
+	char hex[65] = "";
+
+	sprint_uint256(hex, mvccsnp_p->transaction_id);
+	printf("self : %s\n\n", hex);
+
+	printf("in_progress_transactions : [\n");
+	for(cy_uint i = 0; i < get_element_count_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)); i++)
+	{
+		if(i % 8 == 0)
+			printf("\t");
+		sprint_uint256(hex, *get_from_front_of_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids), i));
+		printf(" %s,", hex);
+		if((i+1) % 8 == 0)
+			printf("\n");
+	}
+	printf("]\n\n");
+}
