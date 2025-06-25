@@ -1,6 +1,6 @@
  PICKED TASKS
- * review mvcc and its related functions
- * check is_self, was_completed and visibility of changes for transaction ids [1, 5, 22, 25, 7, 77, 801, 805], create their transaction_id_with_hints with 0 hints and observe how they change
+ * review mvcc and its related functions to be tested, given below
+ * test are_changes_for_transaction_id_visible_at_mvcc_snapshot and is_mvcc_header_visible_to_mvcc_snapshot
 
  * create a struct with a rwlock, to build and give out snapshots
  * takes in transaction_table's root page_id and works with it
