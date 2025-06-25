@@ -35,7 +35,7 @@ int main()
 	}
 
 	{
-		
+		void initialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, uint256 transaction_id);
 	}
 
 	return 0;

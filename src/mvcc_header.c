@@ -103,16 +103,16 @@ void write_mvcc_header(void* mvcchdr_tup, const tuple_def* mvcchdr_def, const mv
 
 void print_mvcc_header(const mvcc_header* mvcchdr_p)
 {
-	char temp[65] = "";
+	char temp[80] = "";
 
-	sprint_uint256(temp, mvcchdr_p->xmin.transaction_id);
+	serialize_to_decimal_uint256(temp, mvcchdr_p->xmin.transaction_id);
 	printf("xmin => c=%d a=%d tx_id=%s\n", mvcchdr_p->xmin.is_committed, mvcchdr_p->xmin.is_aborted, temp);
 
 	if(mvcchdr_p->is_xmax_NULL)
 		printf("xmax => NULL\n");
 	else
 	{
-		sprint_uint256(temp, mvcchdr_p->xmax.transaction_id);
+		serialize_to_decimal_uint256(temp, mvcchdr_p->xmax.transaction_id);
 		printf("xmax => c=%d a=%d tx_id=%s\n", mvcchdr_p->xmax.is_committed, mvcchdr_p->xmax.is_aborted, temp);
 	}
 }

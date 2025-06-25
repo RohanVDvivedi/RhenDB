@@ -97,9 +97,9 @@ int is_mvcc_header_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc
 
 void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p)
 {
-	char temp[65] = "";
+	char temp[80] = "";
 
-	sprint_uint256(temp, mvccsnp_p->transaction_id);
+	serialize_to_decimal_uint256(temp, mvccsnp_p->transaction_id);
 	printf("self : %s\n\n", temp);
 
 	printf("in_progress_transactions : [\n");
@@ -107,7 +107,7 @@ void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p)
 	{
 		if(i % 8 == 0)
 			printf("\t");
-		sprint_uint256(temp, *get_from_front_of_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids), i));
+		serialize_to_decimal_uint256(temp, *get_from_front_of_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids), i));
 		printf(" %s,", temp);
 		if((i+1) % 8 == 0)
 			printf("\n");
