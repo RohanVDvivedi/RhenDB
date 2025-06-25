@@ -50,6 +50,8 @@ void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_tup, const tup
 
 void write_mvcc_header(void* mvcchdr_tup, const tuple_def* mvcchdr_def, const mvcc_header* mvcchdr_p);
 
+void print_mvcc_header(const mvcc_header* mvcchdr_p);
+
 #include<rondb/transaction_status.h>
 
 // below functions updates the hints if it is not uptodate, and will set the were_hints_updated if hints were updated

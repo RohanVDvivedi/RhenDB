@@ -101,6 +101,22 @@ void write_mvcc_header(void* mvcchdr_tup, const tuple_def* mvcchdr_def, const mv
 		exit(-1);
 }
 
+void print_mvcc_header(const mvcc_header* mvcchdr_p)
+{
+	char temp[65] = "";
+
+	sprint_uint256(temp, mvcchdr_p->xmin.transaction_id);
+	printf("xmin => c=%d a=%d tx_id=%s\n", mvcchdr_p->xmin.is_committed, mvcchdr_p->xmin.is_aborted, temp);
+
+	if(mvcchdr_p->is_xmax_NULL)
+		printf("xmax => NULL\n");
+	else
+	{
+		sprint_uint256(temp, mvcchdr_p->xmax.transaction_id);
+		printf("xmax => c=%d a=%d tx_id=%s\n", mvcchdr_p->xmax.is_committed, mvcchdr_p->xmax.is_aborted, temp);
+	}
+}
+
 transaction_status fetch_status_for_transaction_id_with_hints(transaction_id_with_hints* transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated)
 {
 	// first try and answer from hints if possible
