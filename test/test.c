@@ -6,7 +6,7 @@ uint256 self;
 uint256* in_progress_list;
 uint32_t in_progress_count;
 
-transaction_status get_transaction_status(uint256 transaction_id)
+transaction_status get_transaction_status_internal(uint256 transaction_id)
 {
 	// self is always in_progress
 	if(are_equal_uint256(transaction_id, self))
@@ -37,6 +37,15 @@ transaction_status get_transaction_status(uint256 transaction_id)
 		return TX_ABORTED;
 	else
 		return TX_COMMITTED;
+}
+
+transaction_status get_transaction_status(uint256 transaction_id)
+{
+	transaction_status res = get_transaction_status_internal(transaction_id);
+	char temp[80] = {};
+	serialize_to_decimal_uint256(temp, transaction_id);
+	printf("status(%s) => %d\n", temp, transaction_status_strings[res]);
+	return res;
 }
 
 int main()

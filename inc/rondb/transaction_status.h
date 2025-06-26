@@ -9,4 +9,6 @@ enum transaction_status
 	TX_COMMITTED,
 };
 
+extern char const * const transaction_status_string[];
+
 #endif
