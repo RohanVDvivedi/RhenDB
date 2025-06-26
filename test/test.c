@@ -44,7 +44,7 @@ transaction_status get_transaction_status(uint256 transaction_id)
 	transaction_status res = get_transaction_status_internal(transaction_id);
 	char temp[80] = {};
 	serialize_to_decimal_uint256(temp, transaction_id);
-	printf("status(%s) => %d\n", temp, transaction_status_strings[res]);
+	printf("status(%s) => %d\n", temp, transaction_status_string[res]);
 	return res;
 }
 
