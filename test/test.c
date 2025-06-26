@@ -148,6 +148,33 @@ int main()
 		}
 		printf("\n");
 
+		transaction_id_with_hints header_ids[] = {
+			{0,0,get_uint256(1)}, // PAST COMMITTED
+			{0,0,get_uint256(5)}, // PAST ABORTED
+			{0,0,get_uint256(500)}, // PRESENT
+			{0,0,get_uint256(543)}, // PAST COMMITTED
+			{0,0,get_uint256(555)}, // PAST ABORTED
+			{0,0,get_uint256(600)}, // PRESENT ABORTED
+			{0,0,get_uint256(777)}, // SELF
+			{0,0,get_uint256(801)}, // FUTURE COMMITTED
+			{0,0,get_uint256(805)}, // FUTURE ABORTED
+			{0,0,get_uint256(0)}, // NULL (c0nsider it as NULL)
+		};
+		uint32_t header_ids_count = sizeof(header_ids)/sizeof(uint256);
+
+		for(uint32_t xmin_i = 0; xmin_i < header_ids_count; xmin_i++)
+		{
+			for(uint32_t xmax_i = xmin_i + 1; xmax_i < header_ids_count; xmax_i++)
+			{
+				mvcc_header hdr = {.xmin = header_ids[xmin_i], .is_xmax_NULL = are_equal_uint256(header_ids[xmax_i].transaction_id, get_uint256(0)), .xmax = header_ids[xmax_i]};
+				int were_hints_updated = 0;
+				int is_visible = is_tuple_visible_to_mvcc_snapshot(&snap, &hdr, get_transaction_status, &were_hints_updated);
+				int can_delete = can_delete_tuple_for_mvcc_snapshot(&snap, &hdr, get_transaction_status, &were_hints_updated);
+				print_mvcc_header(&hdr);printf("\n\n");
+				printf("is_visble=%d can_delete=%d\n\n\n", is_visible, can_delete);
+			}
+		}
+
 		deinitialize_mvcc_snapshot(&snap);
 	}
 
