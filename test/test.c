@@ -169,9 +169,9 @@ int main()
 				mvcc_header hdr = {.xmin = header_ids[xmin_i], .is_xmax_NULL = are_equal_uint256(header_ids[xmax_i].transaction_id, get_uint256(0)), .xmax = header_ids[xmax_i]};
 				int were_hints_updated = 0;
 				int is_visible = is_tuple_visible_to_mvcc_snapshot(&snap, &hdr, get_transaction_status, &were_hints_updated);
-				int can_delete = can_delete_tuple_for_mvcc_snapshot(&snap, &hdr, get_transaction_status, &were_hints_updated);
+				can_delete_result can_delete = can_delete_tuple_for_mvcc_snapshot(&snap, &hdr, get_transaction_status, &were_hints_updated);
 				print_mvcc_header(&hdr);printf("\n\n");
-				printf("is_visble=%d can_delete=%d\n\n\n", is_visible, can_delete);
+				printf("is_visble=%d can_delete=%s\n\n\n", is_visible, can_delete_result_string[can_delete]);
 			}
 		}
 
