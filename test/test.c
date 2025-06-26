@@ -9,12 +9,20 @@ uint32_t in_progress_count;
 transaction_status get_transaction_status(uint256 transaction_id)
 {
 	// self is always in_progress
-	if(compare_uint256(transaction_id, self) >= 0)
+	if(are_equal_uint256(transaction_id, self) >= 0)
 		return TX_IN_PROGRESS;
 
 	// anything above 830 has not happenned yet so they are in progress
 	if(compare_uint256(transaction_id, get_uint256(830)) >= 0)
 		return TX_IN_PROGRESS;
+
+	// 500 is now committed, after the snapshot was taken
+	if(compare_uint256(transaction_id, get_uint256(500)) >= 0)
+		return TX_COMMITTED;
+
+	// 600 is now aborted, after the snapshot was taken
+	if(compare_uint256(transaction_id, get_uint256(600)) >= 0)
+		return TX_ABORTED;
 
 	// in_progress list transaction are still in progress
 	for(uint32_t i = 0; i < in_progress_count; i++)
@@ -112,6 +120,7 @@ int main()
 			get_uint256(77),
 			get_uint256(500),
 			get_uint256(550),
+			get_uint256(600),
 			get_uint256(777),
 			get_uint256(801),
 			get_uint256(805),
