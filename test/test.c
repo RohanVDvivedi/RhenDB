@@ -160,7 +160,7 @@ int main()
 			{0,0,get_uint256(805)}, // FUTURE ABORTED
 			{0,0,get_uint256(0)}, // NULL (c0nsider it as NULL)
 		};
-		uint32_t header_ids_count = sizeof(header_ids)/sizeof(uint256);
+		uint32_t header_ids_count = sizeof(header_ids)/sizeof(transaction_id_with_hints);
 
 		for(uint32_t xmin_i = 0; xmin_i < header_ids_count; xmin_i++)
 		{
