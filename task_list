@@ -1,5 +1,6 @@
  PICKED TASKS
  * review mvcc and its related functions to be tested, given below
+ * segreagte is_tuple_visible and can_delete_tuple functions
  * test are_changes_for_transaction_id_visible_at_mvcc_snapshot and is_mvcc_header_visible_to_mvcc_snapshot
 
  * create a struct with a rwlock, to build and give out snapshots
