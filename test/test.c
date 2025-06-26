@@ -9,7 +9,7 @@ uint32_t in_progress_count;
 transaction_status get_transaction_status(uint256 transaction_id)
 {
 	// self is always in_progress
-	if(are_equal_uint256(transaction_id, self) >= 0)
+	if(are_equal_uint256(transaction_id, self))
 		return TX_IN_PROGRESS;
 
 	// anything above 830 has not happenned yet so they are in progress
