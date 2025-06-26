@@ -17,11 +17,11 @@ transaction_status get_transaction_status_internal(uint256 transaction_id)
 		return TX_IN_PROGRESS;
 
 	// 500 is now committed, after the snapshot was taken
-	if(compare_uint256(transaction_id, get_uint256(500)) >= 0)
+	if(are_equal_uint256(transaction_id, get_uint256(500)))
 		return TX_COMMITTED;
 
 	// 600 is now aborted, after the snapshot was taken
-	if(compare_uint256(transaction_id, get_uint256(600)) >= 0)
+	if(are_equal_uint256(transaction_id, get_uint256(600)))
 		return TX_ABORTED;
 
 	// in_progress list transaction are still in progress
