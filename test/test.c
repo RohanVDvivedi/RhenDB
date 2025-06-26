@@ -121,6 +121,8 @@ int main()
 			get_uint256(500),
 			get_uint256(550),
 			get_uint256(600),
+			get_uint256(603),
+			get_uint256(605),
 			get_uint256(777),
 			get_uint256(801),
 			get_uint256(805),
