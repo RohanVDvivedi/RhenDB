@@ -58,9 +58,12 @@ void deinitialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
 int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, transaction_id_with_hints* transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated);
 
 // checks if a tuple with the provided mvcchdr_p is visible for the mvccsnp_p in context
-// this function returns true, if the xmin of the header is visible (is_self OR (was_completed AND committed)) and the xmax is (not visible) i.e. (is_NULL OR (!is_self AND (!was_completed OR aborted)))
-// can_delete will be set if the mvcc_snapshot possessing transaction is allowed to delete or update (delete + insert_new_version) this tuple, it would only be set if mvcc_header is_visible and xmax is_NULL OR (was_completed and aborted)
-int is_mvcc_header_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* can_delete, int* were_hints_updated);
+// returns true, if the xmin is visible and the xmax is NULL or (not visible)
+int is_tuple_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated);
+
+// checks if a tuple with the provided mvcchdr_p can be deleted (or updated via delete + new insert) for the mvccsnp_p in context
+// returns true, if the tuple is_visible and xmax is_NULL OR (was_completed and aborted)
+int can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated);
 
 // debug print mvcc snapshot
 void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p);
