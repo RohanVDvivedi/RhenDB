@@ -130,12 +130,12 @@ int main()
 		for(uint32_t i = 0; i < sizeof(test_tx_ids)/sizeof(uint256); i++)
 		{
 			char temp[80] = {};
+			int is_self = is_self_transaction_for_mvcc_snapshot(&snap, test_tx_ids[i]);
+			int was_completed = was_completed_transaction_at_mvcc_snapshot(&snap, test_tx_ids[i]);
 			int were_hints_updated = 0;
+			int is_visible = are_changes_for_transaction_id_visible_at_mvcc_snapshot(&snap, &((transaction_id_with_hints){0,0,test_tx_ids[i]}), get_transaction_status, &were_hints_updated);
 			serialize_to_decimal_uint256(temp, test_tx_ids[i]);
-			printf("%s => self=%d, completed=%d, visible=%d\n", temp,
-				is_self_transaction_for_mvcc_snapshot(&snap, test_tx_ids[i]),
-				was_completed_transaction_at_mvcc_snapshot(&snap, test_tx_ids[i]),
-				are_changes_for_transaction_id_visible_at_mvcc_snapshot(&snap, &((transaction_id_with_hints){0,0,test_tx_ids[i]}), get_transaction_status, &were_hints_updated));
+			printf("%s => self=%d, completed=%d, visible=%d, hints_updated=%d\n", temp, is_self, was_completed, is_visible, were_hints_updated);
 		}
 		printf("\n");
 
