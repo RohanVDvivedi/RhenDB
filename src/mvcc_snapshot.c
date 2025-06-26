@@ -51,7 +51,7 @@ int was_completed_transaction_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, u
 
 	// (transaction_id < mvccsnp_p->transaction_id) && (transaction_id not in mvccsnp_p->in_progress_transaction_ids)
 	return (compare_uint256(transaction_id, mvccsnp_p->transaction_id) < 0) && (is_empty_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)) ||
-		INVALID_INDEX == binary_search_in_sorted_iai(&iai, 0, get_element_count_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)) - 1, &transaction_id, &simple_comparator(compare_uint256_with_ptrs), FIRST_OCCURENCE));
+		(INVALID_INDEX == binary_search_in_sorted_iai(&iai, 0, get_element_count_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)) - 1, &transaction_id, &simple_comparator(compare_uint256_with_ptrs), FIRST_OCCURENCE)));
 }
 
 void deinitialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
@@ -64,7 +64,7 @@ int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot*
 	// you can only see your changes OR changes of transactions that committed before you
 	return is_self_transaction_for_mvcc_snapshot(mvccsnp_p, transaction_id->transaction_id) ||
 		(was_completed_transaction_at_mvcc_snapshot(mvccsnp_p, transaction_id->transaction_id) &&
-		fetch_status_for_transaction_id_with_hints(transaction_id, get_transaction_status, were_hints_updated) == TX_COMMITTED);
+		(fetch_status_for_transaction_id_with_hints(transaction_id, get_transaction_status, were_hints_updated) == TX_COMMITTED));
 }
 
 int is_mvcc_header_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* can_delete, int* were_hints_updated)
