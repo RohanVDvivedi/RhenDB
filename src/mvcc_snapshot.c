@@ -84,24 +84,38 @@ int is_tuple_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_heade
 	return 1;
 }
 
-int can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated)
+char const * const can_delete_result_string[] = {
+	[IN_VISIBLE_TUPLE] = "IN_VISIBLE_TUPLE",
+	[CAN_DELETE] = "CAN_DELETE",
+	[WAIT_FOR_XMAX_TO_ABORT] = "WAIT_FOR_XMAX_TO_ABORT",
+	[MUST_ABORT] = "MUST_ABORT",
+};
+
+can_delete_result can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated)
 {
 	// you can not delete a tuple not visible to you
 	if(!is_tuple_visible_to_mvcc_snapshot(mvccsnp_p, mvcchdr_p, get_transaction_status, were_hints_updated))
-		return 0;
+		return IN_VISIBLE_TUPLE;
 
 	// if xmax is null, then tuple can be immediately deleted by writing a new xmax to it
 	if(mvcchdr_p->is_xmax_NULL)
-		return 1;
+		return CAN_DELETE;
 
 	// if you yourself deleted the tuple, you can not delete it (not again)
 	if(is_self_transaction_for_mvcc_snapshot(mvccsnp_p, mvcchdr_p->xmax.transaction_id))
-		return 0;
+		return IN_VISIBLE_TUPLE;
 
-	// else the status of xmax must be ABORTED for xmax to delete it
-	// if (logically future) xmax committed -> then abort the current transaction
-	// if (logically future) xmax in_progress -> then wait for it to abort, of abort yourself
-	return (fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmax), get_transaction_status, were_hints_updated) == TX_ABORTED);
+	switch (fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmax), get_transaction_status, were_hints_updated))
+	{
+		case TX_ABORTED : // the status of xmax must be ABORTED for xmax to delete it
+			return CAN_DELETE;
+		case TX_IN_PROGRESS : // if (logically future) xmax is in_progress -> then wait for it to abort, of abort yourselfs
+			return WAIT_FOR_XMAX_TO_ABORT;
+		case TX_COMMITTED : // if (logically future) xmax is committed -> then abort the current transaction
+			return MUST_ABORT;
+	}
+
+	return MUST_ABORT;
 }
 
 void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p)

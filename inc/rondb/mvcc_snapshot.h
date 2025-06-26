@@ -61,9 +61,19 @@ int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot*
 // returns true, if the xmin is visible and the xmax is NULL or (not visible)
 int is_tuple_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated);
 
+typedef enum can_delete_result can_delete_result;
+enum can_delete_result
+{
+	IN_VISIBLE_TUPLE, // an invisible tuple, should not even be read, far from deleting it, so just skip and continue the scan
+	CAN_DELETE, // delete immediately, take lock if your system requires it
+	WAIT_FOR_XMAX_TO_ABORT, // tuple in context deleted by logically future in_progress transaction, so either wait for it to abort or abort your own transaction
+	MUST_ABORT, // tuple in context deleted by logically future committed transaction, so you have no choice other than to abort
+};
+extern char const * const can_delete_result_string[];
+
 // checks if a tuple with the provided mvcchdr_p can be deleted (or updated via delete + new insert) for the mvccsnp_p in context
 // returns true, if the tuple is_visible and xmax is_NULL OR (was_completed and aborted)
-int can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated);
+can_delete_result can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated);
 
 // debug print mvcc snapshot
 void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p);
