@@ -10,6 +10,8 @@
  * it will have a cache (* to be built in cutlery) for caching the transaction statuses of committed or aborted transactions
  * it also stores unlocked attributs like mvcc_header_def
 
+ * we also need a lock table and a definition for it, and a cache for it
+
 
  * define catalog tables and indexes on it - persistent
  * define lock tables and indexes on it - volatile
