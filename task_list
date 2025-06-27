@@ -7,6 +7,7 @@
  * initializes a first_transaction_id_after_crash -> 0 if not transactions
  * all transaction_ids are assumed to be aborted or committed before this transaction_id
  * it also store a bst of all active transaction ids, and sets any id < transaction_id_before_crash to aborted if not set, stores a lossy map of transaction_id and their status in memory for all committed and aborted tranactions
+ * it will have a cache (* to be built in cutlery) for caching the transaction statuses of committed or aborted transactions
  * it also stores unlocked attributs like mvcc_header_def
 
 
