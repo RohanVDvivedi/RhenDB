@@ -32,6 +32,7 @@ struct transaction_table
 	bst currently_active_transaction_ids;
 
 	// cache to quickly access frequently accessed transaction_ids and their statuses
+	// only holds transaction_id -> transaction_status mappings for TX_COMMITTED or TX_ABORTED transactions (not for TX_IN_PROGRESS transactions)
 	cy_uint transaction_table_cache_capacity; // this is the number of elements that the transaction_table_cache is allowed to hold
 	cachemap transaction_table_cache;
 
