@@ -1,30 +1,6 @@
  PICKED TASKS
 
- * struct transaction_table {
-  rwlock lock;
-
-  uint256 next_transaction_id_at_start;
-
-  uint256 next_transaction_id_to_assign;
-
-  bst active_transaction_ids;
-
-  uint32_t cache_element_capacity; // maximum number of elements in cache
-  cachemap transaction_table_cache; // transaction_id -> status values cached
-
-  uint64_t transaction_table_root_page_id; // actual transaction table, built out of a page_table pointing to bitmap_pages
-  uint64_t elements_per_bitmap_page; // a constant
-
-  // each entry in the transaction_table consists of 2 bits
-  // 00 -> UNASSIGNED
-  // 01 -> IN_PROGRESS
-  // 10 -> ABORTED
-  // 11 -> COMMITTED
-
-  // accessories to access the on-disk persistent transaction_table
-  page_table_tuple_def transaction_table_def;
-  tuple_def bitmap_page_def;
- }
+transaction_table
  * internal api (static internal functions)
    * int get_from_cache(tx_id, status*)
    * int put_in_cache(tx_id, status)
@@ -38,7 +14,6 @@
    * last 2 functions panic on passing them an unassigned transaction id
 
  * we also need a lock table and a definition for it, and a cache for it
-
 
  * define catalog tables and indexes on it - persistent
  * define lock tables and indexes on it - volatile
