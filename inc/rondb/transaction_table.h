@@ -40,6 +40,7 @@ struct transaction_table
 
 	/*
 		transaction table on the disk is maintained as a page_table pointing to bitmap pages
+		no lock is actually needed to access it, as MinTxEngine takes care of it's ACID-compliant access, (unless ofcourse while assigning a brand new transaction_id)
 		each bitmap page is composed of transaction_statuses_per_bitmap_page number of bit_fields, each bitfield is 2 bits wide
 		the status values being
 		0b00 -> UNASSIGNED
@@ -47,6 +48,7 @@ struct transaction_table
 		TX_IN_PROGRESS = 0b01,
 		TX_ABORTED     = 0b10,
 		TX_COMMITTED   = 0b11,
+		this specific assignment helps, because bitmap fields start by value of 0 only
 	*/
 
 	uint64_t transaction_table_root_page_id;
