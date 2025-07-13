@@ -1,5 +1,28 @@
 #include<rondb/transaction_table.h>
 
+// entry for the currently_active_transaction_ids bst
+typedef struct active_transaction_id_entry active_transaction_id_entry;
+struct active_transaction_id_entry
+{
+	// this transaction_id will be in TX_IN_PROGRESS status
+	uint256 transaction_id;
+
+	bstnode embed_node;
+};
+
+// entry for the transaction_table_cache cachemap
+typedef struct passive_transaction_id_entry passive_transaction_id_entry;
+struct passive_transaction_id_entry
+{
+	// this transaction_id will be in either TX_ABORTED or TX_COMMITTED status, check the status attribute
+	uint256 transaction_id;
+
+	// this status will be either TX_ABORTED or TX_COMMITTED, only
+	transaction_status status;
+
+	cchnode embed_node;
+};
+
 /*
 	internal table functions
 	must be called with global lock (transaction_table_lock) held in right mode
