@@ -38,8 +38,26 @@ static int free_page_vps(void* context, const void* transaction_id, uint64_t pag
 	return 1;
 }
 
-void initialize_pam_for_vps(page_access_methods* pam_p, volatile_page_store* vps)
+#include<tupleindexer/interface/unWALed_page_modification_methods.h>
+
+rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t page_id_width, uint64_t truncator_period_in_microseconds)
 {
+	rage_engine e = {};
+
+	e.context = malloc(sizeof(volatile_page_store));
+	if(e.context == NULL)
+		exit(-1);
+
+	e.pam_p = malloc(sizeof(page_access_methods));
+	if(e.pam_p == NULL)
+		exit(-1);
+
+	if(!initialize_volatile_page_store(e.context, ".", page_size, page_id_width, truncator_period_in_microseconds))
+	{
+		printf("FAILED to initialize volatile page store\n");
+		exit(-1);
+	}
+
 	pam_p->get_new_page_with_write_lock = get_new_page_with_write_lock_vps;
 	pam_p->acquire_page_with_reader_lock = acquire_page_with_reader_lock_vps;
 	pam_p->acquire_page_with_writer_lock = acquire_page_with_writer_lock_vps;
@@ -51,15 +69,8 @@ void initialize_pam_for_vps(page_access_methods* pam_p, volatile_page_store* vps
 	pam_p->pas = (page_access_specs){};
 	pam_p->context = vps;
 
-	if(!initialize_page_access_specs(&(pam_p->pas), vps->user_stats.page_id_width, vps->user_stats.page_size, vps->user_stats.NULL_PAGE_ID))
+	if(!initialize_page_access_specs(&(e.pam_p->pas), ((volatile_page_store*)(e.context))->user_stats.page_id_width, ((volatile_page_store*)(e.context))->user_stats.page_size, ((volatile_page_store*)(e.context))->user_stats.NULL_PAGE_ID))
 		exit(-1);
-}
 
-#include<tupleindexer/interface/unWALed_page_modification_methods.h>
-
-void initialize_pmm_for_vps(page_modification_methods* pmm_p, volatile_page_store* vps)
-{
-	page_modification_methods* pmm_p_c = get_new_unWALed_page_modification_methods();
-	*pmm_p = *pmm_p_c;
-	delete_unWALed_page_modification_methods(pmm_p_c);
+	e.pmm_p = get_new_unWALed_page_modification_methods();
 }

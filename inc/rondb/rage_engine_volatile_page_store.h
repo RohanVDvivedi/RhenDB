@@ -1,12 +1,9 @@
 #ifndef RAGE_ENIGNE_VOLATILE_PAGE_STORE_H
 #define RAGE_ENGINE_VOLATILE_PAGE_STORE_H
 
-#include<volatilepagestore/volatile_page_store.h>
-#include<tupleindexer/interface/page_access_methods.h>
-#include<tupleindexer/interface/page_modification_methods.h>
+#include<rondb/rage_engine.h>
 
-void initialize_pam_for_vps(page_access_methods* pam_p, volatile_page_store* vps);
-
-void initialize_pmm_for_vps(page_modification_methods* pmm_p, volatile_page_store* vps);
+// any allocation or initialization failure results in an exit(-1)
+rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t page_id_width, uint64_t truncator_period_in_microseconds);
 
 #endif

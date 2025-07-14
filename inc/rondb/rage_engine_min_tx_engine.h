@@ -1,9 +1,7 @@
 #ifndef RAGE_ENGINE_MIN_TX_ENGINE_H
 #define RAGE_ENGINE_MIN_TX_ENGINE_H
 
-#include<mintxengine/mini_transaction_engine.h>
-#include<tupleindexer/interface/page_access_methods.h>
-#include<tupleindexer/interface/page_modification_methods.h>
+#include<rondb/rage_engine.h>
 
 void initialize_pam_for_mte(page_access_methods* pam_p, mini_transaction_engine* mte);
 

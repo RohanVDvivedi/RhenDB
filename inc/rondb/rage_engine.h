@@ -12,7 +12,12 @@
 	still wouldn't give you a storage engine, it is just a holder for the RonDB to allow us to easily call the tupleindexer methods and use it's exposed data structures
 	So that you/we would't have to scavenge around the context, pam_p and pmm_p to pass them to the tupleindexer functions
 	In a way it brings TupleIndexer, MinTxEngine and VolatilePageStore under a singlular umbrella, using the underlying format as dictated by the TupleStore
+
+	Note: rage_engine is a flat small structure of pointers allowing you to pass it as parameters and return it by value, but try to pass it's pointer around instead
 */
+
+#include<tupleindexer/interface/opaque_page_access_methods.h>
+#include<tupleindexer/interface/opaque_page_modification_methods.h>
 
 typedef struct rage_engine rage_engine;
 struct rage_engine
