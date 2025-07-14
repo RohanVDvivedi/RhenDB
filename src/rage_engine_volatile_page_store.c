@@ -44,6 +44,8 @@ rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t 
 {
 	rage_engine e = {};
 
+	// allocate/reset all the three components
+
 	e.context = malloc(sizeof(volatile_page_store));
 	if(e.context == NULL)
 		exit(-1);
@@ -51,6 +53,10 @@ rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t 
 	e.pam_p = malloc(sizeof(page_access_methods));
 	if(e.pam_p == NULL)
 		exit(-1);
+
+	e.pmm_p = NULL;
+
+	// initialize all the three components
 
 	if(!initialize_volatile_page_store(e.context, ".", page_size, page_id_width, truncator_period_in_microseconds))
 	{
@@ -73,4 +79,6 @@ rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t 
 		exit(-1);
 
 	e.pmm_p = get_new_unWALed_page_modification_methods();
+
+	return e;
 }
