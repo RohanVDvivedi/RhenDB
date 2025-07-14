@@ -1,8 +1,5 @@
  PICKED TASKS
 
-storage engine abstraction a struct containing pointer to engine, page_access_methods and page_modification_methods
- * make function to create two of them one for volatile page store and one for mini transaction engine
-
 transaction_table
  * internal api (static internal functions)
    * int get_from_cache(tx_id, status*)
