@@ -1,6 +1,7 @@
-#include<rondb/volatile_store_handlers.h>
-
-#include<stdlib.h>
+#include<rondb/rage_engine_min_tx_engine.h>
+#include<volatilepagestore/volatile_page_store.h>
+#include<tupleindexer/interface/page_access_methods.h>
+#include<tupleindexer/interface/unWALed_page_modification_methods.h>
 
 static void* get_new_page_with_write_lock_vps(void* context, const void* transaction_id, uint64_t* page_id_returned, int* abort_error)
 {
@@ -38,7 +39,7 @@ static int free_page_vps(void* context, const void* transaction_id, uint64_t pag
 	return 1;
 }
 
-#include<tupleindexer/interface/unWALed_page_modification_methods.h>
+#include<stdlib.h>
 
 rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t page_id_width, uint64_t truncator_period_in_microseconds)
 {
@@ -64,16 +65,16 @@ rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t 
 		exit(-1);
 	}
 
-	pam_p->get_new_page_with_write_lock = get_new_page_with_write_lock_vps;
-	pam_p->acquire_page_with_reader_lock = acquire_page_with_reader_lock_vps;
-	pam_p->acquire_page_with_writer_lock = acquire_page_with_writer_lock_vps;
-	pam_p->downgrade_writer_lock_to_reader_lock_on_page = downgrade_writer_lock_to_reader_lock_on_page_vps;
-	pam_p->upgrade_reader_lock_to_writer_lock_on_page = upgrade_reader_lock_to_writer_lock_on_page_vps;
-	pam_p->release_reader_lock_on_page = release_reader_lock_on_page_vps;
-	pam_p->release_writer_lock_on_page = release_writer_lock_on_page_vps;
-	pam_p->free_page = free_page_vps;
-	pam_p->pas = (page_access_specs){};
-	pam_p->context = vps;
+	e.pam_p->get_new_page_with_write_lock = get_new_page_with_write_lock_vps;
+	e.pam_p->acquire_page_with_reader_lock = acquire_page_with_reader_lock_vps;
+	e.pam_p->acquire_page_with_writer_lock = acquire_page_with_writer_lock_vps;
+	e.pam_p->downgrade_writer_lock_to_reader_lock_on_page = downgrade_writer_lock_to_reader_lock_on_page_vps;
+	e.pam_p->upgrade_reader_lock_to_writer_lock_on_page = upgrade_reader_lock_to_writer_lock_on_page_vps;
+	e.pam_p->release_reader_lock_on_page = release_reader_lock_on_page_vps;
+	e.pam_p->release_writer_lock_on_page = release_writer_lock_on_page_vps;
+	e.pam_p->free_page = free_page_vps;
+	e.pam_p->pas = (page_access_specs){};
+	e.pam_p->context = e.context;
 
 	if(!initialize_page_access_specs(&(e.pam_p->pas), ((volatile_page_store*)(e.context))->user_stats.page_id_width, ((volatile_page_store*)(e.context))->user_stats.page_size, ((volatile_page_store*)(e.context))->user_stats.NULL_PAGE_ID))
 		exit(-1);

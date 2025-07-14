@@ -24,9 +24,9 @@ struct rage_engine
 {
 	void* context;
 
-	const page_access_methods* pam_p;
+	page_access_methods* pam_p;
 
-	const page_modification_methods* pmm_p;
+	page_modification_methods* pmm_p;
 };
 
 #endif

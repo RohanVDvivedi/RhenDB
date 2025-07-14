@@ -1,26 +1,16 @@
 #ifndef RONDB_H
 #define RONDB_H
 
-#include<mintxengine/mini_transaction_engine.h>
-#include<volatilepagestore/volatile_page_store.h>
-#include<tupleindexer/interface/page_access_methods.h>
-#include<tupleindexer/interface/page_modification_methods.h>
+#include<rondb/rage_engine.h>
+
+#include<stdint.h>
 
 typedef struct rondb rondb;
 struct rondb
 {
-	// path for database file
-	const char* database_file_name;
+	rage_engine persistent_acid_rage_engine;
 
-	// attributes to access persistent store
-	mini_transaction_engine mte;
-	page_access_methods mte_pam;
-	page_modification_methods mte_pmm;
-
-	// attributes to access volatile store
-	volatile_page_store vps;
-	page_access_methods vps_pam;
-	page_modification_methods vps_pmm;
+	rage_engine volatile_rage_engine;
 };
 
 void initialize_rondb(rondb* rdb, const char* database_file_name,

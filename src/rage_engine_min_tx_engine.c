@@ -1,4 +1,7 @@
-#include<rondb/persistent_store_handlers.h>
+#include<rondb/rage_engine_min_tx_engine.h>
+#include<mintxengine/mini_transaction_engine.h>
+#include<tupleindexer/interface/page_access_methods.h>
+#include<tupleindexer/interface/page_modification_methods.h>
 
 static void* get_new_page_with_write_lock_mtx(void* context, const void* transaction_id, uint64_t* page_id_returned, int* abort_error)
 {
@@ -226,7 +229,7 @@ rage_engine get_rage_engine_for_min_tx_engine(const char* database_file_name, ui
 
 	// allocate/reset all the three components
 
-	e.context = malloc(sizeof(volatile_page_store));
+	e.context = malloc(sizeof(mini_transaction_engine));
 	if(e.context == NULL)
 		exit(-1);
 
@@ -250,5 +253,5 @@ rage_engine get_rage_engine_for_min_tx_engine(const char* database_file_name, ui
 
 	initialize_pmm_for_mte(e.pmm_p, ((mini_transaction_engine*)(e.context)));
 
-	return e;s
+	return e;
 }
