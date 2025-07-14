@@ -1,5 +1,5 @@
-#ifndef PERSISTENT_STORE_HANDLERS_H
-#define PERSISTENT_STORE_HANDLERS_H
+#ifndef RAGE_ENGINE_MIN_TX_ENGINE_H
+#define RAGE_ENGINE_MIN_TX_ENGINE_H
 
 #include<mintxengine/mini_transaction_engine.h>
 #include<tupleindexer/interface/page_access_methods.h>

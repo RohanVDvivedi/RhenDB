@@ -1,5 +1,5 @@
-#ifndef VOLATILE_STORE_HANDLERS_H
-#define VOLATILE_STORE_HANDLERS_H
+#ifndef RAGE_ENIGNE_VOLATILE_PAGE_STORE_H
+#define RAGE_ENGINE_VOLATILE_PAGE_STORE_H
 
 #include<volatilepagestore/volatile_page_store.h>
 #include<tupleindexer/interface/page_access_methods.h>
