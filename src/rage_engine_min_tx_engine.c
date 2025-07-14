@@ -113,7 +113,7 @@ static int free_page_mtx(void* context, const void* transaction_id, uint64_t pag
 	return result;
 }
 
-void initialize_pam_for_mte(page_access_methods* pam_p, mini_transaction_engine* mte)
+static void initialize_pam_for_mte(page_access_methods* pam_p, mini_transaction_engine* mte)
 {
 	pam_p->get_new_page_with_write_lock = get_new_page_with_write_lock_mtx;
 	pam_p->acquire_page_with_reader_lock = acquire_page_with_reader_lock_mtx;
@@ -203,7 +203,7 @@ static int run_page_compaction_mtx(void* context, const void* transaction_id, vo
 	return result;
 }
 
-void initialize_pmm_for_mte(page_modification_methods* pmm_p, mini_transaction_engine* mte)
+static void initialize_pmm_for_mte(page_modification_methods* pmm_p, mini_transaction_engine* mte)
 {
 	pmm_p->init_page = init_page_mtx;
 	pmm_p->set_page_header = set_page_header_mtx;
@@ -218,4 +218,37 @@ void initialize_pmm_for_mte(page_modification_methods* pmm_p, mini_transaction_e
 	pmm_p->clone_page = clone_page_mtx;
 	pmm_p->run_page_compaction = run_page_compaction_mtx;
 	pmm_p->context = mte;
+}
+
+rage_engine get_rage_engine_for_min_tx_engine(const char* database_file_name, uint32_t page_size, uint32_t page_id_width, uint32_t log_sequence_number_width, uint64_t bufferpool_frame_count, uint64_t wale_append_only_buffer_block_count, uint64_t latch_wait_timeout_in_microseconds, uint64_t write_lock_wait_timeout_in_microseconds, uint64_t checkpointing_period_in_microseconds, uint64_t checkpointing_LSN_diff_in_bytes, uint64_t max_wal_file_size_in_bytes)
+{
+	rage_engine e = {};
+
+	// allocate/reset all the three components
+
+	e.context = malloc(sizeof(volatile_page_store));
+	if(e.context == NULL)
+		exit(-1);
+
+	e.pam_p = malloc(sizeof(page_access_methods));
+	if(e.pam_p == NULL)
+		exit(-1);
+
+	e.pmm_p = malloc(sizeof(page_modification_methods));
+	if(e.pmm_p == NULL)
+		exit(-1);
+
+	// initialize all the three components
+
+	if(!initialize_mini_transaction_engine(((mini_transaction_engine*)(e.context)), database_file_name, page_size, page_id_width, log_sequence_number_width, bufferpool_frame_count, wale_append_only_buffer_block_count, latch_wait_timeout_in_microseconds, write_lock_wait_timeout_in_microseconds, checkpointing_period_in_microseconds, checkpointing_LSN_diff_in_bytes, max_wal_file_size_in_bytes))
+	{
+		printf("FAILED to initialize persistent store\n");
+		exit(-1);
+	}
+
+	initialize_pam_for_mte(e.pam_p, ((mini_transaction_engine*)(e.context)));
+
+	initialize_pmm_for_mte(e.pmm_p, ((mini_transaction_engine*)(e.context)));
+
+	return e;s
 }
