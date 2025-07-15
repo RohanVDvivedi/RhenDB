@@ -26,7 +26,7 @@ struct passive_transaction_id_entry
 /*
 	internal table functions
 	Note: You do not need lock to access the persistent transaction table as the MinTxEngine will take care of the ACID-compliant access to it
-	Things become simple, as you only read transaction_ids of other tansactions and updte your own
+	Things become simple, as you only read transaction_ids of other tansactions and update your own
 */
 
 // reads the transaction status as is from the table, fails if unassigned or if the entry does not exists
@@ -40,7 +40,7 @@ static int set_transaction_status_from_table(transaction_table* ttbl, uint256 tr
 
 /*
 	internal cache functions
-	must be called with global lock (transaction_table_lock) held in right mode
+	must be called with transaction_table_cache_lock held in write lock mode (exclusive lock)
 */
 
 // reads the transaction status as is from the cache, fails if the entry does not exists in the cache

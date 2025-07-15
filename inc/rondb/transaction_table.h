@@ -17,12 +17,14 @@
 typedef struct transaction_table transaction_table;
 struct transaction_table
 {
-	// locks the completed transaction table under a read/write lock
-	rwlock transaction_table_lock;
-
 	// next transaction_id that was assignable at the beginning right after initialization of the transaction_table
 	// any transaction_id in TX_IN_PROGRESS state (in persistent memory) before this transaction_id is and will be set as TX_ABORTED state, after any of it's access
+	// this is read-only attribute
 	uint256 next_assignable_transaction_id_at_boot;
+
+	// locks the next_assignable_transaction_id, currently_active_transaction_ids and transaction_table_cache
+	// transaction_table_cache bumps on even every read of its entry, so you will need an exclusive lock to even read it
+	rwlock transaction_table_cache_lock;
 
 	// next transaction id to be assigned
 	uint256 next_assignable_transaction_id;
@@ -37,6 +39,12 @@ struct transaction_table
 	cachemap transaction_table_cache;
 
 	// below attributes only work with the transaction_table that is persistently stored on the disk
+
+	// lock to protect the disk resident transaction table
+	// take it with the transaction_table_cache_lock still held and then release the transaction_table_cache_lock
+	// you may hold only a read lock, while reading its entries
+	// but you must hold a write lock for an update, this allows the cache to be consistently holding the right values, even while writing a new one to the disk
+	rwlock transaction_table_lock;
 
 	/*
 		transaction table on the disk is maintained as a page_table pointing to bitmap pages
@@ -69,6 +77,7 @@ mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl);
 transaction_status get_transaction_status(transaction_table* ttbl, uint256 transaction_id);
 
 // updates transaction_status of the transaction from TX_IN_PROGRESS to either TX_COMMITTED or TX_ABORTED status
+// this implies that the transaction_id provided must be in the currently_active_transaction_ids bst
 int update_transaction_status(transaction_table* ttbl, uint256 transaction_id, transaction_status status);
 
 #endif
