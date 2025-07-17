@@ -10,6 +10,11 @@ struct active_transaction_id_entry
 	bstnode embed_node;
 };
 
+static int compare_active_transaction_id_entry(const void* a, const void* b)
+{
+	return compare_uint256_with_ptrs(&(((const active_transaction_id_entry*)a)->transaction_id), &(((const active_transaction_id_entry*)a)->transaction_id));
+}
+
 // entry for the transaction_table_cache cachemap
 typedef struct passive_transaction_id_entry passive_transaction_id_entry;
 struct passive_transaction_id_entry
@@ -22,6 +27,16 @@ struct passive_transaction_id_entry
 
 	cchnode embed_node;
 };
+
+static int compare_passive_transaction_id_entry(const void* a, const void* b)
+{
+	return compare_uint256_with_ptrs(&(((const passive_transaction_id_entry*)a)->transaction_id), &(((const passive_transaction_id_entry*)a)->transaction_id));
+}
+
+static cy_uint hash_passive_transaction_id_entry(const void* a)
+{
+	return ((const passive_transaction_id_entry*)a)->transaction_id.limbs[0];
+}
 
 /*
 	internal table functions
