@@ -169,7 +169,7 @@ static void basic_structural_initialization(transaction_table* ttbl, cy_uint tra
 
 	initialize_cachemap(&(ttbl->transaction_table_cache), NULL, NEVER_PINNED, ((transaction_table_cache_capacity / 5) + 5), &simple_hasher(hash_passive_transaction_id_entry), &simple_comparator(compare_passive_transaction_id_entry), offsetof(passive_transaction_id_entry, embed_node));
 
-	initialize_rwlock(&(ttbl->transaction_table_cache_lock), NULL);
+	initialize_rwlock(&(ttbl->transaction_table_lock), NULL);
 }
 
 mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl);
