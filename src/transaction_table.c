@@ -150,6 +150,19 @@ static int remove_from_currently_active_transaction_ids(transaction_table* ttbl,
 
 // --
 
+static void basic_structural_initialization(transaction_table* ttbl, cy_uint transaction_table_cache_capacity)
+{
+	initialize_rwlock(&(ttbl->transaction_table_cache_lock), NULL);
+
+	initialize_bst(&(ttbl->currently_active_transaction_ids), RED_BLACK_TREE, &simple_comparator(compare_active_transaction_id_entry), offsetof(active_transaction_id_entry, embed_node));
+
+	ttbl->transaction_table_cache_capacity = transaction_table_cache_capacity;
+
+	initialize_cachemap(&(ttbl->transaction_table_cache), NULL, NEVER_PINNED, ((transaction_table_cache_capacity / 5) + 5), &simple_hasher(hash_passive_transaction_id_entry), &simple_comparator(compare_passive_transaction_id_entry), offsetof(passive_transaction_id_entry, embed_node));
+
+	initialize_rwlock(&(ttbl->transaction_table_cache_lock), NULL);
+}
+
 mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl);
 
 transaction_status get_transaction_status(transaction_table* ttbl, uint256 transaction_id);
