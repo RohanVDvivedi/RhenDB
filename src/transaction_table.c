@@ -112,16 +112,41 @@ static void set_transaction_status_from_cache(transaction_table* ttbl, uint256 t
 */
 
 // checks if a transaction_id exists in currently_active_transaction_ids
-static const active_transaction_id_entry* find_in_currently_active_transaction_ids(const transaction_table* ttbl, uint256 transaction_id);
+static const active_transaction_id_entry* find_in_currently_active_transaction_ids(const transaction_table* ttbl, uint256 transaction_id)
+{
+	return find_equals_in_bst(&(ttbl->currently_active_transaction_ids), &transaction_id, FIRST_OCCURENCE);
+}
 
 // iterate over all the currently_active_transaction_ids
 static void for_each_in_order_in_currently_active_transaction_ids(const transaction_table* ttbl);
 
 // insert to currently_active_transaction_ids
-static int insert_in_currently_active_transaction_ids(transaction_table* ttbl, uint256 transaction_id);
+static int insert_in_currently_active_transaction_ids(transaction_table* ttbl, uint256 transaction_id)
+{
+	active_transaction_id_entry* atid_p = (active_transaction_id_entry*) find_equals_in_bst(&(ttbl->currently_active_transaction_ids), &transaction_id, FIRST_OCCURENCE);
+	if(atid_p != NULL)
+		return 0;
+
+	// malloc a new entry
+	atid_p = malloc(sizeof(active_transaction_id_entry));
+
+	// initialize it
+	atid_p->transaction_id = transaction_id;
+	initialize_bstnode(&(atid_p->embed_node));
+
+	// then insert it
+	return insert_in_bst(&(ttbl->currently_active_transaction_ids), atid_p);
+}
 
 // remove a entry from the currently_active_transaction_ids
-static int remove_from_currently_active_transaction_ids(transaction_table* ttbl, const active_transaction_id_entry* active_transaction_id_entry_p);
+static int remove_from_currently_active_transaction_ids(transaction_table* ttbl, active_transaction_id_entry* atid_p)
+{
+	int removed = remove_from_bst(&(ttbl->currently_active_transaction_ids), atid_p);
+
+	free(atid_p);
+
+	return removed;
+}
 
 // --
 
