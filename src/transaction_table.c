@@ -1,5 +1,7 @@
 #include<rondb/transaction_table.h>
 
+#include<stdlib.h>
+
 // entry for the currently_active_transaction_ids bst
 typedef struct active_transaction_id_entry active_transaction_id_entry;
 struct active_transaction_id_entry
@@ -62,11 +64,45 @@ static int set_transaction_status_from_table(transaction_table* ttbl, uint256 tr
 // if an entry is found it is bumped in the cache, so as to avoid immediate eviction
 static int get_transaction_status_from_cache(transaction_table* ttbl, uint256 transaction_id, transaction_status* status)
 {
+	// find one that equals, else fail with 0
+	const passive_transaction_id_entry* ptid_p = find_equals_in_cachemap(&(ttbl->transaction_table_cache), &transaction_id);
+	if(ptid_p == NULL)
+		return 0;
 
+	// then bump the found entry, retrieve status and return 1
+	bump_element_in_cachemap(&(ttbl->transaction_table_cache), ptid_p);
+	(*status) = ptid_p->status;
+	return 1;
 }
 
 // inserts a new entry in the cache for the given transaction_id OR updates and bumps it, if an entry for the transaction_id exists
-static int set_transaction_status_from_cache(transaction_table* ttbl, uint256 transaction_id, transaction_status status);
+static void set_transaction_status_from_cache(transaction_table* ttbl, uint256 transaction_id, transaction_status status)
+{
+	// find one that equals
+	passive_transaction_id_entry* ptid_p = (passive_transaction_id_entry*) find_equals_in_cachemap(&(ttbl->transaction_table_cache), &transaction_id);
+
+	if(ptid_p == NULL)
+	{
+		// if find fails, allocate a new entry
+		ptid_p = malloc(sizeof(passive_transaction_id_entry));
+		if(ptid_p == NULL)
+			exit(-1);
+
+		// initialize it
+		ptid_p->transaction_id = transaction_id;
+		ptid_p->status = status;
+		initialize_cchnode(&(ptid_p->embed_node));
+
+		// insert it
+		insert_in_cachemap(&(ttbl->transaction_table_cache), ptid_p);
+	}
+	else
+	{
+		// else if found, set status and bump the element
+		ptid_p->status = status;
+		bump_element_in_cachemap(&(ttbl->transaction_table_cache), ptid_p);
+	}
+}
 
 // --
 
