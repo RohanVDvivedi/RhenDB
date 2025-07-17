@@ -52,6 +52,25 @@ static int set_transaction_status_from_cache(transaction_table* ttbl, uint256 tr
 
 // --
 
+/*
+	internal functions for currently_active_transaction_ids
+	must be called with transaction_table_cache_lock held in read OR write lock mode as per access type
+*/
+
+// checks if a transaction_id exists in currently_active_transaction_ids
+static const active_transaction_id_entry* find_in_currently_active_transaction_ids(const transaction_table* ttbl, uint256 transaction_id);
+
+// iterate over all the currently_active_transaction_ids
+static void for_each_in_order_in_currently_active_transaction_ids(const transaction_table* ttbl);
+
+// insert to currently_active_transaction_ids
+static int insert_in_currently_active_transaction_ids(transaction_table* ttbl, uint256 transaction_id);
+
+// remove a entry from the currently_active_transaction_ids
+static int remove_from_currently_active_transaction_ids(transaction_table* ttbl, const active_transaction_id_entry* active_transaction_id_entry_p);
+
+// --
+
 mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl);
 
 transaction_status get_transaction_status(transaction_table* ttbl, uint256 transaction_id);
