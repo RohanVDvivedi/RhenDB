@@ -93,7 +93,7 @@ static void set_transaction_status_from_cache(transaction_table* ttbl, uint256 t
 		}
 		else // else evict an existing one
 		{
-			ptid_p = get_evictable_from_cachemap(&(ttbl->transaction_table_cache));
+			ptid_p = (passive_transaction_id_entry*) get_evictable_element_from_cachemap(&(ttbl->transaction_table_cache));
 			remove_from_cachemap(&(ttbl->transaction_table_cache), ptid_p);
 		}
 
