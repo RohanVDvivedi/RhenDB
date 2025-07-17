@@ -14,7 +14,7 @@ struct active_transaction_id_entry
 
 static int compare_active_transaction_id_entry(const void* a, const void* b)
 {
-	return compare_uint256_with_ptrs(&(((const active_transaction_id_entry*)a)->transaction_id), &(((const active_transaction_id_entry*)a)->transaction_id));
+	return compare_uint256_with_ptrs(&(((const active_transaction_id_entry*)a)->transaction_id), &(((const active_transaction_id_entry*)b)->transaction_id));
 }
 
 // entry for the transaction_table_cache cachemap
@@ -32,7 +32,7 @@ struct passive_transaction_id_entry
 
 static int compare_passive_transaction_id_entry(const void* a, const void* b)
 {
-	return compare_uint256_with_ptrs(&(((const passive_transaction_id_entry*)a)->transaction_id), &(((const passive_transaction_id_entry*)a)->transaction_id));
+	return compare_uint256_with_ptrs(&(((const passive_transaction_id_entry*)a)->transaction_id), &(((const passive_transaction_id_entry*)b)->transaction_id));
 }
 
 static cy_uint hash_passive_transaction_id_entry(const void* a)
@@ -83,10 +83,19 @@ static void set_transaction_status_from_cache(transaction_table* ttbl, uint256 t
 
 	if(ptid_p == NULL)
 	{
-		// if find fails, allocate a new entry
-		ptid_p = malloc(sizeof(passive_transaction_id_entry));
-		if(ptid_p == NULL)
-			exit(-1);
+		// if there is space for a new entry create a new one
+		if(ttbl->transaction_table_cache_capacity < get_element_count_cachemap(&(ttbl->transaction_table_cache)))
+		{
+			// if find fails, allocate a new entry
+			ptid_p = malloc(sizeof(passive_transaction_id_entry));
+			if(ptid_p == NULL)
+				exit(-1);
+		}
+		else // else evict an existing one
+		{
+			ptid_p = get_evictable_from_cachemap(&(ttbl->transaction_table_cache));
+			remove_from_cachemap(&(ttbl->transaction_table_cache), ptid_p);
+		}
 
 		// initialize it
 		ptid_p->transaction_id = transaction_id;
