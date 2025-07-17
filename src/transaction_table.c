@@ -5,7 +5,7 @@ typedef struct active_transaction_id_entry active_transaction_id_entry;
 struct active_transaction_id_entry
 {
 	// this transaction_id will be in TX_IN_PROGRESS status
-	uint256 transaction_id;
+	uint256 transaction_id; // note: it should always be the first attribute
 
 	bstnode embed_node;
 };
@@ -20,7 +20,7 @@ typedef struct passive_transaction_id_entry passive_transaction_id_entry;
 struct passive_transaction_id_entry
 {
 	// this transaction_id will be in either TX_ABORTED or TX_COMMITTED status, check the status attribute
-	uint256 transaction_id;
+	uint256 transaction_id; // note: it should always be the first attribute
 
 	// this status will be either TX_ABORTED or TX_COMMITTED, only
 	transaction_status status;
@@ -60,7 +60,10 @@ static int set_transaction_status_from_table(transaction_table* ttbl, uint256 tr
 
 // reads the transaction status as is from the cache, fails if the entry does not exists in the cache
 // if an entry is found it is bumped in the cache, so as to avoid immediate eviction
-static int get_transaction_status_from_cache(transaction_table* ttbl, uint256 transaction_id, transaction_status* status);
+static int get_transaction_status_from_cache(transaction_table* ttbl, uint256 transaction_id, transaction_status* status)
+{
+
+}
 
 // inserts a new entry in the cache for the given transaction_id OR updates and bumps it, if an entry for the transaction_id exists
 static int set_transaction_status_from_cache(transaction_table* ttbl, uint256 transaction_id, transaction_status status);
