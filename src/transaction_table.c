@@ -175,7 +175,50 @@ static void basic_structural_initialization(transaction_table* ttbl, cy_uint tra
 	initialize_rwlock(&(ttbl->transaction_table_lock), NULL);
 }
 
-mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl);
+#include<rondb/mvcc_snapshot.h>
+
+static void mvcc_snapshot_inserter(const void* data, const void* additional_params)
+{
+	mvcc_snapshot* snp = (mvcc_snapshot*) additional_params;
+	const active_transaction_id_entry* atid_p = data;
+	insert_in_progress_transaction_in_mvcc_snapshot(snp, atid_p->transaction_id);
+}
+
+mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl)
+{
+	// allocate a mvcc snapshot
+	mvcc_snapshot* snp = malloc(sizeof(mvcc_snapshot));
+	if(snp == NULL)
+		exit(-1);
+
+	write_lock(&(ttbl->transaction_table_cache_lock), BLOCKING);
+
+	// initialize mvcc snapshot
+	initialize_mvcc_snapshot(snp, ttbl->next_assignable_transaction_id);
+	for_each_in_order_in_currently_active_transaction_ids(ttbl, mvcc_snapshot_inserter, ttbl);
+	finalize_mvcc_snapshot(snp);
+
+	// increment ttbl->next_assignable_transaction_id
+	if(!add_overflow_safe_uint256(&(ttbl->next_assignable_transaction_id), ttbl->next_assignable_transaction_id, get_1_uint256(), ttbl->overflow_transaction_id))
+	{
+		// overflow occurred
+		exit(-1);
+	}
+
+	// insert it as an active new transaction_id
+	insert_in_currently_active_transaction_ids(ttbl, snp->transaction_id);
+
+	write_lock(&(ttbl->transaction_table_lock), BLOCKING);
+
+	write_unlock(&(ttbl->transaction_table_cache_lock));
+
+	// set the transaction status in the persistent table
+	set_transaction_status_in_table(ttbl, snp->transaction_id, TX_IN_PROGRESS);
+
+	write_unlock(&(ttbl->transaction_table_lock));
+
+	return snp;
+}
 
 transaction_status get_transaction_status(transaction_table* ttbl, uint256 transaction_id);
 

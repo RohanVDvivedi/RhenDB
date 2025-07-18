@@ -29,6 +29,9 @@ struct transaction_table
 	// next transaction id to be assigned
 	uint256 next_assignable_transaction_id;
 
+	// no transction_id gretaer than or equal to overflow_transaction_id will ever be assigned
+	uint256 overflow_transaction_id;
+
 	// this bst stores the ids of all the transaction that are IN_PROGRESS state and could be making progress
 	// it is maintaned continuously (as new transaction_ids are assigned) and is used to generate mvcc_snapshot
 	bst currently_active_transaction_ids;
