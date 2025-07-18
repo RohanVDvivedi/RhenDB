@@ -220,6 +220,43 @@ mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl)
 	return snp;
 }
 
-transaction_status get_transaction_status(transaction_table* ttbl, uint256 transaction_id);
+transaction_status get_transaction_status(transaction_table* ttbl, uint256 transaction_id)
+{
+	write_lock(&(ttbl->transaction_table_cache_lock), BLOCKING);
+
+	// check if it is currently active
+	if(NULL != find_in_currently_active_transaction_ids(ttbl, transaction_id))
+	{
+		write_unlock(&(ttbl->transaction_table_cache_lock));
+		return TX_IN_PROGRESS;
+	}
+
+	// try to get the cached copy
+	transaction_status status;
+	if(get_transaction_status_from_cache(ttbl, transaction_id, &status))
+	{
+		write_unlock(&(ttbl->transaction_table_cache_lock));
+		return status;
+	}
+
+	read_lock(&(ttbl->transaction_table_lock), READ_PREFERRING, BLOCKING);
+
+	write_unlock(&(ttbl->transaction_table_cache_lock));
+
+	// try and fetch it from the disk
+	if(!get_transaction_status_from_table(ttbl, transaction_id, &status))
+	{
+		// if you can not even find it in the table then it is a bug
+		exit(-1);
+	}
+
+	// any transaction that was in status TX_IN_PROGRESS, before boot is considered to be committed
+	if(compare_uint256(transaction_id, ttbl->next_assignable_transaction_id_at_boot) < 0 && status == TX_IN_PROGRESS)
+		status = TX_ABORTED;
+
+	read_unlock(&(ttbl->transaction_table_lock));
+
+	return status;
+}
 
 int update_transaction_status(transaction_table* ttbl, uint256 transaction_id, transaction_status status);
