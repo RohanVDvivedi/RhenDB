@@ -76,7 +76,7 @@ static int get_transaction_status_from_cache(transaction_table* ttbl, uint256 tr
 }
 
 // inserts a new entry in the cache for the given transaction_id OR updates and bumps it, if an entry for the transaction_id exists
-static void set_transaction_status_from_cache(transaction_table* ttbl, uint256 transaction_id, transaction_status status)
+static void set_transaction_status_in_cache(transaction_table* ttbl, uint256 transaction_id, transaction_status status)
 {
 	// find one that equals
 	passive_transaction_id_entry* ptid_p = (passive_transaction_id_entry*) find_equals_in_cachemap(&(ttbl->transaction_table_cache), &transaction_id);
@@ -127,7 +127,10 @@ static const active_transaction_id_entry* find_in_currently_active_transaction_i
 }
 
 // iterate over all the currently_active_transaction_ids
-static void for_each_in_order_in_currently_active_transaction_ids(const transaction_table* ttbl);
+static void for_each_in_order_in_currently_active_transaction_ids(const transaction_table* ttbl, void (*operation)(const void* data, const void* additional_params), const void* additional_params)
+{
+	for_each_in_bst(&(ttbl->currently_active_transaction_ids), IN_ORDER, operation, additional_params);
+}
 
 // insert to currently_active_transaction_ids
 static int insert_in_currently_active_transaction_ids(transaction_table* ttbl, uint256 transaction_id)
