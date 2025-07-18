@@ -51,7 +51,7 @@ static int get_transaction_status_from_table(transaction_table* ttbl, uint256 tr
 
 // updates transaction status for the transaction_id on the table, as is creates a new page_table entry and a bitmap page if required
 // must never fail
-static int set_transaction_status_from_table(transaction_table* ttbl, uint256 transaction_id, transaction_status status);
+static int set_transaction_status_in_table(transaction_table* ttbl, uint256 transaction_id, transaction_status status);
 
 // --
 
