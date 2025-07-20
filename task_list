@@ -6,7 +6,12 @@ for api similarity with mintxengine, rage_engine needs functions like
  * get_transaction_status
  * mark_transaction_aborted
 
+mvcc snapshot
+ * fundtion to test if a tuple with corresponding mvcc header could be vaccummed
+
 transaction_table
+ * add bug logs before exit(-1) in transaction table
+ * force flush logs options to make things permanent in put_in_table function
  * internal api (static internal functions)
    * int get_from_table(tx_id, status*)
    * int put_in_table(tx_id, status)
