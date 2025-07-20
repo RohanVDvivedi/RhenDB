@@ -7,7 +7,7 @@ for api similarity with mintxengine, rage_engine needs functions like
  * mark_transaction_aborted
 
 mvcc snapshot
- * fundtion to test if a tuple with corresponding mvcc header could be vaccummed
+ * function to test if a tuple with corresponding mvcc header could be vaccummed
 
 transaction_table
  * force flush logs options to make things permanent in put_in_table function
