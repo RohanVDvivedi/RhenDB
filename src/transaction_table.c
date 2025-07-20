@@ -49,6 +49,9 @@ static cy_uint hash_passive_transaction_id_entry(const void* a)
 // reads the transaction status as is from the table, fails if unassigned or if the entry does not exists
 static int get_transaction_status_from_table(transaction_table* ttbl, uint256 transaction_id, transaction_status* status);
 
+// this is the maximum transaction_id that was ever assigned, if a 0 is returned then it means no transaction_id is ever assigned, then you must start from 0
+static int get_max_allotted_transaction_id(transaction_table* ttbl, uint256* transaction_id);
+
 // updates transaction status for the transaction_id on the table, as is creates a new page_table entry and a bitmap page if required
 // must never fail
 static int set_transaction_status_in_table(transaction_table* ttbl, uint256 transaction_id, transaction_status status);
