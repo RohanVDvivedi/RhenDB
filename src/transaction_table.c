@@ -53,8 +53,9 @@ static int get_transaction_status_from_table(transaction_table* ttbl, uint256 tr
 static int get_max_allotted_transaction_id(transaction_table* ttbl, uint256* transaction_id);
 
 // updates transaction status for the transaction_id on the table, as is creates a new page_table entry and a bitmap page if required
+// if a flush is set an immediate flush is performed while committing the mini transaction that performed the write
 // must never fail
-static int set_transaction_status_in_table(transaction_table* ttbl, uint256 transaction_id, transaction_status status);
+static int set_transaction_status_in_table(transaction_table* ttbl, uint256 transaction_id, transaction_status status, int flush);
 
 // --
 
@@ -218,8 +219,8 @@ mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl)
 
 	write_unlock(&(ttbl->transaction_table_cache_lock));
 
-	// set the transaction status in the persistent table
-	set_transaction_status_in_table(ttbl, snp->transaction_id, TX_IN_PROGRESS);
+	// set the transaction status in the persistent table, with flush=1
+	set_transaction_status_in_table(ttbl, snp->transaction_id, TX_IN_PROGRESS, 1);
 
 	write_unlock(&(ttbl->transaction_table_lock));
 
@@ -260,7 +261,7 @@ transaction_status get_transaction_status(transaction_table* ttbl, uint256 trans
 	// any transaction that was in status TX_IN_PROGRESS, before boot is considered to be committed
 	if(compare_uint256(transaction_id, ttbl->next_assignable_transaction_id_at_boot) < 0 && status == TX_IN_PROGRESS)
 	{
-		set_transaction_status_in_table(ttbl, transaction_id, TX_ABORTED); // this operation can be done in just read lock as it is idempotent, and concurrent reads will always eventually get the fixed value
+		set_transaction_status_in_table(ttbl, transaction_id, TX_ABORTED, 0); // this operation can be done in just read lock as it is idempotent, and concurrent reads will always eventually get the fixed value, so a flush is not necessary
 		status = TX_ABORTED;
 	}
 
@@ -296,7 +297,8 @@ int update_transaction_status(transaction_table* ttbl, uint256 transaction_id, t
 
 	write_unlock(&(ttbl->transaction_table_cache_lock));
 
-	set_transaction_status_in_table(ttbl, transaction_id, status);
+	// update the actual on-disk transaction table, with flush=1
+	set_transaction_status_in_table(ttbl, transaction_id, status, 1);
 
 	write_unlock(&(ttbl->transaction_table_lock));
 
