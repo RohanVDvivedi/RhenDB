@@ -10,7 +10,6 @@ mvcc snapshot
  * function to test if a tuple with corresponding mvcc header could be vaccummed
 
 transaction_table
- * force flush logs options to make things permanent in put_in_table function
  * internal api (static internal functions)
    * get_transaction_status_from_table
    * get_max_allotted_transaction_id
