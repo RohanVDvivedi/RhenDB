@@ -141,6 +141,8 @@ static int insert_in_currently_active_transaction_ids(transaction_table* ttbl, u
 
 	// malloc a new entry
 	atid_p = malloc(sizeof(active_transaction_id_entry));
+	if(atid_p == NULL)
+		exit(-1);
 
 	// initialize it
 	atid_p->transaction_id = transaction_id;
@@ -252,7 +254,10 @@ transaction_status get_transaction_status(transaction_table* ttbl, uint256 trans
 
 	// any transaction that was in status TX_IN_PROGRESS, before boot is considered to be committed
 	if(compare_uint256(transaction_id, ttbl->next_assignable_transaction_id_at_boot) < 0 && status == TX_IN_PROGRESS)
+	{
+		set_transaction_status_in_table(ttbl, transaction_id, TX_ABORTED);
 		status = TX_ABORTED;
+	}
 
 	read_unlock(&(ttbl->transaction_table_lock));
 
