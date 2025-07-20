@@ -264,4 +264,30 @@ transaction_status get_transaction_status(transaction_table* ttbl, uint256 trans
 	return status;
 }
 
-int update_transaction_status(transaction_table* ttbl, uint256 transaction_id, transaction_status status);
+int update_transaction_status(transaction_table* ttbl, uint256 transaction_id, transaction_status status)
+{
+	// you can voluntarily only write committed or aborted to the transaction_id
+	if(status != TX_ABORTED && status != TX_COMMITTED)
+		return 0;
+
+	write_lock(&(ttbl->transaction_table_cache_lock), BLOCKING);
+
+	// find a corresponsing active_transaction_id_entry and remove it from the active transactions
+	active_transaction_id_entry* atid_p = (active_transaction_id_entry*) find_in_currently_active_transaction_ids(ttbl, transaction_id);
+	if(NULL == atid_p)
+		exit(-1);
+	remove_from_currently_active_transaction_ids(ttbl, atid_p);
+
+	// insert a cached copy for it
+	set_transaction_status_in_cache(ttbl, transaction_id, status);
+
+	write_lock(&(ttbl->transaction_table_lock), BLOCKING);
+
+	write_unlock(&(ttbl->transaction_table_cache_lock));
+
+	set_transaction_status_in_table(ttbl, transaction_id, status);
+
+	write_unlock(&(ttbl->transaction_table_lock));
+
+	return 1;
+}
