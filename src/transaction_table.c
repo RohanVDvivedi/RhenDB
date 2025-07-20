@@ -204,6 +204,7 @@ mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl)
 	if(!add_overflow_safe_uint256(&(ttbl->next_assignable_transaction_id), ttbl->next_assignable_transaction_id, get_1_uint256(), ttbl->overflow_transaction_id))
 	{
 		// overflow occurred
+		printf("BUG (in transaction_table) :: transaction id overflow occurred\n");
 		exit(-1);
 	}
 
@@ -249,13 +250,14 @@ transaction_status get_transaction_status(transaction_table* ttbl, uint256 trans
 	if(!get_transaction_status_from_table(ttbl, transaction_id, &status))
 	{
 		// if you can not even find it in the table then it is a bug
+		printf("BUG (in transaction_table) :: attempt to get transaction status for transaction id, that was never assigned\n");
 		exit(-1);
 	}
 
 	// any transaction that was in status TX_IN_PROGRESS, before boot is considered to be committed
 	if(compare_uint256(transaction_id, ttbl->next_assignable_transaction_id_at_boot) < 0 && status == TX_IN_PROGRESS)
 	{
-		set_transaction_status_in_table(ttbl, transaction_id, TX_ABORTED);
+		set_transaction_status_in_table(ttbl, transaction_id, TX_ABORTED); // this operation can be done in just read lock as it is idempotent, and concurrent reads will always eventually get the fixed value
 		status = TX_ABORTED;
 	}
 
@@ -268,14 +270,20 @@ int update_transaction_status(transaction_table* ttbl, uint256 transaction_id, t
 {
 	// you can voluntarily only write committed or aborted to the transaction_id
 	if(status != TX_ABORTED && status != TX_COMMITTED)
-		return 0;
+	{
+		printf("BUG (in transaction_table) :: caller attempting to set transaction status to something other than TX_ABORTED or TX_COMMITTED\n");
+		exit(-1);
+	}
 
 	write_lock(&(ttbl->transaction_table_cache_lock), BLOCKING);
 
 	// find a corresponsing active_transaction_id_entry and remove it from the active transactions
 	active_transaction_id_entry* atid_p = (active_transaction_id_entry*) find_in_currently_active_transaction_ids(ttbl, transaction_id);
 	if(NULL == atid_p)
+	{
+		printf("BUG (in transaction_table) :: caller attempting to update transaction status for a non-TX_IN_PROGRESS transaction\n");
 		exit(-1);
+	}
 	remove_from_currently_active_transaction_ids(ttbl, atid_p);
 
 	// insert a cached copy for it
