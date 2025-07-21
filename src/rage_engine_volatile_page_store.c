@@ -81,5 +81,11 @@ rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t 
 
 	e.pmm_p = get_new_unWALed_page_modification_methods();
 
+	e.allot_new_sub_transaction_id = NULL;
+
+	e.complete_sub_transaction = NULL;
+
+	e.mark_sub_transaction_aborted = NULL;
+
 	return e;
 }

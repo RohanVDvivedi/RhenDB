@@ -19,19 +19,22 @@
 #include<tupleindexer/interface/opaque_page_access_methods.h>
 #include<tupleindexer/interface/opaque_page_modification_methods.h>
 
+#include<stdint.h>
+#include<serint/large_uints.h>
+
 typedef struct rage_engine rage_engine;
 struct rage_engine
 {
 	void* context;
 
 	// returns sub transaction id
-	void* allot_new_sub_transaction_id(void* context, uint64_t wait_timeout_in_microseconds, uint64_t page_latches_to_be_borrowed);
+	void* (*allot_new_sub_transaction_id)(void* context, uint64_t wait_timeout_in_microseconds, uint64_t page_latches_to_be_borrowed);
 
 	// complete a sub transaction
-	uint256 complete_sub_transaction(void* context, void* sub_transaction_id, int flush_on_completion, const void* complete_info, uint32_t complete_info_size, uint64_t* page_latches_to_be_borrowed);
+	uint256 (*complete_sub_transaction)(void* context, void* sub_transaction_id, int flush_on_completion, const void* complete_info, uint32_t complete_info_size, uint64_t* page_latches_to_be_borrowed);
 
 	// mark a sub transaction aborted, for a voluntary abort right before completion
-	int mark_sub_transaction_aborted(void* context, void* sub_transaction_id, int abort_error);
+	int (*mark_sub_transaction_aborted)(void* context, void* sub_transaction_id, int abort_error);
 
 	page_access_methods* pam_p;
 
