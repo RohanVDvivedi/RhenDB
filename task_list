@@ -1,11 +1,5 @@
  PICKED TASKS
 
-for api similarity with mintxengine, rage_engine needs functions like
- * get_new_transaction_id
- * complete_transaction
- * get_transaction_status
- * mark_transaction_aborted
-
 mvcc snapshot
  * function to test if a tuple with corresponding mvcc header could be vaccummed
 
