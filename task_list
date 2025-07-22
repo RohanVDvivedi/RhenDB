@@ -11,7 +11,13 @@ transaction_table
  * external api
    * initialize functions
 
- * we also need a lock table and a definition for it, and a cache for it
+ * lock table
+ * attributes
+   * phy_id (physical id of the tuple on the disk, (page_id, tuple_id))
+   * lock_mode (SHARED, EXCLUSIVE and many more)
+   * lock_status (HELD or WAITING)
+   * transaction_id (uint256 id of the transaction)
+   * timestamp (creation of this entry, for wait timeouts)
 
  * define catalog tables and indexes on it - persistent
  * define lock tables and indexes on it - volatile
