@@ -248,8 +248,6 @@ transaction_status get_transaction_status(transaction_table* ttbl, uint256 trans
 
 	read_lock(&(ttbl->transaction_table_lock), READ_PREFERRING, BLOCKING);
 
-	write_unlock(&(ttbl->transaction_table_cache_lock));
-
 	// try and fetch it from the disk
 	if(!get_transaction_status_from_table(ttbl, transaction_id, &status))
 	{
@@ -266,6 +264,11 @@ transaction_status get_transaction_status(transaction_table* ttbl, uint256 trans
 	}
 
 	read_unlock(&(ttbl->transaction_table_lock));
+
+	// insert a cached copy for it, to next time find it quickly
+	set_transaction_status_in_cache(ttbl, transaction_id, status);
+
+	write_unlock(&(ttbl->transaction_table_cache_lock));
 
 	return status;
 }
