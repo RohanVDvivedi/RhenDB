@@ -50,9 +50,6 @@ static cy_uint hash_passive_transaction_id_entry(const void* a)
 // reads the transaction status as is from the table, fails if unassigned or if the entry does not exists
 static int get_transaction_status_from_table(transaction_table* ttbl, uint256 transaction_id, transaction_status* status)
 {
-	int read_done = 0;
-	int result = 0;
-
 	uint64_t bucket_id;
 	uint32_t sub_bucket_id;
 
@@ -65,6 +62,9 @@ static int get_transaction_status_from_table(transaction_table* ttbl, uint256 tr
 
 	while(1)
 	{
+		// initialize result to 0, i.e. not yet produced
+		int result = 0;
+
 		int abort_error = 0;
 
 		page_table_range_locker* ptrl_p = NULL;
@@ -86,21 +86,12 @@ static int get_transaction_status_from_table(transaction_table* ttbl, uint256 tr
 
 			uint64_t status_field = get_bit_field_on_bitmap_page(&bucket_page, sub_bucket_id, &(ttbl->ttbl_engine->pam_p->pas), ttbl->bitmap_page_tuple_def_p);
 
-			// read from the sub_bucket of bucket is done, so set this flag
-			read_done = 1;
 			// then set the result if read
 			if(status_field != 0)
 			{
 				(*status) = status_field;
 				result = 1;
 			}
-			else
-				result = 0;
-		}
-		else
-		{// read is done but bucket with the following bucket_id was not found
-			read_done = 1;
-			result = 0;
 		}
 
 		// release all resources now
@@ -116,8 +107,8 @@ static int get_transaction_status_from_table(transaction_table* ttbl, uint256 tr
 			ptrl_p = NULL;
 		}
 
-		// if read done return result
-		if(read_done)
+		// if read done, i.e. no abort_error, then return result
+		if(abort_error == 0)
 			return result;
 
 		// sleep for a second and try again
