@@ -5,7 +5,6 @@ mvcc snapshot
 
 transaction_table
  * internal api (static internal functions)
-   * get_transaction_status_from_table
    * get_max_allotted_transaction_id
    * set_transaction_status_in_table
  * external api
