@@ -95,7 +95,7 @@ static int get_transaction_status_from_table(transaction_table* ttbl, uint256 tr
 		}
 
 		// release all resources now
-		ABORT_ERROR:
+		ABORT_ERROR:;
 		if(!is_persistent_page_NULL(&bucket_page, ttbl->ttbl_engine->pam_p))
 		{
 			release_lock_on_persistent_page(ttbl->ttbl_engine->pam_p, NULL, &bucket_page, NONE_OPTION, &abort_error);
