@@ -1,6 +1,7 @@
 #include<rondb/transaction_table.h>
 
 #include<stdlib.h>
+#include<unistd.h>
 
 // entry for the currently_active_transaction_ids bst
 typedef struct active_transaction_id_entry active_transaction_id_entry;
@@ -47,7 +48,85 @@ static cy_uint hash_passive_transaction_id_entry(const void* a)
 */
 
 // reads the transaction status as is from the table, fails if unassigned or if the entry does not exists
-static int get_transaction_status_from_table(transaction_table* ttbl, uint256 transaction_id, transaction_status* status);
+static int get_transaction_status_from_table(transaction_table* ttbl, uint256 transaction_id, transaction_status* status)
+{
+	int read_done = 0;
+	int result = 0;
+
+	uint64_t bucket_id;
+	uint32_t sub_bucket_id;
+
+	{
+		uint256 q;
+		uint256 r = div_uint256(&q, transaction_id, get_uint256(ttbl->transaction_statuses_per_bitmap_page));
+		bucket_id = q.limbs[0];
+		sub_bucket_id = r.limbs[0];
+	}
+
+	while(1)
+	{
+		int abort_error = 0;
+
+		page_table_range_locker* ptrl_p = NULL;
+		persistent_page bucket_page = get_NULL_persistent_page(ttbl->ttbl_engine->pam_p);
+
+		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = bucket_id, .last_bucket_id = bucket_id}, ttbl->pttd_p, ttbl->ttbl_engine->pam_p, NULL, NULL, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		uint64_t bucket_page_id = get_from_page_table(ptrl_p, bucket_id, NULL, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		if(bucket_page_id != ttbl->ttbl_engine->pam_p->pas.NULL_PAGE_ID)
+		{
+			bucket_page = acquire_persistent_page_with_lock(ttbl->ttbl_engine->pam_p, NULL, bucket_page_id, READ_LOCK, &abort_error);
+			if(abort_error)
+				goto ABORT_ERROR;
+
+			uint64_t status_field = get_bit_field_on_bitmap_page(&bucket_page, sub_bucket_id, &(ttbl->ttbl_engine->pam_p->pas), ttbl->bitmap_page_tuple_def_p);
+
+			// read from the sub_bucket of bucket is done, so set this flag
+			read_done = 1;
+			// then set the result if read
+			if(status_field != 0)
+			{
+				(*status) = status_field;
+				result = 1;
+			}
+			else
+				result = 0;
+		}
+		else
+		{// read is done but bucket with the following bucket_id was not found
+			read_done = 1;
+			result = 0;
+		}
+
+		// release all resources now
+		ABORT_ERROR:
+		if(!is_persistent_page_NULL(&bucket_page, ttbl->ttbl_engine->pam_p))
+		{
+			release_lock_on_persistent_page(ttbl->ttbl_engine->pam_p, NULL, &bucket_page, NONE_OPTION, &abort_error);
+			bucket_page = get_NULL_persistent_page(ttbl->ttbl_engine->pam_p);
+		}
+		if(ptrl_p != NULL)
+		{
+			delete_page_table_range_locker(ptrl_p, NULL, NULL, NULL, &abort_error);
+			ptrl_p = NULL;
+		}
+
+		// if read done return result
+		if(read_done)
+			return result;
+
+		// sleep for a second and try again
+		sleep(1);
+	}
+
+	// never reaches here
+	return 0;
+}
 
 // this is the maximum transaction_id that was ever assigned, if a 0 is returned then it means no transaction_id is ever assigned, then you must start from 0
 static int get_max_allotted_transaction_id(transaction_table* ttbl, uint256* transaction_id);

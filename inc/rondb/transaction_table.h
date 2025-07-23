@@ -10,6 +10,9 @@
 
 #include<tupleindexer/page_table/page_table.h>
 #include<tupleindexer/bitmap_page/bitmap_page.h>
+#include<tupleindexer/interface/page_access_methods.h>
+
+#include<rondb/rage_engine.h>
 
 #include<rondb/transaction_status.h>
 #include<rondb/mvcc_snapshot.h>
@@ -69,6 +72,10 @@ struct transaction_table
 	// below two attributes will be used to access the transaction_table on the disk
 	const page_table_tuple_defs* pttd_p; // actual page_table definition
 	const tuple_def* bitmap_page_tuple_def_p; // actual tuple def of the bitmap_page to access them bit_field at a time
+
+	// below is the persistent ACID rage_engine that powers the transaction_table
+	// preferrably an implementation of the MinTxEngine based rage_engine
+	const rage_engine* ttbl_engine;
 };
 
 // gives you a new unassiged transaction_id wrappin it in a mvcc_snapshot
