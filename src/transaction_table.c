@@ -119,8 +119,77 @@ static int get_transaction_status_from_table(transaction_table* ttbl, uint256 tr
 	return 0;
 }
 
-// this is the maximum transaction_id that was ever assigned, if a 0 is returned then it means no transaction_id is ever assigned, then you must start from 0
-static int get_max_allotted_transaction_id(transaction_table* ttbl, uint256* transaction_id);
+// this is the maximum transaction_id that was never assigned
+static void get_min_unassigned_transaction_id(transaction_table* ttbl, uint256* transaction_id)
+{
+	while(1)
+	{
+		int abort_error = 0;
+
+		page_table_range_locker* ptrl_p = NULL;
+		persistent_page bucket_page = get_NULL_persistent_page(ttbl->ttbl_engine->pam_p);
+
+		// lock the complete table
+		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = 0, .last_bucket_id = UINT64_MAX}, ttbl->pttd_p, ttbl->ttbl_engine->pam_p, NULL, NULL, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		// find greatest non-NULL bucket_id
+		uint64_t bucket_id = UINT64_MAX;
+		uint64_t bucket_page_id = find_non_NULL_PAGE_ID_in_page_table(ptrl_p, &bucket_id, LESSER_THAN_EQUALS, NULL, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		if(bucket_page_id != ttbl->ttbl_engine->pam_p->pas.NULL_PAGE_ID)
+		{
+			bucket_page = acquire_persistent_page_with_lock(ttbl->ttbl_engine->pam_p, NULL, bucket_page_id, READ_LOCK, &abort_error);
+			if(abort_error)
+				goto ABORT_ERROR;
+
+			// I know, we locked the entire tree, but no one will access transaction table before or during this function call, as this will be the first call to the transaction table, hence we will not delete the page table range locker immediately after locking the bucket
+
+			for(uint32_t sub_bucket_id = ttbl->transaction_statuses_per_bitmap_page; sub_bucket_id > 0; sub_bucket_id--)
+			{
+				// fetch the immediately previous sub_bucket_id
+				// bucket_id * transaction_statuses_per_bitmap_page + (sub_bucket_id-1)
+				// if it has status_field == 0, then (bucket_id * transaction_statuses_per_bitmap_page + sub_bucket_id) is the answer
+				uint64_t status_field = get_bit_field_on_bitmap_page(&bucket_page, (sub_bucket_id - 1), &(ttbl->ttbl_engine->pam_p->pas), ttbl->bitmap_page_tuple_def_p);
+
+				if(status_field != 0)
+				{
+					mul_uint256(transaction_id, get_uint256(bucket_id), get_uint256(ttbl->transaction_statuses_per_bitmap_page));
+					add_uint256(transaction_id, get_uint256(sub_bucket_id), (*transaction_id));
+					break;
+				}
+			}
+		}
+		else // if none exists ask the callee to start allotting new transactions from 0
+			(*transaction_id) = get_0_uint256();
+
+		// release all resources now
+		ABORT_ERROR:;
+		if(!is_persistent_page_NULL(&bucket_page, ttbl->ttbl_engine->pam_p))
+		{
+			release_lock_on_persistent_page(ttbl->ttbl_engine->pam_p, NULL, &bucket_page, NONE_OPTION, &abort_error);
+			bucket_page = get_NULL_persistent_page(ttbl->ttbl_engine->pam_p);
+		}
+		if(ptrl_p != NULL)
+		{
+			delete_page_table_range_locker(ptrl_p, NULL, NULL, NULL, &abort_error);
+			ptrl_p = NULL;
+		}
+
+		// if read done, i.e. no abort_error, then return result
+		if(abort_error == 0)
+			return ;
+
+		// sleep for a second and try again
+		sleep(1);
+	}
+
+	// never reaches here
+	return ;
+}
 
 // updates transaction status for the transaction_id on the table, as is creates a new page_table entry and a bitmap page if required
 // if a flush is set an immediate flush is performed while committing the mini transaction that performed the write
