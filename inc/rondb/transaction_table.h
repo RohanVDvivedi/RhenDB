@@ -70,13 +70,16 @@ struct transaction_table
 	uint32_t transaction_statuses_per_bitmap_page;
 
 	// below two attributes will be used to access the transaction_table on the disk
-	const page_table_tuple_defs* pttd_p; // actual page_table definition
-	const tuple_def* bitmap_page_tuple_def_p; // actual tuple def of the bitmap_page to access them bit_field at a time
+	page_table_tuple_defs* pttd_p; // actual page_table definition
+	tuple_def* bitmap_page_tuple_def_p; // actual tuple def of the bitmap_page to access them bit_field at a time
 
 	// below is the persistent ACID rage_engine that powers the transaction_table
 	// preferrably an implementation of the MinTxEngine based rage_engine
-	const rage_engine* ttbl_engine;
+	rage_engine* ttbl_engine;
 };
+
+// here the root_page_id is an in-out parameter, pass it as NULL_PAGE_ID to create a new transaction table, or an existing one to open that particular transaction_table
+void initialize_transaction_table(transaction_table* ttbl, uint64_t* root_page_id, rage_engine* ttbl_engine, uint32_t transaction_table_cache_capacity);
 
 // gives you a new unassiged transaction_id wrappin it in a mvcc_snapshot
 // this transaction will be in TX_IN_RPOGRESS status

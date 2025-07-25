@@ -307,17 +307,79 @@ static int remove_from_currently_active_transaction_ids(transaction_table* ttbl,
 
 // --
 
-static void basic_structural_initialization(transaction_table* ttbl, cy_uint transaction_table_cache_capacity)
+void initialize_transaction_table(transaction_table* ttbl, uint64_t* root_page_id, rage_engine* ttbl_engine, uint32_t transaction_table_cache_capacity)
 {
+	// initialize the root_page_id of the persistent transaction table
+	ttbl->transaction_table_root_page_id = (*root_page_id);
+
+	// set the provided transaction table engine, the persistent rage engine possibly MinTxEngine
+	ttbl->ttbl_engine = ttbl_engine;
+
+	// intitialize the pttd_p
+	ttbl->pttd_p = malloc(sizeof(page_table_tuple_defs));
+	if(ttbl->pttd_p == NULL)
+		exit(-1);
+	if(!init_page_table_tuple_definitions(ttbl->pttd_p, &(ttbl->ttbl_engine->pam_p->pas)))
+	{
+		printf("BUG (in transaction_table) :: could not initialize page_table_tuple_defs\n");
+		exit(-1);
+	}
+
+	// initialize the bitmap page tuple def for each of the buckets
+	ttbl->bitmap_page_tuple_def_p = get_tuple_definition_for_bitmap_page(&(ttbl->ttbl_engine->pam_p->pas), 2, &(ttbl->transaction_statuses_per_bitmap_page));
+	if(ttbl->bitmap_page_tuple_def_p == NULL)
+		exit(-1);
+
+	// finally ensure that the (*root_page_id) is not NULL_PAGE_ID
+	if((*root_page_id) == ttbl->ttbl_engine->pam_p->pas.NULL_PAGE_ID)
+	{
+		// create and initialize the root page for the page table
+		{
+			uint64_t page_latches_to_be_borrowed = 0;
+			while(1)
+			{
+				int abort_error = 0;
+
+				// we are fine with waiting for atmost a second, and we hold no latches
+				void* sub_transaction_id = NULL;
+				for(int i = 0; i < 3 && sub_transaction_id == NULL; i++)
+					sub_transaction_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, 1000000ULL, page_latches_to_be_borrowed);
+				if(sub_transaction_id == NULL)
+				{
+					printf("FAILED (in transaction_table) :: spent 3 seconds trying to start a sub transaction to create a new transaction table but failed\n");
+					exit(-1);
+				}
+
+				(*root_page_id) = get_new_page_table(ttbl->pttd_p, ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR;
+
+				ABORT_ERROR:
+				ttbl->ttbl_engine->complete_sub_transaction(ttbl->ttbl_engine->context, sub_transaction_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+
+				if(abort_error == 0)
+					break;
+			}
+		}
+
+		ttbl->transaction_table_root_page_id = (*root_page_id);
+	}
+
+	// initialize locks
 	initialize_rwlock(&(ttbl->transaction_table_cache_lock), NULL);
+	initialize_rwlock(&(ttbl->transaction_table_lock), NULL);
 
+	// initialize active and passive transaction_id caches
 	initialize_bst(&(ttbl->currently_active_transaction_ids), RED_BLACK_TREE, &simple_comparator(compare_active_transaction_id_entry), offsetof(active_transaction_id_entry, embed_node));
-
 	ttbl->transaction_table_cache_capacity = transaction_table_cache_capacity;
-
 	initialize_cachemap(&(ttbl->transaction_table_cache), NULL, NEVER_PINNED, ((transaction_table_cache_capacity / 5) + 5), &simple_hasher(hash_passive_transaction_id_entry), &simple_comparator(compare_passive_transaction_id_entry), offsetof(passive_transaction_id_entry, embed_node));
 
-	initialize_rwlock(&(ttbl->transaction_table_lock), NULL);
+	// compute the overflow_transaction_id, that you not go at or beyond
+	mul_uint256(&(ttbl->overflow_transaction_id), get_uint256(UINT64_MAX), get_uint256(ttbl->transaction_statuses_per_bitmap_page));
+
+	// initialize transaction_ids that are assignable
+	get_min_unassigned_transaction_id(ttbl, &(ttbl->next_assignable_transaction_id_at_boot));
+	ttbl->next_assignable_transaction_id = ttbl->next_assignable_transaction_id_at_boot;
 }
 
 #include<rondb/mvcc_snapshot.h>
