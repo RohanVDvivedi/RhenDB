@@ -6,9 +6,6 @@ mvcc snapshot
 transaction_table
  * internal api (static internal functions)
    * set_transaction_status_in_table
- * external api
-   * initialize functions
-     * create new transaction table if root page id passed is NULL_PAGE_ID -> taken as an in-out parameter
 
  * lock table
  * attributes
