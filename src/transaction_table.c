@@ -439,8 +439,8 @@ transaction_status get_transaction_status(transaction_table* ttbl, uint256 trans
 		return TX_IN_PROGRESS;
 	}
 
-	// try to get the cached copy
-	transaction_status status;
+	// try to get the cached copy, now it can not be TX_IN_PROGRESS transaction
+	transaction_status status = 0;
 	if(get_transaction_status_from_cache(ttbl, transaction_id, &status))
 	{
 		write_unlock(&(ttbl->transaction_table_cache_lock));
