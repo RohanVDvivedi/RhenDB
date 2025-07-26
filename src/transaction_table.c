@@ -515,6 +515,13 @@ mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl)
 
 transaction_status get_transaction_status(transaction_table* ttbl, uint256 transaction_id)
 {
+	// if transaction_id >= overflow_transaction_id, then there is a bug
+	if(compare_uint256(transaction_id, ttbl->overflow_transaction_id) >= 0)
+	{
+		printf("BUG (in transaction_table) :: out-of-bounds transaction id encountered\n");
+		exit(-1);
+	}
+
 	write_lock(&(ttbl->transaction_table_cache_lock), BLOCKING);
 
 	// check if it is currently active
@@ -561,6 +568,13 @@ transaction_status get_transaction_status(transaction_table* ttbl, uint256 trans
 
 int update_transaction_status(transaction_table* ttbl, uint256 transaction_id, transaction_status status)
 {
+	// if transaction_id >= overflow_transaction_id, then there is a bug
+	if(compare_uint256(transaction_id, ttbl->overflow_transaction_id) >= 0)
+	{
+		printf("BUG (in transaction_table) :: out-of-bounds transaction id encountered\n");
+		exit(-1);
+	}
+
 	// you can voluntarily only write committed or aborted to the transaction_id
 	if(status != TX_ABORTED && status != TX_COMMITTED)
 	{
