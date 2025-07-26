@@ -24,7 +24,7 @@ A relational database storage engine, akin to InnoDB and PostgreSQL's storage en
  * ***Once you have installed from source, you may discard the build by*** `make clean`
 
 ## Using The library
- * add `-lrondb -ltuplestore -lcutlery` linker flag, while compiling your application
+ * add `-lrondb -lmintxengine -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz` linker flag, while compiling your application
  * do not forget to include appropriate public api headers as and when needed. this includes
    * `#include<rondb/rondb.h>`
    * `#include<rondb/transaction_table.h>`

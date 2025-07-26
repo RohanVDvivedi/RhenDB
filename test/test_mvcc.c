@@ -2,6 +2,8 @@
 
 #include<rondb/mvcc_snapshot.h>
 
+#include<stdlib.h>
+
 uint256 self;
 uint256* in_progress_list;
 uint32_t in_progress_count;
