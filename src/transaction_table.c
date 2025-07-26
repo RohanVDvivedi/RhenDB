@@ -194,7 +194,87 @@ static void get_min_unassigned_transaction_id(transaction_table* ttbl, uint256* 
 // updates transaction status for the transaction_id on the table, as is creates a new page_table entry and a bitmap page if required
 // if a flush is set an immediate flush is performed while committing the mini transaction that performed the write
 // must never fail
-static int set_transaction_status_in_table(transaction_table* ttbl, uint256 transaction_id, transaction_status status, int flush);
+static int set_transaction_status_in_table(transaction_table* ttbl, uint256 transaction_id, transaction_status status, int flush)
+{
+	uint64_t bucket_id;
+	uint32_t sub_bucket_id;
+
+	{
+		uint256 q;
+		uint256 r = div_uint256(&q, transaction_id, get_uint256(ttbl->transaction_statuses_per_bitmap_page));
+		bucket_id = q.limbs[0];
+		sub_bucket_id = r.limbs[0];
+	}
+
+	uint32_t page_latches_to_be_borrowed = 0;
+
+	while(1)
+	{
+		int abort_error = 0;
+
+		page_table_range_locker* ptrl_p = NULL;
+		persistent_page bucket_page = get_NULL_persistent_page(ttbl->ttbl_engine->pam_p);
+
+		// we are fine with waiting for atmost a second, and we hold no latches
+		void* sub_transaction_id = NULL;
+		while(sub_transaction_id == NULL)
+			sub_transaction_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, 1000000ULL, page_latches_to_be_borrowed);
+
+		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = bucket_id, .last_bucket_id = bucket_id}, ttbl->pttd_p, ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		uint64_t bucket_page_id = get_from_page_table(ptrl_p, bucket_id, sub_transaction_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		if(bucket_page_id == ttbl->ttbl_engine->pam_p->pas.NULL_PAGE_ID)
+		{
+			// bucket_page for this bucket does not exists, so allocate 1 and insert it into the page_table
+			bucket_page = get_new_bitmap_page_with_write_lock(&(ttbl->ttbl_engine->pam_p->pas), ttbl->bitmap_page_tuple_def_p, ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
+			if(abort_error)
+				goto ABORT_ERROR;
+
+			// set bucket_id -> bucket_page_id mapping for the new page
+			set_in_page_table(ptrl_p, bucket_id, bucket_page.page_id, sub_transaction_id, &abort_error);
+			if(abort_error)
+				goto ABORT_ERROR;
+		}
+		else
+		{
+			bucket_page = acquire_persistent_page_with_lock(ttbl->ttbl_engine->pam_p, sub_transaction_id, bucket_page_id, WRITE_LOCK, &abort_error);
+			if(abort_error)
+				goto ABORT_ERROR;
+		}
+
+		set_bit_field_on_bitmap_page(&bucket_page, sub_bucket_id, (uint64_t)(status), &(ttbl->ttbl_engine->pam_p->pas), ttbl->bitmap_page_tuple_def_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		// release all resources now
+		ABORT_ERROR:;
+		if(!is_persistent_page_NULL(&bucket_page, ttbl->ttbl_engine->pam_p))
+		{
+			release_lock_on_persistent_page(ttbl->ttbl_engine->pam_p, sub_transaction_id, &bucket_page, NONE_OPTION, &abort_error);
+			bucket_page = get_NULL_persistent_page(ttbl->ttbl_engine->pam_p);
+		}
+		if(ptrl_p != NULL)
+		{
+			delete_page_table_range_locker(ptrl_p, NULL, NULL, sub_transaction_id, &abort_error);
+			ptrl_p = NULL;
+		}
+
+		// if read done, i.e. no abort_error, then return result
+		if(abort_error == 0)
+			return 1;
+
+		// sleep for a second and try again
+		sleep(1);
+	}
+
+	// never reaches here
+	return 0;
+}
 
 // --
 
