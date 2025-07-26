@@ -3,9 +3,6 @@
 mvcc snapshot
  * function to test if a tuple with corresponding mvcc header could be vaccummed
 
-transaction_table
- * test
-
  * lock table (using VolatilePageStore)
  * attributes
    * phy_id (physical id of the tuple on the disk, (page_id, tuple_id))
