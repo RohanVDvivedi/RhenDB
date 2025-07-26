@@ -308,7 +308,7 @@ static void set_transaction_status_in_cache(transaction_table* ttbl, uint256 tra
 	if(ptid_p == NULL)
 	{
 		// if there is space for a new entry create a new one
-		if(ttbl->transaction_table_cache_capacity < get_element_count_cachemap(&(ttbl->transaction_table_cache)))
+		if(get_element_count_cachemap(&(ttbl->transaction_table_cache)) < ttbl->transaction_table_cache_capacity)
 		{
 			// if find fails, allocate a new entry
 			ptid_p = malloc(sizeof(passive_transaction_id_entry));
