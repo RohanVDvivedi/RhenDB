@@ -7,7 +7,7 @@ DOWNLOAD_DIR:=/usr/local
 # we may download all the public headers
 
 # list of public api headers (only these headers will be installed)
-PUBLIC_HEADERS:=${PROJECT_NAME}.h transaction_table.h transaction_status.h mvcc_snapshot.h mvcc_header.h
+PUBLIC_HEADERS:=${PROJECT_NAME}.h rage_engine.h transaction_table.h transaction_status.h mvcc_snapshot.h mvcc_header.h
 # the library, which we will create
 LIBRARY:=lib${PROJECT_NAME}.a
 # the binary, which will use the created library
