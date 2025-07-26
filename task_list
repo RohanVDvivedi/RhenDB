@@ -4,29 +4,26 @@ mvcc snapshot
  * function to test if a tuple with corresponding mvcc header could be vaccummed
 
 transaction_table
- * internal api (static internal functions)
-   * set_transaction_status_in_table
+ * full code review
+ * test
 
- * lock table
+ * lock table (using VolatilePageStore)
  * attributes
    * phy_id (physical id of the tuple on the disk, (page_id, tuple_id))
    * lock_mode (SHARED, EXCLUSIVE and many more)
    * lock_status (HELD or WAITING)
    * transaction_id (uint256 id of the transaction)
    * timestamp (creation of this entry, for wait timeouts)
+ * define indexes for it
 
  * define catalog tables and indexes on it - persistent
- * define lock tables and indexes on it - volatile
- * define transaction table and indexes on it - persistent
- * define statistics tables - persistent in a different database
+ * define statistics tables - persistent and possibly in a different database
  * define beedb struct
    * with pointer access to volatile memory using VolatilePageStore, and to shared persistent memory using MinTxEngine
    * using their corresponding page access methods and page modification methods
    * add data structures to get access for most relevant tuple definitions
- * define high level transaction struct consisteing of
-   * 64 bit transactions id
-   * last_mini_tx_id (id of the last mini transaction executed), last_logical_log_lsn (lsn of the last logical modification done)
 
+ * implement SQL parser (possibly in a different directory)
  * implement query plan tree
    * with operators
  * implement relational algebra operators
