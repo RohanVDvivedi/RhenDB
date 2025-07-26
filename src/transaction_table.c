@@ -206,7 +206,7 @@ static int set_transaction_status_in_table(transaction_table* ttbl, uint256 tran
 		sub_bucket_id = r.limbs[0];
 	}
 
-	uint32_t page_latches_to_be_borrowed = 0;
+	uint64_t page_latches_to_be_borrowed = 0;
 
 	while(1)
 	{
