@@ -487,7 +487,7 @@ mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl)
 
 	// initialize mvcc snapshot
 	initialize_mvcc_snapshot(snp, ttbl->next_assignable_transaction_id);
-	for_each_in_order_in_currently_active_transaction_ids(ttbl, mvcc_snapshot_inserter, ttbl);
+	for_each_in_order_in_currently_active_transaction_ids(ttbl, mvcc_snapshot_inserter, snp);
 	finalize_mvcc_snapshot(snp);
 
 	// increment ttbl->next_assignable_transaction_id
