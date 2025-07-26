@@ -6,7 +6,7 @@
 int main()
 {
 	rondb rdb;
-	initialize_rondb(&rdb, "test_db",
+	initialize_rondb(&rdb, "./test.db",
 		5,
 		512, 8, 10, 10,
 			10000ULL, 100000ULL,
