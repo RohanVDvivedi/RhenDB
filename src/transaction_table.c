@@ -263,6 +263,7 @@ static int set_transaction_status_in_table(transaction_table* ttbl, uint256 tran
 			delete_page_table_range_locker(ptrl_p, NULL, NULL, sub_transaction_id, &abort_error);
 			ptrl_p = NULL;
 		}
+		ttbl->ttbl_engine->complete_sub_transaction(ttbl->ttbl_engine->context, sub_transaction_id, flush, NULL, 0, &page_latches_to_be_borrowed);
 
 		// if read done, i.e. no abort_error, then return result
 		if(abort_error == 0)
@@ -468,7 +469,11 @@ static void mvcc_snapshot_inserter(const void* data, const void* additional_para
 {
 	mvcc_snapshot* snp = (mvcc_snapshot*) additional_params;
 	const active_transaction_id_entry* atid_p = data;
-	insert_in_progress_transaction_in_mvcc_snapshot(snp, atid_p->transaction_id);
+	if(!insert_in_progress_transaction_in_mvcc_snapshot(snp, atid_p->transaction_id))
+	{
+		printf("BUG (in transaction_table) :: inserting an active transaction_id in the mvcc_snapshot failed\n");
+		exit(-1);
+	}
 }
 
 mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl)
