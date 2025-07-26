@@ -53,5 +53,13 @@ int main()
 	deinitialize_mvcc_snapshot(t1);
 	free(t1);
 
+	for(uint256 tid = get_0_uint256(); tid.limbs[0] < 5; add_uint256(&tid, tid, get_1_uint256()))
+	{
+		transaction_status status = get_transaction_status(&ttbl, tid);
+		printf("%"PRIu64" -> %s\n", tid.limbs[0], transaction_status_string[status]);
+	}
+
+	deinitialize_rondb(&rdb);
+
 	return 0;
 }
