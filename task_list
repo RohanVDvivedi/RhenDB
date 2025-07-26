@@ -4,7 +4,6 @@ mvcc snapshot
  * function to test if a tuple with corresponding mvcc header could be vaccummed
 
 transaction_table
- * full code review
  * test
 
  * lock table (using VolatilePageStore)
