@@ -144,3 +144,18 @@ void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p)
 	}
 	printf("]\n\n");
 }
+
+int can_vaccum_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), uint256 vaccum_horizon_transaction_id, int* were_hints_updated)
+{
+	// tuple created by an aborted transaction, vaccum immediately
+	if(fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmin), get_transaction_status, were_hints_updated) == TX_ABORTED)
+		return 1;
+
+	// if xmax is not NULL, and xmax is committed before the vaccum_horizon_transaction_id, then this tuple is not visible to any transaction, hence you may vaccum it
+	if((!mvcchdr_p->is_xmax_NULL)
+		&& (fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmax), get_transaction_status, were_hints_updated) == TX_COMMITTED)
+		&& (compare_uint256(mvcchdr_p->xmax.transaction_id, vaccum_horizon_transaction_id) < 0))
+		return 1;
+
+	return 0;
+}

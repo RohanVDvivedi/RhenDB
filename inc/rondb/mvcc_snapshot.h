@@ -81,4 +81,7 @@ can_delete_result can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsn
 // debug print mvcc snapshot
 void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p);
 
+// test if a tuple can be vaccummed
+int can_vaccum_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), uint256 vaccum_horizon_transaction_id, int* were_hints_updated);
+
 #endif
