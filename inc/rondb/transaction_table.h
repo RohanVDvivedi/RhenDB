@@ -93,4 +93,7 @@ transaction_status get_transaction_status(transaction_table* ttbl, uint256 trans
 // this implies that the transaction_id provided must be in the currently_active_transaction_ids bst
 int update_transaction_status(transaction_table* ttbl, uint256 transaction_id, transaction_status status);
 
+// returns horizon transaction id, changes of all transactions under this value are visible to one or other future transaction
+uint256 get_vaccum_horizon_transaction_id(transaction_table* ttbl);
+
 #endif

@@ -614,3 +614,25 @@ int update_transaction_status(transaction_table* ttbl, uint256 transaction_id, t
 
 	return 1;
 }
+
+static void minimize_vaccum_horizon_transaction_id(const void* data, const void* additional_params)
+{
+	uint256* vaccum_horizon_transaction_id = (uint256*) additional_params;
+	const active_transaction_id_entry* atid_p = data;
+	(*vaccum_horizon_transaction_id) = min_uint256((*vaccum_horizon_transaction_id), atid_p->smallest_active_transaction_id_in_snapshot);
+}
+
+uint256 get_vaccum_horizon_transaction_id(transaction_table* ttbl)
+{
+	uint256 vaccum_horizon_transaction_id;
+
+	read_lock(&(ttbl->transaction_table_cache_lock), READ_PREFERRING, BLOCKING);
+
+	vaccum_horizon_transaction_id = ttbl->next_assignable_transaction_id;
+
+	for_each_in_order_in_currently_active_transaction_ids(ttbl, minimize_vaccum_horizon_transaction_id, &vaccum_horizon_transaction_id);
+
+	read_unlock(&(ttbl->transaction_table_cache_lock));
+
+	return vaccum_horizon_transaction_id;
+}
