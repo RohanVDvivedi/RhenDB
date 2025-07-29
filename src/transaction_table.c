@@ -10,6 +10,9 @@ struct active_transaction_id_entry
 	// this transaction_id will be in TX_IN_PROGRESS status
 	uint256 transaction_id; // note: it should always be the first attribute
 
+	// this is the smallest transaction_id in the snapshot of this transaction, including it's own transaction_id
+	uint256 smallest_active_transaction_id_in_snapshot;
+
 	bstnode embed_node;
 };
 
@@ -356,10 +359,10 @@ static void for_each_in_order_in_currently_active_transaction_ids(const transact
 	for_each_in_bst(&(ttbl->currently_active_transaction_ids), IN_ORDER, operation, additional_params);
 }
 
-// insert to currently_active_transaction_ids
-static int insert_in_currently_active_transaction_ids(transaction_table* ttbl, uint256 transaction_id)
+// insert to currently_active_transaction_ids, the mvcc_snapshot that we just generated
+static int insert_in_currently_active_transaction_ids(transaction_table* ttbl, const mvcc_snapshot* snp)
 {
-	active_transaction_id_entry* atid_p = (active_transaction_id_entry*) find_equals_in_bst(&(ttbl->currently_active_transaction_ids), &transaction_id, FIRST_OCCURENCE);
+	active_transaction_id_entry* atid_p = (active_transaction_id_entry*) find_equals_in_bst(&(ttbl->currently_active_transaction_ids), &(snp->transaction_id), FIRST_OCCURENCE);
 	if(atid_p != NULL)
 		return 0;
 
@@ -369,7 +372,11 @@ static int insert_in_currently_active_transaction_ids(transaction_table* ttbl, u
 		exit(-1);
 
 	// initialize it
-	atid_p->transaction_id = transaction_id;
+	atid_p->transaction_id = snp->transaction_id;
+	if(NULL != get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0)) // if the snapshot has even a single in_progress_transaction_id, then it is bound to be lower than it's own transaction_id
+		atid_p->smallest_active_transaction_id_in_snapshot = *get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0);
+	else // else set it to the transaction_id of the snapshot itself
+		atid_p->smallest_active_transaction_id_in_snapshot = snp->transaction_id;
 	initialize_bstnode(&(atid_p->embed_node));
 
 	// then insert it
@@ -499,7 +506,7 @@ mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl)
 	}
 
 	// insert it as an active new transaction_id
-	insert_in_currently_active_transaction_ids(ttbl, snp->transaction_id);
+	insert_in_currently_active_transaction_ids(ttbl, snp);
 
 	write_lock(&(ttbl->transaction_table_lock), BLOCKING);
 

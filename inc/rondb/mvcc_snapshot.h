@@ -27,6 +27,9 @@ int insert_in_progress_transaction_in_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, ui
 
 void finalize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
 
+// avoid using this function.
+const uint256* get_in_progress_transaction_ids_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, cy_uint index);
+
 /*
 	The usage of this functions (to fully initialize a mvcc_snapshot) is as follows
 
