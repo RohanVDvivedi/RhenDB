@@ -2,6 +2,9 @@
 
 mvcc snapshot
  * function to test if a tuple with corresponding mvcc header could be vaccummed
+  * make active_transaction_id_entry store minimum_active_transaction_id_in_snapshot
+  * build function to get_vaccum_horizon_transaction_id
+ * build mvcc header function to identify if a tuple can be vaccummed
 
  * lock table (using VolatilePageStore)
  * attributes
