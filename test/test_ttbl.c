@@ -3,6 +3,15 @@
 
 #include<stdlib.h>
 
+void print_vaccum_horizon_transaction_id(transaction_table* ttbl)
+{
+	uint256 vhtxid = get_vaccum_horizon_transaction_id(ttbl);
+	printf("vhtxid = ");
+	char temp[80] = {};
+	serialize_to_decimal_uint256(temp, vhtxid);
+	printf("%s\n", temp);
+}
+
 int main()
 {
 	rondb rdb;
@@ -21,22 +30,29 @@ int main()
 
 	mvcc_snapshot* t1 = get_new_transaction_id(&ttbl);
 	print_mvcc_snapshot(t1);
+	print_vaccum_horizon_transaction_id(&ttbl);
 
 	mvcc_snapshot* t2 = get_new_transaction_id(&ttbl);
 	print_mvcc_snapshot(t2);
+	print_vaccum_horizon_transaction_id(&ttbl);
 
 	mvcc_snapshot* t3 = get_new_transaction_id(&ttbl);
 	print_mvcc_snapshot(t3);
+	print_vaccum_horizon_transaction_id(&ttbl);
 
 	update_transaction_status(&ttbl, t2->transaction_id, TX_ABORTED);
+	print_vaccum_horizon_transaction_id(&ttbl);
 
 	mvcc_snapshot* t4 = get_new_transaction_id(&ttbl);
 	print_mvcc_snapshot(t4);
+	print_vaccum_horizon_transaction_id(&ttbl);
 
 	update_transaction_status(&ttbl, t3->transaction_id, TX_COMMITTED);
+	print_vaccum_horizon_transaction_id(&ttbl);
 
 	mvcc_snapshot* t5 = get_new_transaction_id(&ttbl);
 	print_mvcc_snapshot(t5);
+	print_vaccum_horizon_transaction_id(&ttbl);
 
 	deinitialize_mvcc_snapshot(t5);
 	free(t5);
