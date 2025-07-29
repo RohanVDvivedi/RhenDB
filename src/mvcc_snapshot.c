@@ -39,6 +39,11 @@ void finalize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
 	shrink_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids));
 }
 
+const uint256* get_in_progress_transaction_ids_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, cy_uint index)
+{
+	return get_from_front_of_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids), index);
+}
+
 int is_self_transaction_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint256 transaction_id)
 {
 	// only if transaction_id == mvccsnp_p->transaction_id
