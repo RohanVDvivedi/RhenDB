@@ -1,9 +1,5 @@
  PICKED TASKS
 
-mvcc snapshot
- * build function to get_vaccum_horizon_transaction_id
- * build mvcc header function to identify if a tuple can be vaccummed
-
  * lock table (using VolatilePageStore)
  * attributes
    * phy_id (physical id of the tuple on the disk, (page_id, tuple_id))
