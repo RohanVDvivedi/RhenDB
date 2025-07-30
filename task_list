@@ -49,8 +49,9 @@
 
  * Design methodology
    * we will use postgresql architecture over (mysql like) mini transactions
-   * we will have heaps (a future tuple indexer data structure) for storing tables, insert to which gives us a page_id (physical page_id) and a tuple_index (slot no) in that page
+   * we will have heaps for storing tables, insert to which gives us a page_id (physical page_id) and a tuple_index (slot no) in that page
    * indexes will always include the page_id, tuple_index in the index key right after the actual key columns, and the index entry will be index key followed by the covering columns
+   * standard latch rules apply index->heap_page, heap_pages_tree->heap_page
    * inserts/deletes will always be done to heap in a single mini transaction one at a time
      * inserts/deletes to indexes will be done in mini transactions not owned by anyone
    * updates are just delete followed by insert into the heap
