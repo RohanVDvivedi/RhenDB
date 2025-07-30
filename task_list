@@ -2,12 +2,15 @@
 
  * lock table (using VolatilePageStore)
  * attributes
-   * phy_id (physical id of the tuple on the disk, (page_id, tuple_id))
-   * lock_mode (SHARED, EXCLUSIVE and many more)
-   * lock_status (HELD or WAITING)
+   * resource_type - uint16_t
+   * resource_id - uint256 -> table_id or row_id (page_id, tuple_index)
+   * lock_mode (SHARED, EXCLUSIVE and many more) uint16_t
+   * lock_status (WAITING or HELD) 1 bit
    * transaction_id (uint256 id of the transaction)
-   * timestamp (creation of this entry, for wait timeouts)
- * define indexes for it
+   * timestamp (creation of this entry, for wait timeouts) -> new entry to be created for lock_mode change from WAITING -> HELD
+ * indexes
+   * transaction_id -> lock (to find all locks held and release them upon a commit or abort)
+   * resource_type, resource_id, lock_mode, lock_status -> lock (to find all contentions to acquire new locks AND to detect deadlocks)
 
  * define catalog tables and indexes on it - persistent
  * define statistics tables - persistent and possibly in a different database
