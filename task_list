@@ -15,6 +15,16 @@
    * standard latch rules apply index->heap_page, heap_pages_tree->heap_page, heap_pages_tree is just like another index
    * while accessing the free_space_tree rules apply to access and always lock in the following order, free_sapce_tree->heap_pages_tree->heap_page
 
+Design structure
+ * separate heap_table directory
+  * having heap_pages_tree header and source
+   * it will consume heap_page as an internal module
+   * it will be a bplus_tree of page_id-s
+   * you can ask for a lock on a page with page_id, with a flag to ensure that it exists
+   * you can start a scan over a tree with a given page_id and tuple_index (to start a scan from last position you left from, mvcc ensures that this tuple is not vaccummed), it will provide a get_next function, and NULL_PAGE_ID starts scan from beginning
+   * there will also be an insert and remove entry function for this bplus_tree
+   * api similar to some of tuple_indexer data_structure
+
  * lock table (using VolatilePageStore)
  * attributes
    * resource_type - uint16_t
