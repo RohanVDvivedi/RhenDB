@@ -44,9 +44,6 @@
    * joins -> with/without indexes
    * union, set difference and intersection
 
- * define layout for MVCC columns and figure out how to store multiple versions
- * define MVCC rules for different isolation levels
-
  * Design methodology
    * we will use postgresql architecture over (mysql like) mini transactions
    * we will have heaps for storing tables, insert to which gives us a page_id (physical page_id) and a tuple_index (slot no) in that page
