@@ -1,13 +1,13 @@
  PICKED TASKS
 
- * heap_table
+  1.* heap_table
    * heap_table_root {uint64_t free_space_tree_root_page_id, uint64_t heap_pages_root_page_id}
    * we will need 2 bplus_trees
      * free_space_tree, key = (free_space, page_id) -> in volatile memory protected by a rwlock
      * heap_pages_tree, key = (page_id) -> possibly persistent on disk, inside a mintxengine protected by deadlock avoider btree lock
    * free_space_tree has to be volatile, and stores (free_space, page_id)
-   * heap_pages_tree may be volatile or persistent ACID, and stores (page_id)
-   * heap_pages_tree works just like any other index, except indexes point to (page_id, tuple_index) instead of page_id
+   * heap_pages_tree has to be persistent ACID, and stores (page_id)
+   * heap_pages_tree works just like any other index, except indexes point to (page_id, tuple_index) instead of just (page_id)
    * free space tree is just an hint in volatile memory for the best page to accomodate a new tuple, its contents will not always be consistent with the heap pages tree
    * free_space_tree is only used to find a page with enough free space to the next incomming tuple, presence of this page must be verified using the heap_pages_tree
    * scan over the complete table only scans all the pages in the order of their page_id-s using the heap_pages_tree
@@ -15,17 +15,23 @@
    * standard latch rules apply index->heap_page, heap_pages_tree->heap_page, heap_pages_tree is just like another index
    * while accessing the free_space_tree rules apply to access and always lock in the following order, free_sapce_tree->heap_pages_tree->heap_page
 
-Design structure
- * separate heap_table directory
-  * having heap_pages_tree header and source
-   * it will consume heap_page as an internal module
-   * it will be a bplus_tree of page_id-s
-   * you can ask for a lock on a page with page_id, with a flag to ensure that it exists
-   * you can start a scan over a tree with a given page_id and tuple_index (to start a scan from last position you left from, mvcc ensures that this tuple is not vaccummed), it will provide a get_next function, and NULL_PAGE_ID starts scan from beginning
-   * there will also be an insert and remove entry function for this bplus_tree
-   * api similar to some of tuple_indexer data_structure
+ 2.* define catalog tables and indexes on it - persistent
+   * same as indexes and heap_tables
 
- * lock table (using VolatilePageStore)
+ 3.0* implement SQL parser (possibly in a different directory)
+ 3.1* implement query plan tree
+   * with operators
+ 3.2* implement relational algebra operators
+   * selection -> filter with/without indexes
+   * projection -> picking columns
+   * sorting -> with/without indexes
+   * joins -> with/without indexes
+   * union, set difference and intersection
+
+ 3.* define statistics tables - persistent and possibly in a different database
+   * same as indexes and heap_tables (low priority)
+
+ 4.* lock table (using VolatilePageStore)
  * attributes
    * resource_type - uint16_t
    * resource_id - uint256 -> table_id or row_id (page_id, tuple_index)
@@ -34,25 +40,11 @@ Design structure
    * transaction_id (uint256 id of the transaction)
    * timestamp (creation of this entry, for wait timeouts) -> new entry to be created for lock_mode change from WAITING -> HELD
  * indexes
-   * transaction_id -> lock (to find all locks held and release them upon a commit or abort)
+   * free_space_tree (free_space, page_id) => mandatory
+   * transaction_id -> lock (to find all locks held and release them upon a commit or abort) => mandatory
    * resource_type, resource_id, lock_mode, lock_status -> lock (to find all contentions to acquire new locks AND to detect deadlocks)
-
- * define catalog tables and indexes on it - persistent
- * define statistics tables - persistent and possibly in a different database
- * define beedb struct
-   * with pointer access to volatile memory using VolatilePageStore, and to shared persistent memory using MinTxEngine
-   * using their corresponding page access methods and page modification methods
-   * add data structures to get access for most relevant tuple definitions
-
- * implement SQL parser (possibly in a different directory)
- * implement query plan tree
-   * with operators
- * implement relational algebra operators
-   * selection -> filter with/without indexes
-   * projection -> picking columns
-   * sorting -> with/without indexes
-   * joins -> with/without indexes
-   * union, set difference and intersection
+   * think about more indexes as per accesses
+ * this work can be delayed we can solely rely on mintxengine and MVCC rules to give us the snapshot isolation that we desire
 
  * Design methodology
    * we will use postgresql architecture over (mysql like) mini transactions
