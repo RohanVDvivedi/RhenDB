@@ -17,26 +17,41 @@
    * single rwlock (LockKing) for free_space_tree and mintxengine managed latches and locks for heap_pages_tree
 
  Design and api
-   * get_heap_page_with_enough_free_space()
-     * read lock free_space_tree, and maintain the list of skipped entries
-     * iterate over all entries where free_space >= desired value
-     * for each page_id open a scan to make sure it exists in heap_pages_tree, if not skip this entry
-     * with this scan open, write lock the page itself
-     * if it does not have enough free space skip this entry
-     * else read unlock the free_space_tree, release scan on heap_pages tree and return locked page
-     * if end of free_space_tree is reached, create a new heap page, insert it in heap_pages_tree and return that
-     * but before that write_lock free_space_tree remove all skipped entries and the entry for the page that we just locked and found the free space in
-   * notify_heap_page_to_free_space_tree(page_id, free_space)
-     * inserts an entry in free_space_tree, with write_lock held
-     * call this function after you release any lock where you may have modified the heap_page, at any point after acquiring it
-   * simple raw b+tree iterator to get heap_pages in order from heap_pages_tree in order of their page_ids
-     * get_new_heap_table_iterator(page_id, tuple_index) -> we start at some page_id >= page_id in the parameter
-     * get_curr_heap_page() -> to get page
-     * get_curr_heap_tuple() -> to get tuple
-     * next_heap_page()
-     * next_heap_tuple()
-     * delete_heap_table_iterator()
- **** it would be deadlock prone to acquire index (or heap_pages_tree) latches after already holding some heap_page with a latch, PONDER
+   * separate module/directory heap_table
+   * struct heap_table_definition
+   {
+      rwlock free_space_tree_lock; // to be locked for only the free space tree
+      uint64_t free_space_tree_root_page_id;
+      bplus_tree_tuple_defs* free_space_tree_defs;
+      rage_engine* free_space_tree_engine; // volatile engine, preferrably volatilepagestore
+
+      uint64_t heap_pages_tree_root_page_id; // should be passed externally and not to be part of tuple defs of heap_table
+      bplus_tree_tuple_defs* heap_pages_tree_defs;
+      rage_engine* heap_pages_tree_engine; // persistent acid engine, preferrably mintxengine
+
+      tuple_def* row_def; // first element must be mvcc_header
+
+      async_free_space_executor_thread; // executes free space tree operations, for functions with async prefix
+      async_free_space_executor_queue<{INSERT/REMOVE, free_space, page_id}>; // value arraylist, it will trigger when it is full
+
+      async_heap_pagees_executor_thread;
+      async_heap_pages_executor_queue<{REMOVE, page_id}>;
+   };
+   * async functions that operate only using the write lock on the free_space_tree_lock, on a separate thread
+   * async_remove_from_free_space_tree(uint32_t free_space, uint64_t page_id);
+   * async_insert_in_free_space_tree(uint32_t free_space, uint64_t page_id);
+   * persistent_page get_heap_page_with_enough_free_space(uint32_t free_space); // async_removes entries that do not exist in heap_pages_tree, of that do not have enough free space then a remove and insert is also asynced, runs everything in a read only mode, only uses the transaction_id for locking the heap_page itself, iterates until the end of the free_space tree, after which it allocates a new heap_page and returns that instead
+   * get_new_heap_table_iterator(uint64_t page_id, uint32_t tuple_index); // heap_pages_tree always scans in leaf-only read-locked traversal, heap_pages are the only ones that could be write locked here
+   * get_curr_heap_page_id();
+   * get_curr_heap_page();
+   * get_curr_heap_tuple_index();
+   * get_curr_heap_tuple();
+   * next_heap_page_heap_table_iterator();
+   * next_heap_tuple_heap_table_iterator();
+   * clone_heap_table_iterator();
+   * delete_heap_table_iterator();
+   * if you modify the heap_page please perform async_remove/insert for free space tree
+   * we need a bulk_job_executor, using value_arraylist and a periodic_job, that works at fixed intervals or immediately when the queue is full in boompar OR does it using a fixed maximum thread count cached thread pool executor for both the rage_engine-s
 
  2.* define catalog tables and indexes on it - persistent
    * same as indexes and heap_tables
