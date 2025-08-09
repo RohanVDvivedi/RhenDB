@@ -39,13 +39,18 @@ CP:=cp
 SOURCES=$(shell find ${SRC_DIR} -name '*.c')
 # and the required objects to be built, as intermediary
 OBJECTS=$(patsubst ${SRC_DIR}/%.c, ${OBJ_DIR}/%.o, ${SOURCES})
+# name of directories of the objects
+OBJECTS_DIRS=$(sort $(dir $(OBJECTS)))
 
 # rule to make the directory for storing object files, that we create
 ${OBJ_DIR} :
 	${MK} $@
+${OBJ_DIR}/% :
+	${MK} $@
 
-# generic rule to build any object file
-${OBJ_DIR}/%.o : ${SRC_DIR}/%.c | ${OBJ_DIR}
+# generic rule to build any object file, it will depend on the existing of its directory path (i.e. ${@D}, this must use secondar expansion of makefile)
+.SECONDEXPANSION:
+${OBJECTS} : ${OBJ_DIR}/%.o : ${SRC_DIR}/%.c | $${@D}
 	${CC} ${CFLAGS} -c $< -o $@
 
 # rule to make the directory for storing libraries, that we create
