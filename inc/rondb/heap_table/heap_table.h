@@ -3,6 +3,10 @@
 
 #include<lockking/rwlock.h>
 
+#include<cutlery/singlylist.h>
+
+#include<boompar/periodic_job.h>
+
 #include<tupleindexer/bplus_tree/bplus_tree.h>
 #include<tupleindexer/heap_page/heap_page.h>
 
@@ -35,6 +39,11 @@ struct heap_table
 	bplus_tree_tuple_defs* heap_pages_tree_defs;
 
 	rage_engine* heap_pages_tree_engine; // persistent acid engine, preferrably mintxengine
+
+	// only this job is allowed to asynchronously insert/remove entries from the free_space_tree
+	periodic_job* free_space_tree_modifier_job;
+	singlylist free_space_tree_modifying_params_list; // for this params are to be inserted into this singlylist and they act as a queue, push at tail and pop from head
+	pthread_mutex_t free_space_tree_modifying_params_lock; // finally we need a chlidmost lock to manage concurrency for inserting and removing elements from the free_space_tree_modifying_params_list
 };
 
 // for all the below functions the transaction_id must belong to the persistent ACID engine instance that is used for the heap_pages and the heap_pages_tree
