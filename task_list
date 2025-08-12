@@ -1,57 +1,40 @@
  PICKED TASKS
 
   1.* heap_table
-   * heap_table_root {uint64_t free_space_tree_root_page_id, uint64_t heap_pages_tree_root_page_id}
-   * we will need 2 bplus_trees
-     * free_space_tree, key = (free_space, page_id) -> in volatile memory protected by a rwlock
-     * heap_pages_tree, key = (page_id) -> possibly persistent on disk, inside a mintxengine protected by deadlock avoider btree lock
-   * free_space_tree has to be volatile, and stores (free_space, page_id)
-   * heap_pages_tree has to be persistent ACID, and stores (page_id)
-   * heap_pages_tree works just like any other index, except indexes point to (page_id, tuple_index) instead of just (page_id)
-   * free space tree is just an hint in volatile memory for the best page to accomodate a new tuple, its contents will not always be consistent with the heap pages tree
-   * free_space_tree is only used to find a page with enough free space to the next incomming tuple, presence of this page must be verified using the heap_pages_tree, free_sapce_tree is just a hint
-   * scan over the complete table only scans all the pages in the order of their page_id-s using the heap_pages_tree
-   * there will be a function called get_page_with_enough_space to get a page and insert a tuple on it, this function will also be responsible to rebuild the free space tree when it finds plenty of wrong entries
-   * standard latch rules apply index->heap_page, heap_pages_tree->heap_page, heap_pages_tree is just like another index
-   * while accessing the free_space_tree rules apply to access and always lock in the following order, free_space_tree->heap_pages_tree->heap_page
-   * single rwlock (LockKing) for free_space_tree and mintxengine managed latches and locks for heap_pages_tree
+   * we will need 1 bplus_tree
+     * key = (free_space, page_id) -> in ACID persistent store
+   * this tree works just like any other index, except indexes point to (page_id, tuple_index) instead of just (page_id) from the tuple (free_space, page_id)
+   * free space here is just an hint for the best page to accomodate a new tuple, it's will not always be consistent with the actual free_space on the page
+   * additionally we will have a rwlock called ordering_lock, to be takes in shared mode to preserve and read a fixed ordering of the heap pages
+   * it is taken in exclusive mode at periodic intervals to start small mini transactions to fix the free_space, if any of them is found to be wrong, during a scan or during the logic for finding the next best fit page for the new tuple
+   * ordering lock is not required for finding free space for a tuple and for accessing pages after an index traversal
+   * standard latch rules apply index->heap_page, heap_table->heap_page, heap_table is just like another index
 
  Design and api
    * separate module/directory heap_table
-   * struct heap_table_definition
+   * struct heap_table
    {
-      rwlock free_space_tree_lock; // to be locked for only the free space tree
-      uint64_t free_space_tree_root_page_id;
-      bplus_tree_tuple_defs* free_space_tree_defs;
-      rage_engine* free_space_tree_engine; // volatile engine, preferrably volatilepagestore
+      uint64_t root_page_id;
 
-      uint64_t heap_pages_tree_root_page_id; // should be passed externally and not to be part of tuple defs of heap_table
-      bplus_tree_tuple_defs* heap_pages_tree_defs;
-      rage_engine* heap_pages_tree_engine; // persistent acid engine, preferrably mintxengine
+      bplus_tree_tuple_defs heap_table_def;
+      tuple_def* record_def;
 
-      tuple_def* row_def; // first element must be mvcc_header
-
-      async_free_space_executor_thread; // executes free space tree operations, for functions with async prefix
-      async_free_space_executor_queue<{INSERT/REMOVE, free_space, page_id}>; // value arraylist, it will trigger when it is full
-
-      async_heap_pagees_executor_thread;
-      async_heap_pages_executor_queue<{REMOVE, page_id}>;
+      periodic_job* free_space_fixer;
+      singlylist<pair<uint32_t free_space, uint64_t page_id>> free_space_fixer_params;
    };
-   * async functions that operate only using the write lock on the free_space_tree_lock, on a separate thread
-   * async_remove_from_free_space_tree(uint32_t free_space, uint64_t page_id);
-   * async_insert_in_free_space_tree(uint32_t free_space, uint64_t page_id);
-   * persistent_page get_heap_page_with_enough_free_space(uint32_t free_space); // async_removes entries that do not exist in heap_pages_tree, of that do not have enough free space then a remove and insert is also asynced, runs everything in a read only mode, only uses the transaction_id for locking the heap_page itself, iterates until the end of the free_space tree, after which it allocates a new heap_page and returns that instead
-   * get_new_heap_table_iterator(uint64_t page_id, uint32_t tuple_index); // heap_pages_tree always scans in leaf-only read-locked traversal, heap_pages are the only ones that could be write locked here
-   * get_curr_heap_page_id();
-   * get_curr_heap_page();
+   * fix_free_space_info_for_entry(uint64_t root_page_id, uint32_t free_space_old, uint64_t page_id); // removes 
+   * get_new_heap_table_iterator(uint32_t free_space, uint64_t page_id, uint32_t tuple_index); // always scans in leaf-only read-locked traversal, heap_pages are the only ones that could be write locked here
+   * get_curr_registered_free_space();
+   * get_curr_page_id();
+   * get_curr_heap_page(int write_locked);
    * get_curr_heap_tuple_index();
    * get_curr_heap_tuple();
-   * next_heap_page_heap_table_iterator();
-   * next_heap_tuple_heap_table_iterator();
+   * next_entry_heap_table_iterator();
+   * next_tuple_heap_table_iterator();
    * clone_heap_table_iterator();
    * delete_heap_table_iterator();
-   * if you modify the heap_page please perform async_remove/insert for free space tree
-   * we need a bulk_job_executor, using value_arraylist and a periodic_job, that works at fixed intervals or immediately when the queue is full in boompar OR does it using a fixed maximum thread count cached thread pool executor for both the rage_engine-s
+   * if you modify the heap_page please perform an insert into the free_space_fixer_params
+   * possibly build it in tuple indexer, so that it can be used widely
 
  2.* define catalog tables and indexes on it - persistent
    * same as indexes and heap_tables
