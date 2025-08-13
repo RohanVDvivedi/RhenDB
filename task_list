@@ -2,6 +2,7 @@
 
   1.* heap_table
    * finish it up first in TupleIndexer
+   * we will need ordering_lock on it, to limit unused_space fixer thread from modifying the order of the tree, while iterative table scan is in progress, we can do this using lock tables PONDER
 
  2.* define catalog tables and indexes on it - persistent
    * same as indexes and heap_tables
