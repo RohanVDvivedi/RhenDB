@@ -1,40 +1,7 @@
  PICKED TASKS
 
   1.* heap_table
-   * we will need 1 bplus_tree
-     * key = (free_space, page_id) -> in ACID persistent store
-   * this tree works just like any other index, except indexes point to (page_id, tuple_index) instead of just (page_id) from the tuple (free_space, page_id)
-   * free space here is just an hint for the best page to accomodate a new tuple, it's will not always be consistent with the actual free_space on the page
-   * additionally we will have a rwlock called ordering_lock, to be takes in shared mode to preserve and read a fixed ordering of the heap pages
-   * it is taken in exclusive mode at periodic intervals to start small mini transactions to fix the free_space, if any of them is found to be wrong, during a scan or during the logic for finding the next best fit page for the new tuple
-   * ordering lock is not required for finding free space for a tuple and for accessing pages after an index traversal
-   * standard latch rules apply index->heap_page, heap_table->heap_page, heap_table is just like another index
-
- Design and api
-   * separate module/directory heap_table
-   * struct heap_table
-   {
-      uint64_t root_page_id;
-
-      bplus_tree_tuple_defs heap_table_def;
-      tuple_def* record_def;
-
-      periodic_job* free_space_fixer;
-      singlylist<pair<uint32_t free_space, uint64_t page_id>> free_space_fixer_params;
-   };
-   * fix_free_space_info_for_entry(uint64_t root_page_id, uint32_t free_space_old, uint64_t page_id); // removes 
-   * get_new_heap_table_iterator(uint32_t free_space, uint64_t page_id, uint32_t tuple_index); // always scans in leaf-only read-locked traversal, heap_pages are the only ones that could be write locked here
-   * get_curr_registered_free_space();
-   * get_curr_page_id();
-   * get_curr_heap_page(int write_locked);
-   * get_curr_heap_tuple_index();
-   * get_curr_heap_tuple();
-   * next_entry_heap_table_iterator();
-   * next_tuple_heap_table_iterator();
-   * clone_heap_table_iterator();
-   * delete_heap_table_iterator();
-   * if you modify the heap_page please perform an insert into the free_space_fixer_params
-   * possibly build it in tuple indexer, so that it can be used widely
+   * finish it up first in TupleIndexer
 
  2.* define catalog tables and indexes on it - persistent
    * same as indexes and heap_tables
