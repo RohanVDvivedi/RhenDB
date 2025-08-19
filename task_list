@@ -1,7 +1,7 @@
  PICKED TASKS
 
  1.* heap_table
-   * finish it up first in TupleIndexer
+   * test heap_table basic working in tupleindexer and comeback
    * we will need ordering_lock on it, to limit unused_space fixer thread from modifying the order of the tree, while iterative table scan is in progress, we can do this using lock tables PONDER
 
  2.* lock table (using VolatilePageStore)
