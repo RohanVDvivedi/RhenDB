@@ -3,6 +3,7 @@
  1.* heap_table
    * test heap_table basic working in tupleindexer and comeback
    * we will need ordering_lock on it, to limit unused_space fixer thread from modifying the order of the tree, while iterative table scan is in progress, we can do this using lock tables PONDER
+   * utuility data structure to accumulate and process (unused_space, page_id) entries that are wrong or empty, and process them using the fix_* function in a batch, provide a hashmap page_id->unused_space to accumulate into
 
  2.* lock table (using VolatilePageStore)
  * attributes
