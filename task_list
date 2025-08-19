@@ -30,6 +30,7 @@
 
  3.* define catalog tables and indexes on it - persistent
    * same as indexes and heap_tables
+   * prilimnary investigation revealed no-MVCC and no-per-tuple-locking, instead per table locking, do more research
 
  4.0* implement SQL parser (possibly in a different directory)
  4.1* implement query plan tree
