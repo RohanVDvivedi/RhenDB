@@ -33,17 +33,27 @@
    * same as indexes and heap_tables
    * prilimnary investigation revealed no-MVCC and no-per-tuple-locking, instead per table locking, do more research
 
- 4.0* implement SQL parser (possibly in a different directory)
- 4.1* implement query plan tree
+ 4.* giant_tuple_def, an in-memory tuple_def for an on-disk tuple_def (containing worms)
+   * conversion function to convert on-disk tuple_def to giant_tuple_def
+   * conversion function to convert on-disk tuple to giant_tuple
+   * use this giant_tuple_def's tuples for in-memory tuples
+   * compute max_size for this tuples using tuplestore, and also limit max element_count for the complete project as a macro
+
+ 5.* tuple_file structure
+   * stores tuples or giant_tuples sequentially one after the another and reads them back like from a stream and deletes this temp file on closing
+   * usefull for external sorting and hash joins
+
+ 6.0* implement SQL parser (possibly in a different directory)
+ 6.1* implement query plan tree
    * with operators
- 4.2* implement relational algebra operators
+ 6.2* implement relational algebra operators
    * selection -> filter with/without indexes
    * projection -> picking columns
-   * sorting -> with/without indexes
-   * joins -> with/without indexes
+   * sorting -> implement external giant_tuple_def sorting, by using a tuple_file
+   * joins -> with/without indexes (hashjoins using a tuple_file)
    * union, set difference and intersection
 
- 5.* define statistics tables - persistent and possibly in a different database
+ 7.* define statistics tables - persistent and possibly in a different database
    * same as indexes and heap_tables (low priority)
 
  * Design methodology
