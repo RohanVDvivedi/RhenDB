@@ -44,7 +44,7 @@
    * write can also be done as a stream, returning the offset in the file for this tuple
    * file stays all in-memory up until a point, over which it spills to the disk, and then is accessed from there
    * no tuple updates allowed
-   * also allows read-only mapping to mmap pages containing a tuple, and operate on it as if it is all in memory
+   * also allows read-only mapping to mmap (MAP_SHARED and read-only mapping) pages containing a tuple, and operate on it as if it is all in memory
    * usefull for external sorting, hash joins and passing intermediate tuples between different operators
 
  5.0* implement SQL parser (possibly in a different directory)
