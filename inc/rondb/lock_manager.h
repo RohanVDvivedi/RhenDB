@@ -40,4 +40,40 @@ struct lock_manager
 	rage_engine* ltbl_engine;
 };
 
+typedef enum lock_state lock_state;
+enum lock_state
+{
+	WAITING = 0,
+	LOCK_HELD = 1,
+};
+
+// maximum number of bytes to be allocated for the resource_id of the resource to be locked
+#define MAX_RESOURCE_ID_SIZE 16
+
+typedef struct lock_entry lock_entry;
+struct lock_entry
+{
+	// transaction_id that has locked or is waiting for the lock
+	uint256 transaction_id;
+
+	// this is the resource_type for the below resource_id
+	// this dictates what lock_modes can be used for this resource_type
+	// this implies it is same as the type of the lock to be used on this resource
+	uint32_t resource_type;
+
+	// the resource that is locked it is atmost 16 bytes wide, i.e. 128 bits
+	uint8_t resource_id_size;
+	uint8_t resource_id[MAX_RESOURCE_ID_SIZE];
+
+	// lock mode is the mode of the lock, for instance a (resource_type ==) reader_writer_lock has 2 modes, READ_MODE and WRITE_MODE
+	uint16_t lock_mode;
+
+	// lock_state is a 1-bit field that suggests if the lock_entry belongs to the waiting members or the lock is held
+	lock_state lock_state;
+
+	// this is the time when this lock_entry was created for lock_state == WAITING,
+	// or if the lock_state == LOCK_HELD, this is the time when the lock_state changed to LOCK_HELD
+	uint64_t updated_at;
+};
+
 #endif
