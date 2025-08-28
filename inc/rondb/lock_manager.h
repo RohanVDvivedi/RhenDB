@@ -31,15 +31,15 @@ struct lock_manager
 
 	// root of the lock_table and it's heap_table's tuple_defs
 	uint64_t lock_table_root_page_id;
-	heap_table_tuple_defs lock_table_td;
+	heap_table_tuple_defs* lock_table_td;
 
 	// index that stores (transaction_id, resource_type, resource_id, lock_state, lock_mode) -> lock
 	uint64_t tx_index_root_page_id;
-	bplus_tree_tuple_defs tx_index_td;
+	bplus_tree_tuple_defs* tx_index_td;
 
 	// index that stores (resource_type, resource_id, lock_state, lock_mode) -> lock
 	uint64_t rt_index_root_page_id;
-	bplus_tree_tuple_defs rt_index_td;
+	bplus_tree_tuple_defs* rt_index_td;
 
 	// below is the volatile non-ACID rage_engine that powers the transaction_table
 	// preferrably an implementation of the VolatilePageStore based rage_engine
