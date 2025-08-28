@@ -1,32 +1,8 @@
  PICKED TASKS
 
  1.* lock table (using VolatilePageStore)
- * attributes
-   * resource_type - uint16_t
-   * resource_id - uint256 -> table_id or row_id (page_id, tuple_index)
-   * transaction_id (uint256 id of the transaction)
-   * lock_type (HEAP_TABLE_ORDERING_LOCK(for scan and vaccum of heap tables), SEQUENCE_LOCK(for auto-increment), RWLOCK, MUTEX, etc and many more, whose lock compatibility matrix can be registered at runtime at any time) uint32_t
-   * lock_mode (SHARED, EXCLUSIVE and many more depending on the lock_type supported by lock_type) uint16_t
-   * lock_status (WAITING or HELD) 1 bit
-   * updated_at_in_seconds (creation of this entry in clock monotonic seconds, for wait timeouts and deadlocks) uint64_t
- * rules
-   * lock_type with its lock compatibility matrix has to be loaded at runtime right before application starts, you may use glock matric from LockKing
-   * resource_type, resource_id may not be confined to just one type of lock_type, like a heap_table may have ordering and sequence locks locked at once, along with other locks that we may need in serializable isolation level
- * structure
-   * protected using a global rwlock
-   * heap_table to hold all lock entries
-   * transaction_id -> lock (to find all locks held and release them upon a commit or abort) => mandatory
-   * resource_type, resource_id, lock_type -> lock (to find all contentions to acquire new locks AND to detect deadlocks)
- * api
-   * try_acquire_lock(transaction_id, resource_type, resource_id, lock_type, lock_mode)
-   * acquire_lock(transaction_id, resource_type, resource_id, lock_type, lock_mode)
-   * change_lock_mode(transaction_id, resource_type, resource_id, lock_type, lock_mode_old, lock_mode_new)
-   * release_lock(transaction_id, resource_type, resource_id, lock_type, lock_mode)
-   * release_all_locks(transaction_id)
- * identified locks
-   * ordering_lock on heap_table shared mode in scan and exclusive mode for fixing the accumulated entries
-   * sequence_lock on btree indexes for shared mode for all accesses and exclusive more for auto increments
-   * row locks on rows to allow serializable isolation in the future
+   * implement utility table and index scan methods
+   * implement the actual lock_manager methods
 
  2.* define catalog tables and indexes on it - persistent
    * same as indexes and heap_tables
