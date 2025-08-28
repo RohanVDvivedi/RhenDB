@@ -33,11 +33,11 @@ struct lock_manager
 	uint64_t lock_table_root_page_id;
 	heap_table_tuple_defs lock_table_td;
 
-	// index that stores transaction_id -> lock
+	// index that stores (transaction_id, resource_type, resource_id, lock_state, lock_mode) -> lock
 	uint64_t tx_index_root_page_id;
 	bplus_tree_tuple_defs tx_index_td;
 
-	// index that stores (resource_type, resource_id) -> lock
+	// index that stores (resource_type, resource_id, lock_state, lock_mode) -> lock
 	uint64_t rt_index_root_page_id;
 	bplus_tree_tuple_defs rt_index_td;
 
@@ -72,11 +72,11 @@ struct lock_entry
 	uint8_t resource_id_size;
 	uint8_t resource_id[MAX_RESOURCE_ID_SIZE];
 
-	// lock mode is the mode of the lock, for instance a (resource_type ==) reader_writer_lock has 2 modes, READ_MODE and WRITE_MODE
-	uint32_t lock_mode;
-
 	// lock_state is a 1-bit field that suggests if the lock_entry belongs to the waiting members or the lock is held
 	lock_state lock_state;
+
+	// lock mode is the mode of the lock, for instance a (resource_type ==) reader_writer_lock has 2 modes, READ_MODE and WRITE_MODE
+	uint32_t lock_mode;
 
 	// this is the time when this lock_entry was created for lock_state == WAITING,
 	// or if the lock_state == LOCK_HELD, this is the time when the lock_state changed to LOCK_HELD
