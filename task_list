@@ -3,6 +3,8 @@
  1.* lock table (using VolatilePageStore)
    * implement utility table and index scan methods
    * implement the actual lock_manager methods
+   * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock
+   * write test cases and test
 
  2.* define catalog tables and indexes on it - persistent
    * same as indexes and heap_tables
