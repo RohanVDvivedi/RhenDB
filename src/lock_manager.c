@@ -28,8 +28,10 @@ struct active_transaction_entry
 };
 
 // compare function using transaction_id for active_transaction_entry
+int compare_active_transaction_id_entry_by_transaction_id(const void* data1, const void* data2);
 
 // hash function using transaction_id for active_transaction_entry
+cy_uint hash_active_transaction_id_entry_by_transaction_id(const void* data);
 
 #define MAX_SERIALIZED_LOCK_ENTRY_SIZE (sizeof(uint256) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + sizeof(uint32_t) + 2) // +2 for the size and offset of resource_id
 
@@ -52,6 +54,14 @@ struct lock_entry
 	// lock mode is the mode of the lock, for instance a (resource_type ==) reader_writer_lock has 2 modes, READ_MODE and WRITE_MODE
 	uint32_t lock_mode;
 };
+
+void serialize_lock_entry_key(void* to, const lock_entry* from, const lock_manager lckmgr_p);
+
+void deserialize_lock_entry_key(const void* from, const lock_entry* to, const lock_manager lckmgr_p);
+
+void serialize_lock_entry_record(void* to, const lock_entry* from, const lock_manager lckmgr_p);
+
+void deserialize_lock_entry_record(const void* from, const lock_entry* to, const lock_manager lckmgr_p);
 
 #define MAX_SERIALIZED_WAIT_ENTRY_SIZE (sizeof(uint256) + sizeof(uint256) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + sizeof(uint32_t) + 2) // +2 for the size and offset of resource_id
 
@@ -76,6 +86,10 @@ struct waits_entry
 	uint8_t resource_id_size;
 	uint8_t resource_id[MAX_RESOURCE_ID_SIZE];
 };
+
+void serialize_wait_entry_record(void* to, const wait_entry* from, const lock_manager lckmgr_p);
+
+void deserialize_wait_entry_record(const void* from, const wait_entry* to, const lock_manager lckmgr_p);
 
 // --
 
