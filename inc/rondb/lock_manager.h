@@ -56,6 +56,8 @@ struct lock_manager
 	uint64_t rs_locks_root_page_id;
 	bplus_tree_tuple_defs* rs_locks_td;
 
+	// above tables can only be modified by the the transaction that acquire, release or transition locks
+
 	// composed of 2 transaction_id-s for waits_for_td and waits_back_td
 	tuple_def* wait_record_def;
 
@@ -72,6 +74,9 @@ struct lock_manager
 	*/
 	uint64_t waits_back_root_page_id;
 	bplus_tree_tuple_defs* waits_back_td;
+
+	// above tables can only be modified by the waiting_transaction_id, going to or returning from the wait, and only waiting_transaction_id is allowed to insert or remove it's entry from these tables
+	// waits_for(transaction_id), can only read them and broadcast the corresponding waiting_transaction_id
 
 	// waits_for graph dfs for deadlock detection uses a linked_page_list to store the stack of all the seen entries
 
