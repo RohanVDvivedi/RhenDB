@@ -9,6 +9,8 @@
 
 #include<rondb/rage_engine.h>
 
+#include<cutlery/hashmap.h>
+
 /*
 	1 transaction_id can lock 1 resource in only 1 lock_mode; i.e. (transaction_id, (resource_type, resource_id)) -> lock_mode, mapping has a unique mapping
 */

@@ -2,6 +2,8 @@
 
 #include<tupleindexer/heap_page/heap_page.h>
 
+#include<cutlery/bst.h>
+
 /*
 ** internal structures
 */
@@ -65,8 +67,8 @@ void deserialize_lock_entry_record(const void* from, const lock_entry* to, const
 
 #define MAX_SERIALIZED_WAIT_ENTRY_SIZE (sizeof(uint256) + sizeof(uint256) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + sizeof(uint32_t) + 2) // +2 for the size and offset of resource_id
 
-typedef struct waits_entry waits_entry;
-struct waits_entry
+typedef struct wait_entry wait_entry;
+struct wait_entry
 {
 	// transaction_id that is waiting for the lock
 	uint256 waiting_transaction_id;
