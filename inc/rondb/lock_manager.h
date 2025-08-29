@@ -69,7 +69,7 @@ struct lock_manager
 
 fail_build_on(MAX_RESOURCE_ID_SIZE > 100)
 
-void initialize_lock_manager(lock_manager* lckmgr_p, uint256 overflow_transaction_id, rage_engine* ltbl_engine);
+void initialize_lock_manager(lock_manager* lckmgr_p, uint256 overflow_transaction_id, uint32_t max_active_transaction_count, rage_engine* ltbl_engine);
 
 // registering a lock_type is same as registering a resource_type
 // both of them dictate what lock_mode-s you can use with them
