@@ -92,10 +92,14 @@ uint32_t register_lock_type_with_lock_manager(lock_manager* lckmgr_p, glock_matr
 typedef enum lock_result lock_result;
 enum lock_result
 {
-	ACQUIRED, // success
-	FAILED,   // happens when timeout_in_seconds = NON_BLOCKING
-	TIMEOUT,  // happens when timeout_in_seconds = BLOCKING or some non-zero value
-	DEADLOCK, // you must abort
+	ACQUIRED,     // success OR the lock is already held in the desired lock_mode, making the call acquire_*() and modify_*() functions reentrant
+
+	// all the three below enum values signify the call to acquire_*() and modify_*() has failed
+
+	ALREADY_HELD, // lock for the given resource_type and resource_id is held in some other lock_mode by the transaction_id in context
+	FAILED,       // happens when timeout_in_seconds = NON_BLOCKING
+	TIMEOUT,      // happens when timeout_in_seconds = BLOCKING or some non-zero value
+	DEADLOCK,     // you must abort
 };
 
 // timeout value can also be BLOCKING and NON_BLOCKING
