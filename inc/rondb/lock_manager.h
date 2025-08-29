@@ -97,16 +97,14 @@ enum lock_result
 	// all the three below enum values signify the call to acquire_*() and modify_*() has failed
 
 	ALREADY_HELD, // lock for the given resource_type and resource_id is held in some other lock_mode by the transaction_id in context
-	FAILED,       // happens when timeout_in_seconds = NON_BLOCKING
+	FAILED,       // happens when timeout_in_seconds = NON_BLOCKING, or the old_lock_mode can not transition into the new_lock_mode, due to conflicts with lock held in lock_mode-s with other transactions
 	TIMEOUT,      // happens when timeout_in_seconds = BLOCKING or some non-zero value
 	DEADLOCK,     // you must abort
 };
 
 // timeout value can also be BLOCKING and NON_BLOCKING
-lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint16_t lock_mode, uint64_t timeout_in_milliseconds);
-
-// timeout value can also be BLOCKING and NON_BLOCKING
-lock_result modify_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint16_t old_lock_mode, uint16_t new_lock_mode, uint64_t timeout_in_milliseconds);
+// acquires the lock or transition the lock into the new_lock_mode, old_lock_mode can be equal to the lock not being held
+lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint16_t new_lock_mode, uint64_t timeout_in_milliseconds);
 
 void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint16_t lock_mode);
 
