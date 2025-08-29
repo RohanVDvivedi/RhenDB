@@ -36,10 +36,10 @@ struct lock_manager
 	rwlock table_lock;
 
 	// this is the record_def for the lock_table's records
-	// this tuple_def is similar to the lock_entry given below
 	tuple_def* lock_record_def;
 
 	// lock_record_def looks like the lock_entry
+	// it only preserves and makes lock_table hold locks that are held by some transaction
 
 	// root of the lock_table and it's heap_table's tuple_defs
 	uint64_t lock_table_root_page_id;
