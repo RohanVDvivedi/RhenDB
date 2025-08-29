@@ -9,6 +9,10 @@
 
 #include<rondb/rage_engine.h>
 
+/*
+	1 transaction_id can lock 1 resource in only 1 lock_mode; i.e. (transaction_id, (resource_type, resource_id), lock_mode) is a unique tuple
+*/
+
 typedef struct lock_manager lock_manager;
 struct lock_manager
 {
@@ -20,15 +24,11 @@ struct lock_manager
 	uint32_t locks_type_count;
 	glock_matrix* lock_matrices;
 
-	// active_transactions are expected to be finite, and a transaction can only wait for atmost 1 resource at a time, limiting the size of the below hashmaps to just that many
+	// active_transactions are expected to be finite, limiting the size of the below hashmaps to just that many
 
 	// hashmap of active transactions, that are either holding locks, or are waiting for a lock
 	// transaction_id -> active_transaction_entry
 	hashmap active_transactions;
-
-	// hashmap of waiting transactions, that are waiting for a lock on some resource to be released
-	// (resource_type, resource_id) -> active_transaction_entry
-	hashmap waiting_transactions;
 
 	// since the lock_table required a volatile non-ACID rage_engine
 	// we need this lock to protect the volatile contents of the lock_table
@@ -41,21 +41,37 @@ struct lock_manager
 	// lock_record_def looks like the lock_entry
 	// it only preserves and makes lock_table hold locks that are held by some transaction
 
-	// root of the lock_table and it's heap_table's tuple_defs
-	uint64_t lock_table_root_page_id;
-	heap_table_tuple_defs* lock_table_td;
+	// index that stores (transaction_id, resource_type, resource_id, lock_mode)
+	/* used to
+		1. release locks on all resources for a transaction_id, search locks for a particular transaction_id
+	*/
+	uint64_t tx_locks_root_page_id;
+	bplus_tree_tuple_defs* tx_locks_td;
 
-	// index that stores (transaction_id, resource_type, resource_id, lock_mode) -> lock
-	uint64_t tx_index_root_page_id;
-	bplus_tree_tuple_defs* tx_index_td;
+	// index that stores (resource_type, resource_id, transaction_id, lock_mode)
+	/* used to
+		1. release acquired lock, searched by resource, transaction_id and lock_mode
+		2. check conflicts to acquire lock or modify lock_mode, seach locks for a particular resource
+	*/
+	uint64_t rs_locks_root_page_id;
+	bplus_tree_tuple_defs* rs_locks_td;
 
-	// index that stores (resource_type, resource_id, lock_mode) -> lock
-	uint64_t rs_index_root_page_id;
-	bplus_tree_tuple_defs* rs_index_td;
+	// composed of 2 transaction_id-s for waits_for_td and waits_back_td
+	tuple_def* wait_record_def;
 
-	// the bplus_tree that stores entries for (transaction_id, waits_for(transaction_id))
-	uint64_t waits_for_graph_root_page_id;
-	bplus_tree_tuple_defs* waits_for_graph_td;
+	// the bplus_tree that stores entries for (waiting_transaction_id, waits_for(transaction_id))
+	/*
+	**	used for deadlock detection, traversal_flags is the scratch pad
+	*/
+	uint64_t waits_for_root_page_id;
+	bplus_tree_tuple_defs* waits_for_td;
+
+	// the bplus_tree that stores entries for (waits_for(transaction_id), waiting_transaction_id)
+	/*
+	**	used for waking up all waiting_transaction_id, when locks are released or transitioned by any particular transaction, traversal_flags is the scratch pad
+	*/
+	uint64_t waits_back_root_page_id;
+	bplus_tree_tuple_defs* waits_back_td;
 
 	// waits_for graph dfs for deadlock detection uses a linked_page_list to store the stack of all the seen entries
 
@@ -69,7 +85,7 @@ struct lock_manager
 
 fail_build_on(MAX_RESOURCE_ID_SIZE > 100)
 
-// max_active_transaction_count is the capacity used to initialize the bucket_count for the active_transactions and waiting_transactions hashmap
+// max_active_transaction_count is the capacity used to initialize the bucket_count for the active_transactions
 void initialize_lock_manager(lock_manager* lckmgr_p, uint256 overflow_transaction_id, uint32_t max_active_transaction_count, rage_engine* ltbl_engine);
 
 // registering a lock_type is same as registering a resource_type

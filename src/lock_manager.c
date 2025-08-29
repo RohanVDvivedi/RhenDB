@@ -35,25 +35,18 @@ struct active_transaction_entry
 	uint256 transaction_id;
 
 	// this transaction waits on this variable if it is waiting for an already locked resource
+	// broadcast here if soem other transaction_id finds this transaction to be waiting on it
+	// we will recheck the condition and may again go back to sleep
 	pthread_cond_t wait_on;
 
-	int is_waiting:1;
+	// number of transaction_id's threads waiting on wait_on condition variable
+	uint64_t wait_on_thread_counter;
 
 	// for deadlock detection(is_seen and is_on_path bits)
 	// for releasing_all_locks(mark all transactions that could be woken up, using the flags here)
 	int traversal_flags;
 
-	// below attribites suggest what is it waiting for
-	uint32_t resource_type;
-	uint8_t resource_id_size;
-	uint8_t resource_id[MAX_RESOURCE_ID_SIZE];
-	uint32_t lock_mode;
-
-	// when did it start waiting
-	uint64_t waiting_from_in_seconds;
-
-	bstnode at_embed_node; // embedded node for active transactions
-	bstnode wt_embed_node; // embedded node for waiting transactions
+	bstnode embed_node; // embedded node for active transactions
 };
 
 // --
