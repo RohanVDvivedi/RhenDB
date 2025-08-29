@@ -10,7 +10,7 @@
 #include<rondb/rage_engine.h>
 
 /*
-	1 transaction_id can lock 1 resource in only 1 lock_mode; i.e. (transaction_id, (resource_type, resource_id), lock_mode) is a unique tuple
+	1 transaction_id can lock 1 resource in only 1 lock_mode; i.e. (transaction_id, (resource_type, resource_id)) -> lock_mode, mapping has a unique mapping
 */
 
 typedef struct lock_manager lock_manager;
@@ -41,14 +41,14 @@ struct lock_manager
 	// lock_record_def looks like the lock_entry
 	// it only preserves and makes lock_table hold locks that are held by some transaction
 
-	// index that stores (transaction_id, resource_type, resource_id, lock_mode)
+	// index that stores (transaction_id, resource_type, resource_id) -> lock_mode
 	/* used to
 		1. release locks on all resources for a transaction_id, search locks for a particular transaction_id
 	*/
 	uint64_t tx_locks_root_page_id;
 	bplus_tree_tuple_defs* tx_locks_td;
 
-	// index that stores (resource_type, resource_id, transaction_id, lock_mode)
+	// index that stores (resource_type, resource_id, transaction_id) -> lock_mode
 	/* used to
 		1. release acquired lock, searched by resource, transaction_id and lock_mode
 		2. check conflicts to acquire lock or modify lock_mode, seach locks for a particular resource
@@ -61,14 +61,14 @@ struct lock_manager
 	// composed of 2 transaction_id-s for waits_for_td and waits_back_td
 	tuple_def* wait_record_def;
 
-	// the bplus_tree that stores entries for (waiting_transaction_id, waits_for(transaction_id))
+	// the bplus_tree that stores entries for (waiting_transaction_id, waits_for(transaction_id), waits_for(resource_type), waits_for(resource_id))
 	/*
 	**	used for deadlock detection, traversal_flags is the scratch pad
 	*/
 	uint64_t waits_for_root_page_id;
 	bplus_tree_tuple_defs* waits_for_td;
 
-	// the bplus_tree that stores entries for (waits_for(transaction_id), waiting_transaction_id)
+	// the bplus_tree that stores entries for (waits_for(transaction_id), waits_for(resource_type), waits_for(resource_id), waiting_transaction_id)
 	/*
 	**	used for waking up all waiting_transaction_id, when locks are released or transitioned by any particular transaction, traversal_flags is the scratch pad
 	*/
