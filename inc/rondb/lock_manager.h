@@ -22,8 +22,6 @@ struct lock_manager
 
 	// active_transactions are expected to be finite, and a transaction can only wait for atmost 1 resource at a time, limiting the size of the below hashmaps to just that many
 
-	// active_transaction_entry{transaction_id, condition_variable wait_on, is_waiting, is_seen(for deadlock detection), resource_type, resource_id, lock_mode, waiting_from_in_seconds}
-
 	// hashmap of active transactions, that are either holding locks, or are waiting for a lock
 	// transaction_id -> active_transaction_entry
 	hashmap active_transactions;
@@ -40,6 +38,8 @@ struct lock_manager
 	// this is the record_def for the lock_table's records
 	// this tuple_def is similar to the lock_entry given below
 	tuple_def* lock_record_def;
+
+	// lock_record_def looks like the lock_entry
 
 	// root of the lock_table and it's heap_table's tuple_defs
 	uint64_t lock_table_root_page_id;
@@ -69,6 +69,7 @@ struct lock_manager
 
 fail_build_on(MAX_RESOURCE_ID_SIZE > 100)
 
+// max_active_transaction_count is the capacity used to initialize the bucket_count for the active_transactions and waiting_transactions hashmap
 void initialize_lock_manager(lock_manager* lckmgr_p, uint256 overflow_transaction_id, uint32_t max_active_transaction_count, rage_engine* ltbl_engine);
 
 // registering a lock_type is same as registering a resource_type

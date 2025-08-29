@@ -39,9 +39,9 @@ struct active_transaction_entry
 
 	int is_waiting:1;
 
-	// (for deadlock detection)
-	int is_seen:1;
-	int is_on_path:1;
+	// for deadlock detection(is_seen and is_on_path bits)
+	// for releasing_all_locks(mark all transactions that could be woken up, using the flags here)
+	int traversal_flags;
 
 	// below attribites suggest what is it waiting for
 	uint32_t resource_type;
