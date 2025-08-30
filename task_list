@@ -1,8 +1,6 @@
  PICKED TASKS
 
  1.* lock table (using VolatilePageStore)
-   * implements the stubs currently made, to support the structs
-
    * think about what utility functions modular enough could help us?
 
    * define a transaction_state struct that holds snapshot, a condition variable for the lock_manager to wait on
