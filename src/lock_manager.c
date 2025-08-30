@@ -5,7 +5,7 @@
 #include<cutlery/bst.h>
 
 // all the bplus_tree-s used are ascending ordered by their keys, so we need this global array to pass in all the bplus_tree tuple_defs
-static compare_direction all_ascending[] = {ASC, ASC, ASC, ASC, ASC, ASC};
+static compare_direction all_ascending[] = {ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC};
 
 /*
 ** internal structures
@@ -107,6 +107,10 @@ static void deserialize_lock_entry_record(const void* from, lock_entry* to, cons
 	}
 }
 
+static positional_accessor tx_locks_keys[] = {STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2)};
+
+static positional_accessor rs_locks_keys[] = {STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(0)};
+
 #define MAX_SERIALIZED_WAIT_ENTRY_SIZE (sizeof(uint256) + sizeof(uint256) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + sizeof(uint32_t) + 2) // +2 for the size and offset of resource_id
 
 typedef struct wait_entry wait_entry;
@@ -168,6 +172,10 @@ static void deserialize_wait_entry_record(const void* from, wait_entry* to, cons
 		memory_move(to->resource_id, uval.blob_value, to->resource_id_size);
 	}
 }
+
+static positional_accessor waits_for_keys[] = {STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(3)};
+
+static positional_accessor waits_back_keys[] = {STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(3), STATIC_POSITION(0)};
 
 // --
 
