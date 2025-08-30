@@ -66,10 +66,6 @@ struct lock_entry
 	uint32_t lock_mode;
 };
 
-void serialize_lock_entry_key(void* to, const lock_entry* from, const lock_manager lckmgr_p);
-
-void deserialize_lock_entry_key(const void* from, const lock_entry* to, const lock_manager lckmgr_p);
-
 void serialize_lock_entry_record(void* to, const lock_entry* from, const lock_manager lckmgr_p);
 
 void deserialize_lock_entry_record(const void* from, const lock_entry* to, const lock_manager lckmgr_p);
