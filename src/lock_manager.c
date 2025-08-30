@@ -66,9 +66,17 @@ struct lock_entry
 	uint32_t lock_mode;
 };
 
-void serialize_lock_entry_record(void* to, const lock_entry* from, const lock_manager lckmgr_p);
+static void serialize_lock_entry_record(void* to, const lock_entry* from, const lock_manager* lckmgr_p)
+{
+	init_tuple(lckmgr_p->lock_record_def, to);
 
-void deserialize_lock_entry_record(const void* from, const lock_entry* to, const lock_manager lckmgr_p);
+	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(0), to, &((user_value){.large_uint_value = from->transaction_id}), 0);
+	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(1), to, &((user_value){.uint_value = from->resource_type}), 0);
+	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(2), to, &((user_value){.blob_size = from->resource_id_size, .blob_value = from->resource_id}), MAX_RESOURCE_ID_SIZE);
+	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(3), to, &((user_value){.uint_value = from->lock_mode}), 0);
+}
+
+static void deserialize_lock_entry_record(const void* from, const lock_entry* to, const lock_manager* lckmgr_p);
 
 #define MAX_SERIALIZED_WAIT_ENTRY_SIZE (sizeof(uint256) + sizeof(uint256) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + sizeof(uint32_t) + 2) // +2 for the size and offset of resource_id
 
@@ -94,9 +102,17 @@ struct wait_entry
 	uint8_t resource_id[MAX_RESOURCE_ID_SIZE];
 };
 
-void serialize_wait_entry_record(void* to, const wait_entry* from, const lock_manager lckmgr_p);
+static void serialize_wait_entry_record(void* to, const wait_entry* from, const lock_manager* lckmgr_p)
+{
+	init_tuple(lckmgr_p->wait_record_def, to);
 
-void deserialize_wait_entry_record(const void* from, const wait_entry* to, const lock_manager lckmgr_p);
+	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(0), to, &((user_value){.large_uint_value = from->waiting_transaction_id}), 0);
+	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(1), to, &((user_value){.large_uint_value = from->transaction_id}), 0);
+	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(2), to, &((user_value){.uint_value = from->resource_type}), 0);
+	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(3), to, &((user_value){.blob_size = from->resource_id_size, .blob_value = from->resource_id}), MAX_RESOURCE_ID_SIZE);
+}
+
+static void deserialize_wait_entry_record(const void* from, const wait_entry* to, const lock_manager* lckmgr_p);
 
 // --
 
