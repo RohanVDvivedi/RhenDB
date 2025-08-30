@@ -1,12 +1,12 @@
  PICKED TASKS
 
  1.* lock table (using VolatilePageStore)
-   * think about what utility functions modular enough could help us?
-
-   * define a transaction_state struct that holds snapshot, a condition variable for the lock_manager to wait on
-   * make a structure for the transaction_list to be passed to notify the transaction of an abort due to deadlock
-   * implement utility table and index scan methods
-   * implement the actual lock_manager methods
+   * decide the way to lock table and other components of the lock_manager
+   * implement initialize and register_lock function of the lock_manager
+   * outline the pseudocode for the acquire/transition and release function for the lock_manager
+   * ponder how to signal about a potential deadlock, to the active_transaction_entry
+   * ponder on how to implement release_all_locks function, and is there a way to do it with the existing functions with lesser time complexity?
+     * will we need a function to get all locks for a transaction one by one (iterating with the tx_locks table) and wake up all blocked transaction and remove corresponding entries after that?
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock
    * write test cases and test
 
