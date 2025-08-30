@@ -1,6 +1,7 @@
  PICKED TASKS
 
  1.* lock table (using VolatilePageStore)
+   * decide on when to create and destroy active_transaction_entry, i.e. when to garbage collect
    * decide the way to lock table and other components of the lock_manager
    * implement initialize and register_lock function of the lock_manager
    * outline the pseudocode for the acquire/transition and release function for the lock_manager
