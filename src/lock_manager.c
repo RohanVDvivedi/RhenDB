@@ -3,6 +3,7 @@
 #include<tupleindexer/heap_page/heap_page.h>
 
 #include<cutlery/bst.h>
+#include<cutlery/linkedlist.h>
 
 // all the bplus_tree-s used are ascending ordered by their keys, so we need this global array to pass in all the bplus_tree tuple_defs
 static compare_direction all_ascending[] = {ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC};
@@ -30,6 +31,9 @@ struct active_transaction_entry
 	int traversal_flags;
 
 	bstnode embed_node; // embedded node for active transactions
+
+
+	llnode temp_embed_node; // embedded node for building temporary lists of transactions upon deadlock and conflict detections
 };
 
 // compare function using transaction_id for active_transaction_entry
@@ -182,5 +186,23 @@ static positional_accessor waits_back_keys[] = {STATIC_POSITION(1), STATIC_POSIT
 /*
 ** utility functions
 */
+
+// fetch old_lock_mode and discover the conflicting transactions and return them as a set in a linkedlist containing unique active_transaction_entry-s
+// the returned linkedlist contains the list of unique active_transaction_entry-s that you may want to wait for to release the lock so that you can grab this lock
+// old_lock_mode will be set UINT32_MAX i.e. (-1), if the given transaction did not hold any lock on the given resource
+// this is a read-only function for, tx_locks to find the (transaction_id, resource_type, resource_id) to find the old_lock_mode and, the rs_locks, looped using (resource_type, resource_id) as key to find all conflicting transactions
+linkedlist get_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, uint32_t* old_lock_mode);
+
+// returns the list of active_transaction_entry-s that you need to wake up if you are transitioning the lock or releasing the lock, on the provided resource
+// this is a read lock on the waits_back table, looped using the (waits_for(transaction_id), waits_for(resource_type), waits_for(resource_id)) to find the waiing_transaction_id-s that need to be woken up if the old_lock_mode is released
+linkedlist call_wake_ups_for(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
+
+// before going into wait for a lock you need to insert this entry for all return value active_transaction_entry-s returned by the get_lock_conflicts function
+int insert_wait_entry(lock_manager* lckmgr_p, uint256 waiting_transaction_id, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
+int remove_wait_entry(lock_manager* lckmgr_p, uint256 waiting_transaction_id, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
+
+// insert and remove lock_entry, to acquire, transition or release lock
+int insert_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t lock_mode);
+int remove_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t lock_mode);
 
 // --

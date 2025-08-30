@@ -116,9 +116,9 @@ enum lock_result
 
 // timeout value can also be BLOCKING and NON_BLOCKING
 // acquires the lock or transition the lock into the new_lock_mode, old_lock_mode can be equal to the lock not being held
-lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint16_t new_lock_mode, uint64_t timeout_in_milliseconds);
+lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, uint64_t timeout_in_milliseconds);
 
-void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint16_t lock_mode);
+void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
 void release_all_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id);
 
