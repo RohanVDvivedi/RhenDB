@@ -76,7 +76,33 @@ static void serialize_lock_entry_record(void* to, const lock_entry* from, const 
 	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(3), to, &((user_value){.uint_value = from->lock_mode}), 0);
 }
 
-static void deserialize_lock_entry_record(const void* from, const lock_entry* to, const lock_manager* lckmgr_p);
+static void deserialize_lock_entry_record(const void* from, lock_entry* to, const lock_manager* lckmgr_p)
+{
+	{
+		user_value uval;
+		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(0), from);
+		to->transaction_id = uval.large_uint_value;
+	}
+
+	{
+		user_value uval;
+		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(1), from);
+		to->resource_type = uval.uint_value;
+	}
+
+	{
+		user_value uval;
+		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(2), from);
+		to->resource_id_size = uval.blob_size;
+		memory_move(to->resource_id, uval.blob_value, to->resource_id_size);
+	}
+
+	{
+		user_value uval;
+		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(3), from);
+		to->lock_mode = uval.uint_value;
+	}
+}
 
 #define MAX_SERIALIZED_WAIT_ENTRY_SIZE (sizeof(uint256) + sizeof(uint256) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + sizeof(uint32_t) + 2) // +2 for the size and offset of resource_id
 
@@ -112,7 +138,33 @@ static void serialize_wait_entry_record(void* to, const wait_entry* from, const 
 	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(3), to, &((user_value){.blob_size = from->resource_id_size, .blob_value = from->resource_id}), MAX_RESOURCE_ID_SIZE);
 }
 
-static void deserialize_wait_entry_record(const void* from, const wait_entry* to, const lock_manager* lckmgr_p);
+static void deserialize_wait_entry_record(const void* from, wait_entry* to, const lock_manager* lckmgr_p)
+{
+	{
+		user_value uval;
+		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(0), from);
+		to->waiting_transaction_id = uval.large_uint_value;
+	}
+
+	{
+		user_value uval;
+		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(1), from);
+		to->transaction_id = uval.large_uint_value;
+	}
+
+	{
+		user_value uval;
+		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(2), from);
+		to->resource_type = uval.uint_value;
+	}
+
+	{
+		user_value uval;
+		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(3), from);
+		to->resource_id_size = uval.blob_size;
+		memory_move(to->resource_id, uval.blob_value, to->resource_id_size);
+	}
+}
 
 // --
 
