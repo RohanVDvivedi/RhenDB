@@ -13,6 +13,8 @@
 
 /*
 	1 transaction_id can lock 1 resource in some known lock_mode; i.e. (transaction_id, (resource_type, resource_id)) -> lock_mode, mapping has a unique mapping
+
+	1 transaction_id may have multiple threads executing the transaction, hence multiple threads of the same transactions are allowed to acquire multiple locks simultaneously and block until it is acquired or transitioned
 */
 
 typedef struct lock_manager lock_manager;
