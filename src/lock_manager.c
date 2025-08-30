@@ -4,6 +4,9 @@
 
 #include<cutlery/bst.h>
 
+// all the bplus_tree-s used are ascending ordered by their keys, so we need this global array to pass in all the bplus_tree tuple_defs
+static compare_direction all_ascending[] = {ASC, ASC, ASC, ASC, ASC, ASC};
+
 /*
 ** internal structures
 */
