@@ -30,10 +30,19 @@ struct active_transaction_entry
 };
 
 // compare function using transaction_id for active_transaction_entry
-int compare_active_transaction_id_entry_by_transaction_id(const void* data1, const void* data2);
+static int compare_active_transaction_id_entry_by_transaction_id(const void* data1, const void* data2)
+{
+	const active_transaction_entry* ate1 = data1;
+	const active_transaction_entry* ate2 = data2;
+	return compare_uint256_with_ptrs(&(ate1->transaction_id), &(ate2->transaction_id));
+}
 
 // hash function using transaction_id for active_transaction_entry
-cy_uint hash_active_transaction_id_entry_by_transaction_id(const void* data);
+static cy_uint hash_active_transaction_id_entry_by_transaction_id(const void* data)
+{
+	const active_transaction_entry* ate = data;
+	return ate->transaction_id.limbs[0];
+}
 
 #define MAX_SERIALIZED_LOCK_ENTRY_SIZE (sizeof(uint256) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + sizeof(uint32_t) + 2) // +2 for the size and offset of resource_id
 
