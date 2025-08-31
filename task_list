@@ -1,6 +1,8 @@
  PICKED TASKS
 
  1.* lock table (using VolatilePageStore)
+   **** How can I let the lock_manager block the transaction, because it could be running inside a mini_transaction engine's threadpool of fixed size and blocking will block all other thread and possibly not letting the other transaction unblock it by releasing the locks. Additionally I can not let the transaction block before releasing the latches on pages and other structures, and the buffer pool etc and releasing other resources like cursors over the btree index and the heap table, I can not even go to wait before storing the information like the restart position of the scan for the btree or heap table or any other type of scan.
+     * block outside, and use a callback to wake the blocking threads up, or queue the task to start a new scan form the tuple position in context in a heap table or btree or hash table
    ** ponder and ask chatgpt on a mechanism to release all latches before going to sleep on a condition variable to wait for a lock, we would also need to store the scan context for the b+tree or heap table scan position
    * decide on when to create and destroy active_transaction_entry, i.e. when to garbage collect
      * store counter to number of threads that went to wait for a transaction_id and the count of locks held, when they both become 0, remove that entry for the active transaction entry
