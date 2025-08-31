@@ -28,7 +28,24 @@
 
  4.* tuple_file structure
    * stores tuples or giant_tuples sequentially one after the another and reads them back like from a stream and deletes this temp file on closing
-   * reading can be done as a stream
+   * struct intermediate_tuple_store {
+        uint64_t in_memory_size; // inserts crossin this value spill to the temp file
+        uint64_t file_size;
+        union {
+          int fd; // temp file, if next_insert_offset > in_memory_size
+          void* md;
+        }
+        uint64_t next_insert_offset;
+     }
+   * void initializes_intermediate_tuple_store(intermediate_tuple_store* its_p, uint64_t in_memory_size)
+   * void* map_intermediate_tuple(intermediate_tuple_store* its_p, uint64_t offset, const tuple_size_def* tpl_sz_d, uint64_t* next_tuple_offset);
+     * mmap's pages that contain the tuple and returns the corresponding pointer, MAP_SHARED and MAP_READ | MAP_WRITE
+     * pass next_tuple_offset as NULL, if you do not want it calculated, and want to map all pages from offset to the next_insert_offset
+   * uint64_t unmap_intermediate_tuple(intermediate_tuple_store* its_p, const void* tuple, const tuple_size_def* tpl_sz_d);
+     * munmaps memory, next_insert_offset = max(next_insert_offset, get_tuple_size(tuple, tpl_sz_d));
+     * returns next_tuple_offset for this tuple
+   * uint64_t extend_intermediate_tuple_store(intermediate_tuple_store* its_p, uint64_t extend_bytes_count);
+     * return the bytes to be written from
    * write can also be done as a stream, returning the offset in the file for this tuple
    * file stays all in-memory up until a point, over which it spills to the disk, and then is accessed from there
    * no tuple updates allowed
