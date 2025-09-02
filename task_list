@@ -89,6 +89,17 @@
    * sorting -> implement external giant_tuple_def sorting, by using a tuple_file
    * joins -> with/without indexes (hashjoins using a tuple_file)
    * union, set difference and intersection
+    * Operators will be of two types
+      * Scan -> run on mini transaction engine's thread pool, heap_table scan, index scan, etc
+        -> accesses data from the database
+        -> they accumulate tuples and push them when pulled
+        -> they can be put to sleep and stopped at any instant and can be restarted, this checks are made every iteration
+        -> they are source of the data
+      * Transformers -> Operators that select, project, sort, join tuples -> they run on the transaction's thread pool or IO thread pool
+        -> accesses data from the input stream to them, possibly a intermediate tuple store
+        -> they just pull tuples, when their parent operator pulls on them
+        -> they sleep and do nothing when we do not pull from these operators
+        -> they are mere but smart transformers
 
  6.* define statistics tables - persistent and possibly in a different database
    * same as indexes and heap_tables (low priority)
