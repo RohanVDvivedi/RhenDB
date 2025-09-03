@@ -117,6 +117,12 @@ enum lock_result
 // by design you must call this and all lock_manager functions with external global mutex held, and wait using condition variable or deschedule while this mutex is held, to avoid missed notifications to wakeup from blocked state
 lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int non_blocking);
 
+// discards all wait_entries for the transaction_id and task_id
+// this is done by the acquire_lock_*() everytime you call it, but if you want to start winding up, for safety you may call this, to let the lock_manager know so that it would not send you a deadlock signal out of the blue
+// ideally, on receiving MUST_BLOCK, you must block ad again call the acquire_lock_*() function to again possibly get the same lock, after being unblocked
+// this function is to let the lock_manager know that you are no longer waiting for the same lock
+void notify_task_unblocked_to_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id);
+
 void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
 void release_all_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id);
