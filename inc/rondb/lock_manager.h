@@ -14,30 +14,38 @@
 /*
 	1 transaction_id can lock 1 resource in some known lock_mode; i.e. (transaction_id, (resource_type, resource_id)) -> lock_mode, mapping has a unique mapping
 
-	1 transaction_id may have multiple threads executing the transaction, hence multiple threads of the same transactions are allowed to acquire multiple locks simultaneously and block until it is acquired or transitioned
+	1 transaction_id may have multiple threads (referenced using the task_id) executing the transaction, hence multiple threads of the same transactions are allowed to acquire multiple locks simultaneously and block until it is acquired or transitioned
+
+	locks are not owned by the task's of the transaction, the are owned by the transaction itself
+	it is just that specific task that is waiting for the lock is woken up / notified if it could be unblocked
 */
+
+typedef struct lock_manager_notifier lock_manager_notifier;
+struct lock_manager_notifier
+{
+	void* context_p;
+
+	// the below callback is called when a task belonging to a transaction is unblocked, due to some other transaction having released the locks that it waiting on
+	void (*notify_unblocked)(void* context_p, uint256 transaction_id, uint32_t task_id);
+
+	// notify that a transaction has encountered a deadlock and must step down, and abort itself
+	void (*notify_deadlocked)(void* context_p, uint256 transaction_id);
+
+	// both the above functions are called with the external_lock mutex held
+};
 
 typedef struct lock_manager lock_manager;
 struct lock_manager
 {
-	// main mutex controlling everything inside the lock_manager
-	pthread_mutex_t manager_lock;
+	// external_lock is only ever locked by the deadlock detection thread and noone else
+	pthread_mutex_t* external_lock;
+
+	// all notify_*() functons are called by the lock_manager with the external_lock (above) held
+	lock_manager_notifier notifier;
 
 	// every registered glock_matrix for all lock_type-s go here
-	// protected solely by the manager_lock, it is just an index fetch away, so no need to have a rwlock for it
 	uint32_t locks_type_count;
 	glock_matrix* lock_matrices;
-
-	// active_transactions are expected to be finite, limiting the size of the below hashmaps to just that many
-
-	// hashmap of active transactions, that are either holding locks, or are waiting for a lock
-	// transaction_id -> active_transaction_entry
-	hashmap active_transactions;
-
-	// since the lock_table required a volatile non-ACID rage_engine
-	// we need this lock to protect the volatile contents of the lock_table
-	// that includes the lock_table and it's volatile indices
-	rwlock table_lock;
 
 	// this is the record_def for the lock_table's records
 	tuple_def* lock_record_def;
@@ -46,43 +54,28 @@ struct lock_manager
 	// it only preserves and makes lock_table hold locks that are held by some transaction
 
 	// index that stores (transaction_id, resource_type, resource_id) -> lock_mode
-	/* used to
-		1. release locks on all resources for a transaction_id, search locks for a particular transaction_id
-	*/
 	uint64_t tx_locks_root_page_id;
 	bplus_tree_tuple_defs* tx_locks_td;
 
 	// index that stores (resource_type, resource_id, transaction_id) -> lock_mode
-	/* used to
-		1. release acquired lock, searched by resource, transaction_id and lock_mode
-		2. check conflicts to acquire lock or modify lock_mode, seach locks for a particular resource
-	*/
 	uint64_t rs_locks_root_page_id;
 	bplus_tree_tuple_defs* rs_locks_td;
 
 	// above tables can only be modified by the the transaction that acquire, release or transition locks
 
-	// composed of 2 transaction_id-s for waits_for_td and waits_back_td
+	// this is the record_def for the wait_table's records
 	tuple_def* wait_record_def;
 
-	// the bplus_tree that stores entries for (waiting_transaction_id, waits_for(transaction_id), waits_for(resource_type), waits_for(resource_id))
-	/*
-	**	used for deadlock detection, traversal_flags is the scratch pad
-	*/
+	// the bplus_tree that stores entries for (waiting_transaction_id, waiting_task_id, waits_for(transaction_id), waits_for(resource_type), waits_for(resource_id))
 	uint64_t waits_for_root_page_id;
 	bplus_tree_tuple_defs* waits_for_td;
 
-	// the bplus_tree that stores entries for (waits_for(transaction_id), waits_for(resource_type), waits_for(resource_id), waiting_transaction_id)
-	/*
-	**	used for waking up all waiting_transaction_id, when locks are released or transitioned by any particular transaction, traversal_flags is the scratch pad
-	*/
+	// the bplus_tree that stores entries for (waits_for(transaction_id), waits_for(resource_type), waits_for(resource_id), waiting_transaction_id, waiting_task_id)
 	uint64_t waits_back_root_page_id;
 	bplus_tree_tuple_defs* waits_back_td;
 
-	// above tables can only be modified by the waiting_transaction_id, going to or returning from the wait, and only waiting_transaction_id is allowed to insert or remove it's entry from these tables
-	// waits_for(transaction_id), can only read them and broadcast the corresponding waiting_transaction_id
-
-	// waits_for graph dfs for deadlock detection uses a linked_page_list to store the stack of all the seen entries
+	// above tables can only be modified by the (waiting_transaction_id, waiting_task_id) going to or returning from the wait, using the acquire function
+	// waits_for(transaction_id), can only read them and call the notify_unblocked(waiting_transaction_id, waiting_task_id), never modify the entries
 
 	// below is the volatile non-ACID rage_engine that powers the transaction_table
 	// preferrably an implementation of the VolatilePageStore based rage_engine
@@ -95,7 +88,7 @@ struct lock_manager
 fail_build_on(MAX_RESOURCE_ID_SIZE > 100)
 
 // max_active_transaction_count is the capacity used to initialize the bucket_count for the active_transactions
-void initialize_lock_manager(lock_manager* lckmgr_p, uint256 overflow_transaction_id, uint32_t max_active_transaction_count, rage_engine* ltbl_engine);
+void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, lock_manager_notifier notifier, uint256 overflow_transaction_id, rage_engine* ltbl_engine);
 
 // registering a lock_type is same as registering a resource_type
 // both of them dictate what lock_mode-s you can use with them
@@ -104,19 +97,25 @@ uint32_t register_lock_type_with_lock_manager(lock_manager* lckmgr_p, glock_matr
 typedef enum lock_result lock_result;
 enum lock_result
 {
-	ACQUIRED,     // success OR the lock is already held in the desired lock_mode, making the call acquire_*() and modify_*() functions reentrant
+	// success results
+	ACQUIRED,
+	TRANSITIONED, // successfully changed lock_mode to a new one, acquire and try_lock are reentrant, and they change the lock_mode instead if you try to lock the same resource
+	ALREADY_HELD, // the old_lock_mode == lock_mode passed
 
-	// all the three below enum values signify the call to acquire_*() and modify_*() has failed
-
-	ALREADY_HELD, // lock for the given resource_type and resource_id is held in some other lock_mode by the transaction_id in context
-	FAILED,       // happens when timeout_in_seconds = NON_BLOCKING, or the old_lock_mode can not transition into the new_lock_mode, due to conflicts with lock held in lock_mode-s with other transactions
-	TIMEOUT,      // happens when timeout_in_seconds = BLOCKING or some non-zero value
-	DEADLOCK,     // you must abort
+	// failure results
+	FAILED, // returned when there are conflicts in acquiring the lock or transitioning the lock_mode, and the non_blocking = 1
+	MUST_BLOCK, // returned when there are conflicts in acquiring the lock or transitioning the lock_mode, and the non_blocking = 0
+	// when MUST_BLOCK is returned, the wait_entry-s for the lock have been already inserted, and the caller is expected to block or try again later
 };
 
-// timeout value can also be BLOCKING and NON_BLOCKING
-// acquires the lock or transition the lock into the new_lock_mode, old_lock_mode can be equal to the lock not being held
-lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, uint64_t timeout_in_milliseconds);
+// no wait_entry-s are inserted on a non_blocking = 1 call, and instead FAILED is returned on encountering a conflict
+// task_id is expected to be one of the individual threads working on behalf of the transaction_id
+// a lock is held not by the task_id of a transaction_id instead by the transaction_id itself
+// but multiple tasks are allowed to wait for the same resource (hopefully not by design)
+// i.e. a task_id can take on locks acquired by another task_id
+// while a notify_on_unblocked call back is task specific, waking up only the respective task that is blocked waiting for the lock
+// by design you must call this and all lock_manager functions with external global mutex held, and wait using condition variable or deschedule while this mutex is held, to avoid missed notifications to wakeup from blocked state
+lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int non_blocking);
 
 void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
