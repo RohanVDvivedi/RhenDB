@@ -1,7 +1,6 @@
  PICKED TASKS
 
  1.* lock table (using VolatilePageStore)
-   * code review
    * implement high level functions, except release all locks function
    * code review
    * implement utility functions
