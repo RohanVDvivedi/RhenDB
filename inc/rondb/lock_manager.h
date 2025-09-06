@@ -123,8 +123,9 @@ enum lock_result
 // by design you must call this and all lock_manager functions with external global mutex held, and wait using condition variable or deschedule while this mutex is held, to avoid missed notifications to wakeup from blocked state
 lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int non_blocking);
 
-// since a task is not actually holding the lock, its the transaction that holds the lock, so any task_id can release the lock that was priorly acquired by anyother task
-// i.e. you may release locks using a dummy task_id (lets say = 100) that were in the past, request by and granted to some task_id = 55
+// since a task is not actually holding the lock, its the transaction that holds the lock, so any task_id can release the lock that was priorly acquired by any other task
+// i.e. you may release locks using a dummy task_id (lets say = 100) that were in the past, request by and granted to some (already completed) task_id = 55
+// the task_id is accpeted by this function just to discard all the pending wait-entries by this transaction_id, task_id, because it is now known to have been not blocked and is deemed to be active
 void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
 // this function does remove all the wait-entries for the transaction_id as a whole for all it's task_id-s, no notify_unblocked() will be issued
