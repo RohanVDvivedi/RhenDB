@@ -341,7 +341,7 @@ lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 trans
 
 	// now we are sure that we can grab the lock
 	// so add or update the lock entry with the new_lock_mode
-	insert_lock_entry(lckmgr_p, transaction_id, resource_type, resource_id, resource_id_size, new_lock_mode);
+	insert_or_update_lock_entry(lckmgr_p, transaction_id, resource_type, resource_id, resource_id_size, new_lock_mode);
 
 	// if the lock only transitioned, then we must wake up any waiters, that might now have been unblocked
 	if(old_lock_mode != NO_LOCK_HELD_LOCK_MODE)
@@ -370,4 +370,11 @@ void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_
 	notify_all_wait_entries_for_resource_of_being_unblocked(lckmgr_p, resource_type, resource_id, resource_id_size);
 }
 
-void release_all_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id);
+void release_all_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id)
+{
+	// transacton_id, is indeed calling this function, so it is no longer expected to be blocked, it is aborting or committing, so we remove all it's wait_entries
+	remove_all_wait_entries_for_task_id(lckmgr_p, transaction_id, task_id);
+
+	// TODO:
+	// remove all lock_entries and wake up all waiters on those resources
+}
