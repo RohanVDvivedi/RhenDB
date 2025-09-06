@@ -160,30 +160,32 @@ static positional_accessor waits_back_keys[] = {STATIC_POSITION(3), STATIC_POSIT
 ** utility functions
 */
 
-// basic functionality for the wait_entries
+// 1 - basic functionality for the wait_entries
 int insert_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p);
 int remove_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p);
 
-// remove wait_entries for a particular waiters
+// 2 - remove wait_entries for a particular waiters
 int remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 waiting_transaction_id, uint32_t waiting_task_id);
 int remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, uint256 waiting_transaction_id);
 
-// below function only calls notify_unblocked for all the waiters, that are blocked for this particular resource
+// 3 - below function only calls notify_unblocked for all the waiters, that are blocked for this particular resource
 // it will not remove those wait-entries
 void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager* lckmgr_p, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
-// find function for the lock_entry, the primary key is transaction_id and the resource (type + id)
+// 4 - find function for the lock_entry, the primary key is transaction_id and the resource (type + id)
 uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
-// below functions insert or remove the lock_entry and if a prior lock_mode existed, then a wake_up is also called on the corresponding wait_entries using the notify_all_wait_entries_*() function above
+// 5 - below functions insert or remove the lock_entry and if a prior lock_mode existed, then a wake_up is also called on the corresponding wait_entries using the notify_all_wait_entries_*() function above
+// uses utility functions of section 3
 int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode);
 int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 int remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id);
 
-// below function inserts wait_entries for the corresponding conflicts only if the do_insert_wait_entries = 1,
+// 6 - below function inserts wait_entries for the corresponding conflicts only if the do_insert_wait_entries = 1,
 // return value only suggests if there are any lock_conflicts or not
 // return = 1, means there are lock conflicts, else it returns 0, if the lock can be readily taken
 // please note that this function skips all the lock_entries that have the same transaction_id, and same resource
+// uses utility functions of section 1
 int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, int do_insert_wait_entries);
 
 // --
