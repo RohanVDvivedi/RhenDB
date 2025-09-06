@@ -324,6 +324,14 @@ void notify_task_unblocked_to_lock_manager(lock_manager* lckmgr_p, uint256 trans
 	remove_all_wait_entries_for_task_id(lckmgr_p, transaction_id, task_id);
 }
 
-void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
+void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+{
+	// try to remove the lock, if an entry is not found, return right away
+	if(!remove_lock_entry(lckmgr_p, transaction_id, resource_type, resource_id, resource_id_size))
+		return;
+
+	// as a lock entry was removed, now you may wake up any waiters, waiting for the lock on that resource
+	notify_all_wait_entries_for_resource_of_being_unblocked(lckmgr_p, resource_type, resource_id, resource_id_size);
+}
 
 void release_all_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id);
