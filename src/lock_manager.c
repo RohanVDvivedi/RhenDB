@@ -162,7 +162,7 @@ static positional_accessor waits_back_keys[] = {STATIC_POSITION(3), STATIC_POSIT
 
 int insert_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p);
 int remove_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p);
-int remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 waiting_transaction_id, uint32_t task_id);
+int remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 waiting_transaction_id, uint32_t waiting_task_id);
 int remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, uint256 waiting_transaction_id);
 
 uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
@@ -318,7 +318,11 @@ uint32_t get_lock_mode_for_lock_from_lock_manager(lock_manager* lckmgr_p, uint25
 
 lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int non_blocking);
 
-void notify_task_unblocked_to_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id);
+void notify_task_unblocked_to_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id)
+{
+	// task_id, for the transacton_id, is indeed callig this function, so it is no longer blocked or waiting, so remove it's wait entries
+	remove_all_wait_entries_for_task_id(lckmgr_p, transaction_id, task_id);
+}
 
 void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
