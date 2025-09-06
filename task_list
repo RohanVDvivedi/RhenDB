@@ -1,8 +1,6 @@
  PICKED TASKS
 
  1.* lock table (using VolatilePageStore)
-   * implement high level functions, except release all locks function
-   * code review
    * implement utility functions
    * code review
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock
