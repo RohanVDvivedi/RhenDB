@@ -103,13 +103,13 @@ typedef enum lock_result lock_result;
 enum lock_result
 {
 	// success results
-	ACQUIRED,
-	TRANSITIONED, // successfully changed lock_mode to a new one, acquire and try_lock are reentrant, and they change the lock_mode instead if you try to lock the same resource
-	ALREADY_HELD, // the old_lock_mode == lock_mode passed
+	LOCK_ACQUIRED,
+	LOCK_TRANSITIONED, // successfully changed lock_mode to a new one, acquire and try_lock are reentrant, and they change the lock_mode instead if you try to lock the same resource
+	LOCK_ALREADY_HELD, // the old_lock_mode == lock_mode passed
 
 	// failure results
-	FAILED, // returned when there are conflicts in acquiring the lock or transitioning the lock_mode, and the non_blocking = 1
-	MUST_BLOCK, // returned when there are conflicts in acquiring the lock or transitioning the lock_mode, and the non_blocking = 0
+	LOCKING_FAILED, // returned when there are conflicts in acquiring the lock or transitioning the lock_mode, and the non_blocking = 1
+	MUST_BLOCK_FOR_LOCK, // returned when there are conflicts in acquiring the lock or transitioning the lock_mode, and the non_blocking = 0
 	// when MUST_BLOCK is returned, the wait_entry-s for the lock have been already inserted, and the caller is expected to block or try again later
 };
 
