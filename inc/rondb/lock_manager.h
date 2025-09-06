@@ -1,10 +1,8 @@
 #ifndef LOCK_MANAGER_H
 #define LOCK_MANAGER_H
 
-#include<lockking/rwlock.h>
-#include<lockking/glock.h>
+#include<pthread.h>
 
-#include<tupleindexer/heap_table/heap_table.h>
 #include<tupleindexer/bplus_tree/bplus_tree.h>
 
 #include<rondb/rage_engine.h>
@@ -80,6 +78,9 @@ struct lock_manager
 	// below is the volatile non-ACID rage_engine that powers the transaction_table
 	// preferrably an implementation of the VolatilePageStore based rage_engine
 	rage_engine* ltbl_engine;
+
+	// for internal use
+	data_type_info* resource_id_type_info;
 };
 
 // maximum number of bytes to be allocated for the resource_id of the resource to be locked

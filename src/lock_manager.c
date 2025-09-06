@@ -1,9 +1,11 @@
 #include<rondb/lock_manager.h>
 
-#include<tupleindexer/heap_page/heap_page.h>
+#include<tuplestore/tuple.h>
+#include<tuplestore/data_type_info.h>
 
-#include<cutlery/bst.h>
-#include<cutlery/linkedlist.h>
+#include<tupleindexer/interface/page_access_methods.h>
+
+#include<stdlib.h>
 
 // all the bplus_tree-s used are ascending ordered by their keys, so we need this global array to pass in all the bplus_tree tuple_defs
 static compare_direction all_ascending[] = {ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC};
@@ -85,7 +87,7 @@ struct wait_entry
 	uint256 waiting_transaction_id;
 
 	// task_id of the above transaction that is waiting for the lock
-	uint256 waiting_task_id;
+	uint32_t waiting_task_id;
 
 	// ON the transaction_id and the resource attributes below
 
@@ -189,32 +191,98 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 
 	lckmgr_p->ltbl_engine = ltbl_engine;
 
-	tuple_def* lock_record_def;
+	uint32_t transaction_id_bytes = 0;
+	{
+		for(uint32_t possible_size = sizeof(uint256); possible_size != 0; possible_size++)
+		{
+			if(get_byte_from_uint256(overflow_transaction_id, possible_size-1) != 0)
+			{
+				transaction_id_bytes = possible_size;
+				break;
+			}
+		}
+	}
+	if(transaction_id_bytes == 0)
+		exit(-1);
 
-	lckmgr_p->tx_locks_td = malloc(bplus_tree_tuple_defs);
+	lckmgr_p->resource_id_type_info = malloc(sizeof(data_type_info));
+	if(lckmgr_p->resource_id_type_info)
+		exit(-1);
+	*(lckmgr_p->resource_id_type_info) = get_variable_length_blob_type("resource_id_type", MAX_RESOURCE_ID_SIZE);
+
+	{
+		data_type_info* dti = malloc(sizeof_tuple_data_type_info(4));
+		if(dti == NULL)
+			exit(-1);
+		initialize_tuple_data_type_info(dti, "lock_entry", 0, MAX_SERIALIZED_LOCK_ENTRY_SIZE, 4);
+
+		strcpy(dti->containees[0].field_name, "transaction_id");
+		dti->containees[0].al.type_info = LARGE_UINT_NON_NULLABLE[transaction_id_bytes];
+
+		strcpy(dti->containees[1].field_name, "resource_type");
+		dti->containees[1].al.type_info = UINT_NON_NULLABLE[4];
+
+		strcpy(dti->containees[2].field_name, "resoucre_id");
+		dti->containees[2].al.type_info = lckmgr_p->resource_id_type_info;
+
+		strcpy(dti->containees[3].field_name, "lock_mode");
+		dti->containees[3].al.type_info = UINT_NON_NULLABLE[4];
+
+		lckmgr_p->lock_record_def = malloc(sizeof(tuple_def));
+		if(lckmgr_p->lock_record_def)
+			exit(-1);
+		initialize_tuple_def(lckmgr_p->lock_record_def, dti);
+	}
+
+	lckmgr_p->tx_locks_td = malloc(sizeof(bplus_tree_tuple_defs));
 	if(lckmgr_p->tx_locks_td == NULL)
 		exit(-1);
-	init_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p->pas_p, lckmgr_p->lock_record_def, tx_locks_keys, all_ascending, 3);
+	init_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->lock_record_def, tx_locks_keys, all_ascending, 3);
 	lckmgr_p->tx_locks_root_page_id = get_new_bplus_tree(lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
 
-	lckmgr_p->rs_locks_td = malloc(bplus_tree_tuple_defs);
+	lckmgr_p->rs_locks_td = malloc(sizeof(bplus_tree_tuple_defs));
 	if(lckmgr_p->rs_locks_td == NULL)
 		exit(-1);
-	init_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p->pas_p, lckmgr_p->lock_record_def, rs_locks_keys, all_ascending, 3);
+	init_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->lock_record_def, rs_locks_keys, all_ascending, 3);
 	lckmgr_p->rs_locks_root_page_id = get_new_bplus_tree(lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
 
-	tuple_def* wait_record_def;
+	{
+		data_type_info* dti = malloc(sizeof_tuple_data_type_info(5));
+		if(dti == NULL)
+			exit(-1);
+		initialize_tuple_data_type_info(dti, "wait_entry", 0, MAX_SERIALIZED_WAIT_ENTRY_SIZE, 5);
 
-	lckmgr_p->waits_for_td = malloc(bplus_tree_tuple_defs);
+		strcpy(dti->containees[0].field_name, "waiting_transaction_id");
+		dti->containees[0].al.type_info = LARGE_UINT_NON_NULLABLE[transaction_id_bytes];
+
+		strcpy(dti->containees[1].field_name, "waiting_task_id");
+		dti->containees[1].al.type_info = UINT_NON_NULLABLE[4];
+
+		strcpy(dti->containees[2].field_name, "transaction_id");
+		dti->containees[2].al.type_info = LARGE_UINT_NON_NULLABLE[transaction_id_bytes];
+
+		strcpy(dti->containees[3].field_name, "resource_type");
+		dti->containees[3].al.type_info = UINT_NON_NULLABLE[4];
+
+		strcpy(dti->containees[4].field_name, "resoucre_id");
+		dti->containees[4].al.type_info = lckmgr_p->resource_id_type_info;
+
+		lckmgr_p->wait_record_def = malloc(sizeof(tuple_def));
+		if(lckmgr_p->wait_record_def)
+			exit(-1);
+		initialize_tuple_def(lckmgr_p->wait_record_def, dti);
+	}
+
+	lckmgr_p->waits_for_td = malloc(sizeof(bplus_tree_tuple_defs));
 	if(lckmgr_p->waits_for_td == NULL)
 		exit(-1);
-	init_bplus_tree_tuple_definitions(lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p->pas_p, lckmgr_p->wait_record_def, waits_for_keys, all_ascending, 5);
+	init_bplus_tree_tuple_definitions(lckmgr_p->waits_for_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->wait_record_def, waits_for_keys, all_ascending, 5);
 	lckmgr_p->waits_for_root_page_id = get_new_bplus_tree(lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
 
-	lckmgr_p->waits_back_td = malloc(bplus_tree_tuple_defs);
+	lckmgr_p->waits_back_td = malloc(sizeof(bplus_tree_tuple_defs));
 	if(lckmgr_p->waits_back_td == NULL)
 		exit(-1);
-	init_bplus_tree_tuple_definitions(lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p->pas_p, lckmgr_p->wait_record_def, waits_back_keys, all_ascending, 5);
+	init_bplus_tree_tuple_definitions(lckmgr_p->waits_back_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->wait_record_def, waits_back_keys, all_ascending, 5);
 	lckmgr_p->waits_back_root_page_id = get_new_bplus_tree(lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
 }
 
