@@ -115,25 +115,21 @@ enum lock_result
 
 // no wait_entry-s are inserted on a non_blocking = 1 call, and instead FAILED is returned on encountering a conflict
 // task_id is expected to be one of the individual threads working on behalf of the transaction_id
+
 // a lock is held not by the task_id of a transaction_id, but instead by the transaction_id itself
-// but multiple tasks are allowed to wait for the same resource (hopefully not by design)
+// but multiple tasks are allowed to wait for the same resource
 // i.e. a task_id can take on locks acquired by another task_id
-// while a notify_on_unblocked call back is task specific, waking up only the respective task that is blocked waiting for the lock
+
 // by design you must call this and all lock_manager functions with external global mutex held, and wait using condition variable or deschedule while this mutex is held, to avoid missed notifications to wakeup from blocked state
-// this function also removes all wait-entries inserted prior to this call which have transaction_id, task_id present
 lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int non_blocking);
 
-// discards all wait_entries for the transaction_id and task_id
-// this is done by the acquire_lock_*() everytime you call it, but if you want to start winding up, for safety you may call this, to let the lock_manager know so that it would not send you a deadlock signal out of the blue
-// ideally, on receiving MUST_BLOCK, you must block ad again call the acquire_lock_*() function to again possibly get the same lock, after being unblocked
-// this function is to let the lock_manager know that you are no longer waiting for the same lock
-void notify_task_unblocked_to_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id);
+// since a task is not actually holding the lock, its the transaction that holds the lock, so any task_id can release the lock that was priorly acquired by anyother task
+// i.e. you may release locks using a dummy task_id (lets say = 100) that were in the past, request by and granted to some task_id = 55
+void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
-// this function does not remove any wait entries taken prior, so call the notify function above to remove them
-void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
-
-// this function does remove all the wait-entries for the transaction_id as a whole for all it's task_id-s
+// this function does remove all the wait-entries for the transaction_id as a whole for all it's task_id-s, no notify_unblocked() will be issued
+// this will also release all the locks and also issue notify_unblocked() to all the transactions and tasks that were waiting for the resource that this transaction has locks on
 // so call this function only after you join all the tasks executing on behalf of the transaction, because they won't be woken up by this function call
-void release_all_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id);
+void conclude_all_business_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id);
 
 #endif

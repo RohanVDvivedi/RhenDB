@@ -333,10 +333,10 @@ lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 trans
 	// task_id, for the transacton_id, is indeed calling this function, so it is no longer blocked or waiting, so remove it's wait entries
 	remove_all_wait_entries_for_task_id(lckmgr_p, transaction_id, task_id);
 
-	// get the old_lock_mode for the transaction_id <-> resource given
+	// get the old_lock_mode for the transaction_id and resource given
 	uint32_t old_lock_mode = find_lock_entry(lckmgr_p, transaction_id, resource_type, resource_id, resource_id_size);
 
-	// if the old_lock_mode is same as the one requested
+	// if the old_lock_mode is same as the one requested, then return success
 	if(old_lock_mode == new_lock_mode)
 		return LOCK_ALREADY_HELD;
 
@@ -362,19 +362,16 @@ lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 trans
 		return LOCK_TRANSITIONED;
 }
 
-void notify_task_unblocked_to_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id)
+void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
 {
 	// task_id, for the transacton_id, is indeed calling this function, so it is no longer blocked or waiting, so remove it's wait entries
 	remove_all_wait_entries_for_task_id(lckmgr_p, transaction_id, task_id);
-}
 
-void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
-{
 	// try to remove the lock, and wake up waiters if any
 	remove_lock_entry_and_wake_up_waiters(lckmgr_p, transaction_id, resource_type, resource_id, resource_id_size);
 }
 
-void release_all_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id)
+void conclude_all_business_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id)
 {
 	// transacton_id, is indeed calling this function, so it is no longer expected to be blocked, it is aborting or committing, so we remove all it's wait_entries
 	remove_all_wait_entries_for_transaction_id(lckmgr_p, transaction_id);
