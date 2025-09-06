@@ -273,7 +273,7 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 		strcpy(dti->containees[3].field_name, "resource_type");
 		dti->containees[3].al.type_info = UINT_NON_NULLABLE[4];
 
-		strcpy(dti->containees[4].field_name, "resoucre_id");
+		strcpy(dti->containees[4].field_name, "resource_id");
 		dti->containees[4].al.type_info = lckmgr_p->resource_id_type_info;
 
 		lckmgr_p->wait_record_def = malloc(sizeof(tuple_def));
