@@ -115,11 +115,12 @@ enum lock_result
 
 // no wait_entry-s are inserted on a non_blocking = 1 call, and instead FAILED is returned on encountering a conflict
 // task_id is expected to be one of the individual threads working on behalf of the transaction_id
-// a lock is held not by the task_id of a transaction_id instead by the transaction_id itself
+// a lock is held not by the task_id of a transaction_id, but instead by the transaction_id itself
 // but multiple tasks are allowed to wait for the same resource (hopefully not by design)
 // i.e. a task_id can take on locks acquired by another task_id
 // while a notify_on_unblocked call back is task specific, waking up only the respective task that is blocked waiting for the lock
 // by design you must call this and all lock_manager functions with external global mutex held, and wait using condition variable or deschedule while this mutex is held, to avoid missed notifications to wakeup from blocked state
+// this function also removes all wait-entries inserted prior to this call which have transaction_id, task_id present
 lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int non_blocking);
 
 // discards all wait_entries for the transaction_id and task_id
@@ -128,8 +129,11 @@ lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 trans
 // this function is to let the lock_manager know that you are no longer waiting for the same lock
 void notify_task_unblocked_to_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id);
 
+// this function does not remove any wait entries taken prior, so call the notify function above to remove them
 void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
+// this function does remove all the wait-entries for the transaction_id as a whole for all it's task_id-s
+// so call this function only after you join all the tasks executing on behalf of the transaction, because they won't be woken up by this function call
 void release_all_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id);
 
 #endif
