@@ -78,7 +78,7 @@ static positional_accessor tx_locks_keys[] = {STATIC_POSITION(0), STATIC_POSITIO
 
 static positional_accessor rs_locks_keys[] = {STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(0)};
 
-#define MAX_SERIALIZED_WAIT_ENTRY_SIZE (sizeof(uint256) + sizeof(uint256) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + sizeof(uint32_t) + 2) // +2 for the size and offset of resource_id
+#define MAX_SERIALIZED_WAIT_ENTRY_SIZE (sizeof(uint256) + sizeof(uint32_t) + sizeof(uint256) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + 2) // +2 for the size and offset of resource_id
 
 typedef struct wait_entry wait_entry;
 struct wait_entry
@@ -204,11 +204,12 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 	}
 	if(transaction_id_bytes == 0)
 		exit(-1);
+	printf("lock manager initialized to support %u number of bytes for transaction_id\n", transaction_id_bytes);
 
 	lckmgr_p->resource_id_type_info = malloc(sizeof(data_type_info));
 	if(lckmgr_p->resource_id_type_info)
 		exit(-1);
-	*(lckmgr_p->resource_id_type_info) = get_variable_length_blob_type("resource_id_type", MAX_RESOURCE_ID_SIZE);
+	*(lckmgr_p->resource_id_type_info) = get_variable_length_blob_type("resource_id_type", MAX_RESOURCE_ID_SIZE + 2);
 
 	{
 		data_type_info* dti = malloc(sizeof_tuple_data_type_info(4));
@@ -222,7 +223,7 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 		strcpy(dti->containees[1].field_name, "resource_type");
 		dti->containees[1].al.type_info = UINT_NON_NULLABLE[4];
 
-		strcpy(dti->containees[2].field_name, "resoucre_id");
+		strcpy(dti->containees[2].field_name, "resource_id");
 		dti->containees[2].al.type_info = lckmgr_p->resource_id_type_info;
 
 		strcpy(dti->containees[3].field_name, "lock_mode");
@@ -237,13 +238,21 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 	lckmgr_p->tx_locks_td = malloc(sizeof(bplus_tree_tuple_defs));
 	if(lckmgr_p->tx_locks_td == NULL)
 		exit(-1);
-	init_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->lock_record_def, tx_locks_keys, all_ascending, 3);
+	if(!init_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->lock_record_def, tx_locks_keys, all_ascending, 3))
+	{
+		printf("BUG (in lock_manager) :: could not initialize tx_locks_td\n");
+		exit(-1);
+	}
 	lckmgr_p->tx_locks_root_page_id = get_new_bplus_tree(lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
 
 	lckmgr_p->rs_locks_td = malloc(sizeof(bplus_tree_tuple_defs));
 	if(lckmgr_p->rs_locks_td == NULL)
 		exit(-1);
-	init_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->lock_record_def, rs_locks_keys, all_ascending, 3);
+	if(!init_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->lock_record_def, rs_locks_keys, all_ascending, 3))
+	{
+		printf("BUG (in lock_manager) :: could not initialize rs_locks_td\n");
+		exit(-1);
+	}
 	lckmgr_p->rs_locks_root_page_id = get_new_bplus_tree(lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
 
 	{
@@ -276,19 +285,29 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 	lckmgr_p->waits_for_td = malloc(sizeof(bplus_tree_tuple_defs));
 	if(lckmgr_p->waits_for_td == NULL)
 		exit(-1);
-	init_bplus_tree_tuple_definitions(lckmgr_p->waits_for_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->wait_record_def, waits_for_keys, all_ascending, 5);
+	if(!init_bplus_tree_tuple_definitions(lckmgr_p->waits_for_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->wait_record_def, waits_for_keys, all_ascending, 5))
+	{
+		printf("BUG (in lock_manager) :: could not initialize waits_for_td\n");
+		exit(-1);
+	}
 	lckmgr_p->waits_for_root_page_id = get_new_bplus_tree(lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
 
 	lckmgr_p->waits_back_td = malloc(sizeof(bplus_tree_tuple_defs));
 	if(lckmgr_p->waits_back_td == NULL)
 		exit(-1);
-	init_bplus_tree_tuple_definitions(lckmgr_p->waits_back_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->wait_record_def, waits_back_keys, all_ascending, 5);
+	if(!init_bplus_tree_tuple_definitions(lckmgr_p->waits_back_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->wait_record_def, waits_back_keys, all_ascending, 5))
+	{
+		printf("BUG (in lock_manager) :: could not initialize waits_back_td\n");
+		exit(-1);
+	}
 	lckmgr_p->waits_back_root_page_id = get_new_bplus_tree(lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
 }
 
 uint32_t register_lock_type_with_lock_manager(lock_manager* lckmgr_p, glock_matrix lock_matrix)
 {
 	lckmgr_p->lock_matrices = realloc(lckmgr_p->lock_matrices, sizeof(glock_matrix) * (lckmgr_p->locks_type_count + 1));
+	if(lckmgr_p->lock_matrices == NULL)
+		exit(-1);
 	lckmgr_p->lock_matrices[lckmgr_p->locks_type_count++] = lock_matrix;
 }
 
