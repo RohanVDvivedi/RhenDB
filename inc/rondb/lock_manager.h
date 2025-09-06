@@ -109,6 +109,11 @@ enum lock_result
 	// when MUST_BLOCK is returned, the wait_entry-s for the lock have been already inserted, and the caller is expected to block or try again later
 };
 
+
+// below function lets you query if the transaction_id concontext hold lock on the provided resource
+#define NO_LOCK_HELD UINT32_MAX
+uint32_t get_lock_mode_for_lock_from_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
+
 // no wait_entry-s are inserted on a non_blocking = 1 call, and instead FAILED is returned on encountering a conflict
 // task_id is expected to be one of the individual threads working on behalf of the transaction_id
 // a lock is held not by the task_id of a transaction_id instead by the transaction_id itself

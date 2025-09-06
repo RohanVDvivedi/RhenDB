@@ -292,6 +292,8 @@ uint32_t register_lock_type_with_lock_manager(lock_manager* lckmgr_p, glock_matr
 	lckmgr_p->lock_matrices[lckmgr_p->locks_type_count++] = lock_matrix;
 }
 
+uint32_t get_lock_mode_for_lock_from_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
+
 lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int non_blocking);
 
 void notify_task_unblocked_to_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id);
