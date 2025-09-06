@@ -178,7 +178,45 @@ int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, uint32_
 
 // --
 
-void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, lock_manager_notifier notifier, uint256 overflow_transaction_id, rage_engine* ltbl_engine);
+void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, lock_manager_notifier notifier, uint256 overflow_transaction_id, rage_engine* ltbl_engine)
+{
+	lckmgr_p->external_lock = external_lock;
+
+	lckmgr_p->notifier = notifier;
+
+	lckmgr_p->locks_type_count = 0;
+	lckmgr_p->lock_matrices = NULL;
+
+	lckmgr_p->ltbl_engine = ltbl_engine;
+
+	tuple_def* lock_record_def;
+
+	lckmgr_p->tx_locks_td = malloc(bplus_tree_tuple_defs);
+	if(lckmgr_p->tx_locks_td == NULL)
+		exit(-1);
+	init_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p->pas_p, lckmgr_p->lock_record_def, tx_locks_keys, all_ascending, 3);
+	lckmgr_p->tx_locks_root_page_id = get_new_bplus_tree(lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+
+	lckmgr_p->rs_locks_td = malloc(bplus_tree_tuple_defs);
+	if(lckmgr_p->rs_locks_td == NULL)
+		exit(-1);
+	init_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p->pas_p, lckmgr_p->lock_record_def, rs_locks_keys, all_ascending, 3);
+	lckmgr_p->rs_locks_root_page_id = get_new_bplus_tree(lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+
+	tuple_def* wait_record_def;
+
+	lckmgr_p->waits_for_td = malloc(bplus_tree_tuple_defs);
+	if(lckmgr_p->waits_for_td == NULL)
+		exit(-1);
+	init_bplus_tree_tuple_definitions(lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p->pas_p, lckmgr_p->wait_record_def, waits_for_keys, all_ascending, 5);
+	lckmgr_p->waits_for_root_page_id = get_new_bplus_tree(lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+
+	lckmgr_p->waits_back_td = malloc(bplus_tree_tuple_defs);
+	if(lckmgr_p->waits_back_td == NULL)
+		exit(-1);
+	init_bplus_tree_tuple_definitions(lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p->pas_p, lckmgr_p->wait_record_def, waits_back_keys, all_ascending, 5);
+	lckmgr_p->waits_back_root_page_id = get_new_bplus_tree(lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+}
 
 uint32_t register_lock_type_with_lock_manager(lock_manager* lckmgr_p, glock_matrix lock_matrix);
 
