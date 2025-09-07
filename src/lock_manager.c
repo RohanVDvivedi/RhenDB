@@ -517,7 +517,70 @@ void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, uint256
 // return = 1, means there are lock conflicts, else it returns 0, if the lock can be readily taken
 // please note that this function skips all the lock_entries that have the same transaction_id, and same resource
 // uses utility functions of section 1
-int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, int do_insert_wait_entries);
+int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int do_insert_wait_entries)
+{
+	int has_conflicts = 0;
+
+	// we need to construct the lock_entry_key
+	char lock_entry_key[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
+
+	{
+		// construct lock_entry_tuple
+		char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
+		{
+			lock_entry le = {.resource_type = resource_type, .resource_id_size = resource_id_size};
+			memory_move(le.resource_id, resource_id, resource_id_size);
+			serialize_lock_entry_record(lock_entry_tuple, &le, lckmgr_p);
+		}
+
+		// extract key out of it
+		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, lock_entry_tuple, lock_entry_key);
+	}
+
+	// create an iterator using the first 2 keys (resource_type, resource_id)
+	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_key, 2, GREATER_THAN_EQUALS, 0, READ_LOCK, lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL, NULL);
+
+	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
+	while(!is_empty_bplus_tree(bpi_p) && !is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
+	{
+		// deserialize the lock_entry into a struct
+		lock_entry le;
+		deserialize_lock_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &le, lckmgr_p);
+
+		// if it is not the right tuple, we break out
+		if(le.resource_id_size != resource_id_size || memory_compare(le.resource_id, resource_id, resource_id_size))
+			break;
+
+		// skip entries for the transaction_id that wants this lock
+		if(are_equal_uint256(le.transaction_id, transaction_id))
+			continue;
+
+		// check for conflicts, if there are no conflicts, we continue
+		if(are_glock_modes_compatible(&(lckmgr_p->lock_matrices[resource_type]), le.lock_mode, new_lock_mode))
+			continue;
+
+		// we have conflicts, so set the return value
+		has_conflicts = 1;
+
+		// break out, if we are instructed to not insert any wait entries
+		if(!do_insert_wait_entries)
+			break;
+
+		// insert wait entry for this lock conflict
+		{
+			wait_entry to_ins = {.waiting_transaction_id = transaction_id, .waiting_task_id = task_id, .transaction_id = le.transaction_id, .resource_type = resource_type, .resource_id_size = resource_id_size};
+			memory_move(to_ins.resource_id, resource_id, resource_id_size);
+			insert_wait_entry(lckmgr_p, &to_ins);
+		}
+
+		// continue ahead with the next tuple
+		next_bplus_tree_iterator(bpi_p, NULL, NULL);
+	}
+
+	delete_bplus_tree_iterator(bpi_p, NULL, NULL);
+
+	return has_conflicts;
+}
 
 // --
 
@@ -674,7 +737,7 @@ lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 trans
 		return LOCK_ALREADY_HELD;
 
 	// the return value of this function suggests if we encountered any lock conflicts
-	int has_conflicts = check_lock_conflicts(lckmgr_p, transaction_id, resource_type, resource_id, resource_id_size, !non_blocking); // do insert wait entries if it is a blocking call
+	int has_conflicts = check_lock_conflicts(lckmgr_p, transaction_id, task_id, resource_type, resource_id, resource_id_size, new_lock_mode, !non_blocking); // do insert wait entries if it is a blocking call
 
 	if(has_conflicts) // this means failure
 	{
