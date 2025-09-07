@@ -330,7 +330,7 @@ void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager* lckmg
 			break;
 
 		// wake up that transaction_id's task_id
-		lckmgr_p->notifier.notify_unblocked(lckmgr_p->notifier.context_p, we.transaction_id, we.waiting_task_id);
+		lckmgr_p->notifier.notify_unblocked(lckmgr_p->notifier.context_p, we.waiting_transaction_id, we.waiting_task_id);
 	}
 
 	delete_bplus_tree_iterator(bpi_p, NULL, NULL);
