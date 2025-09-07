@@ -96,8 +96,10 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 uint32_t register_lock_type_with_lock_manager(lock_manager* lckmgr_p, glock_matrix lock_matrix);
 
 // below function lets you query if the transaction_id concontext hold lock on the provided resource
+// this function removes all wait_entries corresponding the transaction_id and it's task_id, because making this call proves that this task_id is no longer waiting/blocked
+// but remember that the lock is always held by the transaction as a whole and never by it's task, so task_id is only used to remove the wait entries
 #define NO_LOCK_HELD_LOCK_MODE UINT32_MAX
-uint32_t get_lock_mode_for_lock_from_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
+uint32_t get_lock_mode_for_lock_from_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
 typedef enum lock_result lock_result;
 enum lock_result

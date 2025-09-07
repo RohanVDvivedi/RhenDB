@@ -721,8 +721,11 @@ uint32_t register_lock_type_with_lock_manager(lock_manager* lckmgr_p, glock_matr
 	return lckmgr_p->locks_type_count++;
 }
 
-uint32_t get_lock_mode_for_lock_from_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+uint32_t get_lock_mode_for_lock_from_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
 {
+	// task_id, for the transacton_id, is indeed calling this function, so it is no longer blocked or waiting, so remove it's wait entries
+	remove_all_wait_entries_for_task_id(lckmgr_p, transaction_id, task_id);
+
 	return find_lock_entry(lckmgr_p, transaction_id, resource_type, resource_id, resource_id_size);
 }
 
