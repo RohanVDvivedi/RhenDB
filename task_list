@@ -2,7 +2,6 @@
 
  1.* lock table (using VolatilePageStore)
    * code review
-   * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock
    * write test cases and test
    * use serint's large_uint's get_byte_count_for_representing_ large_uint(large_uint a);, to find th number of bytes of the large_uint you need to store
 
@@ -47,6 +46,10 @@
      * if no mapped region provided then it starts mapping from the next_insert_offset
    * void unmap_tuple(intermediate_tuple_store* its_p, tuple_region* tr_p);
    * usefull for external sorting, hash joins and passing intermediate tuples between different operators
+
+
+* define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock
+
 
  5.0* implement SQL parser (possibly in a different directory)
  5.1* implement query plan tree
