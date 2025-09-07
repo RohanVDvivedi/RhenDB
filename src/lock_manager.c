@@ -434,7 +434,32 @@ int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint
 
 int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
 {
+	lock_entry le = {.transaction_id = transaction_id, .resource_type = resource_type, .resource_id_size = resource_id_size};
+	memory_move(le.resource_id, resource_id, resource_id_size);
+	char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 
+	serialize_lock_entry_record(lock_entry_tuple, &le, lckmgr_p);
+
+	int res = 1;
+
+	if(res)
+	{
+		char lock_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
+		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, lock_entry_tuple, lock_entry_key);
+		res = res && delete_from_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	}
+
+	if(res)
+	{
+		char lock_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
+		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, lock_entry_tuple, lock_entry_key);
+		res = res && delete_from_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_key, lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	}
+
+	if(res)
+		notify_all_wait_entries_for_resource_of_being_unblocked(lckmgr_p, resource_type, resource_id, resource_id_size);
+
+	return res;
 }
 
 void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id)
