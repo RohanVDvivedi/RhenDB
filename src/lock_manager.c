@@ -775,3 +775,23 @@ void conclude_all_business_with_lock_manager(lock_manager* lckmgr_p, uint256 tra
 	// remove all lock_entries and wake up all waiters on those resources
 	remove_all_lock_entries_and_wake_up_waiters(lckmgr_p, transaction_id);
 }
+
+void debug_print_lock_manager_tables(lock_manager* lckmgr_p)
+{
+	printf("======================= LOCK MANAGER TABLES ===========================\n\n");
+	printf("TX_LOCKS : \n\n");
+	print_bplus_tree(lckmgr_p->tx_locks_root_page_id, 1, lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL);
+	printf("-----------------------------------------------------------------------\n\n");
+
+	printf("RS_LOCKS : \n\n");
+	print_bplus_tree(lckmgr_p->rs_locks_root_page_id, 1, lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL);
+	printf("-----------------------------------------------------------------------\n\n");
+
+	printf("WAITS_FOR : \n\n");
+	print_bplus_tree(lckmgr_p->waits_for_root_page_id, 1, lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL);
+	printf("-----------------------------------------------------------------------\n\n");
+
+	printf("WAITS_BACK : \n\n");
+	print_bplus_tree(lckmgr_p->waits_back_root_page_id, 1, lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL);
+	printf("-----------------------------------------------------------------------\n\n");
+}
