@@ -365,7 +365,7 @@ static uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, 
 	// create an iterator using the first 3 keys (transaction_id, resource_type, resource_id)
 	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, 3, GREATER_THAN_EQUALS, 0, READ_LOCK, lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL, NULL);
 
-	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
+	// if the bplus_tree is not empty and it has a current tuple to be processed, then move forward with the test
 	if(!is_empty_bplus_tree(bpi_p) && !is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
 	{
 		// deserialize the lock_entry into a struct
