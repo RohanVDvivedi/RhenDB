@@ -161,7 +161,7 @@ static positional_accessor waits_back_keys[] = {STATIC_POSITION(3), STATIC_POSIT
 */
 
 // 1 - basic functionality for the wait_entries
-int insert_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p)
+static int insert_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p)
 {
 	char wait_entry_tuple[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
 
@@ -175,7 +175,8 @@ int insert_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p)
 	return res;
 }
 
-int remove_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p)
+/*
+static int remove_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p)
 {
 	char wait_entry_tuple[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
 
@@ -199,9 +200,10 @@ int remove_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p)
 
 	return res;
 }
+*/
 
 // 2 - remove wait_entries for a particular waiters
-void remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 waiting_transaction_id, uint32_t waiting_task_id)
+static void remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 waiting_transaction_id, uint32_t waiting_task_id)
 {
 	// we need to construct the wait_entry_key
 	char wait_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
@@ -248,7 +250,7 @@ void remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 waiting
 	delete_bplus_tree_iterator(bpi_p, NULL, NULL);
 }
 
-void remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, uint256 waiting_transaction_id)
+static void remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, uint256 waiting_transaction_id)
 {
 	// we need to construct the wait_entry_key
 	char wait_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
@@ -297,7 +299,7 @@ void remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, uint256 
 
 // 3 - below function only calls notify_unblocked for all the waiters, that are blocked for this particular resource
 // it will not remove those wait-entries
-void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager* lckmgr_p, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+static void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager* lckmgr_p, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
 {
 	// we need to construct the wait_entry_key
 	char wait_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
@@ -337,7 +339,7 @@ void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager* lckmg
 }
 
 // 4 - find function for the lock_entry, the primary key is transaction_id and the resource (type + id)
-uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+static uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
 {
 	// initialize the lock_mode, this is the return value
 	uint32_t lock_mode = NO_LOCK_HELD_LOCK_MODE;
@@ -387,7 +389,7 @@ struct insert_or_update_lock_entry_context
 	lock_manager* lckmgr_p;
 };
 
-int insert_or_update_lock_entry(const void* context, const tuple_def* record_def, const void* old_record, void** new_record, void (*cancel_update_callback)(void* cancel_update_callback_context, const void* transaction_id, int* abort_error), void* cancel_update_callback_context, const void* transaction_id, int* abort_error)
+static int insert_or_update_lock_entry(const void* context, const tuple_def* record_def, const void* old_record, void** new_record, void (*cancel_update_callback)(void* cancel_update_callback_context, const void* transaction_id, int* abort_error), void* cancel_update_callback_context, const void* transaction_id, int* abort_error)
 {
 	// if there no existing lock, insert directly
 	if(old_record == NULL)
@@ -409,7 +411,7 @@ int insert_or_update_lock_entry(const void* context, const tuple_def* record_def
 	return 1;
 }
 
-int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode)
+static int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode)
 {
 	// construct lock_entry_tuple, that we aim to insert or update with
 	char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
@@ -432,7 +434,7 @@ int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint
 	return inserted_OR_updated;
 }
 
-int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+static int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
 {
 	lock_entry le = {.transaction_id = transaction_id, .resource_type = resource_type, .resource_id_size = resource_id_size};
 	memory_move(le.resource_id, resource_id, resource_id_size);
@@ -462,7 +464,7 @@ int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transa
 	return res;
 }
 
-void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id)
+static void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id)
 {
 	// we need to construct the lock_entry_key
 	char lock_entry_key[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
@@ -517,7 +519,7 @@ void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, uint256
 // return = 1, means there are lock conflicts, else it returns 0, if the lock can be readily taken
 // please note that this function skips all the lock_entries that have the same transaction_id, and same resource
 // uses utility functions of section 1
-int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int do_insert_wait_entries)
+static int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int do_insert_wait_entries)
 {
 	int has_conflicts = 0;
 
