@@ -444,14 +444,14 @@ int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transa
 
 	if(res)
 	{
-		char lock_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
+		char lock_entry_key[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, lock_entry_tuple, lock_entry_key);
 		res = res && delete_from_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
 	}
 
 	if(res)
 	{
-		char lock_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
+		char lock_entry_key[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, lock_entry_tuple, lock_entry_key);
 		res = res && delete_from_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_key, lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
 	}
@@ -464,7 +464,52 @@ int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transa
 
 void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id)
 {
+	// we need to construct the lock_entry_key
+	char lock_entry_key[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 
+	{
+		// construct lock_entry_tuple
+		char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
+		{
+			lock_entry le = {.transaction_id = transaction_id};
+			serialize_lock_entry_record(lock_entry_tuple, &le, lckmgr_p);
+		}
+
+		// extract key out of it
+		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, lock_entry_tuple, lock_entry_key);
+	}
+
+	// create an iterator using the first 1 keys (transaction_id)
+	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, 1, GREATER_THAN_EQUALS, 1, WRITE_LOCK, lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+
+	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
+	while(!is_empty_bplus_tree(bpi_p) && !is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
+	{
+		// deserialize the lock_entry into a struct
+		lock_entry le;
+		deserialize_lock_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &le, lckmgr_p);
+
+		// if it is not the right tuple, we break out
+		if(!are_equal_uint256(transaction_id, le.transaction_id))
+			break;
+
+		// remove the lock_entry and wake up waiters waiting on this resource
+		{
+			{
+				char lock_entry_key[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
+				extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, get_tuple_bplus_tree_iterator(bpi_p), lock_entry_key);
+				delete_from_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_key, lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+			}
+
+			// then from the table with the iterator
+			remove_from_bplus_tree_iterator(bpi_p, GO_NEXT_AFTER_BPLUS_TREE_ITERATOR_REMOVE_OPERATION, NULL, NULL);
+
+			// remove was successfull, so wake up all other transactions that are waitinf for this resource
+			notify_all_wait_entries_for_resource_of_being_unblocked(lckmgr_p, le.resource_type, le.resource_id, le.resource_id_size);
+		}
+	}
+
+	delete_bplus_tree_iterator(bpi_p, NULL, NULL);
 }
 
 // 6 - below function inserts wait_entries for the corresponding conflicts only if the do_insert_wait_entries = 1,
