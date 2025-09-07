@@ -379,9 +379,68 @@ uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, uint32_
 
 // 5 - below functions insert or remove the lock_entry and if a prior lock_mode existed, then a wake_up is also called on the corresponding wait_entries using the notify_all_wait_entries_*() function above
 // uses utility functions of section 3
-int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode);
-int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
-int remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id);
+
+typedef struct insert_or_update_lock_entry_context insert_or_update_lock_entry_context;
+struct insert_or_update_lock_entry_context
+{
+	int* was_updated;
+	lock_manager* lckmgr_p;
+};
+
+int insert_or_update_lock_entry(const void* context, const tuple_def* record_def, const void* old_record, void** new_record, void (*cancel_update_callback)(void* cancel_update_callback_context, const void* transaction_id, int* abort_error), void* cancel_update_callback_context, const void* transaction_id, int* abort_error)
+{
+	// if there no existing lock, insert directly
+	if(old_record == NULL)
+		return 1;
+
+	// else analyze if an update has to be performed
+
+	insert_or_update_lock_entry_context* cntxt = (void*) context;
+
+	lock_entry old_lock_entry; deserialize_lock_entry_record(   old_record, &old_lock_entry, cntxt->lckmgr_p);
+	lock_entry new_lock_entry; deserialize_lock_entry_record(*(new_record), &new_lock_entry, cntxt->lckmgr_p);
+
+	// if both the lock_mode-s are same then do nothing
+	if(old_lock_entry.lock_mode == new_lock_entry.lock_mode)
+		return 0;
+
+	// else say we update and ask the callback to go ahead with the update
+	*(cntxt->was_updated) = 1;
+	return 1;
+}
+
+int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode)
+{
+	// construct lock_entry_tuple, that we aim to insert or update with
+	char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
+	{
+		lock_entry le = {.transaction_id = transaction_id, .resource_type = resource_type, .resource_id_size = resource_id_size, .lock_mode = new_lock_mode};
+		memory_move(le.resource_id, resource_id, resource_id_size);
+		serialize_lock_entry_record(lock_entry_tuple, &le, lckmgr_p);
+	}
+
+	int inserted_OR_updated = 1;
+	int was_updated = 0;
+
+	inserted_OR_updated = inserted_OR_updated && inspected_update_in_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_tuple, &((update_inspector){.context = &((insert_or_update_lock_entry_context){&was_updated, lckmgr_p}), .update_inspect = insert_or_update_lock_entry}), lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+
+	inserted_OR_updated = inserted_OR_updated && inspected_update_in_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_tuple, &((update_inspector){.context = &((insert_or_update_lock_entry_context){&was_updated, lckmgr_p}), .update_inspect = insert_or_update_lock_entry}), lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+
+	if(inserted_OR_updated && was_updated)
+		notify_all_wait_entries_for_resource_of_being_unblocked(lckmgr_p, resource_type, resource_id, resource_id_size);
+
+	return inserted_OR_updated;
+}
+
+int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+{
+
+}
+
+void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id)
+{
+
+}
 
 // 6 - below function inserts wait_entries for the corresponding conflicts only if the do_insert_wait_entries = 1,
 // return value only suggests if there are any lock_conflicts or not
