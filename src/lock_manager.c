@@ -161,7 +161,18 @@ static positional_accessor waits_back_keys[] = {STATIC_POSITION(3), STATIC_POSIT
 */
 
 // 1 - basic functionality for the wait_entries
-int insert_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p);
+int insert_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p)
+{
+	char wait_entry_tuple[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
+
+	serialize_wait_entry_record(wait_entry_tuple, we_p, lckmgr_p);
+
+	int res = insert_in_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_tuple, lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	res = res && insert_in_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_tuple, lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+
+	return res;
+}
+
 int remove_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p);
 
 // 2 - remove wait_entries for a particular waiters
