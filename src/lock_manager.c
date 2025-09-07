@@ -265,7 +265,7 @@ void remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, uint256 
 		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->waits_for_td, wait_entry_tuple, wait_entry_key);
 	}
 
-	// create an iterator using the first 2 keys (waiting_transaction_id, waiting_task_id)
+	// create an iterator using the first 1 keys (waiting_transaction_id)
 	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_key, 1, GREATER_THAN_EQUALS, 1, WRITE_LOCK, lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
 
 	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
@@ -297,7 +297,44 @@ void remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, uint256 
 
 // 3 - below function only calls notify_unblocked for all the waiters, that are blocked for this particular resource
 // it will not remove those wait-entries
-void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager* lckmgr_p, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
+void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager* lckmgr_p, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+{
+	// we need to construct the wait_entry_key
+	char wait_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
+
+	{
+		// construct wait_entry_tuple
+		char wait_entry_tuple[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
+		{
+			wait_entry we = {.resource_type = resource_type, .resource_id_size = resource_id_size};
+			memory_move(we.resource_id, resource_id, resource_id_size);
+			serialize_wait_entry_record(wait_entry_tuple, &we, lckmgr_p);
+		}
+
+		// extract key out of it
+		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->waits_back_td, wait_entry_tuple, wait_entry_key);
+	}
+
+	// create an iterator using the first 2 keys (resource_type, resource_id)
+	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_key, 2, GREATER_THAN_EQUALS, 0, READ_LOCK, lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL, NULL);
+
+	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
+	while(!is_empty_bplus_tree(bpi_p) && !is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
+	{
+		// deserialize the wait_entry into a struct
+		wait_entry we;
+		deserialize_wait_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &we, lckmgr_p);
+
+		// if it is not the right tuple, we break out
+		if(we.resource_type != resource_type || we.resource_id_size != resource_id_size || memory_compare(we.resource_id, resource_id, resource_id_size))
+			break;
+
+		// wake up that transaction_id's task_id
+		lckmgr_p->notifier.notify_unblocked(lckmgr_p->notifier.context_p, we.transaction_id, we.waiting_task_id);
+	}
+
+	delete_bplus_tree_iterator(bpi_p, NULL, NULL);
+}
 
 // 4 - find function for the lock_entry, the primary key is transaction_id and the resource (type + id)
 uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
