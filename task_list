@@ -1,11 +1,10 @@
  PICKED TASKS
 
  1.* lock table (using VolatilePageStore)
-   * implement utility functions
-   * use serint's large_uint's get_byte_count_for_representing_ large_uint(large_uint a);, to find th number of bytes of the large_uint you need to store
    * code review
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock
    * write test cases and test
+   * use serint's large_uint's get_byte_count_for_representing_ large_uint(large_uint a);, to find th number of bytes of the large_uint you need to store
 
  2.* define catalog tables and indexes on it - persistent
    * same as indexes and heap_tables
