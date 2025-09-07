@@ -133,4 +133,15 @@ void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_
 // so call this function only after you join all the tasks executing on behalf of the transaction, because they won't be woken up by this function call
 void conclude_all_business_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id);
 
+const glock_matrix RW_DB_LOCK = {
+	.lock_modes_count = 2,// there are 2 modes
+	.matrix = (uint8_t[GLOCK_MATRIX_SIZE(2)]){
+	//  R  W
+		1,    // R
+		0, 0, // W
+	},
+};
+#define RW_DB_LOCK_R_MODE 0
+#define RW_DB_LOCK_W_MODE 1
+
 #endif
