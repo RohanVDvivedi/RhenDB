@@ -337,7 +337,45 @@ void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager* lckmg
 }
 
 // 4 - find function for the lock_entry, the primary key is transaction_id and the resource (type + id)
-uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
+uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+{
+	// initialize the lock_mode, this is the return value
+	uint32_t lock_mode = NO_LOCK_HELD_LOCK_MODE;
+
+	char lock_entry_key[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
+
+	{
+		// construct lock_entry_tuple
+		char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
+		{
+			lock_entry le = {.transaction_id = transaction_id, .resource_type = resource_type, .resource_id_size = resource_id_size};
+			memory_move(le.resource_id, resource_id, resource_id_size);
+			serialize_lock_entry_record(lock_entry_tuple, &le, lckmgr_p);
+		}
+
+		// extract key out of it
+		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, lock_entry_tuple, lock_entry_key);
+	}
+
+	// create an iterator using the first 3 keys (transaction_id, resource_type, resource_id)
+	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, 3, GREATER_THAN_EQUALS, 0, READ_LOCK, lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL, NULL);
+
+	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
+	if(!is_empty_bplus_tree(bpi_p) && !is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
+	{
+		// deserialize the lock_entry into a struct
+		lock_entry le;
+		deserialize_lock_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &le, lckmgr_p);
+
+		// if it is the right tuple, extract the lock_mode
+		if(are_equal_uint256(le.transaction_id, transaction_id) && le.resource_type == resource_type && le.resource_id_size == resource_id_size && 0 == memory_compare(le.resource_id, resource_id, resource_id_size))
+			lock_mode = le.lock_mode;
+	}
+
+	delete_bplus_tree_iterator(bpi_p, NULL, NULL);
+
+	return lock_mode;
+}
 
 // 5 - below functions insert or remove the lock_entry and if a prior lock_mode existed, then a wake_up is also called on the corresponding wait_entries using the notify_all_wait_entries_*() function above
 // uses utility functions of section 3
