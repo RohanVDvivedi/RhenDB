@@ -250,7 +250,49 @@ void remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 waiting
 
 void remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, uint256 waiting_transaction_id)
 {
+	// we need to construct the wait_entry_key
+	char wait_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
 
+	{
+		// construct wait_entry_tuple
+		char wait_entry_tuple[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
+		{
+			wait_entry we = {.waiting_transaction_id = waiting_transaction_id};
+			serialize_wait_entry_record(wait_entry_tuple, &we, lckmgr_p);
+		}
+
+		// extract key out of it
+		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->waits_for_td, wait_entry_tuple, wait_entry_key);
+	}
+
+	// create an iterator using the first 2 keys (waiting_transaction_id, waiting_task_id)
+	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_key, 1, GREATER_THAN_EQUALS, 1, WRITE_LOCK, lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+
+	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
+	while(!is_empty_bplus_tree(bpi_p) && !is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
+	{
+		// deserialize the wait_entry into a struct
+		wait_entry we;
+		deserialize_wait_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &we, lckmgr_p);
+
+		// if it is not the right tuple, we break out
+		if(!are_equal_uint256(waiting_transaction_id, we.waiting_transaction_id))
+			break;
+
+		// remove the wait_entry
+		{
+			{
+				char wait_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
+				extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->waits_back_td, get_tuple_bplus_tree_iterator(bpi_p), wait_entry_key);
+				delete_from_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_key, lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+			}
+
+			// then from the table with the iterator
+			remove_from_bplus_tree_iterator(bpi_p, GO_NEXT_AFTER_BPLUS_TREE_ITERATOR_REMOVE_OPERATION, NULL, NULL);
+		}
+	}
+
+	delete_bplus_tree_iterator(bpi_p, NULL, NULL);
 }
 
 // 3 - below function only calls notify_unblocked for all the waiters, that are blocked for this particular resource
