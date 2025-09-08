@@ -169,8 +169,8 @@ static int insert_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p)
 
 	int res = 1;
 
-	res = res && insert_in_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_tuple, lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
-	res = res && insert_in_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_tuple, lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	res = res && insert_in_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_tuple, lckmgr_p->waits_for_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
+	res = res && insert_in_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_tuple, lckmgr_p->waits_back_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 
 	return res;
 }
@@ -188,14 +188,14 @@ static int remove_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p)
 	{
 		char wait_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
 		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->waits_for_td, wait_entry_tuple, wait_entry_key);
-		res = res && delete_from_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_key, lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+		res = res && delete_from_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_key, lckmgr_p->waits_for_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 	}
 
 	if(res)
 	{
 		char wait_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
 		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->waits_back_td, wait_entry_tuple, wait_entry_key);
-		res = res && delete_from_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_key, lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+		res = res && delete_from_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_key, lckmgr_p->waits_back_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 	}
 
 	return res;
@@ -221,7 +221,7 @@ static void remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 
 	}
 
 	// create an iterator using the first 2 keys (waiting_transaction_id, waiting_task_id)
-	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_key, 2, GREATER_THAN_EQUALS, 1, WRITE_LOCK, lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_key, 2, GREATER_THAN_EQUALS, 1, WRITE_LOCK, lckmgr_p->waits_for_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 
 	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
 	while(!is_empty_bplus_tree(bpi_p) && !is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
@@ -239,7 +239,7 @@ static void remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 
 			{
 				char wait_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
 				extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->waits_back_td, get_tuple_bplus_tree_iterator(bpi_p), wait_entry_key);
-				delete_from_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_key, lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+				delete_from_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_key, lckmgr_p->waits_back_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 			}
 
 			// then from the table with the iterator
@@ -268,7 +268,7 @@ static void remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, u
 	}
 
 	// create an iterator using the first 1 keys (waiting_transaction_id)
-	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_key, 1, GREATER_THAN_EQUALS, 1, WRITE_LOCK, lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_key, 1, GREATER_THAN_EQUALS, 1, WRITE_LOCK, lckmgr_p->waits_for_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 
 	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
 	while(!is_empty_bplus_tree(bpi_p) && !is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
@@ -286,7 +286,7 @@ static void remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, u
 			{
 				char wait_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
 				extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->waits_back_td, get_tuple_bplus_tree_iterator(bpi_p), wait_entry_key);
-				delete_from_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_key, lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+				delete_from_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_key, lckmgr_p->waits_back_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 			}
 
 			// then from the table with the iterator
@@ -318,7 +318,7 @@ static void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager
 	}
 
 	// create an iterator using the first 2 keys (resource_type, resource_id)
-	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_key, 2, GREATER_THAN_EQUALS, 0, READ_LOCK, lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL, NULL);
+	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->waits_back_root_page_id, wait_entry_key, 2, GREATER_THAN_EQUALS, 0, READ_LOCK, lckmgr_p->waits_back_td, lckmgr_p->lckmgr_engine->pam_p, NULL, NULL, NULL);
 
 	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
 	while(!is_empty_bplus_tree(bpi_p) && !is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
@@ -363,7 +363,7 @@ static uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, 
 	}
 
 	// create an iterator using the first 3 keys (transaction_id, resource_type, resource_id)
-	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, 3, GREATER_THAN_EQUALS, 0, READ_LOCK, lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL, NULL);
+	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, 3, GREATER_THAN_EQUALS, 0, READ_LOCK, lckmgr_p->tx_locks_td, lckmgr_p->lckmgr_engine->pam_p, NULL, NULL, NULL);
 
 	// if the bplus_tree is not empty and it has a current tuple to be processed, then move forward with the test
 	if(!is_empty_bplus_tree(bpi_p) && !is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
@@ -427,9 +427,9 @@ static int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_
 	int inserted_OR_updated = 1;
 	int was_updated = 0;
 
-	inserted_OR_updated = inserted_OR_updated && inspected_update_in_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_tuple, &((update_inspector){.context = &((insert_or_update_lock_entry_context){&was_updated, lckmgr_p}), .update_inspect = insert_or_update_lock_entry}), lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	inserted_OR_updated = inserted_OR_updated && inspected_update_in_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_tuple, &((update_inspector){.context = &((insert_or_update_lock_entry_context){&was_updated, lckmgr_p}), .update_inspect = insert_or_update_lock_entry}), lckmgr_p->tx_locks_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 
-	inserted_OR_updated = inserted_OR_updated && inspected_update_in_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_tuple, &((update_inspector){.context = &((insert_or_update_lock_entry_context){&was_updated, lckmgr_p}), .update_inspect = insert_or_update_lock_entry}), lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	inserted_OR_updated = inserted_OR_updated && inspected_update_in_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_tuple, &((update_inspector){.context = &((insert_or_update_lock_entry_context){&was_updated, lckmgr_p}), .update_inspect = insert_or_update_lock_entry}), lckmgr_p->rs_locks_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 
 	if(inserted_OR_updated && was_updated)
 		notify_all_wait_entries_for_resource_of_being_unblocked(lckmgr_p, resource_type, resource_id, resource_id_size);
@@ -451,14 +451,14 @@ static int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256
 	{
 		char lock_entry_key[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, lock_entry_tuple, lock_entry_key);
-		res = res && delete_from_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+		res = res && delete_from_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, lckmgr_p->tx_locks_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 	}
 
 	if(res)
 	{
 		char lock_entry_key[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, lock_entry_tuple, lock_entry_key);
-		res = res && delete_from_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_key, lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+		res = res && delete_from_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_key, lckmgr_p->rs_locks_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 	}
 
 	if(res)
@@ -485,7 +485,7 @@ static void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, 
 	}
 
 	// create an iterator using the first 1 keys (transaction_id)
-	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, 1, GREATER_THAN_EQUALS, 1, WRITE_LOCK, lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, 1, GREATER_THAN_EQUALS, 1, WRITE_LOCK, lckmgr_p->tx_locks_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 
 	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
 	while(!is_empty_bplus_tree(bpi_p) && !is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
@@ -503,7 +503,7 @@ static void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, 
 			{
 				char lock_entry_key[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 				extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, get_tuple_bplus_tree_iterator(bpi_p), lock_entry_key);
-				delete_from_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_key, lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+				delete_from_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_key, lckmgr_p->rs_locks_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 			}
 
 			// then from the table with the iterator
@@ -543,7 +543,7 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, 
 	}
 
 	// create an iterator using the first 2 keys (resource_type, resource_id)
-	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_key, 2, GREATER_THAN_EQUALS, 0, READ_LOCK, lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL, NULL);
+	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->rs_locks_root_page_id, lock_entry_key, 2, GREATER_THAN_EQUALS, 0, READ_LOCK, lckmgr_p->rs_locks_td, lckmgr_p->lckmgr_engine->pam_p, NULL, NULL, NULL);
 
 	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
 	while(!is_empty_bplus_tree(bpi_p) && !is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
@@ -589,7 +589,7 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, 
 
 // --
 
-void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, lock_manager_notifier notifier, uint256 overflow_transaction_id, rage_engine* ltbl_engine)
+void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, lock_manager_notifier notifier, uint256 overflow_transaction_id, rage_engine* lckmgr_engine)
 {
 	lckmgr_p->external_lock = external_lock;
 
@@ -598,7 +598,7 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 	lckmgr_p->locks_type_count = 0;
 	lckmgr_p->lock_matrices = NULL;
 
-	lckmgr_p->ltbl_engine = ltbl_engine;
+	lckmgr_p->lckmgr_engine = lckmgr_engine;
 
 	uint32_t transaction_id_bytes = 0;
 	{
@@ -647,22 +647,22 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 	lckmgr_p->tx_locks_td = malloc(sizeof(bplus_tree_tuple_defs));
 	if(lckmgr_p->tx_locks_td == NULL)
 		exit(-1);
-	if(!init_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->lock_record_def, tx_locks_keys, all_ascending, 3))
+	if(!init_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, &(lckmgr_p->lckmgr_engine->pam_p->pas), lckmgr_p->lock_record_def, tx_locks_keys, all_ascending, 3))
 	{
 		printf("BUG (in lock_manager) :: could not initialize tx_locks_td\n");
 		exit(-1);
 	}
-	lckmgr_p->tx_locks_root_page_id = get_new_bplus_tree(lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	lckmgr_p->tx_locks_root_page_id = get_new_bplus_tree(lckmgr_p->tx_locks_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 
 	lckmgr_p->rs_locks_td = malloc(sizeof(bplus_tree_tuple_defs));
 	if(lckmgr_p->rs_locks_td == NULL)
 		exit(-1);
-	if(!init_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->lock_record_def, rs_locks_keys, all_ascending, 3))
+	if(!init_bplus_tree_tuple_definitions(lckmgr_p->rs_locks_td, &(lckmgr_p->lckmgr_engine->pam_p->pas), lckmgr_p->lock_record_def, rs_locks_keys, all_ascending, 3))
 	{
 		printf("BUG (in lock_manager) :: could not initialize rs_locks_td\n");
 		exit(-1);
 	}
-	lckmgr_p->rs_locks_root_page_id = get_new_bplus_tree(lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	lckmgr_p->rs_locks_root_page_id = get_new_bplus_tree(lckmgr_p->rs_locks_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 
 	{
 		data_type_info* dti = malloc(sizeof_tuple_data_type_info(5));
@@ -694,22 +694,22 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 	lckmgr_p->waits_for_td = malloc(sizeof(bplus_tree_tuple_defs));
 	if(lckmgr_p->waits_for_td == NULL)
 		exit(-1);
-	if(!init_bplus_tree_tuple_definitions(lckmgr_p->waits_for_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->wait_record_def, waits_for_keys, all_ascending, 5))
+	if(!init_bplus_tree_tuple_definitions(lckmgr_p->waits_for_td, &(lckmgr_p->lckmgr_engine->pam_p->pas), lckmgr_p->wait_record_def, waits_for_keys, all_ascending, 5))
 	{
 		printf("BUG (in lock_manager) :: could not initialize waits_for_td\n");
 		exit(-1);
 	}
-	lckmgr_p->waits_for_root_page_id = get_new_bplus_tree(lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	lckmgr_p->waits_for_root_page_id = get_new_bplus_tree(lckmgr_p->waits_for_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 
 	lckmgr_p->waits_back_td = malloc(sizeof(bplus_tree_tuple_defs));
 	if(lckmgr_p->waits_back_td == NULL)
 		exit(-1);
-	if(!init_bplus_tree_tuple_definitions(lckmgr_p->waits_back_td, &(lckmgr_p->ltbl_engine->pam_p->pas), lckmgr_p->wait_record_def, waits_back_keys, all_ascending, 5))
+	if(!init_bplus_tree_tuple_definitions(lckmgr_p->waits_back_td, &(lckmgr_p->lckmgr_engine->pam_p->pas), lckmgr_p->wait_record_def, waits_back_keys, all_ascending, 5))
 	{
 		printf("BUG (in lock_manager) :: could not initialize waits_back_td\n");
 		exit(-1);
 	}
-	lckmgr_p->waits_back_root_page_id = get_new_bplus_tree(lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, lckmgr_p->ltbl_engine->pmm_p, NULL, NULL);
+	lckmgr_p->waits_back_root_page_id = get_new_bplus_tree(lckmgr_p->waits_back_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, NULL);
 }
 
 uint32_t register_lock_type_with_lock_manager(lock_manager* lckmgr_p, glock_matrix lock_matrix)
@@ -788,18 +788,18 @@ void debug_print_lock_manager_tables(lock_manager* lckmgr_p)
 {
 	printf("======================= LOCK MANAGER TABLES ===========================\n\n");
 	printf("TX_LOCKS : \n\n");
-	print_bplus_tree(lckmgr_p->tx_locks_root_page_id, 1, lckmgr_p->tx_locks_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL);
+	print_bplus_tree(lckmgr_p->tx_locks_root_page_id, 1, lckmgr_p->tx_locks_td, lckmgr_p->lckmgr_engine->pam_p, NULL, NULL);
 	printf("-----------------------------------------------------------------------\n\n");
 
 	printf("RS_LOCKS : \n\n");
-	print_bplus_tree(lckmgr_p->rs_locks_root_page_id, 1, lckmgr_p->rs_locks_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL);
+	print_bplus_tree(lckmgr_p->rs_locks_root_page_id, 1, lckmgr_p->rs_locks_td, lckmgr_p->lckmgr_engine->pam_p, NULL, NULL);
 	printf("-----------------------------------------------------------------------\n\n");
 
 	printf("WAITS_FOR : \n\n");
-	print_bplus_tree(lckmgr_p->waits_for_root_page_id, 1, lckmgr_p->waits_for_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL);
+	print_bplus_tree(lckmgr_p->waits_for_root_page_id, 1, lckmgr_p->waits_for_td, lckmgr_p->lckmgr_engine->pam_p, NULL, NULL);
 	printf("-----------------------------------------------------------------------\n\n");
 
 	printf("WAITS_BACK : \n\n");
-	print_bplus_tree(lckmgr_p->waits_back_root_page_id, 1, lckmgr_p->waits_back_td, lckmgr_p->ltbl_engine->pam_p, NULL, NULL);
+	print_bplus_tree(lckmgr_p->waits_back_root_page_id, 1, lckmgr_p->waits_back_td, lckmgr_p->lckmgr_engine->pam_p, NULL, NULL);
 	printf("-----------------------------------------------------------------------\n\n");
 }
