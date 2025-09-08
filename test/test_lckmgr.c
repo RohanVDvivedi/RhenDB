@@ -100,5 +100,7 @@ int main()
 	initialize_lock_manager(&lckmgr, NULL, ((lock_manager_notifier){NULL, notify_unblocked, notify_deadlocked}), get_uint256(65536), &(rdb.volatile_rage_engine));
 	printf("lock_manager initialized\n\n");
 
+	debug_print_lock_manager_tables(&lckmgr);
+
 	return 0;
 }
