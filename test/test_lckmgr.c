@@ -26,6 +26,37 @@ void notify_deadlocked(void* context_p, uint256 transaction_id)
 	printf(" )\n\n");
 }
 
+void get_lock_mode(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint64_t resource_id)
+{
+	printf("<-get_lock_mode( trx_id = ");
+	print_transaction_id(transaction_id);
+	printf(" , task_id = %"PRIu32" , r_type = %"PRIu32" , r_id = %"PRIu64" )\n\n", task_id, resource_type, resource_id);
+	uint32_t res = get_lock_mode_for_lock_from_lock_manager(lckmgr_p, transaction_id, task_id, resource_type, (uint8_t*)(&resource_id), sizeof(uint64_t));
+	switch(res)
+	{
+		case 0 :
+		{
+			printf("-> READ\n\n");
+			break;
+		}
+		case 1 :
+		{
+			printf("-> WRITE\n\n");
+			break;
+		}
+		case NO_LOCK_HELD_LOCK_MODE :
+		{
+			printf("-> NO_LOCK\n\n");
+			break;
+		}
+		default :
+		{
+			printf("-> UNKNOWN\n\n");
+			break;
+		}
+	}
+}
+
 void acquire_lock(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint64_t resource_id, uint32_t new_lock_mode, int non_blocking)
 {
 	printf("<-acquire_lock( trx_id = ");
@@ -33,6 +64,24 @@ void acquire_lock(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_
 	printf(" , task_id = %"PRIu32" , r_type = %"PRIu32" , r_id = %"PRIu64", %s , %s )\n\n", task_id, resource_type, resource_id, ((new_lock_mode == 0) ? "READ" : "WRITE"), ((non_blocking) ? "NON_BLOCKING" : "BLOCKING"));
 	lock_result res = acquire_lock_with_lock_manager(lckmgr_p, transaction_id, task_id, resource_type, (uint8_t*)(&resource_id), sizeof(uint64_t), new_lock_mode, non_blocking);
 	printf("-> %s\n\n", lock_result_strings[res]);
+}
+
+void release_lock(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint64_t resource_id)
+{
+	printf("<-release_lock( trx_id = ");
+	print_transaction_id(transaction_id);
+	printf(" , task_id = %"PRIu32" , r_type = %"PRIu32" , r_id = %"PRIu64" )\n\n", task_id, resource_type, resource_id);
+	release_lock_with_lock_manager(lckmgr_p, transaction_id, task_id, resource_type, (uint8_t*)(&resource_id), sizeof(uint64_t));
+	printf("-> POSSIBLY_RELEASED\n\n");
+}
+
+void conclude_all_business(lock_manager* lckmgr_p, uint256 transaction_id)
+{
+	printf("<-conclude_all_business( trx_id = ");
+	print_transaction_id(transaction_id);
+	printf(" )\n\n");
+	conclude_all_business_with_lock_manager(lckmgr_p, transaction_id);
+	printf("-> POSSIBLY_CONCLUDED\n\n");
 }
 
 int main()
