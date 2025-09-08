@@ -26,6 +26,8 @@ void notify_deadlocked(void* context_p, uint256 transaction_id)
 	printf(" )\n\n");
 }
 
+
+
 int main()
 {
 	rondb rdb;

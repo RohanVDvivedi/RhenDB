@@ -7,6 +7,14 @@
 
 #include<stdlib.h>
 
+char const * const lock_result_strings[] = {
+	[LOCK_ACQUIRED] = "LOCK_ACQUIRED",
+	[LOCK_TRANSITIONED] = "LOCK_TRANSITIONED",
+	[LOCK_ALREADY_HELD] = "LOCK_ALREADY_HELD",
+	[LOCKING_FAILED] = "LOCKING_FAILED",
+	[MUST_BLOCK_FOR_LOCK] = "MUST_BLOCK_FOR_LOCK",
+};
+
 // all the bplus_tree-s used are ascending ordered by their keys, so we need this global array to pass in all the bplus_tree tuple_defs
 static compare_direction all_ascending[] = {ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC};
 

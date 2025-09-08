@@ -115,6 +115,8 @@ enum lock_result
 	// when MUST_BLOCK is returned, the wait_entry-s for the lock have been already inserted, and the caller is expected to block or try again later
 };
 
+extern char const * const lock_result_strings[];
+
 // no wait_entry-s are inserted on a non_blocking = 1 call, and instead FAILED is returned on encountering a conflict
 // task_id is expected to be one of the individual threads working on behalf of the transaction_id
 
