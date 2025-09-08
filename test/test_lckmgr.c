@@ -36,9 +36,11 @@ int main()
 			10000000ULL,
 		4096,
 			10000000ULL);
+	printf("database initialized\n\n");
 
 	lock_manager lckmgr;
 	initialize_lock_manager(&lckmgr, NULL, ((lock_manager_notifier){NULL, notify_unblocked, notify_deadlocked}), get_uint256(65536), &(rdb.volatile_rage_engine));
+	printf("lock_manager initialized\n\n");
 
 	return 0;
 }
