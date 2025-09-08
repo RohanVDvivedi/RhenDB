@@ -1,7 +1,6 @@
  PICKED TASKS
 
  1.* lock table (using VolatilePageStore)
-   * write test cases and test
    * code review as whole
    * use serint's large_uint's get_byte_count_for_representing_ large_uint(large_uint a);, to find th number of bytes of the large_uint you need to store
 
