@@ -14,19 +14,26 @@ void print_transaction_id(uint256 transaction_id)
 
 void notify_unblocked(void* context_p, uint256 transaction_id, uint32_t task_id)
 {
-	printf("notify_unblocked( ");
+	printf("notify_unblocked( trx_id = ");
 	print_transaction_id(transaction_id);
-	printf(", %"PRIu32" )\n\n", task_id);
+	printf(" , task_id =  %"PRIu32" )\n\n", task_id);
 }
 
 void notify_deadlocked(void* context_p, uint256 transaction_id)
 {
-	printf("notify_deadlocked( ");
+	printf("notify_deadlocked( trx_id = ");
 	print_transaction_id(transaction_id);
 	printf(" )\n\n");
 }
 
-
+void acquire_lock(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint64_t resource_id, uint32_t new_lock_mode, int non_blocking)
+{
+	printf("<-acquire_lock( trx_id = ");
+	print_transaction_id(transaction_id);
+	printf(" , task_id = %"PRIu32" , r_type = %"PRIu32" , r_id = %"PRIu64", %s , %s )\n\n", task_id, resource_type, resource_id, ((new_lock_mode == 0) ? "READ" : "WRITE"), ((non_blocking) ? "NON_BLOCKING" : "BLOCKING"));
+	lock_result res = acquire_lock_with_lock_manager(lckmgr_p, transaction_id, task_id, resource_type, (uint8_t*)(&resource_id), sizeof(uint64_t), new_lock_mode, non_blocking);
+	printf("-> %s\n\n", lock_result_strings[res]);
+}
 
 int main()
 {
