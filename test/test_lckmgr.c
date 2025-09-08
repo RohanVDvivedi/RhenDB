@@ -128,5 +128,11 @@ int main()
 
 	debug_print_lock_manager_tables(&lckmgr);
 
+	conclude_all_business(&lckmgr, get_uint256(0));
+	conclude_all_business(&lckmgr, get_uint256(1));
+	conclude_all_business(&lckmgr, get_uint256(2));
+
+	debug_print_lock_manager_tables(&lckmgr);
+
 	return 0;
 }
