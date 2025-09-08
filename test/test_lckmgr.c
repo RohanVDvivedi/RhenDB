@@ -97,7 +97,7 @@ int main()
 	printf("database initialized\n\n");
 
 	lock_manager lckmgr;
-	initialize_lock_manager(&lckmgr, NULL, ((lock_manager_notifier){NULL, notify_unblocked, notify_deadlocked}), get_uint256(65536), &(rdb.volatile_rage_engine));
+	initialize_lock_manager(&lckmgr, NULL, &((const lock_manager_notifier){NULL, notify_unblocked, notify_deadlocked}), get_uint256(65536), &(rdb.volatile_rage_engine));
 	printf("lock_manager initialized\n\n");
 
 	uint32_t RESOURCE_TYPE_0 =register_lock_type_with_lock_manager(&lckmgr, RW_DB_LOCK);
