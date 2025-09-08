@@ -3,7 +3,8 @@
  * build a function to get the number of bytes required to store the system's transaction_id, given an overflow_transaction_id
  1.* lock table
    * use the above function to calculate the number of bytes in the transaction_id in the lock_tables
-   * deadlock detection and resolution task job (*future, for now rely on timouts to back off and abort)
+   * deadlock detection and resolution task job (*future, for now rely on timeouts to back off and abort)
+   * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock (*future, do it when query optimizer and catalog tables are ready )
 
  2.* define catalog tables and indexes on it - persistent
    * same as indexes and heap_tables
@@ -46,10 +47,6 @@
      * if no mapped region provided then it starts mapping from the next_insert_offset
    * void unmap_tuple(intermediate_tuple_store* its_p, tuple_region* tr_p);
    * usefull for external sorting, hash joins and passing intermediate tuples between different operators
-
-
-* define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock
-
 
  5.0* implement SQL parser (possibly in a different directory)
  5.1* implement query plan tree
