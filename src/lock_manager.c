@@ -803,3 +803,12 @@ void debug_print_lock_manager_tables(lock_manager* lckmgr_p)
 	print_bplus_tree(lckmgr_p->waits_back_root_page_id, 1, lckmgr_p->waits_back_td, lckmgr_p->lckmgr_engine->pam_p, NULL, NULL);
 	printf("-----------------------------------------------------------------------\n\n");
 }
+
+const glock_matrix RW_DB_LOCK = {
+	.lock_modes_count = 2,// there are 2 modes
+	.matrix = (uint8_t[GLOCK_MATRIX_SIZE(2)]){
+	//  R  W
+		1,    // R
+		0, 0, // W
+	},
+};

@@ -138,14 +138,7 @@ void conclude_all_business_with_lock_manager(lock_manager* lckmgr_p, uint256 tra
 // prints all the contents of the lock manager to the printf
 void debug_print_lock_manager_tables(lock_manager* lckmgr_p);
 
-const glock_matrix RW_DB_LOCK = {
-	.lock_modes_count = 2,// there are 2 modes
-	.matrix = (uint8_t[GLOCK_MATRIX_SIZE(2)]){
-	//  R  W
-		1,    // R
-		0, 0, // W
-	},
-};
+extern const glock_matrix RW_DB_LOCK;
 #define RW_DB_LOCK_R_MODE 0
 #define RW_DB_LOCK_W_MODE 1
 
