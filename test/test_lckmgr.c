@@ -114,10 +114,10 @@ int main()
 
 	debug_print_lock_manager_tables(&lckmgr);
 
-	acquire_lock(&lckmgr, get_uint256(0), 0, RESOURCE_TYPE_1, 0, RW_DB_LOCK_W_MODE, 1);
-	acquire_lock(&lckmgr, get_uint256(0), 1, RESOURCE_TYPE_1, 1, RW_DB_LOCK_R_MODE, 1);
-	acquire_lock(&lckmgr, get_uint256(1), 0, RESOURCE_TYPE_0, 0, RW_DB_LOCK_R_MODE, 1);
-	acquire_lock(&lckmgr, get_uint256(1), 1, RESOURCE_TYPE_0, 1, RW_DB_LOCK_W_MODE, 1);
+	acquire_lock(&lckmgr, get_uint256(0), 0, RESOURCE_TYPE_1, 0, RW_DB_LOCK_W_MODE, 0);
+	acquire_lock(&lckmgr, get_uint256(0), 1, RESOURCE_TYPE_1, 1, RW_DB_LOCK_R_MODE, 0);
+	acquire_lock(&lckmgr, get_uint256(1), 0, RESOURCE_TYPE_0, 0, RW_DB_LOCK_R_MODE, 0);
+	acquire_lock(&lckmgr, get_uint256(1), 1, RESOURCE_TYPE_0, 1, RW_DB_LOCK_W_MODE, 0);
 
 	debug_print_lock_manager_tables(&lckmgr);
 
