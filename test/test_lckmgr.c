@@ -142,6 +142,7 @@ int main()
 	debug_print_lock_manager_tables(&lckmgr);
 
 	get_lock_mode(&lckmgr, get_uint256(0), 1, RESOURCE_TYPE_1, 33);
+	get_lock_mode(&lckmgr, get_uint256(1), 1, RESOURCE_TYPE_1, 1);
 
 	debug_print_lock_manager_tables(&lckmgr);
 
