@@ -602,7 +602,7 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 
 	uint32_t transaction_id_bytes = 0;
 	{
-		for(uint32_t possible_size = sizeof(uint256); possible_size != 0; possible_size++)
+		for(uint32_t possible_size = sizeof(uint256); possible_size != 0; possible_size--)
 		{
 			if(get_byte_from_uint256(overflow_transaction_id, possible_size-1) != 0)
 			{
