@@ -100,6 +100,18 @@ int main()
 	initialize_lock_manager(&lckmgr, NULL, ((lock_manager_notifier){NULL, notify_unblocked, notify_deadlocked}), get_uint256(65536), &(rdb.volatile_rage_engine));
 	printf("lock_manager initialized\n\n");
 
+	uint32_t RESOURCE_TYPE_0 =register_lock_type_with_lock_manager(&lckmgr, RW_DB_LOCK);
+	uint32_t RESOURCE_TYPE_1 =register_lock_type_with_lock_manager(&lckmgr, RW_DB_LOCK);
+
+	printf("lock types initialized\n\n");
+
+	debug_print_lock_manager_tables(&lckmgr);
+
+	acquire_lock(&lckmgr, get_uint256(0), 0, RESOURCE_TYPE_0, 0, RW_DB_LOCK_R_MODE, 1);
+	acquire_lock(&lckmgr, get_uint256(0), 1, RESOURCE_TYPE_0, 1, RW_DB_LOCK_W_MODE, 1);
+	acquire_lock(&lckmgr, get_uint256(1), 0, RESOURCE_TYPE_1, 0, RW_DB_LOCK_R_MODE, 1);
+	acquire_lock(&lckmgr, get_uint256(1), 1, RESOURCE_TYPE_1, 1, RW_DB_LOCK_W_MODE, 1);
+
 	debug_print_lock_manager_tables(&lckmgr);
 
 	return 0;
