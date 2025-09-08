@@ -89,7 +89,7 @@ struct lock_manager
 fail_build_on(MAX_RESOURCE_ID_SIZE > 100)
 
 // max_active_transaction_count is the capacity used to initialize the bucket_count for the active_transactions
-void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, lock_manager_notifier notifier, uint256 overflow_transaction_id, rage_engine* ltckmgrengine);
+void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, const lock_manager_notifier* notifier, uint256 overflow_transaction_id, rage_engine* ltckmgrengine);
 
 // registering a lock_type is same as registering a resource_type
 // both of them dictate what lock_mode-s you can use with them

@@ -605,11 +605,11 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, 
 
 // --
 
-void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, lock_manager_notifier notifier, uint256 overflow_transaction_id, rage_engine* lckmgr_engine)
+void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, const lock_manager_notifier* notifier, uint256 overflow_transaction_id, rage_engine* lckmgr_engine)
 {
 	lckmgr_p->external_lock = external_lock;
 
-	lckmgr_p->notifier = notifier;
+	lckmgr_p->notifier = (*notifier);
 
 	lckmgr_p->locks_type_count = 0;
 	lckmgr_p->lock_matrices = NULL;
