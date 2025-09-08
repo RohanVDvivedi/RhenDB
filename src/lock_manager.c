@@ -568,11 +568,17 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, 
 
 		// skip entries for the transaction_id that wants this lock
 		if(are_equal_uint256(le.transaction_id, transaction_id))
+		{
+			next_bplus_tree_iterator(bpi_p, NULL, &abort_error);
 			continue;
+		}
 
 		// check for conflicts, if there are no conflicts, we continue
 		if(are_glock_modes_compatible(&(lckmgr_p->lock_matrices[resource_type]), le.lock_mode, new_lock_mode))
+		{
+			next_bplus_tree_iterator(bpi_p, NULL, &abort_error);
 			continue;
+		}
 
 		// we have conflicts, so set the return value
 		has_conflicts = 1;
