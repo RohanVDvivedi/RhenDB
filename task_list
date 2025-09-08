@@ -1,8 +1,9 @@
  PICKED TASKS
 
- 1.* lock table (using VolatilePageStore)
-   * code review as whole
-   * use serint's large_uint's get_byte_count_for_representing_ large_uint(large_uint a);, to find th number of bytes of the large_uint you need to store
+ * build a function to get the number of bytes required to store the system's transaction_id, given an overflow_transaction_id
+ 1.* lock table
+   * use the above function to calculate the number of bytes in the transaction_id in the lock_tables
+   * deadlock detection and resolution task job (*future, for now rely on timouts to back off and abort)
 
  2.* define catalog tables and indexes on it - persistent
    * same as indexes and heap_tables
