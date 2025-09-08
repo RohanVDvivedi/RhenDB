@@ -133,6 +133,18 @@ int main()
 
 	debug_print_lock_manager_tables(&lckmgr);
 
+	acquire_lock(&lckmgr, get_uint256(1), 0, RESOURCE_TYPE_0, 1, RW_DB_LOCK_R_MODE, 0);
+
+	debug_print_lock_manager_tables(&lckmgr);
+
+	release_lock(&lckmgr, get_uint256(1), 0, RESOURCE_TYPE_0, 0);
+
+	debug_print_lock_manager_tables(&lckmgr);
+
+	get_lock_mode(&lckmgr, get_uint256(0), 1, RESOURCE_TYPE_1, 33);
+
+	debug_print_lock_manager_tables(&lckmgr);
+
 	conclude_all_business(&lckmgr, get_uint256(0));
 	conclude_all_business(&lckmgr, get_uint256(1));
 	conclude_all_business(&lckmgr, get_uint256(3));
