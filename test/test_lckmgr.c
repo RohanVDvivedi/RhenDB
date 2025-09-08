@@ -145,6 +145,16 @@ int main()
 
 	debug_print_lock_manager_tables(&lckmgr);
 
+	release_lock(&lckmgr, get_uint256(0), 0, RESOURCE_TYPE_0, 0);
+	release_lock(&lckmgr, get_uint256(1), 1, RESOURCE_TYPE_1, 1);
+
+	debug_print_lock_manager_tables(&lckmgr);
+
+	release_lock(&lckmgr, get_uint256(0), 1, RESOURCE_TYPE_0, 1);
+	release_lock(&lckmgr, get_uint256(1), 0, RESOURCE_TYPE_1, 0);
+
+	debug_print_lock_manager_tables(&lckmgr);
+
 	conclude_all_business(&lckmgr, get_uint256(0));
 	conclude_all_business(&lckmgr, get_uint256(1));
 	conclude_all_business(&lckmgr, get_uint256(3));
