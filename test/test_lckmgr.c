@@ -130,7 +130,7 @@ int main()
 
 	conclude_all_business(&lckmgr, get_uint256(0));
 	conclude_all_business(&lckmgr, get_uint256(1));
-	conclude_all_business(&lckmgr, get_uint256(2));
+	conclude_all_business(&lckmgr, get_uint256(3));
 
 	debug_print_lock_manager_tables(&lckmgr);
 
