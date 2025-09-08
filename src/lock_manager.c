@@ -647,7 +647,7 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 		dti->containees[3].al.type_info = UINT_NON_NULLABLE[4];
 
 		lckmgr_p->lock_record_def = malloc(sizeof(tuple_def));
-		if(lckmgr_p->lock_record_def)
+		if(lckmgr_p->lock_record_def == NULL)
 			exit(-1);
 		initialize_tuple_def(lckmgr_p->lock_record_def, dti);
 	}
@@ -694,7 +694,7 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 		dti->containees[4].al.type_info = lckmgr_p->resource_id_type_info;
 
 		lckmgr_p->wait_record_def = malloc(sizeof(tuple_def));
-		if(lckmgr_p->wait_record_def)
+		if(lckmgr_p->wait_record_def == NULL)
 			exit(-1);
 		initialize_tuple_def(lckmgr_p->wait_record_def, dti);
 	}
