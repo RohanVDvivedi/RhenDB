@@ -624,7 +624,7 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 	printf("lock manager initialized to support %u number of bytes for transaction_id\n", transaction_id_bytes);
 
 	lckmgr_p->resource_id_type_info = malloc(sizeof(data_type_info));
-	if(lckmgr_p->resource_id_type_info)
+	if(lckmgr_p->resource_id_type_info == NULL)
 		exit(-1);
 	*(lckmgr_p->resource_id_type_info) = get_variable_length_blob_type("resource_id_type", MAX_RESOURCE_ID_SIZE + 2);
 
