@@ -605,6 +605,8 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, 
 
 // --
 
+#include<rondb/bytes_for_transaction_id.h>
+
 void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, const lock_manager_notifier* notifier, uint256 overflow_transaction_id, rage_engine* lckmgr_engine)
 {
 	lckmgr_p->external_lock = external_lock;
@@ -616,19 +618,7 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 
 	lckmgr_p->lckmgr_engine = lckmgr_engine;
 
-	uint32_t transaction_id_bytes = 0;
-	{
-		for(uint32_t possible_size = sizeof(uint256); possible_size != 0; possible_size--)
-		{
-			if(get_byte_from_uint256(overflow_transaction_id, possible_size-1) != 0)
-			{
-				transaction_id_bytes = possible_size;
-				break;
-			}
-		}
-	}
-	if(transaction_id_bytes == 0)
-		exit(-1);
+	uint32_t transaction_id_bytes = get_bytes_required_for_transaction_id(overflow_transaction_id);
 	printf("lock manager initialized to support %u number of bytes for transaction_id\n", transaction_id_bytes);
 
 	lckmgr_p->resource_id_type_info = malloc(sizeof(data_type_info));
