@@ -18,31 +18,29 @@
         pthread_mutex_t lock;
         uint64_t in_memory_size; // next_insert_offset crossing this value spill to the temp file
         uint64_t curr_file_size; // if non zero use fd instead
-        union {
-          int fd; // temp file, if next_insert_offset > in_memory_size
-          void* md;
-        }
+        int fd; // temp file, if next_insert_offset > in_memory_size
+        void* md;
         uint64_t next_insert_offset; -> more appropriate name append_offset
      }
    * struct tuple_region {
-        uint64_t memory_block_offset_in_tuple_store; // always multiple of page size
-        void* memory_block; // NULL if uninitialized
-        uint64_t memory_block_size; // capped by curr_file_size
+        uint64_t region_offset; // always multiple of page size
+        void* region_memory; // NULL if uninitialized
+        uint64_t region_size; // capped by curr_file_size
 
-        void* tuple; // offset of this tuple in the memory = (tuple - memory_block)
+        void* tuple; // offset of this tuple in the memory = (tuple - region_memory)
         uint32_t tuple_size;
      } -> utility function to get memory_before_tuple, memory_at_tuple and memory_after_tuple in uint64_t bytes
    * void initializes_intermediate_tuple_store(intermediate_tuple_store* its_p, uint64_t in_memory_size)
-   * void extend_intermediate_tuple_store(its_p, uint64_t additional_bytes); // additional_bytes over the next_insert_offset
-     * any call to this function must take into account to release/unmap all tuple_regions
-   * void* read_tuple(its_p, uin32_t* size);
-   * void* map_tuple(intermediate_tuple_store* its_p, tuple_region* tr_p, uint64_t offset, const tuple_size_def* tpl_sz_d, uint64_t* next_tuple_offset);
-   * void* wmap_tuple(intermediate_tuple_store* its_p, tuple_region* tr_p, uint64_t* offset, uint32_t* max_size);
-     * on unmap and succeeding calls for the wmap, it updates the next_insert_offset
-     * it maps all the memory at the end of the its_p to this tuple_region
-     * if no mapped region provided then it starts mapping from the next_insert_offset
-   * void unmap_tuple(intermediate_tuple_store* its_p, tuple_region* tr_p);
-   * usefull for external sorting, hash joins and passing intermediate tuples between different operators
+   * int read_tuple(tuple_region* tr_p, uint32_t offset, const tuple_size_def* tpl_sz_d, uint32_t* next_offset);
+   * struct write_iterator{
+
+   }
+   * get_new_intermediate_tuple_store_write_iterator();
+   * extend(uint32_t additional_bytes);
+   * get_tuple_to_write();
+   * next();
+   * delete_write_iterator();
+
 
  4.* define catalog tables and indexes on it - persistent
    * same as indexes and heap_tables
