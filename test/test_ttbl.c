@@ -1,4 +1,4 @@
-#include<rhenndb/rhenndb.h>
+#include<rhendb/rhendb.h>
 #include<rhendb/transaction_table.h>
 
 #include<stdlib.h>
