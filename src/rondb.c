@@ -1,9 +1,9 @@
-#include<rondb/rondb.h>
+#include<rhendb/rhendb.h>
 
-#include<rondb/rage_engine_min_tx_engine.h>
-#include<rondb/rage_engine_volatile_page_store.h>
+#include<rhendb/rage_engine_min_tx_engine.h>
+#include<rhendb/rage_engine_volatile_page_store.h>
 
-void initialize_rondb(rondb* rdb, const char* database_file_name,
+void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 		uint32_t page_id_width,
 		uint32_t page_size_mte, uint32_t lsn_width, uint64_t bufferpool_frame_count, uint64_t wale_buffer_count,
 			uint64_t page_latch_wait_us, uint64_t page_lock_wait_us,
@@ -17,7 +17,7 @@ void initialize_rondb(rondb* rdb, const char* database_file_name,
 	rdb->volatile_rage_engine = get_rage_engine_for_volatile_page_store(page_size_vps, page_id_width, truncator_period_us);
 }
 
-void deinitialize_rondb(rondb* rdb)
+void deinitialize_rhendb(rhendb* rdb)
 {
 	deinitialize_mini_transaction_engine((mini_transaction_engine*)(rdb->persistent_acid_rage_engine.context));
 

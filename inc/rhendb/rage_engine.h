@@ -9,7 +9,7 @@
 		* the page modification methods
 
 	Populating this struct with the methods from MinTxEngine (for persistent ACID-compliant storage) OR the VolatilePageStore (for Volatile temporary-file backed storage)
-	still wouldn't give you a storage engine, it is just a holder for the RonDB to allow us to easily call the tupleindexer methods and use it's exposed data structures
+	still wouldn't give you a storage engine, it is just a holder for the RhennDB to allow us to easily call the tupleindexer methods and use it's exposed data structures
 	So that you/we would't have to scavenge around the context, pam_p and pmm_p to pass them to the tupleindexer functions
 	In a way it brings TupleIndexer, MinTxEngine and VolatilePageStore under a singlular umbrella, using the underlying format as dictated by the TupleStore
 

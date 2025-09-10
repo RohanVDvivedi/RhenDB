@@ -54,8 +54,8 @@ int was_completed_transaction_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, u
 
 void deinitialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
 
-#include<rondb/mvcc_header.h>
-#include<rondb/transaction_status.h>
+#include<rhendb/mvcc_header.h>
+#include<rhendb/transaction_status.h>
 
 // returns true if is_self() || (was_completed() && committed)
 int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, transaction_id_with_hints* transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated);

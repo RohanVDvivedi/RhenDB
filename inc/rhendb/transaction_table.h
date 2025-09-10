@@ -12,10 +12,10 @@
 #include<tupleindexer/bitmap_page/bitmap_page.h>
 #include<tupleindexer/interface/page_access_methods.h>
 
-#include<rondb/rage_engine.h>
+#include<rhendb/rage_engine.h>
 
-#include<rondb/transaction_status.h>
-#include<rondb/mvcc_snapshot.h>
+#include<rhendb/transaction_status.h>
+#include<rhendb/mvcc_snapshot.h>
 
 typedef struct transaction_table transaction_table;
 struct transaction_table

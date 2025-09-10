@@ -1,4 +1,4 @@
-# RonDB
+# RhenDB
 A relational database storage engine, akin to InnoDB and PostgreSQL's storage engine, built on top of TupleIndexer, TupleStore, VolatilePageStore and MinTxEngine.
 
 ## Setup instructions
@@ -13,10 +13,10 @@ A relational database storage engine, akin to InnoDB and PostgreSQL's storage en
  * [SerializableInteger](https://github.com/RohanVDvivedi/SerializableInteger)
 
 **Download source code :**
- * `git clone https://github.com/RohanVDvivedi/RonDB.git`
+ * `git clone https://github.com/RohanVDvivedi/RhenDB.git`
 
 **Build from source :**
- * `cd RonDB`
+ * `cd RhenDB`
  * `make clean all`
 
 **Install from the build :**
@@ -24,14 +24,14 @@ A relational database storage engine, akin to InnoDB and PostgreSQL's storage en
  * ***Once you have installed from source, you may discard the build by*** `make clean`
 
 ## Using The library
- * add `-lrondb -lmintxengine -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz` linker flag, while compiling your application
+ * add `-lrhendb -lmintxengine -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz` linker flag, while compiling your application
  * do not forget to include appropriate public api headers as and when needed. this includes
-   * `#include<rondb/rondb.h>`
-   * `#include<rondb/transaction_table.h>`
-   * `#include<rondb/lock_manager.h>`
+   * `#include<rhendb/rhendb.h>`
+   * `#include<rhendb/transaction_table.h>`
+   * `#include<rohedb/lock_manager.h>`
 
 ## Instructions for uninstalling library
 
 **Uninstall :**
- * `cd RonDB`
+ * `cd RhennDB`
  * `sudo make uninstall`

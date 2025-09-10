@@ -1,7 +1,7 @@
 #ifndef RAGE_ENGINE_MIN_TX_ENGINE_H
 #define RAGE_ENGINE_MIN_TX_ENGINE_H
 
-#include<rondb/rage_engine.h>
+#include<rhendb/rage_engine.h>
 
 #include<mintxengine/mini_transaction_engine.h>
 

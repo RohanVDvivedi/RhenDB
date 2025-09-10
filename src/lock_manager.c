@@ -1,4 +1,4 @@
-#include<rondb/lock_manager.h>
+#include<rhendb/lock_manager.h>
 
 #include<tuplestore/tuple.h>
 #include<tuplestore/data_type_info.h>
@@ -605,7 +605,7 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, 
 
 // --
 
-#include<rondb/bytes_for_transaction_id.h>
+#include<rhendb/bytes_for_transaction_id.h>
 
 void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, const lock_manager_notifier* notifier, uint256 overflow_transaction_id, rage_engine* lckmgr_engine)
 {

@@ -1,4 +1,4 @@
-#include<rondb/transaction_table.h>
+#include<rhendb/transaction_table.h>
 
 #include<stdlib.h>
 #include<unistd.h>
@@ -470,7 +470,7 @@ void initialize_transaction_table(transaction_table* ttbl, uint64_t* root_page_i
 	ttbl->next_assignable_transaction_id = ttbl->next_assignable_transaction_id_at_boot;
 }
 
-#include<rondb/mvcc_snapshot.h>
+#include<rhendb/mvcc_snapshot.h>
 
 static void mvcc_snapshot_inserter(const void* data, const void* additional_params)
 {
