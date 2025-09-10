@@ -1,7 +1,5 @@
  PICKED TASKS
 
- * change porject name to RhenDB
-
  1.* temp_tuple_store (name it this instead of intermediate_tuple_store)
    * stores tuples or giant_tuples sequentially one after the another and reads them back like from a stream and deletes this temp file on closing
    * struct intermediate_tuple_store {
