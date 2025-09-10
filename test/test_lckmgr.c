@@ -1,5 +1,5 @@
-#include<rondb/rondb.h>
-#include<rondb/lock_manager.h>
+#include<rhendb/rhendb.h>
+#include<rhendb/lock_manager.h>
 
 #include<stdlib.h>
 
@@ -86,8 +86,8 @@ void conclude_all_business(lock_manager* lckmgr_p, uint256 transaction_id)
 
 int main()
 {
-	rondb rdb;
-	initialize_rondb(&rdb, "./test.db",
+	rhendb rdb;
+	initialize_rhendb(&rdb, "./test.db",
 		5,
 		512, 8, 10, 10,
 			10000ULL, 100000ULL,

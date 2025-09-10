@@ -1,5 +1,5 @@
-#include<rondb/rondb.h>
-#include<rondb/transaction_table.h>
+#include<rhenndb/rhenndb.h>
+#include<rhendb/transaction_table.h>
 
 #include<stdlib.h>
 
@@ -14,8 +14,8 @@ void print_vaccum_horizon_transaction_id(transaction_table* ttbl)
 
 int main()
 {
-	rondb rdb;
-	initialize_rondb(&rdb, "./test.db",
+	rhendb rdb;
+	initialize_rhendb(&rdb, "./test.db",
 		5,
 		512, 8, 10, 10,
 			10000ULL, 100000ULL,
@@ -75,7 +75,7 @@ int main()
 		printf("%"PRIu64" -> %s\n", tid.limbs[0], transaction_status_string[status]);
 	}
 
-	deinitialize_rondb(&rdb);
+	deinitialize_rhendb(&rdb);
 
 	return 0;
 }
