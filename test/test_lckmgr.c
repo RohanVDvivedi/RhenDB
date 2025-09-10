@@ -162,5 +162,7 @@ int main()
 
 	debug_print_lock_manager_tables(&lckmgr);
 
+	deinitialize_rhendb(&rdb);
+
 	return 0;
 }
