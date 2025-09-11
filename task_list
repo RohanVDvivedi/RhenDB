@@ -41,14 +41,10 @@
    * use this giant_tuple_def's tuples for in-memory tuples
    * compute max_size for this tuples using tuplestore, and also limit max element_count for the complete project as a macro
 
- 3.* define catalog tables and indexes on it - persistent
-   * same as indexes and heap_tables
-   * prilimnary investigation revealed no-MVCC and no-per-tuple-locking, instead per table locking, do more research
-
- 4.0* implement SQL parser (possibly in a different directory)
- 4.1* implement query plan tree
+ 3.0* implement SQL parser (possibly in a different directory)
+ 3.1* implement query plan tree
    * with operators
- 4.2* implement relational algebra operators
+ 3.2* implement relational algebra operators
    * selection -> filter with/without indexes
    * projection -> picking columns
    * sorting -> implement external giant_tuple_def sorting, by using a tuple_file
@@ -65,6 +61,11 @@
         -> they just pull tuples, when their parent operator pulls on them
         -> they sleep and do nothing when we do not pull from these operators
         -> they are mere but smart transformers
+
+ 4.* define catalog tables and indexes on it - persistent
+   * stores only serialized immutable datatypes and persistent serialized immutable query_plans/functions
+   * and an LRU cache on them
+   * we will also need a clone function for the data_type_info-s and the query_plan-s
 
  5.* define statistics tables (*future) - persistent and possibly in a different database
    * same as indexes and heap_tables (low priority)
