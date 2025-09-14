@@ -2,7 +2,7 @@
 #define TEMP_TUPLE_STORE_H
 
 #include<inttypes.h>
-#include<tuple_def.h>
+#include<tuplestore/tuple_def.h>
 
 /*
 	temp_tuple_store is basically a sequentially inserted, non-page aligned collection of heterogeneous tuples (i.e. having different tuple_defs)
