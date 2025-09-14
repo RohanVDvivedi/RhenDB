@@ -2,6 +2,8 @@
 #define TEMP_TUPLE_STORE_H
 
 #include<inttypes.h>
+#include<pthread.h>
+
 #include<tuplestore/tuple_def.h>
 
 /*
@@ -25,7 +27,7 @@ struct temp_tuple_store
 	// protects only the internal contents of the temp_tuple_store
 	pthread_mutex_t store_lock;
 
-	uint64_t spill_over_size;
+	uint64_t spill_over_size; // will be a multiple of page_size of the system
 	/*
 		this depends on the total memory that your system as typically use 1MB here
 	*/
@@ -57,6 +59,7 @@ struct tuple_region
 	int is_only_readable; // this will be set if the region_memory is open for only reading the tuple
 };
 
+// please be sure that page_size will be rounded to the next page_size available
 temp_tuple_store* get_new_temp_tuple_store(uint64_t spill_over_size);
 
 void delete_temp_tuple_store(temp_tuple_store* tts_p);
