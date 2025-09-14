@@ -1,39 +1,9 @@
  PICKED TASKS
 
- 1.* temp_tuple_store (name it this instead of intermediate_tuple_store)
-   * stores tuples or giant_tuples sequentially one after the another and reads them back like from a stream and deletes this temp file on closing
-   * struct intermediate_tuple_store {
-        pthread_mutex_t lock;
-        uint64_t in_memory_size; // next_insert_offset crossing this value spill to the temp file
-        uint64_t curr_file_size; // if non zero use fd instead
-        int fd; // temp file, if next_insert_offset > in_memory_size
-        void* md;
-        uint64_t next_insert_offset; -> more appropriate name append_offset
-     }
-   * struct tuple_region {
-        uint64_t region_offset; // always multiple of page size
-        void* region_memory; // NULL if uninitialized
-        uint64_t region_size; // capped by curr_file_size
-
-        void* tuple; // offset of this tuple in the memory = (tuple - region_memory)
-        const tuple_size_def* tpl_sz_d;
-     } -> utility function to get memory_before_tuple, memory_at_tuple and memory_after_tuple in uint64_t bytes
-   * void initializes_intermediate_tuple_store(intermediate_tuple_store* its_p, uint64_t in_memory_size)
-   * int read_tuple(tuple_region* tr_p, uint32_t offset, const tuple_size_def* tpl_sz_d, uint32_t* next_offset);
-   * struct write_iterator{
-      its_p;
-
-      uint64_t region_offset; // always multiple of page size
-      void* region_memory; // NULL if uninitialized
-      uint64_t region_size; // capped by curr_file_size
-
-      void* tuple; // offset of this tuple in the memory = (tuple - region_memory)
-      const tuple_size_def* tpl_sz_d;
-   }
-   * get_new_intermediate_tuple_store_write_iterator();
-   * void* get_tuple(uint32_t* offset, uint32_t* size, const tuple_size_def* tpl_sz_d, int finalize_prior_tuple); // offset is output, size is in-out request bytes and you get greater than or equal to that bytes at the offset, extending the file if necessary
-   * finalize_prior_tuple, moves the next_insert_offset forward
-   * delete_write_iterator();
+ 1.* temp_tuple_store
+   * implement functions
+   * code review
+   * test
 
  2.* giant_tuple_def, an in-memory tuple_def for an on-disk tuple_def (containing worms)
    * conversion function to convert on-disk tuple_def to giant_tuple_def
