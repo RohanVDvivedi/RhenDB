@@ -15,9 +15,16 @@
 	giant_tuples generated from tuple_defs are still going to have to fit 2GB so that remains the constraint even here
 */
 
+/*
+	please be sure to avoid overflowing the uint64_t for tuple_offsets and sizes passed and provided, because there are no overflow checks in this module
+*/
+
 typedef struct temp_tuple_store temp_tuple_store;
 struct temp_tuple_store
 {
+	// protects only the internal contents of the temp_tuple_store
+	pthread_mutex_t store_lock;
+
 	uint64_t spill_over_size;
 	/*
 		this depends on the total memory that your system as typically use 1MB here
@@ -81,6 +88,7 @@ void unmap_for_tuple_region(temp_tuple_store* tts_p, tuple_region* tr_p);
 // utility function for the tuple_region below
 
 uint64_t curr_tuple_offset_for(tuple_region* tr_p);
+uint32_t curr_tuple_size_for(tuple_region* tr_p);
 uint64_t next_tuple_offset_for(tuple_region* tr_p);
 
 #define INIT_TUPLE_REGION ((tuple_region){})
