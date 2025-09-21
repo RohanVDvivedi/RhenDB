@@ -1,5 +1,7 @@
  PICKED TASKS
 
+ * conform to the new mini_transaction_engine allotment api and test
+
  1.* temp_tuple_store
    * implement functions use mmap64 only
    * code review
