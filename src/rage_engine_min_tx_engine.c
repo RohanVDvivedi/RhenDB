@@ -253,7 +253,7 @@ rage_engine get_rage_engine_for_min_tx_engine(const char* database_file_name, ui
 
 	initialize_pmm_for_mte(e.pmm_p, ((mini_transaction_engine*)(e.context)));
 
-	e.allot_new_sub_transaction_id = (void* (*)(void*, uint64_t, uint64_t))mte_allot_mini_tx;
+	e.allot_new_sub_transaction_id = (void* (*)(void*, uint64_t))mte_allot_mini_tx;
 
 	e.complete_sub_transaction = (uint256 (*)(void*, void*, int, const void*, uint32_t, uint64_t*))mte_complete_mini_tx;
 
