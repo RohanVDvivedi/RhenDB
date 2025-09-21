@@ -1,7 +1,5 @@
  PICKED TASKS
 
- * conform to the new mini_transaction_engine allotment api and test
-
  1.* temp_tuple_store
    * implement functions use mmap64 only
    * code review
@@ -17,6 +15,8 @@
  3.1* implement query plan tree
    * with operators
  3.2* implement relational algebra operators
+   * use BoomPar's resource usage limiter to allot a mini transaction only if the buffer count it needs is available
+   * every transaction starts with reservng 2 frames to access the transaction table
    * selection -> filter with/without indexes
    * projection -> picking columns
    * sorting -> implement external giant_tuple_def sorting, by using a tuple_file
