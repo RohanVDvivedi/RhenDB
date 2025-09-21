@@ -219,9 +219,7 @@ static int set_transaction_status_in_table(transaction_table* ttbl, uint256 tran
 		persistent_page bucket_page = get_NULL_persistent_page(ttbl->ttbl_engine->pam_p);
 
 		// we are fine with waiting for atmost a second, and we hold no latches
-		void* sub_transaction_id = NULL;
-		while(sub_transaction_id == NULL)
-			sub_transaction_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, 1000000ULL, page_latches_to_be_borrowed);
+		void* sub_transaction_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, page_latches_to_be_borrowed);
 
 		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = bucket_id, .last_bucket_id = bucket_id}, ttbl->pttd_p, ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
 		if(abort_error)
@@ -429,9 +427,8 @@ void initialize_transaction_table(transaction_table* ttbl, uint64_t* root_page_i
 				int abort_error = 0;
 
 				// we are fine with waiting for atmost a second, and we hold no latches
-				void* sub_transaction_id = NULL;
-				for(int i = 0; i < 3 && sub_transaction_id == NULL; i++)
-					sub_transaction_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, 1000000ULL, page_latches_to_be_borrowed);
+				void* sub_transaction_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, page_latches_to_be_borrowed);
+
 				if(sub_transaction_id == NULL)
 				{
 					printf("FAILED (in transaction_table) :: spent 3 seconds trying to start a sub transaction to create a new transaction table but failed\n");
