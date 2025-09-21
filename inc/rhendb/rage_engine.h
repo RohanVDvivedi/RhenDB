@@ -28,7 +28,7 @@ struct rage_engine
 	void* context;
 
 	// returns sub transaction id
-	void* (*allot_new_sub_transaction_id)(void* context, uint64_t wait_timeout_in_microseconds, uint64_t page_latches_to_be_borrowed);
+	void* (*allot_new_sub_transaction_id)(void* context, uint64_t page_latches_to_be_borrowed);
 
 	// complete a sub transaction
 	uint256 (*complete_sub_transaction)(void* context, void* sub_transaction_id, int flush_on_completion, const void* complete_info, uint32_t complete_info_size, uint64_t* page_latches_to_be_borrowed);
