@@ -37,7 +37,10 @@ int mmap_for_reading_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, uint64_t
 
 int mmap_for_writing_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, tuple_size_def* tpl_sz_d, uint32_t required_size);
 
-int finalize_written_tuple(temp_tuple_store* tts_p, tuple_region* tr_p);
+int finalize_written_tuple(temp_tuple_store* tts_p, tuple_region* tr_p)
+{
+	tts_p->next_tuple_offset = next_tuple_offset_for(tr_p);
+}
 
 int unmap_for_tuple_region(tuple_region* tr_p)
 {
