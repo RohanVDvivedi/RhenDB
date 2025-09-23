@@ -45,8 +45,6 @@ struct tuple_region
 
 	void* tuple; // a pointer to a complete tuple in the region_memory
 	tuple_size_def* tpl_sz_d; // this allows the temp_tuple_store get knowledge about the memory in use by this tuple_region
-
-	int is_only_readable; // this will be set if the region_memory is open for only reading the tuple
 };
 
 // please be sure that page_size will be rounded to the next page_size available
