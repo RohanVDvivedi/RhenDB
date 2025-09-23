@@ -79,7 +79,7 @@ int contains_for_tuple_region(const tuple_region* tr_p, uint64_t offset_start, u
 		return 0;
 
 	uint64_t region_start = tr_p->region_offset;
-	uint64_t region_end = region_start + tr_p-region_size;
+	uint64_t region_end = region_start + tr_p->region_size;
 
 	return (region_start <= offset_start) && (offset_end <= region_end);
 }
