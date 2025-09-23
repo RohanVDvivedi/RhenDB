@@ -1,5 +1,7 @@
 #include<rhendb/temp_tuple_store.h>
 
+#include<sys/mman.h>
+
 temp_tuple_store* get_new_temp_tuple_store(uint64_t spill_over_size);
 
 void delete_temp_tuple_store(temp_tuple_store* tts_p);
@@ -10,7 +12,15 @@ int mmap_for_writing_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, tuple_si
 
 int finalize_written_tuple(temp_tuple_store* tts_p, tuple_region* tr_p);
 
-void unmap_for_tuple_region(temp_tuple_store* tts_p, tuple_region* tr_p);
+int unmap_for_tuple_region(tuple_region* tr_p)
+{
+	if(0 == munmap(tr_p->region_memory, tr_p->region_size))
+	{
+		(*tr_p) = INIT_TUPLE_REGION;
+		return 1;
+	}
+	return 0;
+}
 
 uint64_t curr_tuple_offset_for(tuple_region* tr_p)
 {

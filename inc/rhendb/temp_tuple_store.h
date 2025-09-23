@@ -86,7 +86,7 @@ int mmap_for_writing_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, tuple_si
 int finalize_written_tuple(temp_tuple_store* tts_p, tuple_region* tr_p);
 
 // unmaps the tuple_region provided and sets all its attributes to 0s
-void unmap_for_tuple_region(temp_tuple_store* tts_p, tuple_region* tr_p);
+int unmap_for_tuple_region(tuple_region* tr_p);
 
 // utility function for the tuple_region below
 
