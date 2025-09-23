@@ -2,9 +2,36 @@
 
 #include<sys/mman.h>
 
-temp_tuple_store* get_new_temp_tuple_store(uint64_t spill_over_size);
+#include<stdlib.h>
 
-void delete_temp_tuple_store(temp_tuple_store* tts_p);
+#include<fcntl.h>
+#include<unistd.h>
+
+temp_tuple_store* get_new_temp_tuple_store(const char* directory)
+{
+	temp_tuple_store* tts_p = malloc(sizeof(temp_tuple_store));
+	if(tts_p == NULL)
+		return NULL;
+
+	tts_p->total_size = 0;
+	tts_p->next_tuple_offset = 0;
+
+	tts_p->fd = open64(directory, O_TMPFILE | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
+
+	if(tts_p->fd == -1)
+	{
+		free(tts_p);
+		return NULL;
+	}
+
+	return tts_p;
+}
+
+void delete_temp_tuple_store(temp_tuple_store* tts_p)
+{
+	close(tts_p->fd);
+	free(tts_p);
+}
 
 int mmap_for_reading_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, uint64_t offset, tuple_size_def* tpl_sz_d);
 
