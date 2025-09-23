@@ -11,7 +11,7 @@
 	it will primarily be used for working with passing tuples between operator or for internal processing and collection of the tuples
 
 	yes this is look-alike of the volatile_page_store used as the volatie engine, and that too can be used by the relational operators that you design
-	but temp_tuple_store is more suited to giant_tuple_defs bcause there no restriction for the size of the tuple to be stored here
+	but temp_tuple_store is more suited to giant_tuple_defs bcause there is no restriction for the size of the tuple to be stored here
 	as the tuple is laid out sequentially, one after the pther, we may not need to chase pointers to recontruct the tuple in the memory, it will be paged in and out by the mmap calls
 	virtual memory comming to the rescue and saving us the hazzle, when we could be dealing with 32-bit systems
 	giant_tuples generated from tuple_defs are still going to have to fit 2GB so that remains the constraint even here
@@ -21,29 +21,16 @@
 	please be sure to avoid overflowing the uint64_t for tuple_offsets and sizes passed and provided, because there are no overflow checks in this module
 */
 
+// this module has been designed to be used by a single thread only, it's exposed functions are not thread safe
+
 typedef struct temp_tuple_store temp_tuple_store;
 struct temp_tuple_store
 {
-	// protects only the internal contents of the temp_tuple_store
-	pthread_mutex_t store_lock;
+	uint64_t total_size; // total memory region to be used by the file or the (in-) memory region below
 
-	uint64_t spill_over_size; // will be a multiple of page_size of the system
-	/*
-		this depends on the total memory that your system as typically use 1MB here
-	*/
+	uint64_t next_tuple_offset; // next tuple gets appended here, it starts with 0 and increments by writable tuple_regions upon calling finalize_written_tuple() operation
 
-	uint64_t total_size;
-	// total memory region to be used by the file or the (in-) memory region below
-
-	union
-	{
-		int fd; // file_descriptor to be accessed when total_size > spill_over_size, this is a temp file and its contents will be lost as it gets closed
-
-		void* md; // instead use memory allocated at this address
-	};
-
-	uint64_t next_tuple_offset;
-	// next tuple gets appended here, it starts with 0 and increments by writable tuple_regions upon calling finalize_written_tuple() operation
+	int fd; // file_descriptor to be accessed for mapping the memory
 };
 
 typedef struct tuple_region tuple_region;
@@ -60,7 +47,7 @@ struct tuple_region
 };
 
 // please be sure that page_size will be rounded to the next page_size available
-temp_tuple_store* get_new_temp_tuple_store(uint64_t spill_over_size);
+temp_tuple_store* get_new_temp_tuple_store();
 
 void delete_temp_tuple_store(temp_tuple_store* tts_p);
 
