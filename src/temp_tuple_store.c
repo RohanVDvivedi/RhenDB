@@ -39,6 +39,10 @@ int mmap_for_writing_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, tuple_si
 
 int finalize_written_tuple(temp_tuple_store* tts_p, tuple_region* tr_p)
 {
+	// if the tuple that suggest to be finalized must at the next_tuple_offset
+	if(tts_p->next_tuple_offset != curr_tuple_offset_for_tuple_region(tr_p))
+		return 0;
+
 	tts_p->next_tuple_offset = next_tuple_offset_for_tuple_region(tr_p);
 	return 1;
 }
