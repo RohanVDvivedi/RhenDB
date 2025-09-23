@@ -78,9 +78,11 @@ int unmap_for_tuple_region(tuple_region* tr_p);
 
 // utility function for the tuple_region below
 
-uint64_t curr_tuple_offset_for(tuple_region* tr_p);
-uint32_t curr_tuple_size_for(tuple_region* tr_p);
-uint64_t next_tuple_offset_for(tuple_region* tr_p);
+uint64_t curr_tuple_offset_for_tuple_region(const tuple_region* tr_p);
+uint32_t curr_tuple_size_for_tuple_region(const tuple_region* tr_p);
+uint64_t next_tuple_offset_for_tuple_region(const tuple_region* tr_p);
+
+int contains_for_tuple_region(const tuple_region* tr_p, uint64_t offset_start, uint64_t offset_end);
 
 #define INIT_TUPLE_REGION ((tuple_region){})
 
