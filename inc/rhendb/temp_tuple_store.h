@@ -82,6 +82,7 @@ uint64_t curr_tuple_offset_for_tuple_region(const tuple_region* tr_p);
 uint32_t curr_tuple_size_for_tuple_region(const tuple_region* tr_p);
 uint64_t next_tuple_offset_for_tuple_region(const tuple_region* tr_p);
 
+// offset_start is inclusive and offset_end is exclusive
 int contains_for_tuple_region(const tuple_region* tr_p, uint64_t offset_start, uint64_t offset_end);
 
 #define INIT_TUPLE_REGION ((tuple_region){})

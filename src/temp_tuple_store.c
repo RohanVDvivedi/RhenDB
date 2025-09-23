@@ -72,4 +72,14 @@ uint64_t next_tuple_offset_for_tuple_region(const tuple_region* tr_p)
 	return curr_tuple_offset_for_tuple_region(tr_p) + curr_tuple_size_for_tuple_region(tr_p);
 }
 
-int contains_for_tuple_region(const tuple_region* tr_p, uint64_t offset_start, uint64_t offset_end);
+int contains_for_tuple_region(const tuple_region* tr_p, uint64_t offset_start, uint64_t offset_end)
+{
+	// offset_start <= offset_end, is a must
+	if(offset_start > offset_end)
+		return 0;
+
+	uint64_t region_start = tr_p->region_offset;
+	uint64_t region_end = region_start + tr_p-region_size;
+
+	return (region_start <= offset_start) && (offset_end <= region_end);
+}
