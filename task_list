@@ -1,7 +1,6 @@
  PICKED TASKS
 
  1.* temp_tuple_store
-   * implement functions use mmap64 only
    * code review
    * test
 
