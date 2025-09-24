@@ -49,6 +49,9 @@ int finalize_written_tuple(temp_tuple_store* tts_p, tuple_region* tr_p)
 
 int unmap_for_tuple_region(tuple_region* tr_p)
 {
+	if(is_empty_tuple_region(tr_p))
+		return 0;
+
 	if(0 == munmap(tr_p->region_memory, tr_p->region_size))
 	{
 		(*tr_p) = INIT_TUPLE_REGION;
@@ -57,23 +60,40 @@ int unmap_for_tuple_region(tuple_region* tr_p)
 	return 0;
 }
 
+int is_empty_tuple_region(const tuple_region* tr_p)
+{
+	return tr_p->region_memory == NULL;
+}
+
 uint64_t curr_tuple_offset_for_tuple_region(const tuple_region* tr_p)
 {
+	if(is_empty_tuple_region(tr_p))
+		return 0;
+
 	return tr_p->region_offset + (tr_p->tuple - tr_p->region_memory);
 }
 
 uint32_t curr_tuple_size_for_tuple_region(const tuple_region* tr_p)
 {
+	if(is_empty_tuple_region(tr_p))
+		return 0;
+
 	return get_tuple_size_using_tuple_size_def(tr_p->tpl_sz_d, tr_p->tuple);
 }
 
 uint64_t next_tuple_offset_for_tuple_region(const tuple_region* tr_p)
 {
+	if(is_empty_tuple_region(tr_p))
+		return 0;
+
 	return curr_tuple_offset_for_tuple_region(tr_p) + curr_tuple_size_for_tuple_region(tr_p);
 }
 
 int contains_for_tuple_region(const tuple_region* tr_p, uint64_t offset_start, uint64_t offset_end)
 {
+	if(is_empty_tuple_region(tr_p))
+		return 0;
+
 	// offset_start <= offset_end, is a must
 	if(offset_start > offset_end)
 		return 0;

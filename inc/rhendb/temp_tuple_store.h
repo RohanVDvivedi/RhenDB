@@ -78,6 +78,8 @@ int unmap_for_tuple_region(tuple_region* tr_p);
 
 // utility function for the tuple_region below
 
+int is_empty_tuple_region(const tuple_region* tr_p);
+
 uint64_t curr_tuple_offset_for_tuple_region(const tuple_region* tr_p);
 uint32_t curr_tuple_size_for_tuple_region(const tuple_region* tr_p);
 uint64_t next_tuple_offset_for_tuple_region(const tuple_region* tr_p);
