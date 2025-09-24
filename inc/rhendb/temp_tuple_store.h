@@ -52,6 +52,9 @@ temp_tuple_store* get_new_temp_tuple_store(const char* directory);
 
 void delete_temp_tuple_store(temp_tuple_store* tts_p);
 
+// gets size of the tuple at a known random offset
+uint32_t get_tuple_size_for_temp_tuple_store(const temp_tuple_store* tts_p, uint64_t tuple_offset, tuple_size_def* tpl_sz_d);
+
 // remaps the tr_p to a new offset, if it is valid else creates a new mapping
 // it may use the same mapping, if the tuple fits in this region
 // you can have multiple reading tuple_regions open

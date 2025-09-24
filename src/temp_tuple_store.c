@@ -36,10 +36,37 @@ void delete_temp_tuple_store(temp_tuple_store* tts_p)
 	free(tts_p);
 }
 
+typedef struct tuple_size_getter_context tuple_size_getter_context;
+struct tuple_size_getter_context
+{
+	int fd;
+	uint64_t offset;
+};
+
+static uint32_t tuple_size_getter_reader(void* context_p, void* data, uint32_t data_size)
+{
+	tuple_size_getter_context* temp = context_p;
+	ssize_t bytes_read = pread64(temp->fd, data, data_size, temp->offset);
+	if(bytes_read == -1)
+	{
+		printf("FAILED to fetch the size of the next tuple for temp_tuple_store\n");
+		exit(-1);
+	}
+	temp->offset += bytes_read;
+	return bytes_read;
+}
+
+uint32_t get_tuple_size_for_temp_tuple_store(const temp_tuple_store* tts_p, uint64_t tuple_offset, tuple_size_def* tpl_sz_d)
+{
+	char buffer[32];
+	uint32_t bytes_read = 0;
+	return get_tuple_size_from_stream_using_tuple_size_def(tpl_sz_d, buffer, &bytes_read, &((tuple_size_getter_context){tts_p->fd, tuple_offset}), tuple_size_getter_reader);
+}
+
 int mmap_for_reading_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, uint64_t offset, tuple_size_def* tpl_sz_d)
 {
 	uint64_t tuple_offset_start = offset;
-	uint32_t tuple_size = ;
+	uint32_t tuple_size = get_tuple_size_for_temp_tuple_store(tts_p, tuple_offset_start, tpl_sz_d);
 	uint64_t tuple_offset_end = tuple_offset_start + tuple_size;
 
 	// tuple_offset_end <= tts_p->next_tuple_offset, is a must
