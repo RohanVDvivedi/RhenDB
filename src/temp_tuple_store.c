@@ -36,9 +36,102 @@ void delete_temp_tuple_store(temp_tuple_store* tts_p)
 	free(tts_p);
 }
 
-int mmap_for_reading_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, uint64_t offset, tuple_size_def* tpl_sz_d);
+int mmap_for_reading_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, uint64_t offset, tuple_size_def* tpl_sz_d)
+{
+	uint64_t tuple_offset_start = offset;
+	uint32_t tuple_size = ;
+	uint64_t tuple_offset_end = tuple_offset_start + tuple_size;
 
-int mmap_for_writing_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, tuple_size_def* tpl_sz_d, uint32_t required_size);
+	// tuple_offset_end <= tts_p->next_tuple_offset, is a must
+	if(tuple_offset_end > tts_p->next_tuple_offset)
+		return 0;
+
+	// if the memory region is already contained then return true directly, pointing the tuple_region to the right tuple
+	if(contains_for_tuple_region(tr_p, tuple_offset_start, tuple_offset_end))
+	{
+		tr_p->tuple = tr_p->region_memory + (tuple_offset_start - tr_p->region_offset);
+		tr_p->tpl_sz_d = tpl_sz_d;
+		return 1;
+	}
+
+	// now we free up the old region
+	if(!is_empty_tuple_region(tr_p))
+		unmap_for_tuple_region(tr_p);
+
+	// build up region offsets
+	uint64_t region_offset_start = UINT_ALIGN_DOWN(tuple_offset_start, sysconf(_SC_PAGE_SIZE));
+	uint64_t region_offset_end = UINT_ALIGN_UP(tuple_offset_end, sysconf(_SC_PAGE_SIZE));
+	uint32_t region_size = region_offset_end - region_offset_start;
+
+	// map the new tuple_region and return it
+	void* region_memory = mmap(NULL, region_size, PROT_READ | PROT_WRITE, MAP_SHARED, tts_p->fd, region_offset_start);
+	if(region_memory == MAP_FAILED)
+	{
+		printf("FAILED to create a tuple_region for temp_tuple_store\n");
+		exit(-1);
+		return 0;
+	}
+
+	tr_p->region_memory = region_memory;
+	tr_p->region_offset = region_offset_start;
+	tr_p->region_size = region_size;
+	tr_p->tuple = region_memory + (tuple_offset_start - region_offset_start);
+	tr_p->tpl_sz_d = tpl_sz_d;
+	return 1;
+}
+
+int mmap_for_writing_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, tuple_size_def* tpl_sz_d, uint32_t required_size)
+{
+	uint64_t tuple_offset_start = tts_p->next_tuple_offset;
+	uint32_t tuple_size = required_size;
+	uint64_t tuple_offset_end = tuple_offset_start + tuple_size;
+
+	// if the memory region is already contained then return true directly, pointing the tuple_region to the right tuple
+	if(contains_for_tuple_region(tr_p, tuple_offset_start, tuple_offset_end))
+	{
+		tr_p->tuple = tr_p->region_memory + (tuple_offset_start - tr_p->region_offset);
+		tr_p->tpl_sz_d = tpl_sz_d;
+		return 1;
+	}
+
+	// now we free up the old region
+	if(!is_empty_tuple_region(tr_p))
+		unmap_for_tuple_region(tr_p);
+
+	// build up region offsets
+	uint64_t region_offset_start = UINT_ALIGN_DOWN(tuple_offset_start, sysconf(_SC_PAGE_SIZE));
+	uint64_t region_offset_end = UINT_ALIGN_UP(tuple_offset_end, sysconf(_SC_PAGE_SIZE));
+	uint32_t region_size = region_offset_end - region_offset_start;
+
+	// ftruncate to extend the file, if the region_offset_end is greater than total_size
+	if(region_offset_end > tts_p->total_size)
+	{
+		if(-1 == ftruncate64(tts_p->fd, region_offset_end))
+		{
+			printf("FAILED to extend the file for temp_tuple_store\n");
+			exit(-1);
+			return 0;
+		}
+		else
+			tts_p->total_size = region_offset_end;
+	}
+
+	// map the new tuple_region and return it
+	void* region_memory = mmap(NULL, region_size, PROT_READ | PROT_WRITE, MAP_SHARED, tts_p->fd, region_offset_start);
+	if(region_memory == MAP_FAILED)
+	{
+		printf("FAILED to create a tuple_region for temp_tuple_store\n");
+		exit(-1);
+		return 0;
+	}
+
+	tr_p->region_memory = region_memory;
+	tr_p->region_offset = region_offset_start;
+	tr_p->region_size = region_size;
+	tr_p->tuple = region_memory + (tuple_offset_start - region_offset_start);
+	tr_p->tpl_sz_d = tpl_sz_d;
+	return 1;
+}
 
 int finalize_written_tuple(temp_tuple_store* tts_p, tuple_region* tr_p)
 {
@@ -60,6 +153,9 @@ int unmap_for_tuple_region(tuple_region* tr_p)
 		(*tr_p) = INIT_TUPLE_REGION;
 		return 1;
 	}
+
+	printf("FAILED to unmap a tuple_region for temp_tuple_store\n");
+	exit(-1);
 	return 0;
 }
 
