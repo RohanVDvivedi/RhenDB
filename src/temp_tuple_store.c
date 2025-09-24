@@ -11,7 +11,10 @@ temp_tuple_store* get_new_temp_tuple_store(const char* directory)
 {
 	temp_tuple_store* tts_p = malloc(sizeof(temp_tuple_store));
 	if(tts_p == NULL)
-		return NULL;
+	{
+		printf("FAILED allocate memory for temp_tuple_store\n");
+		exit(-1);
+	}
 
 	tts_p->total_size = 0;
 	tts_p->next_tuple_offset = 0;
@@ -20,8 +23,8 @@ temp_tuple_store* get_new_temp_tuple_store(const char* directory)
 
 	if(tts_p->fd == -1)
 	{
-		free(tts_p);
-		return NULL;
+		printf("FAILED to open a file for temp_tuple_store\n");
+		exit(-1);
 	}
 
 	return tts_p;
