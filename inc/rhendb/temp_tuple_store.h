@@ -26,6 +26,14 @@
 
 // this module has been designed to be used by a single thread only, it's exposed functions are not thread safe
 
+// below headers are only necessary for the embedded nodes inside the temp_tuple_store
+#include<cutlery/singlylist.h>
+#include<cutlery/linkedlist.h>
+#include<cutlery/bst.h>
+#include<cutlery/hashmap.h>
+#include<cutlery/heap.h>
+#include<cutlery/pheap.h>
+
 typedef struct temp_tuple_store temp_tuple_store;
 struct temp_tuple_store
 {
@@ -38,6 +46,18 @@ struct temp_tuple_store
 	uint64_t tuple_count;
 
 	int fd; // file_descriptor to be accessed for mapping the memory
+
+	// embedded node to possibly put temp_tuple_store inside atmost any one type of datastructure
+	// embed_node_ll will be used to put it inside the output of the operators it gets passed out of
+	union
+	{
+		llnode embed_node_ll;
+		slnode embed_node_sl;
+		bstnode embed_node_bst;
+		rbhnode embed_node_rbh;
+		hpnode embed_node_hp;
+		phpnode embed_node_php;
+	};
 };
 
 typedef struct tuple_region tuple_region;
