@@ -33,6 +33,8 @@ struct temp_tuple_store
 
 	uint64_t next_tuple_offset; // next tuple gets appended here, it starts with 0 and increments by writable tuple_regions upon calling finalize_written_tuple() operation
 
+	// we will always have next_tuple_offset <= total_size
+
 	int fd; // file_descriptor to be accessed for mapping the memory
 };
 
