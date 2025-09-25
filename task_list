@@ -1,7 +1,6 @@
  PICKED TASKS
 
  1.* temp_tuple_store
-   * code review
    * test
 
  2.* giant_tuple_def, an in-memory tuple_def for an on-disk tuple_def (containing worms)
