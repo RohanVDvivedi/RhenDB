@@ -31,6 +31,27 @@
         -> they just pull tuples, when their parent operator pulls on them
         -> they sleep and do nothing when we do not pull from these operators
         -> they are mere but smart transformers
+    * the complete query plan will execute in a fixed sized thread pool, where we define operators that can be preempted while storing their current scan state and exit when they are asked to or when their work is completed and there are no tuples to consume from ,i.e. their chidlren are also completed
+    * they can also be woken up by their children or parent operators by using atomic function and can be asked to stop
+    * their internal interface will look something like this
+     typedef struct operator {
+        uint64_t operator_index; // asked to be used by the user's thread
+
+        pthread_mutex_t output_lock;
+        linkedlist<temp_tuple_store> output;
+
+        pthread_mutex_t state_lock;
+        int is_running; // is set when running
+        int is_completed; // can be set only once
+        int is_shutdown_called; // if set the operator must go into completed state
+
+        int schedule(uint64_t tuples_to_produce, uint64_t bytes_to_produce);
+        int shutdown();
+        int run(operator* op);
+
+        void* operator_context; // everything that this operator needs to do including its state is stored here
+     }
+     user thread will store list of all operators and their indices
 
  4.* define catalog tables and indexes on it - persistent
    * stores only serialized immutable datatypes and persistent serialized immutable query_plans/functions
