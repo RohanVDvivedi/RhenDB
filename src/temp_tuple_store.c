@@ -12,7 +12,7 @@ temp_tuple_store* get_new_temp_tuple_store(const char* directory)
 	temp_tuple_store* tts_p = malloc(sizeof(temp_tuple_store));
 	if(tts_p == NULL)
 	{
-		printf("FAILED allocate memory for temp_tuple_store\n");
+		printf("FAILED to allocate memory for temp_tuple_store\n");
 		exit(-1);
 	}
 
@@ -20,7 +20,6 @@ temp_tuple_store* get_new_temp_tuple_store(const char* directory)
 	tts_p->next_tuple_offset = 0;
 
 	tts_p->fd = open64(directory, O_TMPFILE | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
-
 	if(tts_p->fd == -1)
 	{
 		printf("FAILED to open a file for temp_tuple_store\n");
@@ -131,6 +130,7 @@ int mmap_for_writing_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, tuple_si
 	uint32_t region_size = region_offset_end - region_offset_start;
 
 	// ftruncate to extend the file, if the region_offset_end is greater than total_size
+	// we do not need to extend if region_offset_end <= total_size
 	if(region_offset_end > tts_p->total_size)
 	{
 		if(-1 == ftruncate64(tts_p->fd, region_offset_end))
