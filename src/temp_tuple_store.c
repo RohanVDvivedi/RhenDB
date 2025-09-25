@@ -28,6 +28,14 @@ temp_tuple_store* get_new_temp_tuple_store(const char* directory)
 		exit(-1);
 	}
 
+	// cutlery always assigns all embedded nodes that are free to be 0 initialized, so the below calls are just an formality
+	initialize_llnode(&(tts_p->embed_node_ll));
+	initialize_slnode(&(tts_p->embed_node_sl));
+	initialize_bstnode(&(tts_p->embed_node_bst));
+	initialize_rbhnode(&(tts_p->embed_node_rbh));
+	initialize_hpnode(&(tts_p->embed_node_hp));
+	initialize_phpnode(&(tts_p->embed_node_php));
+
 	return tts_p;
 }
 
