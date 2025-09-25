@@ -19,6 +19,8 @@ temp_tuple_store* get_new_temp_tuple_store(const char* directory)
 	tts_p->total_size = 0;
 	tts_p->next_tuple_offset = 0;
 
+	tts_p->tuple_count = 0;
+
 	tts_p->fd = open64(directory, O_TMPFILE | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
 	if(tts_p->fd == -1)
 	{
@@ -167,6 +169,7 @@ int finalize_written_tuple(temp_tuple_store* tts_p, tuple_region* tr_p)
 		return 0;
 
 	tts_p->next_tuple_offset = next_tuple_offset_for_tuple_region(tr_p);
+	tts_p->tuple_count++;
 	return 1;
 }
 
