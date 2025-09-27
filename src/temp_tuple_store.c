@@ -74,6 +74,10 @@ uint32_t get_tuple_size_for_temp_tuple_store(const temp_tuple_store* tts_p, uint
 
 int mmap_for_reading_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, uint64_t offset, tuple_size_def* tpl_sz_d)
 {
+	// offset must be withing readable file region to begin with, with enough bytes for the smallest sized tuple
+	if(offset + get_minimum_tuple_size_using_tuple_size_def(tpl_sz_d) > tts_p->next_tuple_offset)
+		return 0;
+
 	uint64_t tuple_offset_start = offset;
 	uint32_t tuple_size = get_tuple_size_for_temp_tuple_store(tts_p, tuple_offset_start, tpl_sz_d);
 	uint64_t tuple_offset_end = tuple_offset_start + tuple_size;
