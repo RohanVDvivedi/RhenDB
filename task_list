@@ -1,15 +1,15 @@
  PICKED TASKS
 
- 2.* giant_tuple_def, an in-memory tuple_def for an on-disk tuple_def (containing worms)
+ 1.* giant_tuple_def, an in-memory tuple_def for an on-disk tuple_def (containing worms)
    * conversion function to convert on-disk tuple_def to giant_tuple_def
    * conversion function to convert on-disk tuple to giant_tuple
    * use this giant_tuple_def's tuples for in-memory tuples
    * compute max_size for this tuples using tuplestore, and also limit max element_count for the complete project as a macro
 
- 3.0* implement SQL parser (possibly in a different directory)
- 3.1* implement query plan tree
+ 2.0* implement SQL parser (possibly in a different directory)
+ 2.1* implement query plan tree
    * with operators
- 3.2* implement relational algebra operators
+ 2.2* implement relational algebra operators
    * use BoomPar's resource usage limiter to allot a mini transaction only if the buffer count it needs is available
    * every transaction starts with reservng 2 frames to access the transaction table
    * selection -> filter with/without indexes
@@ -50,15 +50,15 @@
      }
      user thread will store list of all operators and their indices
 
- 4.* define catalog tables and indexes on it - persistent
+ 3.* define catalog tables and indexes on it - persistent
    * stores only serialized immutable datatypes and persistent serialized immutable query_plans/functions
    * and an LRU cache on them
    * we will also need a clone function for the data_type_info-s and the query_plan-s
 
- 5.* define statistics tables (*future) - persistent and possibly in a different database
+ 4.* define statistics tables (*future) - persistent and possibly in a different database
    * same as indexes and heap_tables (low priority)
 
- 6.* lock table remaining tasks (*future)
+ 5.* lock table remaining tasks (*future)
    * deadlock detection and resolution task job (*future, for now rely on timeouts to back off and abort)
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock (*future, do it when query optimizer and catalog tables are ready )
 
