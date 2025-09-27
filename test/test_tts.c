@@ -87,33 +87,49 @@ int main()
 
 	print_mmap_pages_for_fd(tts_p->fd);
 
+	printf("----------------------------------------------\n\n");
+
 	print_all_tuples(tts_p);
 
 	print_mmap_pages_for_fd(tts_p->fd);
+
+	printf("----------------------------------------------\n\n");
 
 	append_all_tuples(tts_p, 10, (char* []){"Rohan Vipulkumar Dvivedi", "Rupa Vipulkumar Dvivedi", "Vipulkumar Bhanuprasad Dvivedi", NULL});
 
 	print_mmap_pages_for_fd(tts_p->fd);
 
+	printf("----------------------------------------------\n\n");
+
 	print_all_tuples(tts_p);
 
 	print_mmap_pages_for_fd(tts_p->fd);
+
+	printf("----------------------------------------------\n\n");
 
 	append_all_tuples(tts_p, 10, (char* []){"Devashree Vipulkumar Dvivedi", "Manan Joshi", "Devashree Manan Joshi", NULL});
 
 	print_mmap_pages_for_fd(tts_p->fd);
 
+	printf("----------------------------------------------\n\n");
+
 	print_all_tuples(tts_p);
 
 	print_mmap_pages_for_fd(tts_p->fd);
+
+	printf("----------------------------------------------\n\n");
 
 	append_all_tuples(tts_p, 500, (char* []){ROHAN, DVIVEDI, NULL});
 
 	print_mmap_pages_for_fd(tts_p->fd);
 
+	printf("----------------------------------------------\n\n");
+
 	print_all_tuples(tts_p);
 
 	print_mmap_pages_for_fd(tts_p->fd);
+
+	printf("----------------------------------------------\n\n");
 
 	// deinit start
 
