@@ -1,8 +1,5 @@
  PICKED TASKS
 
- 1.* temp_tuple_store
-   * test
-
  2.* giant_tuple_def, an in-memory tuple_def for an on-disk tuple_def (containing worms)
    * conversion function to convert on-disk tuple_def to giant_tuple_def
    * conversion function to convert on-disk tuple to giant_tuple
