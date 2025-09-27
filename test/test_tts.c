@@ -9,6 +9,8 @@
 tuple_def tpl_d;
 data_type_info dti;
 
+void print_mmap_pages_for_fd(int fd);
+
 void print_all_tuples(temp_tuple_store* tts_p)
 {
 	printf("\n\nprinting temp_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", tts_p->tuple_count, tts_p->next_tuple_offset, tts_p->total_size);
@@ -97,4 +99,44 @@ int main()
 
 	delete_temp_tuple_store(tts_p);
 	return 0;
+}
+
+void print_mmap_pages_for_fd(int fd) {
+    char path[PATH_MAX];
+    char fdpath[64];
+    char realpath_buf[PATH_MAX];
+    FILE *maps;
+    char line[1024];
+    long page_size = sysconf(_SC_PAGESIZE);
+    size_t total_pages = 0;
+
+    // Get the file path from /proc/self/fd/<fd>
+    snprintf(fdpath, sizeof(fdpath), "/proc/self/fd/%d", fd);
+    ssize_t len = readlink(fdpath, realpath_buf, sizeof(realpath_buf) - 1);
+    if (len == -1) {
+        perror("readlink");
+        return;
+    }
+    realpath_buf[len] = '\0';
+
+    // Open /proc/self/maps to find mappings for this file
+    maps = fopen("/proc/self/maps", "r");
+    if (!maps) {
+        perror("fopen");
+        return;
+    }
+
+    while (fgets(line, sizeof(line), maps)) {
+        if (strstr(line, realpath_buf)) {
+            unsigned long start, end;
+            if (sscanf(line, "%lx-%lx", &start, &end) == 2) {
+                size_t length = end - start;
+                total_pages += length / page_size;
+            }
+        }
+    }
+
+    fclose(maps);
+
+    printf("Pages mapped for %s: %zu\n", realpath_buf, total_pages);
 }
