@@ -57,6 +57,7 @@ void append_all_tuples(temp_tuple_store* tts_p, uint32_t chunk_size, char** stri
 			len_added += len_to_add;
 		}
 
+		printf("finalized tuple\n\n");
 		finalize_written_tuple(tts_p, &tr);
 	}
 	unmap_for_tuple_region(&tr);
