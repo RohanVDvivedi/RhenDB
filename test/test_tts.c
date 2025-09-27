@@ -78,6 +78,14 @@ int main()
 
 	print_all_tuples(tts_p);
 
+	append_all_tuples(tts_p, 10, (char* []){"Rohan Vipulkumar Dvivedi", "Rupa Vipulkumar Dvivedi", "Vipulkumar Bhanuprasad Dvivedi", NULL});
+
+	print_all_tuples(tts_p);
+
+	append_all_tuples(tts_p, 10, (char* []){"Devashree Vipulkumar Dvivedi", "Manan Joshi", "Devashree Manan Joshi", NULL});
+
+	print_all_tuples(tts_p);
+
 	// deinit start
 
 	delete_temp_tuple_store(tts_p);
