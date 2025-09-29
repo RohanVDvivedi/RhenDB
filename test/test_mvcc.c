@@ -81,7 +81,7 @@ int main()
 
 		print_mvcc_header(&b);printf("\n\n");
 
-		destroy_non_static_type_info_recursively(mvcc_header_def->type_info);
+		destroy_type_info_recursively(mvcc_header_def->type_info, NULL);
 		free(mvcc_header_def);
 	}
 
