@@ -51,11 +51,11 @@
      user thread will store list of all operators and their indices
 
  3.* define catalog tables and indexes on it - persistent
-   * stores only serialized immutable datatypes dti-s and things like bplus_tree_tuple_defs and persistent serialized immutable query_plans/functions
-   * and an LRU cache on them
+   * stores only serialized immutable datatypes dti-s and things like bplus_tree_tuple_defs and persistent serialized immutable query_plans/functions and an LRU cache on them
    * there will also be reference counters for all of them, with LRU searches on them using name, index and their own pointers
-   * they also point to each other, dtis pointing to other dtis in there and bplus_tree_tuple_defs pointing to record_defs that are dtis in there
-   * we will also need a clone function for the data_type_info-s and the query_plan-s, but we will use reference counting to already cached catalog objects
+   * they also point to each other, dtis pointing to other dtis in there and bplus_tree_tuple_defs and alike, pointing to record_defs that are dtis in there itself
+   * functions and queries and functions can call other functions, reference them
+   * we will use reference counting to already cached catalog objects, implement on_destroy and on_reference callbacks of type static_type_info_callback-s, that increment and decrement the reference counter for the dtis, that need to be passed around
 
  4.* define statistics tables (*future) - persistent and possibly in a different database
    * same as indexes and heap_tables (low priority)
