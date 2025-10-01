@@ -3,6 +3,7 @@
  1.0* implement SQL parser (possibly in a different directory)
  1.1* implement query plan tree
    * with operators
+   * need functions to compare, and hash, including extended data types from tuple large types, two positons inside tuples or a tuple position and a materialized value, like materialized numeric
  1.2* implement relational algebra operators
    * use BoomPar's resource usage limiter to allot a mini transaction only if the buffer count it needs is available
    * every transaction starts with reservng 2 frames to access the transaction table
