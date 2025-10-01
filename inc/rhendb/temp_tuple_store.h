@@ -14,10 +14,10 @@
 	it will primarily be used for working with passing tuples between operator or for internal processing and collection of the tuples
 
 	yes this is look-alike of the volatile_page_store used as the volatie engine, and that too can be used by the relational operators that you design
-	but temp_tuple_store is more suited to giant_tuple_defs bcause there is no restriction for the size of the tuple to be stored here
-	as the tuple is laid out sequentially, one after the pther, we may not need to chase pointers to recontruct the tuple in the memory, it will be paged in and out by the mmap calls
+	but temp_tuple_store is more suited to tuples with tuple_defs for intermediate tuple stores because, there is no restriction for the size of the tuple to be stored here
+	as the tuple is laid out sequentially, one after the other, we may not need to chase pointers to recontruct the tuple in the memory, it will be paged in and out by the mmap calls
 	virtual memory comming to the rescue and saving us the hazzle, when we could be dealing with 32-bit systems
-	giant_tuples generated from tuple_defs are still going to have to fit 2GB so that remains the constraint even here
+	tuples generated from tuple_defs are still going to have to fit 2GB so that remains the constraint even here
 */
 
 /*

@@ -8,8 +8,8 @@
    * every transaction starts with reservng 2 frames to access the transaction table
    * selection -> filter with/without indexes
    * projection -> picking columns
-   * sorting -> implement external giant_tuple_def sorting, by using a tuple_file
-   * joins -> with/without indexes (hashjoins using a tuple_file)
+   * sorting -> implement external sorting, by using a temp_tuple_store
+   * joins -> with/without indexes (hashjoins using a temp_tuple_store as buckets)
    * union, set difference and intersection
     * Operators will be of two types
       * Scan -> run on mini transaction engine's thread pool, heap_table scan, index scan, etc
