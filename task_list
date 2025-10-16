@@ -1,5 +1,61 @@
  PICKED TASKS
 
+ * starting with relational algebra operators
+  * transformers
+    * typedef struct transformer
+      {
+        const void* context;
+        int (*transform)(const void* context, const user_value* input, user_value* output);
+        int (*inverse_transform)(const void* context, const user_value* input, user_value* output);
+      }
+      int transform(transformer* t, const user_value* input, user_value* output);
+      integral operations, logical and, or, not, bitwise and or not, math add, sub, mul divide, compare (returns 1, 0, -1),
+      strings/blobs, get suffix/prefix, compare
+      integral integer seconds, milliseconds, microseconds, nanoseconds to date and time, and its parts
+  * selection
+      struct selection_params
+      {
+        selection_tree* tree;
+        tuple_def* lvalue_def;
+      }
+      struct selection_tree
+      {
+        enum {
+          NOT, -> class 0
+          AND, OR, XOR -> class 1
+          EQUALS, NOT_EQUALS, GREATER_THAN, LESSER_THAN, GREATER_THAN_EQUALS, LESSER_THAN_EQAULS -> class 2
+          LVALUE, -> class 3
+          RVALUE, -> class 4
+        }
+
+        union
+        {
+          selection* not_for; // class 0
+          singlylist<selection*> logical_for; // class 1
+          // class 2
+          { // class 3
+            transformer* lvalue_transform;
+            static_position lvalue_position;
+          }
+          user_value rvalue; // class 4
+        }
+      }
+    * int select(const void* tuple, const selection_params* sp);
+  * projection
+      struct projection_params
+      {
+        int projection_count;
+        projection projection_list[];
+      }
+      struct projection
+      {
+        static_position output_position;
+        transformer combiner_transformer;
+        static_position* input_positions;
+      }
+    * void* project(const void* tuple, uint64_t page_id, uint32_t tuple_index, const void* page, const projection_params* pp);
+
+
  1.0* implement SQL parser (possibly in a different directory)
  1.1* implement query plan tree
    * with operators
