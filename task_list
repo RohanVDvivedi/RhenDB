@@ -1,14 +1,18 @@
  PICKED TASKS
 
  * starting with relational algebra operators
+  * typed_user_value
+    * typedef struct typed_user_value {
+      data_type_info* type;
+      user_value value;
+    }
   * transformers
     * typedef struct transformer
       {
         const void* context;
-        int (*transform)(const void* context, const user_value* input, user_value* output);
-        int (*inverse_transform)(const void* context, const user_value* input, user_value* output);
+        typed_user_value (*transform)(const void* context, uint32_t input_count, const typed_user_value** input);
       }
-      int transform(transformer* t, const user_value* input, user_value* output);
+      typed_user_value transform(transformer* t, const typed_user_value* input);
       integral operations, logical and, or, not, bitwise and or not, math add, sub, mul divide, compare (returns 1, 0, -1),
       strings/blobs, get suffix/prefix, compare
       integral integer seconds, milliseconds, microseconds, nanoseconds to date and time, and its parts
