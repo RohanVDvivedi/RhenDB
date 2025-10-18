@@ -59,6 +59,39 @@
       }
     * void* project(const void* tuple, uint64_t page_id, uint32_t tuple_index, const void* page, const projection_params* pp);
 
+  * operator
+    typedef struct operator
+    {
+      uint64_t operator_id; // local to the transaction/query it is in
+
+      pthread_mutex_t lock;
+
+      operator_output* output_buffer;
+
+      operator_state state; // enum for OPERATOR_RUNNING, OPEARATOR_PAUSED (waiting for lock/deadlock), OPERATOR_KILLED
+      int is_kill_signal_sent;
+
+      executor* compute_thread_pool;
+
+      executor* disk_access_thread_pool;
+
+      llnode embed_node_for_operator_outputs; // output_buffer linkes all it's pushers using this
+    };
+    int send_kill_signal(operator*);
+    int schedule_or_process(operator*); // schedule on the threadpool it has or process in the same thread as per the operator behaviour, to be called by the receiver when it wants data
+  * operator_output
+    typedef struct operator_output
+    {
+      pthread_mutex_t lock;
+      pthread_cond_t wait;
+      linked_list<temp_tuple_store> output_data;
+      linked_list<operator> pushers;
+      int is_stop_pushes_sent; // to make pushers from stop pushing the data
+    };
+    int push(operator_output, temp_tuple_store); // push fails only if a stop_pushes is sent
+    temp_tuple_store* pop(operator_output, uint64_t microseconds_to_wait); // for outer most operator to send data to user, fails with returning NULL only if is_stop_pushes_sent is set or there is noone to push datas
+    temp_tuple_store* pop_non_blocking(operator_output, int* should_quit, int* should_pause); // for all other intermediate operators, should_quit will be set if nothing further will be produced, and should_pause will be set if all the pushers are in pauses state
+    * 
 
  1.0* implement SQL parser (possibly in a different directory)
  1.1* implement query plan tree
