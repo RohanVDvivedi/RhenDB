@@ -91,6 +91,12 @@
     temp_tuple_store* pop_non_blocking(operator_output, state* force_state); // for all other intermediate operators, force_state suggests if the caller must pause if all the pusher are paused or have quit, asking the callee to do the same
   * we also need a way to forcefully pause everything (scans will save their context in this case to restart), and play then again
 
+  * what operators to implement
+    * scan on b+tree/hash index (sort rids and then scan the table), scan on table(start and move ahead linearly)
+    * sort (external sorting, N-way)
+    * joins (nested loop with per block, index nested loop, sort merge join, hash join)
+    * group_by (based on hash or sorted input data otherwise)
+
  1.0* implement SQL parser (possibly in a different directory)
  1.1* implement query plan tree
    * with operators
