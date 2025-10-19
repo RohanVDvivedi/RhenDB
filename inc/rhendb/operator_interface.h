@@ -1,6 +1,12 @@
 #ifndef OPERATOR_INTERFACE_H
 #define OPERATOR_INTERFACE_H
 
+#include<stdlib.h>
+
+#include<pthread.h>
+
+#include<rhendb/temp_tuple_store.h>
+
 typedef struct operator_buffer operator_buffer;
 struct operator_buffer
 {
@@ -39,6 +45,9 @@ struct operator
 
 	operator_buffer* output;	// operator must write its output here, not protected by the operator's global lock
 
+	operator_buffer* input;		// operator must read its input here, not protected by the operator's global lock
+	// it will be NULL, if it is a scan
+
 	pthread_mutex_t lock;		// global lock for the operator
 
 	operator_state state;		// access the current state of the operator here
@@ -60,5 +69,22 @@ struct operator
 // global function, does not do the same on the child operators
 // queues the operator to run immediately
 int queue_operator(operator* o); // fails if the operator is in OPERATOR_KILLED state, NO-OP in OPERATOR_QUEUED/OPERATOR_RUNNING state, gets to OPERATOR_QUEUED state if it was in OPERATOR_PAUSED
+
+int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts);
+
+// timeout can be BLOCKING or a positive value in microseconds
+// to be used by the user's io thread to send data to user
+temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout_in_microseconds);
+
+// to be used by the intermediate operators to retrieve data from their source
+temp_tuple_store* pop_from_operator_buffer_unblockingly(operator_buffer* ob, operator_state* state_next); // state_next must be used only if return valus is NULL, it gets set to OPERATOR_PAUSED, if all pushers are in paused state, and OPERATOR_KILLED if all pushers are dead
+
+// insert pusher when building the query tree, and remove when killed
+void insert_pusher_to_operator_buffer(operator_buffer* ob, operator* o);
+void remove_pusher_to_operator_buffer(operator_buffer* ob, operator* o);
+
+// insert waiter when going into paused state over input buffer being empty, and remove on being queued
+void insert_waiter_to_operator_buffer(operator_buffer* ob, operator* o);
+void remove_waiter_to_operator_buffer(operator_buffer* ob, operator* o);
 
 #endif
