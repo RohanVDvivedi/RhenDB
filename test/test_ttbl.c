@@ -57,6 +57,8 @@ int main()
 	print_mvcc_snapshot(t5);
 	print_vaccum_horizon_transaction_id(&ttbl);
 
+	uint256 last_txid_in_session = t5->transaction_id;
+
 	deinitialize_mvcc_snapshot(t5);
 	free(t5);
 
@@ -72,7 +74,7 @@ int main()
 	deinitialize_mvcc_snapshot(t1);
 	free(t1);
 
-	for(uint256 tid = get_0_uint256(); compare_uint256(tid, t5->transaction_id) <= 0; add_uint256(&tid, tid, get_1_uint256()))
+	for(uint256 tid = get_0_uint256(); compare_uint256(tid, last_txid_in_session) <= 0; add_uint256(&tid, tid, get_1_uint256()))
 	{
 		transaction_status status = get_transaction_status(&ttbl, tid);
 		printf("%"PRIu64" -> %s\n", tid.limbs[0], transaction_status_string[status]);
