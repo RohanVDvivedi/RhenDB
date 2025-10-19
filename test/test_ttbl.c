@@ -3,6 +3,8 @@
 
 #include<stdlib.h>
 
+#define USERS_COUNT 10
+
 void print_vaccum_horizon_transaction_id(transaction_table* ttbl)
 {
 	uint256 vhtxid = get_vaccum_horizon_transaction_id(ttbl);
@@ -21,7 +23,8 @@ int main()
 			10000ULL, 100000ULL,
 			10000000ULL,
 		4096,
-			10000000ULL);
+			10000000ULL,
+		USERS_COUNT);
 
 	uint64_t root_page_id = 0;
 

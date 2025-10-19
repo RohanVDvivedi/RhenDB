@@ -3,6 +3,8 @@
 
 #include<stdlib.h>
 
+#define USERS_COUNT 10
+
 void print_transaction_id(uint256 transaction_id)
 {
 	{
@@ -93,7 +95,8 @@ int main()
 			10000ULL, 100000ULL,
 			10000000ULL,
 		4096,
-			10000000ULL);
+			10000000ULL,
+		USERS_COUNT);
 	printf("database initialized\n\n");
 
 	lock_manager lckmgr;
