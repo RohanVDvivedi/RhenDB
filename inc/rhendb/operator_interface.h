@@ -4,6 +4,7 @@
 #include<stdlib.h>
 
 #include<pthread.h>
+#include<boompar/executor.h>
 
 #include<rhendb/temp_tuple_store.h>
 
