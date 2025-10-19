@@ -1,5 +1,6 @@
  PICKED TASKS
 
+ * we need a query structure / transaction structure, that holds all operators and operator_buffers, has a mutex to put operators in paused state waiting on operators or locked data, helping orchestrating
  * implement operator and its buffer basic functions
 
  * starting with relational algebra operators
