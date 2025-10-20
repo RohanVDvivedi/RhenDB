@@ -37,11 +37,13 @@ enum operator_state
 	OPERATOR_KILLED,	// operator is not functional and has quit, this implies all the context is released before setting to this state
 };
 
+typedef struct transaction transaction;
+
 typedef struct operator operator;
 struct operator
 {
-	// id of the query and the index of the operator in it, helps to identify who waits on what, and wake the respective one only
-	void* query_id;
+	// transaction handle and the index of the operator in it, helps to identify who waits on what, and wake the respective operator only
+	transaction* txn;
 	uint64_t operator_id;		
 
 	operator_buffer* output;	// operator must write its output here, not protected by the operator's global lock
@@ -66,6 +68,8 @@ struct operator
 	llnode embed_node_pushers;
 	llnode embed_node_waiters;
 };
+
+#include<rhendb/transaction.h>
 
 // global function, does not do the same on the child operators
 // queues the operator to run immediately
