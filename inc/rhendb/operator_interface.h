@@ -82,7 +82,7 @@ int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts);
 temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout_in_microseconds);
 
 // to be used by the intermediate operators to retrieve data from their source
-temp_tuple_store* pop_from_operator_buffer_unblockingly(operator_buffer* ob, operator_state* state_next); // state_next must be used only if return valus is NULL, it gets set to OPERATOR_PAUSED, if all pushers are in paused state, and OPERATOR_KILLED if all pushers are dead
+temp_tuple_store* pop_from_operator_buffer_nonblocking(operator_buffer* ob, operator_state* state_next); // state_next must be used only if return valus is NULL, it gets set to OPERATOR_PAUSED, if all pushers are in paused state, and OPERATOR_KILLED if all pushers are dead
 
 // insert pusher when building the query tree, and remove when killed
 void insert_pusher_to_operator_buffer(operator_buffer* ob, operator* o);
