@@ -8,13 +8,16 @@ int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts)
 
 	if(!(ob->prohibit_pushing))
 	{
-		ob->tuple_stores_count += insert_tail_in_linkedlist(&(ob->tuple_stores), tts);
-		pushed = 1;
+		pushed = insert_tail_in_linkedlist(&(ob->tuple_stores), tts);
+		if(pushed)
+		{
+			ob->tuple_stores_count += 1;
 
-		// wake up blocking waiters
-		pthread_cond_broadcast(&(ob->wait));
+			// wake up blocking waiters
+			pthread_cond_broadcast(&(ob->wait));
 
-		// wake up any waiters (operators)
+			// wake up any waiters (operators)
+		}
 	}
 
 	pthread_mutex_unlock(&(ob->lock));
