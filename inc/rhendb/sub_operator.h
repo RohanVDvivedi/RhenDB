@@ -1,8 +1,10 @@
-#ifndef TRANSFORMER_H
-#define TRANSFORMER_H
+#ifndef SUB_OPERATOR_H
+#define SUB_OPERATOR_H
 
 #include<tuplestore/data_type_info.h>
 #include<tuplestore/user_value.h>
+
+// transformer
 
 typedef struct typed_user_value typed_user_value;
 struct typed_user_value
@@ -23,5 +25,9 @@ struct transformer
 };
 
 typed_user_value transform(transformer* t, uint32_t input_count, const typed_user_value** input);
+
+// selection
+
+// projection
 
 #endif
