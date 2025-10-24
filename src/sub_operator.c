@@ -159,9 +159,35 @@ void destroy_selection_tree(selection_tree* tree)
 	free(tree);
 }
 
-static const data_type_info* get_type_of_selection_tree_node(selection_tree* node)
+static const data_type_info* get_type_of_selection_tree_node(selection_tree* node, tuple_def* input_def)
 {
-const data_type_info* get_type_info_for_element_from_tuple_def(const tuple_def* tpl_d, positional_accessor pa);
+	switch(node->type)
+	{
+		case SELECT_NOT :
+		case SELECT_AND :
+		case SELECT_OR :
+		case SELECT_XOR :
+		case SELECT_EQ :
+		case SELECT_NE :
+		case SELECT_GT :
+		case SELECT_LT :
+		case SELECT_GTE :
+		case SELECT_LTE :
+		{
+			return NULL;
+		}
+
+		case SELECT_INPUT :
+		{
+			return get_type_info_for_element_from_tuple_def(input_def, node->input_position);
+		}
+
+		case SELECT_CONSTANT :
+		{
+			return node->constant.type;
+		}
+	}
+	return NULL;
 }
 
 int is_valid_selection_params(const selection_params* sp)
@@ -220,7 +246,7 @@ int is_valid_selection_params(const selection_params* sp)
 				return 0;
 
 			// TODO: ensure that the lhs and rhs are of comparable type, use a functions that also encompases types from TupleLargeTypes
-			if(!can_compare_user_value(get_type_of_selection_tree_node(sp->tree->lhs), get_type_of_selection_tree_node(sp->tree->rhs)))
+			if(!can_compare_user_value(get_type_of_selection_tree_node(sp->tree->lhs, sp->input_def), get_type_of_selection_tree_node(sp->tree->rhs, sp->input_def)))
 				return 0;
 
 			return 1;
@@ -228,7 +254,7 @@ int is_valid_selection_params(const selection_params* sp)
 
 		case SELECT_INPUT :
 		{
-			if(get_type_of_selection_tree_node(sp->tree) == NULL)
+			if(get_type_of_selection_tree_node(sp->tree, sp->input_def) == NULL)
 				return 0;
 			return 1;
 		}
