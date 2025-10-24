@@ -119,7 +119,7 @@ int is_valid_selection_params(const selection_params* sp);
 
 // below function works on the input_tuple, and return 1 if it passes the select clause, or 0 if it fails
 // -1 if it can not be evaluated (accessing array indices out of bounds)
-int select(const void* input_tuple, const selection_params* sp);
+int do_select(const void* input_tuple, const selection_params* sp);
 
 // projection
 
