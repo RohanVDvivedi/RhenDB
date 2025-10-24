@@ -93,7 +93,7 @@ struct selection_tree
 
 selection_tree* initialize_selection_tree_node(selection_node_type type);
 
-void insert_child_for_selection_tree_node(selection_tree* parent, selection_tree* child);
+int insert_child_for_selection_tree_node(selection_tree* parent, selection_tree* child);
 
 // things like
 // AND/OR of just 1 node gets reduced

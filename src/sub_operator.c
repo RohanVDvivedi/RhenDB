@@ -60,4 +60,53 @@ selection_tree* initialize_selection_tree_node(selection_node_type type)
 	return node;
 }
 
-void insert_child_for_selection_tree_node(selection_tree* parent, selection_tree* child);
+int insert_child_for_selection_tree_node(selection_tree* parent, selection_tree* child)
+{
+	switch(parent->type)
+	{
+		case SELECT_NOT :
+		{
+			if(parent->not_of == NULL)
+			{
+				parent->not_of = child;
+				return 1;
+			}
+			return 0;
+		}
+
+		case SELECT_AND :
+		case SELECT_OR :
+		case SELECT_XOR :
+		{
+			return insert_tail_in_singlylist(&(parent->logi_of), child);
+		}
+
+		case SELECT_EQ :
+		case SELECT_NE :
+		case SELECT_GT :
+		case SELECT_LT :
+		case SELECT_GTE :
+		case SELECT_LTE :
+		{
+			if(parent->lhs == NULL)
+			{
+				parent->lhs = child;
+				return 1;
+			}
+			if(parent->rhs == NULL)
+			{
+				parent->rhs = child;
+				return 1;
+			}
+			return 0;
+		}
+
+		case SELECT_INPUT :
+		case SELECT_CONSTANT :
+		{
+			return 0;
+		}
+	}
+
+	return 0;
+}
