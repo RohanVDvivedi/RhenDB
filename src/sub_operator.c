@@ -110,3 +110,51 @@ int insert_child_for_selection_tree_node(selection_tree* parent, selection_tree*
 
 	return 0;
 }
+
+void destroy_selection_tree(selection_tree* tree)
+{
+	switch(tree->type)
+	{
+		case SELECT_NOT :
+		{
+			if(tree->not_of != NULL)
+				destroy_selection_tree(tree->not_of);
+			break;
+		}
+
+		case SELECT_AND :
+		case SELECT_OR :
+		case SELECT_XOR :
+		{
+			selection_tree* x = NULL;
+			while((x = (selection_tree*) get_head_of_singlylist(&(tree->logi_of))) != NULL)
+			{
+				remove_head_from_singlylist(&(tree->logi_of));
+				destroy_selection_tree(x);
+			}
+			break;
+		}
+
+		case SELECT_EQ :
+		case SELECT_NE :
+		case SELECT_GT :
+		case SELECT_LT :
+		case SELECT_GTE :
+		case SELECT_LTE :
+		{
+			if(tree->lhs != NULL)
+				free(tree->lhs);
+			if(tree->rhs != NULL)
+				free(tree->rhs);
+			return;
+		}
+
+		case SELECT_INPUT :
+		case SELECT_CONSTANT :
+		{
+			break;
+		}
+	}
+
+	free(tree);
+}
