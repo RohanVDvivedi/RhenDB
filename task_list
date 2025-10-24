@@ -2,36 +2,8 @@
 
  * we need a query structure / transaction structure, that holds all operators and operator_buffers, has a mutex to put operators in paused state waiting on operators or locked data, helping orchestrating
  * implement operator and its buffer basic functions
-
-  * selection
-      struct selection_params
-      {
-        selection_tree* tree;
-        tuple_def* lvalue_def;
-      }
-      struct selection_tree
-      {
-        enum {
-          NOT, -> class 0
-          AND, OR, XOR -> class 1
-          EQUALS, NOT_EQUALS, GREATER_THAN, LESSER_THAN, GREATER_THAN_EQUALS, LESSER_THAN_EQAULS -> class 2
-          LVALUE, -> class 3
-          RVALUE, -> class 4
-        }
-
-        union
-        {
-          selection* not_for; // class 0
-          singlylist<selection*> logical_for; // class 1
-          // class 2
-          { // class 3
-            transformer* lvalue_transform;
-            static_position lvalue_position;
-          }
-          user_value rvalue; // class 4
-        }
-      }
-    * int select(const void* tuple, const selection_params* sp);
+ * selection
+   * implement optimize and do_select funtions
   * projection
       struct projection_params
       {
