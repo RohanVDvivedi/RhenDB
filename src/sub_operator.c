@@ -158,3 +158,86 @@ void destroy_selection_tree(selection_tree* tree)
 
 	free(tree);
 }
+
+static const data_type_info* get_type_of_selection_tree_node(selection_tree* node)
+{
+const data_type_info* get_type_info_for_element_from_tuple_def(const tuple_def* tpl_d, positional_accessor pa);
+}
+
+int is_valid_selection_params(const selection_params* sp)
+{
+	switch(sp->tree->type)
+	{
+		case SELECT_NOT :
+		{
+			if(sp->tree->not_of == NULL)
+				return 0;
+
+			if(!is_valid_selection_params(&((selection_params){sp->tree->not_of, sp->input_def})))
+				return 0;
+
+			return 1;
+		}
+
+		case SELECT_AND :
+		case SELECT_OR :
+		case SELECT_XOR :
+		{
+			if(is_empty_singlylist(&(sp->tree->logi_of)))
+				return 0;
+
+			for(selection_tree* x = (selection_tree*) get_head_of_singlylist(&(sp->tree->logi_of)); x != NULL; x = (selection_tree*) get_next_of_in_singlylist(&(sp->tree->logi_of), x))
+			{
+				if(x->type == SELECT_INPUT || x->type == SELECT_CONSTANT)
+					return 0;
+
+				if(!is_valid_selection_params(&((selection_params){x, sp->input_def})))
+					return 0;
+			}
+
+			return 1;
+		}
+
+		case SELECT_EQ :
+		case SELECT_NE :
+		case SELECT_GT :
+		case SELECT_LT :
+		case SELECT_GTE :
+		case SELECT_LTE :
+		{
+			if(sp->tree->lhs == NULL)
+				return 0;
+			if(sp->tree->lhs->type != SELECT_INPUT && sp->tree->lhs->type != SELECT_CONSTANT)
+				return 0;
+			if(!is_valid_selection_params(&((selection_params){sp->tree->lhs, sp->input_def})))
+				return 0;
+
+			if(sp->tree->rhs == NULL)
+				return 0;
+			if(sp->tree->rhs->type != SELECT_INPUT && sp->tree->rhs->type != SELECT_CONSTANT)
+				return 0;
+			if(!is_valid_selection_params(&((selection_params){sp->tree->rhs, sp->input_def})))
+				return 0;
+
+			// TODO: ensure that the lhs and rhs are of comparable type, use a functions that also encompases types from TupleLargeTypes
+			if(!can_compare_user_value(get_type_of_selection_tree_node(sp->tree->lhs), get_type_of_selection_tree_node(sp->tree->rhs)))
+				return 0;
+
+			return 1;
+		}
+
+		case SELECT_INPUT :
+		{
+			if(get_type_of_selection_tree_node(sp->tree) == NULL)
+				return 0;
+			return 1;
+		}
+
+		case SELECT_CONSTANT :
+		{
+			return 1;
+		}
+	}
+
+	return 0;
+}
