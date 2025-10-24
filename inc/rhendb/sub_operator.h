@@ -95,13 +95,6 @@ selection_tree* initialize_selection_tree_node(selection_node_type type);
 
 int insert_child_for_selection_tree_node(selection_tree* parent, selection_tree* child);
 
-// things like
-// AND/OR of just 1 node gets reduced
-// XOR with false is reduced to NOT
-// CONSTANT and CONSTANT comparison are evaluated upfront
-// CONSTANT transformers get evaluated upfront before actual select
-void optimize_selection_tree(selection_tree* tree);
-
 void destroy_selection_tree(selection_tree* tree);
 
 typedef struct selection_params selection_params;
@@ -116,6 +109,14 @@ struct selection_params
 // checks for rhs and lhs to only hold input and constants
 // checks to make sure that the accessed input_positions in the selection_params actually may exist in the input_tuple
 int is_valid_selection_params(const selection_params* sp);
+
+// things like
+// 2 NOTs in a row are removed
+// AND/OR of just 1 node gets reduced
+// XOR with false is reduced to NOT
+// CONSTANT and CONSTANT comparison are evaluated upfront
+// CONSTANT transformers get evaluated upfront before actual select
+void optimize_selection_tree(selection_tree* tree);
 
 // below function works on the input_tuple, and return 1 if it passes the select clause, or 0 if it fails
 // -1 if it can not be evaluated (accessing array indices out of bounds)
