@@ -23,7 +23,7 @@ struct typed_user_value
 typedef struct transformer transformer;
 struct transformer
 {
-	const void* context;
+	const void* context; // context may hold a set of instructions and a virtual machine to execute them, or a list of transformers to be applied in sequence
 
 	typed_user_value (*transform)(const void* context, uint32_t input_count, const typed_user_value** input);
 };
