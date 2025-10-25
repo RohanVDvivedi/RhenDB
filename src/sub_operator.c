@@ -42,6 +42,12 @@ selection_tree* initialize_selection_tree_node(selection_node_type type)
 			break;
 		}
 
+		case SELECT_TRUE :
+		case SELECT_FALSE :
+		{
+			break;
+		}
+
 		case SELECT_INPUT :
 		{
 			node->input_transformer = NULL;
@@ -101,6 +107,12 @@ int insert_child_for_selection_tree_node(selection_tree* parent, selection_tree*
 			return 0;
 		}
 
+		case SELECT_TRUE :
+		case SELECT_FALSE :
+		{
+			return 0;
+		}
+
 		case SELECT_INPUT :
 		case SELECT_CONSTANT :
 		{
@@ -143,10 +155,16 @@ void destroy_selection_tree(selection_tree* tree)
 		case SELECT_LTE :
 		{
 			if(tree->lhs != NULL)
-				free(tree->lhs);
+				destroy_selection_tree(tree->lhs);
 			if(tree->rhs != NULL)
-				free(tree->rhs);
-			return;
+				destroy_selection_tree(tree->rhs);
+			break;
+		}
+
+		case SELECT_TRUE :
+		case SELECT_FALSE :
+		{
+			break;
 		}
 
 		case SELECT_INPUT :
@@ -173,6 +191,8 @@ static const data_type_info* get_type_of_selection_tree_node(selection_tree* nod
 		case SELECT_LT :
 		case SELECT_GTE :
 		case SELECT_LTE :
+		case SELECT_TRUE :
+		case SELECT_FALSE :
 		{
 			return NULL;
 		}
@@ -197,6 +217,9 @@ int is_valid_selection_params(const selection_params* sp)
 		case SELECT_NOT :
 		{
 			if(sp->tree->not_of == NULL)
+				return 0;
+
+			if(sp->tree->not_of->type == SELECT_INPUT || sp->tree->not_of->type == SELECT_CONSTANT)
 				return 0;
 
 			if(!is_valid_selection_params(&((selection_params){sp->tree->not_of, sp->input_def})))
@@ -233,7 +256,7 @@ int is_valid_selection_params(const selection_params* sp)
 		{
 			if(sp->tree->lhs == NULL)
 				return 0;
-			if(sp->tree->lhs->type != SELECT_INPUT && sp->tree->lhs->type != SELECT_CONSTANT)
+			if(sp->tree->lhs->type != SELECT_INPUT && sp->tree->lhs->type != SELECT_CONSTANT) // we can only compare input or a constant
 				return 0;
 			if(!is_valid_selection_params(&((selection_params){sp->tree->lhs, sp->input_def})))
 				return 0;
@@ -249,6 +272,12 @@ int is_valid_selection_params(const selection_params* sp)
 			if(!can_compare_user_value(get_type_of_selection_tree_node(sp->tree->lhs, sp->input_def), get_type_of_selection_tree_node(sp->tree->rhs, sp->input_def)))
 				return 0;
 
+			return 1;
+		}
+
+		case SELECT_TRUE :
+		case SELECT_FALSE :
+		{
 			return 1;
 		}
 
