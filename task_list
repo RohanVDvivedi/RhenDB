@@ -15,7 +15,6 @@
         static_position* input_positions;
       }
     * void* project(const void* tuple, uint64_t page_id, uint32_t tuple_index, const void* page, const projection_params* pp);
- * implement all different types of basic transformers
 
   * what operators to implement
     * scan on b+tree/hash index (sort rids and then scan the table), scan on table(start and move ahead linearly)
