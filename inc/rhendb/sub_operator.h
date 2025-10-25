@@ -14,11 +14,16 @@ typedef struct typed_user_value typed_user_value;
 struct typed_user_value
 {
 	// type of the value
-	data_type_info* type;
+	const data_type_info* type;
 
 	// value itself
 	user_value value;
+
+	// set the below flag if you allocated memory for storing the value above
+	int value_needs_to_be_freed;
 };
+
+void destroy_typed_user_value(typed_user_value t);
 
 typedef struct transformer transformer;
 struct transformer

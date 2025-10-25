@@ -2,6 +2,40 @@
 
 #include<stdlib.h>
 
+void destroy_typed_user_value(typed_user_value t)
+{
+	if(!(t.value_needs_to_be_freed))
+		return;
+
+	switch(t.type->type)
+	{
+		case STRING :
+		{
+			free((void*)(t.value.string_value));
+			break;
+		}
+		case BLOB :
+		{
+			free((void*)(t.value.blob_value));
+			break;
+		}
+		case TUPLE :
+		{
+			free((void*)(t.value.tuple_value));
+			break;
+		}
+		case ARRAY :
+		{
+			free((void*)(t.value.array_value));
+			break;
+		}
+		default :
+		{
+			break;
+		}
+	}
+}
+
 typed_user_value transform(transformer* t, uint32_t input_count, const typed_user_value** input)
 {
 	return t->transform(t->context, input_count, input);
@@ -210,6 +244,48 @@ static const data_type_info* get_type_of_selection_tree_node(selection_tree* nod
 	return NULL;
 }
 
+static const typed_user_value get_value_of_selection_tree_node(selection_tree* node, tuple_def* input_def, const void* input_tuple, int* error)
+{
+	(*error) = 0;
+
+	switch(node->type)
+	{
+		case SELECT_NOT :
+		case SELECT_AND :
+		case SELECT_OR :
+		case SELECT_XOR :
+		case SELECT_EQ :
+		case SELECT_NE :
+		case SELECT_GT :
+		case SELECT_LT :
+		case SELECT_GTE :
+		case SELECT_LTE :
+		case SELECT_TRUE :
+		case SELECT_FALSE :
+		{
+			break;
+		}
+
+		case SELECT_INPUT :
+		{
+			typed_user_value tvalue = {.value_needs_to_be_freed = 0};
+			if(0 == get_value_from_element_from_tuple(&(tvalue.value), input_def, node->input_position, input_tuple))
+				break;
+			tvalue.type = get_type_of_selection_tree_node(node, input_def);
+
+			return transform(node->input_transformer, 1, (const typed_user_value* []){&tvalue});
+		}
+
+		case SELECT_CONSTANT :
+		{
+			return transform(node->constant_transformer, 1, (const typed_user_value* []){&(node->constant)});
+		}
+	}
+
+	(*error) = 1;
+	return (typed_user_value){};
+}
+
 int is_valid_selection_params(const selection_params* sp)
 {
 	switch(sp->tree->type)
@@ -297,6 +373,8 @@ int is_valid_selection_params(const selection_params* sp)
 	return 0;
 }
 
+void optimize_selection_tree(selection_tree* tree);
+
 int do_select(const void* input_tuple, const selection_params* sp)
 {
 	switch(sp->tree->type)
@@ -365,6 +443,67 @@ int do_select(const void* input_tuple, const selection_params* sp)
 		case SELECT_GTE :
 		case SELECT_LTE :
 		{
+			int error = 0;
+
+			typed_user_value lhs = get_value_of_selection_tree_node(sp->tree->lhs, sp->input_def, input_tuple, &error);
+			if(error)
+				return -1;
+
+			typed_user_value rhs = get_value_of_selection_tree_node(sp->tree->rhs, sp->input_def, input_tuple, &error);
+			if(error)
+			{
+				destroy_typed_user_value(lhs);
+				return -1;
+			}
+
+			int res;
+
+			// TODO : use a more elaborate compare function that also includes types from TupleLargeTypes
+			int cmp = compare_user_value(&(lhs.value), lhs.type, &(rhs.value), rhs.type);
+
+			switch(sp->tree->type)
+			{
+				case SELECT_EQ :
+				{
+					res = (cmp == 0);
+					break;
+				}
+				case SELECT_NE :
+				{
+					res = (cmp != 0);
+					break;
+				}
+				case SELECT_GT :
+				{
+					res = (cmp > 0);
+					break;
+				}
+				case SELECT_LT :
+				{
+					res = (cmp < 0);
+					break;
+				}
+				case SELECT_GTE :
+				{
+					res = (cmp >= 0);
+					break;
+				}
+				case SELECT_LTE :
+				{
+					res = (cmp <= 0);
+					break;
+				}
+				default :
+				{
+					res = -1;
+					break;
+				}
+			}
+
+			destroy_typed_user_value(lhs);
+			destroy_typed_user_value(rhs);
+
+			return res;
 		}
 
 		case SELECT_TRUE :
