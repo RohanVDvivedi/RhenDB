@@ -296,3 +296,93 @@ int is_valid_selection_params(const selection_params* sp)
 
 	return 0;
 }
+
+int do_select(const void* input_tuple, const selection_params* sp)
+{
+	switch(sp->tree->type)
+	{
+		case SELECT_NOT :
+		{
+			int res = do_select(input_tuple, &((selection_params){sp->tree->not_of, sp->input_def}));
+			if(res == -1)
+				return -1;
+
+			return !res;
+		}
+
+		case SELECT_AND :
+		{
+			int res = 1;
+
+			for(selection_tree* x = (selection_tree*) get_head_of_singlylist(&(sp->tree->logi_of)); x != NULL && res != 0; x = (selection_tree*) get_next_of_in_singlylist(&(sp->tree->logi_of), x))
+			{
+				int temp_res = do_select(input_tuple, &((selection_params){x, sp->input_def}));
+				if(temp_res == -1)
+					return -1;
+
+				res = res && temp_res;
+			}
+
+			return res;
+		}
+
+		case SELECT_OR :
+		{
+			int res = 0;
+
+			for(selection_tree* x = (selection_tree*) get_head_of_singlylist(&(sp->tree->logi_of)); x != NULL && res != 1; x = (selection_tree*) get_next_of_in_singlylist(&(sp->tree->logi_of), x))
+			{
+				int temp_res = do_select(input_tuple, &((selection_params){x, sp->input_def}));
+				if(temp_res == -1)
+					return -1;
+
+				res = res || temp_res;
+			}
+
+			return res;
+		}
+
+		case SELECT_XOR :
+		{
+			int res = 0;
+
+			for(selection_tree* x = (selection_tree*) get_head_of_singlylist(&(sp->tree->logi_of)); x != NULL; x = (selection_tree*) get_next_of_in_singlylist(&(sp->tree->logi_of), x))
+			{
+				int temp_res = do_select(input_tuple, &((selection_params){x, sp->input_def}));
+				if(temp_res == -1)
+					return -1;
+
+				res = res ^ temp_res;
+			}
+
+			return res;
+		}
+
+		case SELECT_EQ :
+		case SELECT_NE :
+		case SELECT_GT :
+		case SELECT_LT :
+		case SELECT_GTE :
+		case SELECT_LTE :
+		{
+		}
+
+		case SELECT_TRUE :
+		{
+			return 1;
+		}
+		case SELECT_FALSE :
+		{
+			return 0;
+		}
+
+		// never reaches here
+		case SELECT_INPUT :
+		case SELECT_CONSTANT :
+		{
+			return -1;
+		}
+	}
+
+	return -1;
+}
