@@ -36,7 +36,12 @@ void destroy_typed_user_value(typed_user_value t)
 	}
 }
 
-typed_user_value transform(transformer* t, uint32_t input_count, const typed_user_value** input)
+const data_type_info* get_transformed_type(const transformer* t, uint32_t input_count, const data_type_info** input_types)
+{
+	return t->transformed_type(t->context, input_count, input_types);
+}
+
+typed_user_value transform(const transformer* t, uint32_t input_count, const typed_user_value** input)
 {
 	return t->transform(t->context, input_count, input);
 }

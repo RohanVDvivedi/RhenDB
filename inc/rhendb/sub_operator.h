@@ -32,9 +32,13 @@ struct transformer
 	const void* context; // context may hold a set of instructions and a virtual machine to execute them, or a list of transformers to be applied in sequence
 
 	typed_user_value (*transform)(const void* context, uint32_t input_count, const typed_user_value** input);
+
+	const data_type_info* (*transformed_type)(const void* context, uint32_t input_count, const data_type_info** input_types);
 };
 
-typed_user_value transform(transformer* t, uint32_t input_count, const typed_user_value** input);
+const data_type_info* get_transformed_type(const transformer* t, uint32_t input_count, const data_type_info** input_types);
+
+typed_user_value transform(const transformer* t, uint32_t input_count, const typed_user_value** input);
 
 // selection
 
