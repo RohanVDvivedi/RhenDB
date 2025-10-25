@@ -47,6 +47,9 @@ enum selection_node_type
 	SELECT_GTE,	// >=
 	SELECT_LTE,	// <=
 
+	SELECT_TRUE,  // constant booleans for true
+	SELECT_FALSE, // and false, will be possibly discarded upon optimize
+
 	SELECT_INPUT,
 
 	SELECT_CONSTANT,
