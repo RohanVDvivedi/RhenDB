@@ -20,6 +20,7 @@ struct typed_user_value
 	user_value value;
 
 	// set the below flag if you allocated memory for storing the value above
+	// this need to b set by your transformer
 	int value_needs_to_be_freed;
 };
 
