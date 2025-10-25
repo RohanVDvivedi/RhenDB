@@ -2,8 +2,6 @@
 
  * we need a query structure / transaction structure, that holds all operators and operator_buffers, has a mutex to put operators in paused state waiting on operators or locked data, helping orchestrating
  * implement operator and its buffer basic functions
- * selection
-   * implement optimize and do_select funtions
   * projection
       struct projection_params
       {
@@ -51,6 +49,14 @@
  4.* lock table remaining tasks (*future)
    * deadlock detection and resolution task job (*future, for now rely on timeouts to back off and abort)
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock (*future, do it when query optimizer and catalog tables are ready )
+
+ 5.*selection implement optimize function
+
+ 6.*implement various types of transformers
+   * add, sub, mul, divide, mod, gcd, lcm, pow, sin, cos, invert
+   * strings and blobs to be concatenated, substring with from and to
+   * unix epoch to date, day, month, year, second, millisecond, microsecond, with timezones
+   * build more complex functions transfromers with local variables and bytecode stored in context
 
  * Design methodology
    * we will use postgresql architecture over (mysql like) mini transactions
