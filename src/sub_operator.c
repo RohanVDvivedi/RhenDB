@@ -238,12 +238,20 @@ static const data_type_info* get_type_of_selection_tree_node(selection_tree* nod
 
 		case SELECT_INPUT :
 		{
-			return get_type_info_for_element_from_tuple_def(input_def, node->input_position);
+			const data_type_info* type = get_type_info_for_element_from_tuple_def(input_def, node->input_position);
+			if(node->input_transformer == NULL)
+				return type;
+
+			return get_transformed_type(node->input_transformer, 1, (data_type_info*[]){type});
 		}
 
 		case SELECT_CONSTANT :
 		{
-			return node->constant.type;
+			const data_type_info* type = node->constant.type;
+			if(node->constant_transformer == NULL)
+				return type;
+
+			return get_transformed_type(node->constant_transformer, 1, (data_type_info*[]){type});
 		}
 	}
 	return NULL;
