@@ -4,6 +4,7 @@
 
 void destroy_typed_user_value(typed_user_value t)
 {
+	// if no freeing needed we quit early
 	if(!(t.value_needs_to_be_freed))
 		return;
 
@@ -296,7 +297,7 @@ static const typed_user_value get_value_of_selection_tree_node(selection_tree* n
 	}
 
 	(*error) = 1;
-	return (typed_user_value){};
+	return (typed_user_value){NULL, *NULL_USER_VALUE};
 }
 
 int is_valid_selection_params(const selection_params* sp)
@@ -357,7 +358,7 @@ int is_valid_selection_params(const selection_params* sp)
 			if(!is_valid_selection_params(&((selection_params){sp->tree->rhs, sp->input_def})))
 				return 0;
 
-			// TODO: ensure that the lhs and rhs are of comparable type, use a functions that also encompases types from TupleLargeTypes
+			// TODO: use some function that also encompases types from TupleLargeTypes
 			if(!can_compare_user_value(get_type_of_selection_tree_node(sp->tree->lhs, sp->input_def), get_type_of_selection_tree_node(sp->tree->rhs, sp->input_def)))
 				return 0;
 
@@ -471,7 +472,7 @@ int do_select(const void* input_tuple, const selection_params* sp)
 
 			int res;
 
-			// TODO : use a more elaborate compare function that also includes types from TupleLargeTypes
+			// TODO: use a more elaborate compare function that also includes types from TupleLargeTypes
 			int cmp = compare_user_value(&(lhs.value), lhs.type, &(rhs.value), rhs.type);
 
 			switch(sp->tree->type)
