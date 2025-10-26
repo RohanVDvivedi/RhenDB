@@ -3,19 +3,8 @@
  * review all code in sub_operator
  * we need a query structure / transaction structure, that holds all operators and operator_buffers, has a mutex to put operators in paused state waiting on operators or locked data, helping orchestrating
  * implement operator and its buffer basic functions
-  * projection
-      struct projection_params
-      {
-        int projection_count;
-        projection projection_list[];
-      }
-      struct projection
-      {
-        static_position output_position;
-        transformer combiner_transformer;
-        static_position* input_positions;
-      }
-    * void* project(const void* tuple, uint64_t page_id, uint32_t tuple_index, const void* page, const projection_params* pp);
+ * projection
+   * implement do_project and utility functions for initializing the projection_params
 
   * what operators to implement
     * scan on b+tree/hash index (sort rids and then scan the table), scan on table(start and move ahead linearly)
