@@ -53,10 +53,11 @@
  5.*selection implement optimize function
 
  6.*implement various types of transformers
-   * add, sub, mul, divide, mod, gcd, lcm, pow, sin, cos, invert
+   * add, sub, mul, divide, mod, gcd, lcm, pow, sin, cos, multiplicate inverse, additive inverse
    * strings and blobs to be concatenated, substring with from and to
    * unix epoch to date, day, month, year, second, millisecond, microsecond, with timezones
-   * build more complex functions transfromers with local variables and bytecode stored in context
+   * build more complex functions transformers with local variables and bytecode stored in context
+   * length of string, blob, array, tuple, etc
 
  * Design methodology
    * we will use postgresql architecture over (mysql like) mini transactions
