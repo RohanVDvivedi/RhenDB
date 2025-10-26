@@ -243,7 +243,7 @@ static const data_type_info* get_type_of_selection_tree_node(selection_tree* nod
 			if(node->input_transformer == NULL)
 				return type;
 
-			return get_transformed_type(node->input_transformer, 1, (data_type_info*[]){type});
+			return get_transformed_type(node->input_transformer, 1, (const data_type_info*[]){type});
 		}
 
 		case SELECT_CONSTANT :
@@ -252,7 +252,7 @@ static const data_type_info* get_type_of_selection_tree_node(selection_tree* nod
 			if(node->constant_transformer == NULL)
 				return type;
 
-			return get_transformed_type(node->constant_transformer, 1, (data_type_info*[]){type});
+			return get_transformed_type(node->constant_transformer, 1, (const data_type_info*[]){type});
 		}
 	}
 	return NULL;

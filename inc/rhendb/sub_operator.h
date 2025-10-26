@@ -137,4 +137,46 @@ int do_select(const void* input_tuple, const selection_params* sp);
 
 // projection
 
+typedef struct projection_input projection_input;
+struct projection_input
+{
+	transformer* input_transformer;
+
+	uint32_t input_tuple_number;
+
+	positional_accessor input_position;
+
+	slnode embed_node_of_projection_inputs;
+};
+
+typedef struct projection projection;
+struct projection
+{
+	// may be NULL, if there is only 1 element
+	transformer* combiner_transformer;
+
+	// singlylist of projection_input-s
+	singlylist projection_inputs;
+};
+
+typedef struct projection_params projection_params;
+struct projection_params
+{
+	// this must be a flat tuple
+	tuple_def* output_def;
+
+	uint32_t input_defs_count;
+
+	tuple_def** input_defs;
+
+	// input_defs point here if the input_defs_count < INPUT_DEFS_DUMMY_COUNT
+	#define INPUT_DEFS_DUMMY_COUNT 5
+	tuple_def* input_defs_dummy[INPUT_DEFS_DUMMY_COUNT];
+
+	uint32_t element_count;
+
+	// number of projections is same as the element_count
+	projection* projections;
+};
+
 #endif
