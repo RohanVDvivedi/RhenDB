@@ -3,7 +3,7 @@
 
 #include<rhendb/rhendb.h>
 #include<rhendb/mvcc_snapshot.h>
-#include<rhendb/operator_interface.h>
+#include<rhendb/query_plan_interface.h>
 
 typedef struct query_plan query_plan;
 
@@ -21,20 +21,6 @@ struct transaction
 
 	// actual query plan, for the current query being executed
 	query_plan* curr_query;
-};
-
-struct query_plan
-{
-	// operators scans, writers, and also the joins, sorts and groupbys
-	uint64_t operators_count;
-	operator* operators;
-
-	// operator outputs including the intermediate ones
-	uint64_t result_buffers_count;
-	operator_buffer* result_buffers;
-
-	// output tuples of the query
-	operator_buffer* output;
 };
 
 #endif
