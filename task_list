@@ -3,6 +3,7 @@
  ** review code in query_plan_interface
 
  * query_plan callback and a global mutex for the ttransaction_table
+ * even selection and projection functions can be implemented as a synchronous operators
 
  * review all code in sub_operator
  * projection
