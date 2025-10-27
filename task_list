@@ -2,9 +2,9 @@
 
  ** review code in query_plan_interface
 
+ * query_plan callback and a global mutex for the ttransaction_table
+
  * review all code in sub_operator
- * we need a query structure / transaction structure, that holds all operators and operator_buffers, has a mutex to put operators in paused state waiting on operators or locked data, helping orchestrating
- * implement operator and its buffer basic functions
  * projection
    * implement do_project and utility functions for initializing the projection_params
  * selection and projection may instead be implemented using a complex transformer, how about we use python as a scripting tool to do this
