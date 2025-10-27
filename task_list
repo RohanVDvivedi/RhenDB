@@ -5,6 +5,8 @@
  * implement operator and its buffer basic functions
  * projection
    * implement do_project and utility functions for initializing the projection_params
+ * selection and projection may instead be implemented using a complex transformer, how about we use python as a scripting tool to do this
+   * the current design is limited to using only 1 operand for each comparison from 1 tuple OR just sinply combine a few non constant field tuples into 1 attribute into a single output tuple's attribute for projection, which is a very limited usecase
 
   * what operators to implement
     * scan on b+tree/hash index (sort rids and then scan the table), scan on table(start and move ahead linearly)
