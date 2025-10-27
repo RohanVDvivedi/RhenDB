@@ -106,8 +106,11 @@ int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts)
 	return pushed;
 }
 
-temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout_in_microseconds, int* prohibit_usage)
+temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout_in_microseconds, int* prohibit_usage, int* operator_paused)
 {
+	if(operator_paused)
+		(*operator_paused) = 0;
+
 	pthread_mutex_lock(&(ob->lock));
 
 	if(timeout_in_microseconds != NON_BLOCKING)
@@ -127,8 +130,15 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout
 	if(!(ob->prohibit_usage))
 	{
 		tts = (temp_tuple_store*) get_head_of_linkedlist(&(ob->tuple_stores));
-		if(tts)
+		if(tts != NULL)
+		{
 			remove_from_linkedlist(&(ob->tuple_stores), tts);
+		}
+		else
+		{
+			if((operator_paused != NULL))
+				(*operator_paused) = set_operator_state(ob->consumer, OPERATOR_WAITING_TO_BE_NOTIFIED);
+		}
 	}
 	else
 		(*prohibit_usage) = (ob->prohibit_usage);
