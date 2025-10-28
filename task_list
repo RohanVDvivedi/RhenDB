@@ -1,13 +1,19 @@
  PICKED TASKS
 
- * query_plan callback and a global mutex for the ttransaction_table
+ * add lock_manager (and its external_lock_manger_mutex) and transaction_table to rhendb
+ * implement query_plan callback for the lock_manager, to wait and to wakeup/notify
+ * query_plan structure holds pointers to rhendb and the transaction struct
+
  * even selection and projection functions can be implemented as a synchronous operators
 
- * review all code in sub_operator
+ * discard all code in sub_operator, after a new design for selection and projection is finalized
  * projection
    * implement do_project and utility functions for initializing the projection_params
  * selection and projection may instead be implemented using a complex transformer, how about we use python as a scripting tool to do this
    * the current design is limited to using only 1 operand for each comparison from 1 tuple OR just sinply combine a few non constant field tuples into 1 attribute into a single output tuple's attribute for projection, which is a very limited usecase
+ * a selection or projection can be a single transformer statement (selection compare the output, if it NULL or ZERO it is considered as false)
+ * a user defined function can be a series of transformers applied one after the another over a set of local variables
+ * basically implement a RVM (RhenDB Virtual Machine)
 
   * what operators to implement
     * scan on b+tree/hash index (sort rids (per 1 or set of buckets for hash index OR about some 1000 pages for bplus tree) and then scan the table), scan on table(start and move ahead linearly)
