@@ -36,6 +36,7 @@ typedef struct lock_manager lock_manager;
 struct lock_manager
 {
 	// external_lock is only ever locked by the deadlock detection thread and noone else
+	// this lock is left for external users to co-ordinate with so that (to-be) waiters can actually put themselves to wait right after they have been notified for the same
 	pthread_mutex_t* external_lock;
 
 	// all notify_*() functons are called by the lock_manager with the external_lock (above) held
@@ -82,6 +83,10 @@ struct lock_manager
 	// for internal use
 	data_type_info* resource_id_type_info;
 };
+
+/*
+	If you have a multi threaded function, you must use the external_lock and must call any of the functions below with the external_lock held
+*/
 
 // maximum number of bytes to be allocated for the resource_id of the resource to be locked
 #define MAX_RESOURCE_ID_SIZE 16
