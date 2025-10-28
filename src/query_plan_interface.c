@@ -43,7 +43,7 @@ int set_operator_state(operator* o, operator_state state)
 	pthread_mutex_lock(&(o->lock));
 
 	// a killed operator can not be revived
-	if(state == OPERATOR_KILLED)
+	if(state != OPERATOR_KILLED)
 	{
 		o->state = state;
 		state_changed = 1;
@@ -108,7 +108,7 @@ int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts)
 
 temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout_in_microseconds, int* prohibit_usage, int* operator_paused)
 {
-	if(operator_paused)
+	if(operator_paused != NULL)
 		(*operator_paused) = 0;
 
 	pthread_mutex_lock(&(ob->lock));
@@ -136,7 +136,7 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout
 		}
 		else
 		{
-			if((operator_paused != NULL))
+			if(operator_paused != NULL)
 				(*operator_paused) = set_operator_state(ob->consumer, OPERATOR_WAITING_TO_BE_NOTIFIED);
 		}
 	}
