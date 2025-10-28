@@ -10,7 +10,7 @@
    * the current design is limited to using only 1 operand for each comparison from 1 tuple OR just sinply combine a few non constant field tuples into 1 attribute into a single output tuple's attribute for projection, which is a very limited usecase
 
   * what operators to implement
-    * scan on b+tree/hash index (sort rids and then scan the table), scan on table(start and move ahead linearly)
+    * scan on b+tree/hash index (sort rids (per 1 or set of buckets for hash index OR about some 1000 pages for bplus tree) and then scan the table), scan on table(start and move ahead linearly)
     * sort (external sorting, N-way)
     * joins (nested loop with per block, index nested loop, sort merge join, hash join)
     * group_by (based on hash or sorted input data otherwise)
