@@ -6,6 +6,7 @@
 
  * even selection and projection functions can be implemented as a synchronous operators
 
+ * make typed_user_value also hold where does it store it's extended bytes, and upon freeing free them too (for volatile page store)
  * discard all code in sub_operator, after a new design for selection and projection is finalized
  * projection
    * implement do_project and utility functions for initializing the projection_params
