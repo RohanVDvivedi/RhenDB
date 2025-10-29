@@ -1,5 +1,8 @@
  PICKED TASKS
 
+ * for operator_buffer, while popping, let the function take in parameter suggesting if the producer is OPERATOR_KILLED
+  * we will never wait if the producer is KILLED, and if KILLED we set a result flag suggesting that for the consumer to look at it and kill itself too
+
  * add lock_manager (and its lock_manager_external_lock) and transaction_table to rhendb
  * add a bplus_tree "system_structure" -> root_page_id, if this page does not exist, then create it, create transaction_table and insert it as it's first entry
  * complete setup should be 1 mini transaction
