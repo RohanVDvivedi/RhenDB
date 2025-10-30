@@ -109,9 +109,11 @@ int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts);
 
 // public, operators must use this call NON_BLOCKING
 // user level functions must use BLOCKING or with a timeout, to ensure that we have data immediately
-// if returned NULL, prohibit_usage will be set if the pipeline was asked to be collapsed
-// operator_paused is an optional inout parameter, if provided this function will go ahead and put the operator in OPERATOR_WAITING_TO_BE_NOTIFIED state, while setting this flag
-temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout_in_microseconds, int* prohibit_usage, int* operator_paused);
+// failure implies that the operator_buffer is empty
+// another failure condition comes from the operator_buffer getting it's prohibit_usage set OR if the operator_buffer is empty and the producer is OPERATOR_KILLED
+// in the second failure case the consumer also get's OPERATOR_KILLED if it exists and the consumer must shutdown
+// in the first case the consumer is instead placed in the OPERATOR_WAITING_TO_BE_NOTIFIED state and asked to wait
+temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout_in_microseconds);
 
 typedef struct query_plan query_plan;
 struct query_plan

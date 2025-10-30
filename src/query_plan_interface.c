@@ -111,17 +111,14 @@ int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts)
 	return pushed;
 }
 
-temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout_in_microseconds, int* prohibit_usage, int* operator_paused)
+temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout_in_microseconds)
 {
-	if(operator_paused != NULL)
-		(*operator_paused) = 0;
-
 	pthread_mutex_lock(&(ob->lock));
 
 	if(timeout_in_microseconds != NON_BLOCKING)
 	{
 		int wait_error = 0;
-		while((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && !(ob->prohibit_usage) && !wait_error)
+		while((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && (OPERATOR_KILLED != get_operator_state(ob->producer)) && !(ob->prohibit_usage) && !wait_error)
 		{
 			if(timeout_in_microseconds == BLOCKING)
 				wait_error = pthread_cond_wait(&(ob->wait), &(ob->lock));
@@ -132,21 +129,27 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout
 
 	temp_tuple_store* tts = NULL;
 
-	if(!(ob->prohibit_usage))
+	// if there is prohibit_usage on the operator_buffer
+	// OR it is empty with the producer in OPERATOR_KILLED state, then we kill the consumer
+	if((ob->prohibit_usage) || ((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && (OPERATOR_KILLED == get_operator_state(ob->producer))))
 	{
+		set_operator_state(ob->consumer, OPERATOR_KILLED);
+	}
+	else
+	{
+		// fetch the head
 		tts = (temp_tuple_store*) get_head_of_linkedlist(&(ob->tuple_stores));
 		if(tts != NULL)
 		{
+			// if it exists, remove it as the return value and return it
 			remove_from_linkedlist(&(ob->tuple_stores), tts);
 		}
 		else
 		{
-			if(operator_paused != NULL)
-				(*operator_paused) = set_operator_state(ob->consumer, OPERATOR_WAITING_TO_BE_NOTIFIED);
+			// else the set the operator in OPERATOR_WAITING_TO_BE_NOTIFIED state
+			set_operator_state(ob->consumer, OPERATOR_WAITING_TO_BE_NOTIFIED);
 		}
 	}
-	else
-		(*prohibit_usage) = (ob->prohibit_usage);
 
 	pthread_mutex_unlock(&(ob->lock));
 
