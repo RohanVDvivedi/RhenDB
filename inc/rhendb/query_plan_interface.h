@@ -80,9 +80,11 @@ typedef struct operator_buffer operator_buffer;
 struct operator_buffer
 {
 	// this is the operator that pushes its produce into this operator buffer, this is static
+	// must never be NULL, there must be a procuder to an operator buffer
 	operator* producer;
 
 	// this is the operator that pops/consumes from this operator buffer, this is static
+	// must never be NULL, there must be a consumer to an operator buffer (there will always be a consumer the outer most operator must always be a writer to the user's TCP or STDIN file descriptors)
 	operator* consumer;
 
 	// there can be only 1 producer and 1 consumer for the operator_buffer, but these operators may be using multiple threads

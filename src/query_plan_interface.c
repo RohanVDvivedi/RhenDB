@@ -102,8 +102,8 @@ int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts)
 
 	pthread_mutex_unlock(&(ob->lock));
 
-	// if we pushed and there is a consumer that is waiting to be notified them wake it up
-	if(pushed && ob->consumer != NULL && get_operator_state(ob->consumer) == OPERATOR_WAITING_TO_BE_NOTIFIED)
+	// if we pushed and there is a consumer that is waiting to be notified then wake it up
+	if(pushed && get_operator_state(ob->consumer) == OPERATOR_WAITING_TO_BE_NOTIFIED)
 	{
 		ob->consumer->notify_wake_up(ob->consumer, ob->consumer->operator_id);
 	}
