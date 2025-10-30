@@ -26,36 +26,31 @@ int main()
 			10000000ULL,
 		USERS_COUNT);
 
-	uint64_t root_page_id = 0;
-
-	transaction_table ttbl;
-	initialize_transaction_table(&ttbl, &root_page_id, &(rdb.persistent_acid_rage_engine), 3);
-
-	mvcc_snapshot* t1 = get_new_transaction_id(&ttbl);
+	mvcc_snapshot* t1 = get_new_transaction_id(&(rdb.tx_table));
 	print_mvcc_snapshot(t1);
-	print_vaccum_horizon_transaction_id(&ttbl);
+	print_vaccum_horizon_transaction_id(&(rdb.tx_table));
 
-	mvcc_snapshot* t2 = get_new_transaction_id(&ttbl);
+	mvcc_snapshot* t2 = get_new_transaction_id(&(rdb.tx_table));
 	print_mvcc_snapshot(t2);
-	print_vaccum_horizon_transaction_id(&ttbl);
+	print_vaccum_horizon_transaction_id(&(rdb.tx_table));
 
-	mvcc_snapshot* t3 = get_new_transaction_id(&ttbl);
+	mvcc_snapshot* t3 = get_new_transaction_id(&(rdb.tx_table));
 	print_mvcc_snapshot(t3);
-	print_vaccum_horizon_transaction_id(&ttbl);
+	print_vaccum_horizon_transaction_id(&(rdb.tx_table));
 
-	update_transaction_status(&ttbl, t2->transaction_id, TX_ABORTED);
-	print_vaccum_horizon_transaction_id(&ttbl);
+	update_transaction_status(&(rdb.tx_table), t2->transaction_id, TX_ABORTED);
+	print_vaccum_horizon_transaction_id(&(rdb.tx_table));
 
-	mvcc_snapshot* t4 = get_new_transaction_id(&ttbl);
+	mvcc_snapshot* t4 = get_new_transaction_id(&(rdb.tx_table));
 	print_mvcc_snapshot(t4);
-	print_vaccum_horizon_transaction_id(&ttbl);
+	print_vaccum_horizon_transaction_id(&(rdb.tx_table));
 
-	update_transaction_status(&ttbl, t3->transaction_id, TX_COMMITTED);
-	print_vaccum_horizon_transaction_id(&ttbl);
+	update_transaction_status(&(rdb.tx_table), t3->transaction_id, TX_COMMITTED);
+	print_vaccum_horizon_transaction_id(&(rdb.tx_table));
 
-	mvcc_snapshot* t5 = get_new_transaction_id(&ttbl);
+	mvcc_snapshot* t5 = get_new_transaction_id(&(rdb.tx_table));
 	print_mvcc_snapshot(t5);
-	print_vaccum_horizon_transaction_id(&ttbl);
+	print_vaccum_horizon_transaction_id(&(rdb.tx_table));
 
 	uint256 last_txid_in_session = t5->transaction_id;
 
@@ -76,7 +71,7 @@ int main()
 
 	for(uint256 tid = get_0_uint256(); compare_uint256(tid, last_txid_in_session) <= 0; add_uint256(&tid, tid, get_1_uint256()))
 	{
-		transaction_status status = get_transaction_status(&ttbl, tid);
+		transaction_status status = get_transaction_status(&(rdb.tx_table), tid);
 		printf("%"PRIu64" -> %s\n", tid.limbs[0], transaction_status_string[status]);
 	}
 
