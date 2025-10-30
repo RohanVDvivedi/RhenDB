@@ -5,6 +5,10 @@
 
 #include<unistd.h>
 
+static void notify_unblocked(void* context_p, uint256 transaction_id, uint32_t task_id);
+
+static void notify_deadlocked(void* context_p, uint256 transaction_id);
+
 void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 		uint32_t page_id_width,
 		uint32_t page_size_mte, uint32_t lsn_width, uint64_t bufferpool_frame_count, uint64_t wale_buffer_count,
@@ -25,6 +29,16 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 	rdb->persistent_acid_rage_engine = get_rage_engine_for_min_tx_engine(database_file_name, page_size_mte, page_id_width, lsn_width, bufferpool_frame_count, wale_buffer_count, page_latch_wait_us, page_lock_wait_us, checkpoint_period_us, 2 * 1000000, 200 * 1000000);
 
 	rdb->volatile_rage_engine = get_rage_engine_for_volatile_page_store(page_size_vps, page_id_width, truncator_period_us);
+
+	// system table initialization
+
+	// for tx_table
+	uint64_t tx_table_root_page_id = 0;
+	initialize_transaction_table(&(rdb->tx_table), &(tx_table_root_page_id), &(rdb->persistent_acid_rage_engine), max_concurrent_users_count);
+
+	// for lck_table
+	pthread_mutex_init(&(rdb->lock_manager_external_lock), NULL);
+	initialize_lock_manager(&(rdb->lck_table), &(rdb->lock_manager_external_lock), &((const lock_manager_notifier){rdb, notify_unblocked, notify_deadlocked}), rdb->tx_table.overflow_transaction_id, &(rdb->volatile_rage_engine));
 }
 
 void deinitialize_rhendb(rhendb* rdb)
@@ -40,4 +54,29 @@ void deinitialize_rhendb(rhendb* rdb)
 	deinitialize_mini_transaction_engine((mini_transaction_engine*)(rdb->persistent_acid_rage_engine.context));
 
 	deinitialize_volatile_page_store((volatile_page_store*)(rdb->volatile_rage_engine.context));
+}
+
+// TODO: rewrite the below functions for waking up the transaction_id's current query's operator's respective thread
+
+static void print_transaction_id(uint256 transaction_id)
+{
+	{
+		char temp[80] = {};
+		serialize_to_decimal_uint256(temp, transaction_id);
+		printf("%s", temp);
+	}
+}
+
+static void notify_unblocked(void* context_p, uint256 transaction_id, uint32_t task_id)
+{
+	printf("notify_unblocked( trx_id = ");
+	print_transaction_id(transaction_id);
+	printf(" , task_id = %"PRIu32" )\n\n", task_id);
+}
+
+static void notify_deadlocked(void* context_p, uint256 transaction_id)
+{
+	printf("notify_deadlocked( trx_id = ");
+	print_transaction_id(transaction_id);
+	printf(" )\n\n");
 }
