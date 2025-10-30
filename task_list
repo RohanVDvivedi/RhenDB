@@ -4,9 +4,8 @@
   * we will never wait if the producer is KILLED, and if KILLED we set a result flag suggesting that for the consumer to look at it and kill itself too
   * flags should look like producer_killed and consumer_paused
 
- * add lock_manager (and its lock_manager_external_lock) and transaction_table to rhendb
  * add a bplus_tree "system_structure" -> root_page_id, if this page does not exist, then create it, create transaction_table and insert it as it's first entry
- * complete setup should be 1 mini transaction
+  * complete setup should be 1 mini transaction
  * add a hashtable to map transaction_ids to transaction structs and protect it under active_transactions_lock, lock is taken to only insert itself in it and remove right after we mark ourselves completed (committed or aborted)
  * implement query_plan callback for the lock_manager, to wait and to wakeup/notify
  * query_plan structure holds pointers to rhendb and the transaction struct
