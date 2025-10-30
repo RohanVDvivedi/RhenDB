@@ -103,7 +103,8 @@ struct operator_buffer
 void prohibit_usage_for_operator_buffer(operator_buffer* ob);
 
 // private -> only for the operators to use them
-// failure only implies that the prohibit_usage request was sent
+// failure only implies that the prohibit_usage request was sent OR that the consumer operator is in OPERATOR_KILLED state and will never come back
+// in both these failure states the producer operator get's it's state set to OPERATOR_KILLED and must shutdown
 int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts);
 
 // public, operators must use this call NON_BLOCKING

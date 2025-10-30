@@ -83,7 +83,8 @@ int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts)
 
 	pthread_mutex_lock(&(ob->lock));
 
-	if(!(ob->prohibit_usage))
+	// proceed only if there is no prohibit_usage and the consumer is alive
+	if(!(ob->prohibit_usage) && (OPERATOR_KILLED != get_operator_state(ob->consumer)))
 	{
 		pushed = insert_tail_in_linkedlist(&(ob->tuple_stores), tts);
 		if(pushed)
@@ -93,6 +94,10 @@ int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts)
 			// wake up blocking waiters
 			pthread_cond_broadcast(&(ob->wait));
 		}
+	}
+	else // kill the producer_operator
+	{
+		set_operator_state(ob->producer, OPERATOR_KILLED);
 	}
 
 	pthread_mutex_unlock(&(ob->lock));
