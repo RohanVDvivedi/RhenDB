@@ -5,6 +5,58 @@
 
 #include<unistd.h>
 
+static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_users_count)
+{
+	data_type_info* system_roots_record = malloc(sizeof_tuple_data_type_info(2));
+	initialize_tuple_data_type_info(system_roots_record, "system_roots_record", 0, 64, 2);
+
+	data_type_info system_roots_name = get_variable_length_string_type("system_record_name", 32);
+
+	strcpy(system_roots_record->containees[0].field_name, "table_name");
+	system_roots_record->containees[0].al.type_info = &system_roots_name;
+
+	strcpy(system_roots_record->containees[1].field_name, "page_id");
+	system_roots_record->containees[1].al.type_info = &(rdb->persistent_acid_rage_engine.pam_p->pas.page_id_type_info);
+
+	tuple_def system_roots_record_def;
+	initialize_tuple_def(&system_roots_record_def, system_roots_record);
+
+	// initialize the bplus_tree_tuple_defs for this
+	bplus_tree_tuple_defs bpttd;
+	positional_accessor key_position[] = {STATIC_POSITION(1)};
+	compare_direction key_compare_direction[] = {ASC};
+	init_bplus_tree_tuple_definitions(&bpttd, &(rdb->persistent_acid_rage_engine.pam_p->pas), &(system_roots_record_def), key_position, key_compare_direction, 1);
+
+	// root is expecto be at page_id 1, because that is the first page that get's created/allocated
+	uint64_t root_page_id = 1;
+
+	// set this flag for creation
+	int creation_needed = 0;
+	{
+		int abort_error = 0;
+		persistent_page root_page = acquire_persistent_page_with_lock(rdb->persistent_acid_rage_engine.pam_p, NULL, root_page_id, READ_LOCK, &abort_error);
+		if(abort_error) // no page lock acquired, no need to release any thing
+			creation_needed = 1;
+		else
+		{
+			creation_needed = 0;
+			release_lock_on_persistent_page(rdb->persistent_acid_rage_engine.pam_p, NULL, &root_page, NONE_OPTION, &abort_error);
+		}
+	}
+
+	if(creation_needed) // create all tables
+	{
+
+	}
+	else // read and initialize all structures
+	{
+
+	}
+
+	deinit_bplus_tree_tuple_definitions(&bpttd);
+	free(system_roots_record);
+}
+
 static void notify_unblocked(void* context_p, uint256 transaction_id, uint32_t task_id);
 
 static void notify_deadlocked(void* context_p, uint256 transaction_id);
