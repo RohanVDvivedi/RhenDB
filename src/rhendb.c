@@ -35,7 +35,7 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 	{
 		int abort_error = 0;
 		persistent_page root_page = acquire_persistent_page_with_lock(rdb->persistent_acid_rage_engine.pam_p, NULL, root_page_id, READ_LOCK, &abort_error);
-		if(abort_error) // no page lock acquired, no need to release any thing
+		if(abort_error) // no page lock acquired, no need to release any thing, this call only fail if there was no page allocated at that place and the database is empty
 			creation_needed = 1;
 		else
 		{
