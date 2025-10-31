@@ -46,6 +46,8 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 
 	if(creation_needed) // create all tables
 	{
+		printf("Rhendb database sytem being created\n");
+
 		uint64_t page_latches_to_be_borrowed = 0;
 		void* sub_transaction_id = rdb->persistent_acid_rage_engine.allot_new_sub_transaction_id(rdb->persistent_acid_rage_engine.context, page_latches_to_be_borrowed);
 		if(sub_transaction_id == NULL)
@@ -90,6 +92,8 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 	}
 	else // read and initialize all structures
 	{
+		printf("Rhendb database sytem table roots being read\n");
+
 		// this is just going to be read, so no need for a sub_transaction
 
 		int abort_error = 0;
@@ -110,6 +114,7 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 		while(!is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
 		{
 			const void* curr_tuple = get_tuple_bplus_tree_iterator(bpi_p);
+			print_tuple(curr_tuple, &(system_roots_record_def));
 
 			user_value system_table_name = {};
 			uint64_t system_root_page_id = 0;
