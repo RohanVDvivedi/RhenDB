@@ -65,6 +65,7 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 
 		char tuple_buffer[100];
 
+		// create transaction table here
 		{
 			uint64_t tx_table_root_page_id = 0;
 			initialize_transaction_table(&(rdb->tx_table), &(tx_table_root_page_id), &(rdb->persistent_acid_rage_engine), max_concurrent_users_count);
@@ -79,6 +80,10 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 				printf("FAILED TO CREATE SYSTEM TABLES SECIFICALLY TRANSACTION TABLE\n");
 				exit(-1);
 			}
+		}
+
+		// create more system tables here
+		{
 		}
 
 		rdb->persistent_acid_rage_engine.complete_sub_transaction(rdb->persistent_acid_rage_engine.context, sub_transaction_id, 1, NULL, 0, &page_latches_to_be_borrowed);
@@ -117,9 +122,14 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 
 			if(system_root_page_id != rdb->persistent_acid_rage_engine.pam_p->pas.NULL_PAGE_ID)
 			{
+				// compare with key and initialize transaction table here
 				if(strncmp("tx_table_root_page_id", system_table_name.string_value, system_table_name.string_size))
 				{
 					initialize_transaction_table(&(rdb->tx_table), &(system_root_page_id), &(rdb->persistent_acid_rage_engine), max_concurrent_users_count);
+				}
+
+				// initialize more system tables here
+				{
 				}
 			}
 
