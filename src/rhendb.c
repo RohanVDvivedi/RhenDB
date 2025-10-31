@@ -89,7 +89,7 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 
 		int abort_error = 0;
 
-		bplus_tree_iterator* bpi_p = find_in_bplus_tree(root_page_id, NULL, KEY_ELEMENT_COUNT, MIN, 0, READ_LOCK, &bpttd, rdb->persistent_acid_rage_engine.pam_p, rdb->persistent_acid_rage_engine.pmm_p, NULL, &abort_error);
+		bplus_tree_iterator* bpi_p = find_in_bplus_tree(root_page_id, NULL, KEY_ELEMENT_COUNT, MIN, 0, READ_LOCK, &bpttd, rdb->persistent_acid_rage_engine.pam_p, NULL, NULL, &abort_error);
 		if(abort_error)
 		{
 			printf("FAILED TO READ SYSTEM TABLES ROOTS\n");
