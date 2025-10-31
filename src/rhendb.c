@@ -46,7 +46,42 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 
 	if(creation_needed) // create all tables
 	{
+		uint64_t page_latches_to_be_borrowed = 0;
+		void* sub_transaction_id = rdb->persistent_acid_rage_engine.allot_new_sub_transaction_id(rdb->persistent_acid_rage_engine.context, page_latches_to_be_borrowed);
+		if(sub_transaction_id == NULL)
+		{
+			printf("FAILED TO CREATE SYSTEM TABLES\n");
+			exit(-1);
+		}
 
+		int abort_error = 0;
+
+		uint64_t temp_root_page_id = get_new_bplus_tree(&bpttd, rdb->persistent_acid_rage_engine.pam_p, rdb->persistent_acid_rage_engine.pmm_p, sub_transaction_id, &abort_error);
+		if(temp_root_page_id != root_page_id)
+		{
+			printf("FAILED TO CREATE SYSTEM TABLES WHOSE ROOT MUST BE AT PAGE ID %"PRIu64"\n", root_page_id);
+			exit(-1);
+		}
+
+		char tuple_buffer[100];
+
+		{
+			uint64_t tx_table_root_page_id = 0;
+			initialize_transaction_table(&(rdb->tx_table), &(tx_table_root_page_id), &(rdb->persistent_acid_rage_engine), max_concurrent_users_count);
+
+			init_tuple(&(system_roots_record_def), tuple_buffer);
+			set_element_in_tuple(&(system_roots_record_def), STATIC_POSITION(0), tuple_buffer, &((user_value){.string_value = "tx_table_root_page_id", .string_size = sizeof("tx_table_root_page_id")}), 100);
+			set_element_in_tuple(&(system_roots_record_def), STATIC_POSITION(1), tuple_buffer, &((user_value){.uint_value = tx_table_root_page_id}), 100);
+
+			insert_in_bplus_tree(root_page_id, tuple_buffer, &bpttd, rdb->persistent_acid_rage_engine.pam_p, rdb->persistent_acid_rage_engine.pmm_p, sub_transaction_id, &abort_error);
+			if(abort_error)
+			{
+				printf("FAILED TO CREATE SYSTEM TABLES SECIFICALLY TRANSACTION TABLE\n");
+				exit(-1);
+			}
+		}
+
+		rdb->persistent_acid_rage_engine.complete_sub_transaction(rdb->persistent_acid_rage_engine.context, sub_transaction_id, 1, NULL, 0, &page_latches_to_be_borrowed);
 	}
 	else // read and initialize all structures
 	{
