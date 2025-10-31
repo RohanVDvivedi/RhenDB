@@ -5,12 +5,14 @@
 
 #include<unistd.h>
 
+#define TX_TABLE_ROOT_PAGE_ID_KEY "AAA-tx_table_root_page_id"
+
 static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_users_count)
 {
 	data_type_info* system_roots_record = malloc(sizeof_tuple_data_type_info(2));
 	initialize_tuple_data_type_info(system_roots_record, "system_roots_record", 0, 64, 2);
 
-	data_type_info system_roots_name = get_variable_length_string_type("system_record_name", 32);
+	data_type_info system_roots_name = get_variable_length_string_type("system_record_name", 40);
 
 	strcpy(system_roots_record->containees[0].field_name, "table_name");
 	system_roots_record->containees[0].al.type_info = &system_roots_name;
@@ -73,7 +75,7 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 			initialize_transaction_table(&(rdb->tx_table), &(tx_table_root_page_id), &(rdb->persistent_acid_rage_engine), max_concurrent_users_count);
 
 			init_tuple(&(system_roots_record_def), tuple_buffer);
-			set_element_in_tuple(&(system_roots_record_def), STATIC_POSITION(0), tuple_buffer, &((user_value){.string_value = "tx_table_root_page_id", .string_size = sizeof("tx_table_root_page_id")}), 100);
+			set_element_in_tuple(&(system_roots_record_def), STATIC_POSITION(0), tuple_buffer, &((user_value){.string_value = TX_TABLE_ROOT_PAGE_ID_KEY, .string_size = sizeof(TX_TABLE_ROOT_PAGE_ID_KEY)}), 100);
 			set_element_in_tuple(&(system_roots_record_def), STATIC_POSITION(1), tuple_buffer, &((user_value){.uint_value = tx_table_root_page_id}), 100);
 
 			insert_in_bplus_tree(root_page_id, tuple_buffer, &bpttd, rdb->persistent_acid_rage_engine.pam_p, rdb->persistent_acid_rage_engine.pmm_p, sub_transaction_id, &abort_error);
@@ -128,7 +130,7 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 			if(system_root_page_id != rdb->persistent_acid_rage_engine.pam_p->pas.NULL_PAGE_ID)
 			{
 				// compare with key and initialize transaction table here
-				if(strncmp("tx_table_root_page_id", system_table_name.string_value, system_table_name.string_size))
+				if(0 == strncmp(TX_TABLE_ROOT_PAGE_ID_KEY, system_table_name.string_value, system_table_name.string_size))
 				{
 					initialize_transaction_table(&(rdb->tx_table), &(system_root_page_id), &(rdb->persistent_acid_rage_engine), max_concurrent_users_count);
 				}
