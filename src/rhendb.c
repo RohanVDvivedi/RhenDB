@@ -170,9 +170,8 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 
 	// system table initialization
 
-	// for tx_table
-	uint64_t tx_table_root_page_id = 0;
-	initialize_transaction_table(&(rdb->tx_table), &(tx_table_root_page_id), &(rdb->persistent_acid_rage_engine), max_concurrent_users_count);
+	// for tx_table, ...
+	initialize_system_root_tables(rdb, max_concurrent_users_count);
 
 	// for lck_table
 	pthread_mutex_init(&(rdb->lock_manager_external_lock), NULL);
