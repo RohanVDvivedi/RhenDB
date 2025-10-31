@@ -85,7 +85,58 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 	}
 	else // read and initialize all structures
 	{
+		// this is just going to be read, so no need for a sub_transaction
 
+		int abort_error = 0;
+
+		bplus_tree_iterator* bpi_p = find_in_bplus_tree(root_page_id, NULL, KEY_ELEMENT_COUNT, MIN, 0, READ_LOCK, &bpttd, rdb->persistent_acid_rage_engine.pam_p, rdb->persistent_acid_rage_engine.pmm_p, NULL, &abort_error);
+		if(abort_error)
+		{
+			printf("FAILED TO READ SYSTEM TABLES ROOTS\n");
+			exit(-1);
+		}
+
+		if(is_empty_bplus_tree(bpi_p))
+		{
+			printf("FAILED TO READ SYSTEM TABLES ROOTS - NO TABLES FOUND - IMPOSSIBLE\n");
+			exit(-1);
+		}
+
+		while(!is_beyond_max_tuple_bplus_tree_iterator(bpi_p))
+		{
+			const void* curr_tuple = get_tuple_bplus_tree_iterator(bpi_p);
+
+			user_value system_table_name = {};
+			uint64_t system_root_page_id = 0;
+			{
+				get_value_from_element_from_tuple(&system_table_name, &(system_roots_record_def), STATIC_POSITION(0), curr_tuple);
+				user_value uval;
+				get_value_from_element_from_tuple(&uval, &(system_roots_record_def), STATIC_POSITION(1), curr_tuple);
+				system_root_page_id = uval.uint_value;
+			}
+
+			if(system_root_page_id != rdb->persistent_acid_rage_engine.pam_p->pas.NULL_PAGE_ID)
+			{
+				if(strncmp("tx_table_root_page_id", system_table_name.string_value, system_table_name.string_size))
+				{
+					initialize_transaction_table(&(rdb->tx_table), &(system_root_page_id), &(rdb->persistent_acid_rage_engine), max_concurrent_users_count);
+				}
+			}
+
+			next_bplus_tree_iterator(bpi_p, NULL, &abort_error);
+			if(abort_error)
+			{
+				printf("FAILED TO GO-NEXT SYSTEM TABLES ROOTS\n");
+				exit(-1);
+			}
+		}
+
+		delete_bplus_tree_iterator(bpi_p, NULL, &abort_error);
+		if(abort_error)
+		{
+			printf("FAILED TO READ-CLOSE SYSTEM TABLES ROOTS\n");
+			exit(-1);
+		}
 	}
 
 	deinit_bplus_tree_tuple_definitions(&bpttd);
