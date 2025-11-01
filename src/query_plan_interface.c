@@ -181,3 +181,14 @@ void shutdown_query_plan(query_plan* qp)
 		qp->operators[i]->clean_up(qp->operators[i]);
 	}
 }
+
+operator* find_right_operator_for_query_plan(query_plan* qp, uint64_t operator_task_id)
+{
+	for(uint64_t i = 0; i < qp->operators_count; i++)
+	{
+		if(qp->operators[i]->operator_id <= operator_task_id && operator_task_id < (qp->operators[i]->operator_id + MAX_TASKS_PER_OPERATOR))
+			return qp->operators[i];
+	}
+
+	return NULL;
+}

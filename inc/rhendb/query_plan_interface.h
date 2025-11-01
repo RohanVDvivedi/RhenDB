@@ -8,6 +8,8 @@
 
 #include<rhendb/temp_tuple_store.h>
 
+#define MAX_TASKS_PER_OPERATOR 10000
+
 typedef enum operator_state operator_state;
 enum operator_state
 {
@@ -134,5 +136,7 @@ struct query_plan
 // prohibit usage of all the operator_buffers
 // then wait for all the operators to get killed in a loop, calling their cleanups one by one
 void shutdown_query_plan(query_plan* qp);
+
+operator* find_right_operator_for_query_plan(query_plan* qp, uint64_t operator_task_id);
 
 #endif
