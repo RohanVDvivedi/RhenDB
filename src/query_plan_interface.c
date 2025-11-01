@@ -72,6 +72,9 @@ void prohibit_usage_for_operator_buffer(operator_buffer* ob)
 			remove_from_linkedlist(&(ob->tuple_stores), tts);
 			delete_temp_tuple_store(tts);
 		}
+
+		// wake up waiters so that they can know about the prohibition of the usage of the operator_buffer
+		pthread_cond_broadcast(&(ob->wait));
 	}
 
 	pthread_mutex_unlock(&(ob->lock));
