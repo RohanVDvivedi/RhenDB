@@ -47,13 +47,24 @@ int set_operator_state(operator* o, operator_state state)
 	{
 		o->state = state;
 		state_changed = 1;
-		if(state == OPERATOR_KILLED)
+		if(o->state == OPERATOR_KILLED)
 			pthread_cond_broadcast(&(o->wait_until_killed));
 	}
 
 	pthread_mutex_unlock(&(o->lock));
 
 	return state_changed;
+}
+
+int is_operator_killed_or_to_be_killed(operator* o)
+{
+	pthread_mutex_lock(&(o->lock));
+
+	int result = (o->state == OPERATOR_KILLED) || (o->state == OPERATOR_TO_BE_KILLED);
+
+	pthread_mutex_unlock(&(o->lock));
+
+	return result;
 }
 
 // operator buffer functions
@@ -86,8 +97,8 @@ int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts)
 
 	pthread_mutex_lock(&(ob->lock));
 
-	// proceed only if there is no prohibit_usage and the consumer is alive
-	if(!(ob->prohibit_usage) && (OPERATOR_KILLED != get_operator_state(ob->consumer)))
+	// proceed only if there is no prohibit_usage and the consumer is not killed
+	if(!(ob->prohibit_usage) && !is_operator_killed_or_to_be_killed(ob->consumer))
 	{
 		pushed = insert_tail_in_linkedlist(&(ob->tuple_stores), tts);
 		if(pushed)
@@ -100,7 +111,7 @@ int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts)
 	}
 	else // kill the producer_operator
 	{
-		set_operator_state(ob->producer, OPERATOR_KILLED);
+		set_operator_state(ob->producer, OPERATOR_TO_BE_KILLED);
 	}
 
 	pthread_mutex_unlock(&(ob->lock));
@@ -121,7 +132,7 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout
 	if(timeout_in_microseconds != NON_BLOCKING)
 	{
 		int wait_error = 0;
-		while((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && (OPERATOR_KILLED != get_operator_state(ob->producer)) && !(ob->prohibit_usage) && !wait_error)
+		while((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && !is_operator_killed_or_to_be_killed(ob->producer) && !(ob->prohibit_usage) && !wait_error)
 		{
 			if(timeout_in_microseconds == BLOCKING)
 				wait_error = pthread_cond_wait(&(ob->wait), &(ob->lock));
@@ -134,9 +145,9 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout
 
 	// if there is prohibit_usage on the operator_buffer
 	// OR it is empty with the producer in OPERATOR_KILLED state, then we kill the consumer
-	if((ob->prohibit_usage) || ((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && (OPERATOR_KILLED == get_operator_state(ob->producer))))
+	if((ob->prohibit_usage) || ((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && is_operator_killed_or_to_be_killed(ob->producer)))
 	{
-		set_operator_state(ob->consumer, OPERATOR_KILLED);
+		set_operator_state(ob->consumer, OPERATOR_TO_BE_KILLED);
 	}
 	else
 	{
@@ -157,4 +168,16 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout
 	pthread_mutex_unlock(&(ob->lock));
 
 	return tts;
+}
+
+void shutdown_query_plan(query_plan* qp)
+{
+	for(uint64_t i = 0; i < qp->operator_buffers_count; i++)
+		prohibit_usage_for_operator_buffer(qp->operator_buffers[i]);
+
+	for(uint64_t i = 0; i < qp->operators_count; i++)
+	{
+		wait_until_operator_is_killed(qp->operators[i], BLOCKING);
+		qp->operators[i]->clean_up(qp->operators[i]);
+	}
 }

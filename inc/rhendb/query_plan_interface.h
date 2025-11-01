@@ -18,6 +18,8 @@ enum operator_state
 	// but is waiting for someone to notify it, once an operator (or one of it's thread) is in this state, it can not come back without being notified
 	OPERATOR_WAITING_TO_BE_NOTIFIED,	// some thread of this operator is paused, because the source operators are paused OR waiting for a lock to be granted
 
+	OPERATOR_TO_BE_KILLED,	// operator's was waiting for some resource and is marked to be killed sooner ar later, only next state it could go in is OPERATOR_KILLED
+
 	OPERATOR_KILLED,	// operator is not functional and has quit, this implies all the context is released before setting to this state
 };
 
@@ -67,7 +69,7 @@ operator_state get_operator_state(operator* o);
 
 // public
 // timeout can be BLOCKING or some positive value in microseconds
-// returns 1 if the operator is killed
+// returns 1 if the operator is killed, and you may call cleanup() on that operator
 int wait_until_operator_is_killed(operator* o, uint64_t timeout_in_microseconds);
 
 // private
@@ -127,9 +129,10 @@ struct query_plan
 	// operator outputs including the intermediate ones
 	uint64_t operator_buffers_count;
 	operator_buffer** operator_buffers;
-
-	// output tuples of the query, come here
-	operator_buffer* output;
 };
+
+// prohibit usage of all the operator_buffers
+// then wait for all the operators to get killed in a loop, calling their cleanups one by one
+void shutdown_query_plan(query_plan* qp);
 
 #endif
