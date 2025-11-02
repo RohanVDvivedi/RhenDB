@@ -69,8 +69,10 @@ int is_operator_killed_or_to_be_killed(operator* o)
 
 // operator buffer functions
 
-void prohibit_usage_for_operator_buffer(operator_buffer* ob)
+int prohibit_usage_for_operator_buffer(operator_buffer* ob)
 {
+	int result = 0;
+
 	pthread_mutex_lock(&(ob->lock));
 
 	if(ob->prohibit_usage == 0)
@@ -86,9 +88,20 @@ void prohibit_usage_for_operator_buffer(operator_buffer* ob)
 
 		// wake up waiters so that they can know about the prohibition of the usage of the operator_buffer
 		pthread_cond_broadcast(&(ob->wait));
+
+		// set the return value to success
+		result = 1;
 	}
 
 	pthread_mutex_unlock(&(ob->lock));
+
+	// if the task succeeded, then notify consumers (the only waiters for this operator buffer)
+	if(result && get_operator_state(ob->consumer) == OPERATOR_WAITING_TO_BE_NOTIFIED)
+	{
+		ob->consumer->notify_wake_up(ob->consumer, ob->consumer->operator_id);
+	}
+
+	return result;
 }
 
 int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts)

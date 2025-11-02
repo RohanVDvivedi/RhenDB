@@ -106,7 +106,8 @@ struct operator_buffer
 
 // public
 // this will also clear all the temp_tuple_stores accumulated upuntil now
-void prohibit_usage_for_operator_buffer(operator_buffer* ob);
+// returns 1 if the prohibit usage for the operator_buffer was done, (it only fails if done again)
+int prohibit_usage_for_operator_buffer(operator_buffer* ob);
 
 // private -> only for the operators to use them
 // failure only implies that the prohibit_usage request was sent OR that the consumer operator is in OPERATOR_KILLED state and will never come back
