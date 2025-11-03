@@ -1,6 +1,5 @@
  PICKED TASKS
 
- * add a hashtable to map transaction_ids to transaction structs and protect it under active_transactions_lock, lock is taken to only insert itself in it and remove right after we mark ourselves completed (committed or aborted)
  * implement query_plan callback for the lock_manager, to wait and to wakeup/notify
  * query_plan structure holds pointers to rhendb and the transaction struct
 
