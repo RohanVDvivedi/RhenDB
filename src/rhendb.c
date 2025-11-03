@@ -227,6 +227,9 @@ static void print_transaction_id(uint256 transaction_id)
 
 static void notify_unblocked(void* context_p, uint256 transaction_id, uint32_t task_id)
 {
+	// rhendb provided the callback so we are the context
+	rhendb* rdb = context_p;
+
 	printf("notify_unblocked( trx_id = ");
 	print_transaction_id(transaction_id);
 	printf(" , task_id = %"PRIu32" )\n\n", task_id);
@@ -234,6 +237,9 @@ static void notify_unblocked(void* context_p, uint256 transaction_id, uint32_t t
 
 static void notify_deadlocked(void* context_p, uint256 transaction_id)
 {
+	// rhendb provided the callback so we are the context
+	rhendb* rdb = context_p;
+
 	printf("notify_deadlocked( trx_id = ");
 	print_transaction_id(transaction_id);
 	printf(" )\n\n");
