@@ -3,6 +3,8 @@
 #include<rhendb/rage_engine_min_tx_engine.h>
 #include<rhendb/rage_engine_volatile_page_store.h>
 
+#include<rhendb/transaction.h>
+
 #include<unistd.h>
 
 #define TX_TABLE_ROOT_PAGE_ID_KEY "AAA-tx_table_root_page_id"
@@ -193,6 +195,8 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 	// for lck_table
 	pthread_mutex_init(&(rdb->lock_manager_external_lock), NULL);
 	initialize_lock_manager(&(rdb->lck_table), &(rdb->lock_manager_external_lock), &((const lock_manager_notifier){rdb, notify_unblocked, notify_deadlocked}), rdb->tx_table.overflow_transaction_id, &(rdb->volatile_rage_engine));
+
+	initialize_hashmap(&(rdb->active_transactions), ELEMENTS_AS_RED_BLACK_BST, ((max_concurrent_users_count / 5) + 5), &simple_hasher(hash_transaction_by_transaction_id), &simple_comparator(compare_transaction_by_transaction_id), offsetof(transaction, embed_node_active_transactions_in_rhendb));
 }
 
 void deinitialize_rhendb(rhendb* rdb)

@@ -10,6 +10,8 @@ typedef struct query_plan query_plan;
 // the transaction struct only consists of pointers to already created structs, and need to be managed by you
 // it is basically a place holder for you (the user), and noone else, the application will not be handling or initializing it for you
 
+// this struct must be 0 initiialized, before trying to use it
+
 typedef struct transaction transaction;
 struct transaction
 {
@@ -24,6 +26,9 @@ struct transaction
 
 	// actual query plan, for the current query being executed
 	query_plan* curr_query;
+
+	// embedded node for linking it in active_transactions in rhendb
+	bstnode embed_node_active_transactions_in_rhendb;
 };
 
 // helper compare and hash functions to insert the transaction in your data structures
