@@ -214,6 +214,24 @@ void deinitialize_rhendb(rhendb* rdb)
 	deinitialize_volatile_page_store((volatile_page_store*)(rdb->volatile_rage_engine.context));
 }
 
+void register_transaction_with_rhendb(rhendb* rdb, transaction* tx)
+{
+	pthread_mutex_lock(&(rdb->lock_manager_external_lock));
+
+	insert_in_hashmap(&(rdb->active_transactions), tx);
+
+	pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
+}
+
+void deregister_transaction_with_rhendb(rhendb* rdb, transaction* tx)
+{
+	pthread_mutex_lock(&(rdb->lock_manager_external_lock));
+
+	remove_from_hashmap(&(rdb->active_transactions), tx);
+
+	pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
+}
+
 // TODO: rewrite the below functions for waking up the transaction_id's current query's operator's respective thread
 
 static void print_transaction_id(uint256 transaction_id)

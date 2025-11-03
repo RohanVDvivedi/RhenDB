@@ -58,4 +58,12 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 
 void deinitialize_rhendb(rhendb* rdb);
 
+typedef struct transaction transaction;
+
+// after getting a new snapshot for a transaction, do the below register immediately before you do anything else
+// then upon abort or commit, deregister it, in the meanwhile only the registered transaction will every actually be interacted-with by rhendb
+// there is no reference counting involved for this struct, so hold as many references of this struct as you like, and it should be 0 initialized to be safe
+void register_transaction_with_rhendb(rhendb* rdb, transaction* tx);
+void deregister_transaction_with_rhendb(rhendb* rdb, transaction* tx);
+
 #endif
