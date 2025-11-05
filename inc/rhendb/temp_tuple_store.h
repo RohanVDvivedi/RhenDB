@@ -43,7 +43,7 @@ struct temp_tuple_store
 
 	// we will always have next_tuple_offset <= total_size
 
-	uint64_t tuple_count;
+	uint64_t tuples_count;
 
 	int fd; // file_descriptor to be accessed for mapping the memory
 

@@ -79,6 +79,8 @@ struct operator_buffer
 	pthread_cond_t wait;		// wait for the data here blockingly
 
 	uint64_t tuple_stores_count;
+	uint64_t tuples_count;
+
 	linkedlist tuple_stores;	// temp_tuple_store produced by the operator gets stored here
 
 	// number of operator tasks producing to this operator buffer
@@ -88,6 +90,7 @@ struct operator_buffer
 	uint64_t consumers_count;
 
 	// this counters can be incremented or decremented at will
+	// but once any of these numbers reach zero then they can not change, they are both initialized to 1
 };
 
 // public
