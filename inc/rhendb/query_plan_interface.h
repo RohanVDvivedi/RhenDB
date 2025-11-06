@@ -15,28 +15,35 @@ enum operator_state
 
 	OPERATOR_RUNNING, // executing right now
 
-	OPERATOR_WAITING, // operator waiting for some resource to be available
+	OPERATOR_WAITING, // operator waiting for some resource to be available, the operator starts in this state
 
 	OPERATOR_KILLED, // no state transitions can occur for the operator after this state is reached, operator has released all the resources
 };
 
+typedef struct query_plan query_plan;
+
+// operator is actually a task in the pipeline of the query_plan, it must be implemented single threadedly to pull resources
+// for multithreading make other compute threads or clone new operators into the query_plan
 typedef struct operator operator;
 struct operator
 {
 	// below attributes are static and you do not need lock to access them
 
 	// operator_id is the id of this operator
-	uint64_t operator_id;
+	uint32_t operator_id;
+
+	// pointer to the query_plan that this operator is part of
+	query_plan* self_query_plan;
 
 	// below attributes are not static and you need a lock to access them
 
 	pthread_mutex_t lock;		// global lock for the operator
 
-	pthread_cond_t wait_until_state_changes; // wait for the operator to change it's state
+	pthread_cond_t wait_until_killed; // wait for the operator to get into OPERATOR_KILLED state
 
 	operator_state state;	// access the current state of the operator tasks here
 
-	void* input;			// pointer for the operator to store input params
+	void* inputs;			// pointer for the operator to store input params
 
 	void* context;			// context to be used by the operators, when they are waiting, this helps then restart again when data is again available
 							// this must hold the last position you were scanning at, so as to restore from that same old position, upon being relieved of the blocking from the resource (being locks in lock_table OR operator_buffer-s)
@@ -53,23 +60,35 @@ struct operator
 	// hold lock while calling this function and atomically transitioning from OPERATOR_QUEUED to OPERATOR_RUNNING state
 	void (*restore_locals_from_context)(operator* o);
 
+	// to be called when operator state is to be changed to OPERATOR_KILLED
+	// this method must be idempotent and must set all the 3, local, context and input to NULLs
+	void (*destroy_locals_context_inputs)(operator* o);
+
 	// this is the function that runs for the operator, after it is set to OPERATOR_RUNNING state and atomically making calling it's restore_locals_from_context() function
 	void (*execute)(operator* o);
+
+	// embedded node for the operator to get stacked onto the waiters of the operator_buffer
+	llnode embed_node_waiting_on_operator_buffer;
 };
 
-// public
 operator_state get_operator_state(operator* o);
 
-// public
-// timeout can be BLOCKING or some positive value in microseconds
-// returns 1 if the operator is killed, and you may call cleanup() on that operator
-int wait_until_operator_is_killed(operator* o, uint64_t timeout_in_microseconds);
+/*
+	state transitions allowed
 
-// private
-// to be only used from inside the operator
-// it wakes up any thread waiting on operator to get into OPERATOR_KILLED state
-// returns 1 if the state was changed
+	OPERATOR_QUEUED -> OPERATOR_RUNNING
+		   ^               /
+			\             \/
+			OPERATOR_WAITING
+
+	OPERATOR_KILLED only from OPERATOR_RUNNING and OPERATOR_WAITINGn states
+*/
+
+// fails only when the state transition is not possible OR when the the operator is in OPERATOR_KILLED state
 int set_operator_state(operator* o, operator_state state);
+
+// you must call this function after putting the operator in OPERATOR_QUEUED state, form OPERATOR_WAITING state
+int notify_wake_up_to_operator(operator* o);
 
 typedef struct operator_buffer operator_buffer;
 struct operator_buffer
@@ -84,32 +103,29 @@ struct operator_buffer
 	linkedlist tuple_stores;	// temp_tuple_store produced by the operator gets stored here
 
 	// number of operator tasks producing to this operator buffer
-	uint64_t producers_count;
+	uint32_t producers_count;
 
 	// number of operator tasks consuming from this operator buffer
-	uint64_t consumers_count;
+	uint32_t consumers_count;
 
 	// this counters can be incremented or decremented at will
 	// but once any of these numbers reach zero then they can not change, they are both initialized to 1
+
+	// list of consumer operators that went to waiting state for this operator_buffer not having data
+	linkedlist waiting_consumers;
 };
 
-// public
-// this will also clear all the temp_tuple_stores accumulated upuntil now
-// returns 1 if the prohibit usage for the operator_buffer was done, (it only fails if done again)
-int prohibit_usage_for_operator_buffer(operator_buffer* ob);
+int modify_operator_buffer_producer_count_by(operator_buffer* ob, int64_t change_amount);
 
-// private -> only for the operators to use them
-// failure only implies that the prohibit_usage request was sent OR that the consumer operator is in OPERATOR_KILLED state and will never come back
-// in both these failure states the producer operator get's it's state set to OPERATOR_KILLED and must shutdown
-int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts);
+int modify_operator_buffer_consumer_count_by(operator_buffer* ob, int64_t change_amount);
 
-// public, operators must use this call NON_BLOCKING
-// user level functions must use BLOCKING or with a timeout, to ensure that we have data immediately
-// failure implies that the operator_buffer is empty
-// another failure condition comes from the operator_buffer getting it's prohibit_usage set OR if the operator_buffer is empty and the producer is OPERATOR_KILLED
-// in the second failure case the consumer also get's OPERATOR_KILLED if it exists and the consumer must shutdown
-// in the first case the consumer is instead placed in the OPERATOR_WAITING_TO_BE_NOTIFIED state and asked to wait
-temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout_in_microseconds);
+// there should be only 1 operator execution context calling these operator_bufffer functions
+
+// fails if the operator is in OPERATOR_KILLED state
+int push_to_operator_buffer(operator_buffer* ob, operator* producer, temp_tuple_store* tts);
+
+// fails if the operator is in OPERATOR_KILLED state
+temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* consumer, uint64_t timeout_in_microseconds);
 
 typedef struct query_plan query_plan;
 struct query_plan
@@ -118,18 +134,12 @@ struct query_plan
 	transaction* curr_tx;
 
 	// operators scans, writers, and also the joins, sorts and groupbys
-	uint64_t operators_count;
+	uint32_t operators_count;
 	operator** operators;
 
 	// operator outputs including the intermediate ones
-	uint64_t operator_buffers_count;
+	uint32_t operator_buffers_count;
 	operator_buffer** operator_buffers;
 };
-
-// prohibit usage of all the operator_buffers
-// then wait for all the operators to get killed in a loop, calling their cleanups one by one
-void shutdown_query_plan(query_plan* qp);
-
-operator* find_right_operator_for_query_plan(query_plan* qp, uint64_t operator_task_id);
 
 #endif

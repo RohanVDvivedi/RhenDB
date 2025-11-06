@@ -42,13 +42,90 @@ int set_operator_state(operator* o, operator_state state)
 
 	pthread_mutex_lock(&(o->lock));
 
-	// a killed operator can not be revived
-	if(state != OPERATOR_KILLED)
+	switch(o->state)
 	{
-		o->state = state;
-		state_changed = 1;
-		if(o->state == OPERATOR_KILLED)
-			pthread_cond_broadcast(&(o->wait_until_killed));
+		case OPERATOR_QUEUED :
+		{
+			switch(state)
+			{
+				case OPERATOR_RUNNING :
+				{
+					o->restore_locals_from_context(o);
+					o->state = state;
+					state_changed = 1;
+					break;
+				}
+				case OPERATOR_KILLED :
+				{
+					o->destroy_locals_context_input(o);
+					o->state = state;
+					state_changed = 1;
+					break;
+				}
+				default :
+				{
+					state_changed = 0;
+					break;
+				}
+			}
+			break;
+		}
+		case OPERATOR_RUNNING :
+		{
+			switch(state)
+			{
+				case OPERATOR_WAITING :
+				{
+					o->store_locals_to_context(o);
+					o->state = state;
+					state_changed = 1;
+					break;
+				}
+				case OPERATOR_KILLED :
+				{
+					o->destroy_locals_context_input(o);
+					o->state = state;
+					state_changed = 1;
+					break;
+				}
+				default :
+				{
+					state_changed = 0;
+					break;
+				}
+			}
+			break;
+		}
+		case OPERATOR_WAITING :
+		{
+			switch(state)
+			{
+				case OPERATOR_QUEUED :
+				{
+					o->state = state;
+					state_changed = 1;
+					break;
+				}
+				case OPERATOR_KILLED :
+				{
+					o->destroy_locals_context_input(o);
+					o->state = state;
+					state_changed = 1;
+					break;
+				}
+				default :
+				{
+					state_changed = 0;
+					break;
+				}
+			}
+			break;
+		}
+		case OPERATOR_KILLED :
+		{
+			state_changed = 0;
+			break;
+		}
 	}
 
 	pthread_mutex_unlock(&(o->lock));
@@ -56,18 +133,76 @@ int set_operator_state(operator* o, operator_state state)
 	return state_changed;
 }
 
-int is_operator_killed_or_to_be_killed(operator* o)
+// operator buffer functions
+
+int modify_operator_buffer_producers_count_by(operator_buffer* ob, int64_t change_amount)
 {
-	pthread_mutex_lock(&(o->lock));
+	if(change_amount == 0)
+		return 1;
 
-	int result = (o->state == OPERATOR_KILLED) || (o->state == OPERATOR_TO_BE_KILLED);
+	int result = 0;
 
-	pthread_mutex_unlock(&(o->lock));
+	pthread_mutex_lock(&(ob->lock));
+
+	if(change_amount > 0)
+	{
+		// only possible to increment producers, while there still are some producers
+		if((ob->producers_count > 0) && ((((uint64_t)ob->producers_count) + change_amount) <= UINT32_MAX))
+		{
+			ob->producers_count += change_amount;
+			result = 1;
+		}
+	}
+	else
+	{
+		if(ob->producers_count >= (-change_amount))
+		{
+			ob->producers_count += change_amount;
+			result = 1;
+		}
+	}
+
+	if(result && ob->producers_count == 0)
+	{
+		// wake up all waiting consumers
+	}
+
+	pthread_mutex_unlock(&(ob->lock));
 
 	return result;
 }
 
-// operator buffer functions
+int modify_operator_buffer_consumer_count_by(operator_buffer* ob, int64_t change_amount)
+{
+	if(change_amount == 0)
+		return 1;
+
+	int result = 0;
+
+	pthread_mutex_lock(&(ob->lock));
+
+	if(change_amount > 0)
+	{
+		// only possible to increment consumers, while there still are some consumers
+		if((ob->consumers_count > 0) && ((((uint64_t)ob->consumers_count) + change_amount) <= UINT32_MAX))
+		{
+			ob->consumers_count += change_amount;
+			result = 1;
+		}
+	}
+	else
+	{
+		if(ob->consumers_count >= (-change_amount))
+		{
+			ob->consumers_count += change_amount;
+			result = 1;
+		}
+	}
+
+	pthread_mutex_unlock(&(ob->lock));
+
+	return result;
+}
 
 int prohibit_usage_for_operator_buffer(operator_buffer* ob)
 {
@@ -181,27 +316,4 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, uint64_t timeout
 	pthread_mutex_unlock(&(ob->lock));
 
 	return tts;
-}
-
-void shutdown_query_plan(query_plan* qp)
-{
-	for(uint64_t i = 0; i < qp->operator_buffers_count; i++)
-		prohibit_usage_for_operator_buffer(qp->operator_buffers[i]);
-
-	for(uint64_t i = 0; i < qp->operators_count; i++)
-	{
-		wait_until_operator_is_killed(qp->operators[i], BLOCKING);
-		qp->operators[i]->clean_up(qp->operators[i]);
-	}
-}
-
-operator* find_right_operator_for_query_plan(query_plan* qp, uint64_t operator_task_id)
-{
-	for(uint64_t i = 0; i < qp->operators_count; i++)
-	{
-		if(qp->operators[i]->operator_id <= operator_task_id && operator_task_id < (qp->operators[i]->operator_id + MAX_TASKS_PER_OPERATOR))
-			return qp->operators[i];
-	}
-
-	return NULL;
 }
