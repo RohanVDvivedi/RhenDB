@@ -1,5 +1,10 @@
  PICKED TASKS
 
+ * make get_state_for_operator (if asked to kill just send kill signal) get_state_for_operator_from_self (kills operator if kill signal was sent)
+ * set_state_for_operator and set_state_for_operator_from_self (kills operator if kill signal was sent)
+
+ * push and pop from operator_buffer take self as input
+
  * implement query_plan callback for the lock_manager, to wait and to wakeup/notify
  * query_plan structure holds pointers to rhendb and the transaction struct
 
