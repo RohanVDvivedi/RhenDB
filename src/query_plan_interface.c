@@ -2,11 +2,12 @@
 
 // operator functions
 
-operator_state get_operator_state(operator* o)
+operator_state get_operator_state(operator* o, int* kill_signal_sent)
 {
 	pthread_mutex_lock(&(o->lock));
 
 	operator_state state = o->state;
+	(*kill_signal_sent) = o->kill_signal_sent;
 
 	pthread_mutex_unlock(&(o->lock));
 
@@ -42,6 +43,9 @@ int set_operator_state(operator* o, operator_state state)
 
 	pthread_mutex_lock(&(o->lock));
 
+	if(o->kill_signal_sent && (state != OPERATOR_KILLED))
+		goto EXIT;
+
 	switch(o->state)
 	{
 		case OPERATOR_QUEUED :
@@ -74,6 +78,12 @@ int set_operator_state(operator* o, operator_state state)
 		{
 			switch(state)
 			{
+				case OPERATOR_QUEUED :
+				{
+					o->state = state;
+					state_changed = 1;
+					break;
+				}
 				case OPERATOR_WAITING :
 				{
 					o->store_locals_to_context(o);
@@ -128,9 +138,63 @@ int set_operator_state(operator* o, operator_state state)
 		}
 	}
 
+	EXIT:;
+
 	pthread_mutex_unlock(&(o->lock));
 
 	return state_changed;
+}
+
+void kill_OR_send_kill_to_operator(operator* o)
+{
+	pthread_mutex_lock(&(o->lock));
+
+	switch(o->state)
+	{
+		// in thse both states the operator can be directly killed
+		case OPERATOR_QUEUED :
+		case OPERATOR_WAITING :
+		{
+			o->destroy_locals_context_input(o);
+			o->state = OPERATOR_KILLED;
+			break;
+		}
+		// in this state, we can only send the operator the kill signal
+		case OPERATOR_RUNNING :
+		{
+			o->kill_signal_sent = 1;
+			break;
+		}
+		case OPERATOR_KILLED :
+		{
+			break;
+		}
+	}
+
+	pthread_mutex_unlock(&(o->lock));
+}
+
+static void* execute_operator(void* o_v)
+{
+	operator* o = o_v;
+
+	// first thing you do is set the operator to OPERATOR_RUNNING state
+	if(!set_operator_state(o, OPERATOR_RUNNING)) // if we can not do this, then we were killed way before annd must quit
+	{
+		set_operator_state(o, OPERATOR_KILLED);
+		return;
+	}
+
+	// execute the operator
+	o->execute(o);
+}
+
+int enqueue_operator(operator* o)
+{
+	if(o->thread_pool)
+		submit_job_executor(o->thread_pool, execute_operator, o, NULL, NULL, BLOCKING);
+	else
+		execute_operator(o);
 }
 
 // operator buffer functions

@@ -43,6 +43,8 @@ struct operator
 
 	operator_state state;	// access the current state of the operator tasks here
 
+	int kill_signal_sent;	// this flag will be set if a kill signal sent was done from the outside of the operator, predominantly while it was still running
+
 	void* inputs;			// pointer for the operator to store input params
 
 	void* context;			// context to be used by the operators, when they are waiting, this helps then restart again when data is again available
@@ -65,30 +67,38 @@ struct operator
 	void (*destroy_locals_context_inputs)(operator* o);
 
 	// this is the function that runs for the operator, after it is set to OPERATOR_RUNNING state and atomically making calling it's restore_locals_from_context() function
+	// an operator will enter this function always in OPERATOR_RUNNING state but must exit in any of the 3 other states, please keep this in mind
 	void (*execute)(operator* o);
 
 	// embedded node for the operator to get stacked onto the waiters of the operator_buffer
 	llnode embed_node_waiting_on_operator_buffer;
 };
 
-operator_state get_operator_state(operator* o);
+operator_state get_operator_state(operator* o, int* kill_signal_sent);
 
 /*
 	state transitions allowed
 
-	OPERATOR_QUEUED -> OPERATOR_RUNNING
-		   ^               /
-			\             \/
-			OPERATOR_WAITING
+	OPERATOR_QUEUED <-> OPERATOR_RUNNING
+		   ^                /
+			\              \/
+			 OPERATOR_WAITING
 
-	OPERATOR_KILLED only from OPERATOR_RUNNING and OPERATOR_WAITINGn states
+	OPERATOR_KILLED can come after any of the states
 */
 
 // fails only when the state transition is not possible OR when the the operator is in OPERATOR_KILLED state
+// if you state change the operator using this function to OPERATOR_QUEUED, you still need to queue the operator itself into the threadpool it get's dedicated to
 int set_operator_state(operator* o, operator_state state);
 
-// you must call this function after putting the operator in OPERATOR_QUEUED state, form OPERATOR_WAITING state
-int notify_wake_up_to_operator(operator* o);
+// ask operator to be killed from outside the operator, from another operator or some global thread
+// the locals of the operator are not protected by the lock, so you need to send kill signal instead for killing the operator, and let the operator itself kill itself
+void kill_OR_send_kill_to_operator(operator* o);
+
+// you must call this function after putting the operator in OPERATOR_QUEUED state, form OPERATOR_WAITING state, after using the set_operator_state function
+// this function will not change the state of the operator for you
+void enqueue_operator(operator* o);
+// enqueue_operator executes the operator in the current thread if the operator does not register thread_pool, in this case enqueue operator must not be called from the inside of the operator itself as it may cause infinite recursion
 
 typedef struct operator_buffer operator_buffer;
 struct operator_buffer
