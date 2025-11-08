@@ -208,10 +208,13 @@ int modify_operator_buffer_producers_count_by(operator_buffer* ob, int64_t chang
 
 	pthread_mutex_lock(&(ob->lock));
 
+	// we can not update producers_count once it reaches 0
+	if(ob->producers_count == 0)
+		goto EXIT;
+
 	if(change_amount > 0)
 	{
-		// only possible to increment producers, while there still are some producers
-		if((ob->producers_count > 0) && ((((uint64_t)ob->producers_count) + change_amount) <= UINT32_MAX))
+		if((((uint64_t)ob->producers_count) + change_amount) <= UINT32_MAX)
 		{
 			ob->producers_count += change_amount;
 			result = 1;
@@ -231,6 +234,7 @@ int modify_operator_buffer_producers_count_by(operator_buffer* ob, int64_t chang
 		// wake up all waiting consumers
 	}
 
+	EXIT:;
 	pthread_mutex_unlock(&(ob->lock));
 
 	return result;
@@ -245,10 +249,18 @@ int modify_operator_buffer_consumer_count_by(operator_buffer* ob, int64_t change
 
 	pthread_mutex_lock(&(ob->lock));
 
+	// we can not update consumers_count once it reaches 0
+	if(ob->consumers_count == 0)
+		goto EXIT;
+
 	if(change_amount > 0)
 	{
+		// you can not add more consumers, if the producers_count has reached 0
+		if(ob->producers_count == 0)
+			goto EXIT;
+
 		// only possible to increment consumers, while there still are some consumers
-		if((ob->consumers_count > 0) && ((((uint64_t)ob->consumers_count) + change_amount) <= UINT32_MAX))
+		if((((uint64_t)ob->consumers_count) + change_amount) <= UINT32_MAX)
 		{
 			ob->consumers_count += change_amount;
 			result = 1;
@@ -263,6 +275,7 @@ int modify_operator_buffer_consumer_count_by(operator_buffer* ob, int64_t change
 		}
 	}
 
+	EXIT:;
 	pthread_mutex_unlock(&(ob->lock));
 
 	return result;
