@@ -199,7 +199,7 @@ int enqueue_operator(operator* o)
 
 // operator buffer functions
 
-int modify_operator_buffer_producers_count_by(operator_buffer* ob, int64_t change_amount)
+int increment_operator_buffer_producer_count(operator_buffer* ob, uint32_t change_amount)
 {
 	if(change_amount == 0)
 		return 1;
@@ -212,26 +212,14 @@ int modify_operator_buffer_producers_count_by(operator_buffer* ob, int64_t chang
 	if(ob->producers_count == 0)
 		goto EXIT;
 
-	if(change_amount > 0)
-	{
-		if((((uint64_t)ob->producers_count) + change_amount) <= UINT32_MAX)
-		{
-			ob->producers_count += change_amount;
-			result = 1;
-		}
-	}
-	else
-	{
-		if(ob->producers_count >= (-change_amount))
-		{
-			ob->producers_count += change_amount;
-			result = 1;
-		}
-	}
+	// you can not add more producers, if the consumers_count has reached 0
+	if(ob->consumers_count == 0)
+		goto EXIT;
 
-	if(result && ob->producers_count == 0)
+	if(!will_unsigned_sum_overflow(uint32_t, ob->producers_count, change_amount))
 	{
-		// wake up all waiting consumers
+		ob->producers_count += change_amount;
+		result = 1;
 	}
 
 	EXIT:;
@@ -240,7 +228,46 @@ int modify_operator_buffer_producers_count_by(operator_buffer* ob, int64_t chang
 	return result;
 }
 
-int modify_operator_buffer_consumer_count_by(operator_buffer* ob, int64_t change_amount)
+int decrement_operator_buffer_producer_count(operator_buffer* ob, uint32_t change_amount)
+{
+	if(change_amount == 0)
+		return 1;
+
+	int result = 0;
+
+	pthread_mutex_lock(&(ob->lock));
+
+	// we can not update producers_count once it reaches 0
+	if(ob->producers_count == 0)
+		goto EXIT;
+
+	// you can still decrement producers_count, if there are no consumers
+
+	if(!will_unsigned_sub_underflow(uint32_t, ob->producers_count, change_amount))
+	{
+		ob->producers_count -= change_amount;
+		result = 1;
+	}
+
+	if(result && ob->producers_count == 0)
+	{
+		// kill (or send kill) to all waiting consumers (as soon as) producers_count reaches 0
+		while(!is_empty_linkedlist(&(ob->waiting_consumers)))
+		{
+			operator* oc = (operator*) get_head_of_linkedlist(&(ob->waiting_consumers));
+			remove_from_linkedlist(&(ob->tuple_stores), oc);
+
+			kill_OR_send_kill_to_operator(oc);
+		}
+	}
+
+	EXIT:;
+	pthread_mutex_unlock(&(ob->lock));
+
+	return result;
+}
+
+int increment_operator_buffer_consumer_count(operator_buffer* ob, uint32_t change_amount)
 {
 	if(change_amount == 0)
 		return 1;
@@ -253,26 +280,15 @@ int modify_operator_buffer_consumer_count_by(operator_buffer* ob, int64_t change
 	if(ob->consumers_count == 0)
 		goto EXIT;
 
-	if(change_amount > 0)
-	{
-		// you can not add more consumers, if the producers_count has reached 0
-		if(ob->producers_count == 0)
-			goto EXIT;
+	// you can not add more consumers, if the producers_count has reached 0
+	if(ob->producers_count == 0)
+		goto EXIT;
 
-		// only possible to increment consumers, while there still are some consumers
-		if((((uint64_t)ob->consumers_count) + change_amount) <= UINT32_MAX)
-		{
-			ob->consumers_count += change_amount;
-			result = 1;
-		}
-	}
-	else
+	// only possible to increment consumers, while there still are some consumers
+	if(!will_unsigned_sum_overflow(uint32_t, ob->consumers_count, change_amount))
 	{
-		if(ob->consumers_count >= (-change_amount))
-		{
-			ob->consumers_count += change_amount;
-			result = 1;
-		}
+		ob->consumers_count += change_amount;
+		result = 1;
 	}
 
 	EXIT:;
@@ -281,37 +297,29 @@ int modify_operator_buffer_consumer_count_by(operator_buffer* ob, int64_t change
 	return result;
 }
 
-int prohibit_usage_for_operator_buffer(operator_buffer* ob)
+int decrement_operator_buffer_consumer_count(operator_buffer* ob, uint32_t change_amount)
 {
+	if(change_amount == 0)
+		return 1;
+
 	int result = 0;
 
 	pthread_mutex_lock(&(ob->lock));
 
-	if(ob->prohibit_usage == 0)
+	// we can not update consumers_count once it reaches 0
+	if(ob->consumers_count == 0)
+		goto EXIT;
+
+	// you can still decrement consumers_count, if there are no producers
+
+	if(!will_unsigned_sub_underflow(uint32_t, ob->consumers_count, change_amount))
 	{
-		ob->prohibit_usage = 1;
-
-		temp_tuple_store* tts = NULL;
-		while((tts = (temp_tuple_store*) get_head_of_linkedlist(&(ob->tuple_stores))))
-		{
-			remove_from_linkedlist(&(ob->tuple_stores), tts);
-			delete_temp_tuple_store(tts);
-		}
-
-		// wake up waiters so that they can know about the prohibition of the usage of the operator_buffer
-		pthread_cond_broadcast(&(ob->wait));
-
-		// set the return value to success
+		ob->consumers_count -= change_amount;
 		result = 1;
 	}
 
+	EXIT:;
 	pthread_mutex_unlock(&(ob->lock));
-
-	// if the task succeeded, then notify consumers (the only waiters for this operator buffer)
-	if(result && get_operator_state(ob->consumer) == OPERATOR_WAITING_TO_BE_NOTIFIED)
-	{
-		ob->consumer->notify_wake_up(ob->consumer, ob->consumer->operator_id);
-	}
 
 	return result;
 }

@@ -125,9 +125,13 @@ struct operator_buffer
 	linkedlist waiting_consumers;
 };
 
-int modify_operator_buffer_producer_count_by(operator_buffer* ob, int64_t change_amount);
+int increment_operator_buffer_producer_count(operator_buffer* ob, uint32_t change_amount);
 
-int modify_operator_buffer_consumer_count_by(operator_buffer* ob, int64_t change_amount);
+int decrement_operator_buffer_producer_count(operator_buffer* ob, uint32_t change_amount);
+
+int increment_operator_buffer_consumer_count(operator_buffer* ob, uint32_t change_amount);
+
+int decrement_operator_buffer_consumer_count(operator_buffer* ob, uint32_t change_amount);
 
 // there should be only 1 operator execution context calling these operator_bufffer functions
 
