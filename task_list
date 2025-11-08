@@ -2,6 +2,11 @@
 
  * push and pop from operator_buffer take self as input
 
+ * how about using ucontext for light weight threads, we will need only 1 function that gets called for releasing all latches while we go into wait state
+ * latches should be reacquired everytime we come back after waiting for any resource by the operator itself
+ * think about queueing logic and and waiting state management and wake up
+ * if possible build it in BoomPar over an existing executor this could be a great addition
+
  * review query_plan_interface functions
 
  * implement query_plan callback for the lock_manager, to wait and to wakeup/notify
