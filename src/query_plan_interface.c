@@ -199,7 +199,7 @@ int enqueue_operator(operator* o)
 
 // operator buffer functions
 
-int increment_operator_buffer_producer_count(operator_buffer* ob, uint32_t change_amount)
+int increment_operator_buffer_producers_count(operator_buffer* ob, uint32_t change_amount)
 {
 	if(change_amount == 0)
 		return 1;
@@ -228,7 +228,7 @@ int increment_operator_buffer_producer_count(operator_buffer* ob, uint32_t chang
 	return result;
 }
 
-int decrement_operator_buffer_producer_count(operator_buffer* ob, uint32_t change_amount)
+int decrement_operator_buffer_producers_count(operator_buffer* ob, uint32_t change_amount)
 {
 	if(change_amount == 0)
 		return 1;
@@ -267,7 +267,7 @@ int decrement_operator_buffer_producer_count(operator_buffer* ob, uint32_t chang
 	return result;
 }
 
-int increment_operator_buffer_consumer_count(operator_buffer* ob, uint32_t change_amount)
+int increment_operator_buffer_consumers_count(operator_buffer* ob, uint32_t change_amount)
 {
 	if(change_amount == 0)
 		return 1;
@@ -297,7 +297,7 @@ int increment_operator_buffer_consumer_count(operator_buffer* ob, uint32_t chang
 	return result;
 }
 
-int decrement_operator_buffer_consumer_count(operator_buffer* ob, uint32_t change_amount)
+int decrement_operator_buffer_consumers_count(operator_buffer* ob, uint32_t change_amount)
 {
 	if(change_amount == 0)
 		return 1;
