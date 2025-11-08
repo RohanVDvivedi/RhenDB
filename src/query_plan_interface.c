@@ -189,7 +189,7 @@ static void* execute_operator(void* o_v)
 	o->execute(o);
 }
 
-int enqueue_operator(operator* o)
+void enqueue_operator(operator* o)
 {
 	if(o->thread_pool)
 		submit_job_executor(o->thread_pool, execute_operator, o, NULL, NULL, BLOCKING);
@@ -255,7 +255,7 @@ int decrement_operator_buffer_producers_count(operator_buffer* ob, uint32_t chan
 		while(!is_empty_linkedlist(&(ob->waiting_consumers)))
 		{
 			operator* oc = (operator*) get_head_of_linkedlist(&(ob->waiting_consumers));
-			remove_from_linkedlist(&(ob->tuple_stores), oc);
+			remove_from_linkedlist(&(ob->waiting_consumers), oc);
 
 			kill_OR_send_kill_to_operator(oc);
 		}
@@ -330,30 +330,42 @@ int push_to_operator_buffer(operator_buffer* ob, temp_tuple_store* tts)
 
 	pthread_mutex_lock(&(ob->lock));
 
-	// proceed only if there is no prohibit_usage and the consumer is not killed
-	if(!(ob->prohibit_usage) && !is_operator_killed_or_to_be_killed(ob->consumer))
+	// proceed only if there are both producers and consumers on this operator_buffer
+	if(ob->producers_count > 0 && ob->consumers_count > 0)
 	{
 		pushed = insert_tail_in_linkedlist(&(ob->tuple_stores), tts);
 		if(pushed)
 		{
 			ob->tuple_stores_count += 1;
+			ob->tuples_count += tts->tuples_count;
 
 			// wake up blocking waiters
 			pthread_cond_broadcast(&(ob->wait));
 		}
 	}
-	else // kill the producer_operator
+
+	// wake up atleast 1 operator, that is waiting for data, if all of them are in waiting state
+	operator* to_wake_up = NULL;
+	if(ob->waiting_consumers_count == ob->consumers_count)
 	{
-		set_operator_state(ob->producer, OPERATOR_TO_BE_KILLED);
+		while(!is_empty_linkedlist(&(ob->waiting_consumers)))
+		{
+			to_wake_up = (operator*) get_head_of_linkedlist(&(ob->waiting_consumers));
+			remove_from_linkedlist(&(ob->waiting_consumers), to_wake_up);
+
+			if(set_operator_state(to_wake_up, OPERATOR_QUEUED))
+				break;
+
+			to_wake_up = NULL;
+		}
 	}
+
 
 	pthread_mutex_unlock(&(ob->lock));
 
-	// if we pushed and there is a consumer that is waiting to be notified then wake it up
-	if(pushed && get_operator_state(ob->consumer) == OPERATOR_WAITING_TO_BE_NOTIFIED)
-	{
-		ob->consumer->notify_wake_up(ob->consumer, ob->consumer->operator_id);
-	}
+	// enqueue the operator that we just woke up
+	if(to_wake_up)
+		enqueue_operator(to_wake_up);
 
 	return pushed;
 }

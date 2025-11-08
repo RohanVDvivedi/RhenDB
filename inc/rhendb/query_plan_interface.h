@@ -123,6 +123,7 @@ struct operator_buffer
 
 	// list of consumer operators that went to waiting state for this operator_buffer not having data
 	linkedlist waiting_consumers;
+	uint32_t waiting_consumers_count;
 };
 
 int increment_operator_buffer_producers_count(operator_buffer* ob, uint32_t change_amount);
