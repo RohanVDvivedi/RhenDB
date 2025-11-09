@@ -1,5 +1,6 @@
  PICKED TASKS
 
+ * use tiber from boompar with UNBOUNDED_SYNC_QUEUE for the threadpool for the operators
  * push and pop from operator_buffer take self as input
 
  * how about using ucontext for light weight threads, we will need only 1 function that gets called for releasing all latches while we go into wait state
