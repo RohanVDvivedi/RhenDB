@@ -7,7 +7,7 @@
  * mintxengine is completely thread based and will be left so, so figure out how to do this
  * same way network will also remain blocking thread based
 
- * review query_plan_interface functions
+ * code review query_plan_interface functions
 
  * implement query_plan callback for the lock_manager, to wait and to wakeup/notify
  * query_plan structure holds pointers to rhendb and the transaction struct
