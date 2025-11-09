@@ -30,7 +30,7 @@ struct operator
 	tiber opertor_tiber;	// the fiber that executes the operator, along with it's thread_pool, and all of it's state context
 
 	// this function get's called before operator goes into waiting on lock_table or the operator_buffer
-	void operator_release_latches_and_store_contexts(operator* o);
+	void (*operator_release_latches_and_store_contexts)(operator* o);
 
 	// below variables are only necessary if you are interested in killing the operator OR waiting for it to be killed
 
@@ -80,11 +80,11 @@ int decrement_operator_buffer_consumers_count(operator_buffer* ob, uint32_t chan
 
 // there should be only 1 operator execution context calling these operator_bufffer functions
 
-// fails if the operator is in OPERATOR_KILLED state
-int push_to_operator_buffer(operator_buffer* ob, operator* producer, temp_tuple_store* tts);
+int push_to_operator_buffer(operator_buffer* ob, operator* callee, temp_tuple_store* tts);
 
-// fails if the operator is in OPERATOR_KILLED state
-temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* consumer, uint64_t timeout_in_microseconds);
+temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee);
+
+typedef struct transaction transaction;
 
 typedef struct query_plan query_plan;
 struct query_plan
