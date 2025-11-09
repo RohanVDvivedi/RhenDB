@@ -2,199 +2,37 @@
 
 // operator functions
 
-operator_state get_operator_state(operator* o, int* kill_signal_sent)
+int is_kill_signal_sent(operator* o)
 {
-	pthread_mutex_lock(&(o->lock));
+	pthread_mutex_lock(&(o->kill_lock));
 
-	operator_state state = o->state;
-	(*kill_signal_sent) = o->kill_signal_sent;
+	int is_kill_signal_sent = !!(o->is_kill_signal_sent);
 
-	pthread_mutex_unlock(&(o->lock));
+	pthread_mutex_unlock(&(o->kill_lock));
 
-	return state;
+	return is_kill_signal_sent
 }
 
-int wait_until_operator_is_killed(operator* o, uint64_t timeout_in_microseconds)
+void mark_operator_self_killed(operator* o)
 {
-	pthread_mutex_lock(&(o->lock));
+	pthread_mutex_lock(&(o->kill_lock));
 
-	if(timeout_in_microseconds != NON_BLOCKING)
-	{
-		int wait_error = 0;
-		while((o->state != OPERATOR_KILLED) && !wait_error)
-		{
-			if(timeout_in_microseconds == BLOCKING)
-				wait_error = pthread_cond_wait(&(o->wait_until_killed), &(o->lock));
-			else
-				wait_error = pthread_cond_timedwait_for_microseconds(&(o->wait_until_killed), &(o->lock), &timeout_in_microseconds);
-		}
-	}
+	o->is_killed = 1;
+	pthread_cond_broadcast(&(o->kill_lock));
 
-	int is_killed = (o->state == OPERATOR_KILLED);
-
-	pthread_mutex_unlock(&(o->lock));
-
-	return is_killed;
+	pthread_mutex_unlock(&(o->kill_lock));
 }
 
-int set_operator_state(operator* o, operator_state state)
+void send_kill_and_wait_for_operator_to_die_FROM_NON_OPERATOR(operator* o)
 {
-	int state_changed = 0;
+	pthread_mutex_lock(&(o->kill_lock));
 
-	pthread_mutex_lock(&(o->lock));
+	o->is_kill_signal_sent = 1;
 
-	if(o->kill_signal_sent && (state != OPERATOR_KILLED))
-		goto EXIT;
+	while(!(o->is_killed))
+		pthread_cond_wait(&(o->kill_lock), &(o->wait_until_killed));
 
-	switch(o->state)
-	{
-		case OPERATOR_QUEUED :
-		{
-			switch(state)
-			{
-				case OPERATOR_RUNNING :
-				{
-					o->restore_locals_from_context(o);
-					o->state = state;
-					state_changed = 1;
-					break;
-				}
-				case OPERATOR_KILLED :
-				{
-					o->destroy_locals_context_input(o);
-					o->state = state;
-					state_changed = 1;
-					break;
-				}
-				default :
-				{
-					state_changed = 0;
-					break;
-				}
-			}
-			break;
-		}
-		case OPERATOR_RUNNING :
-		{
-			switch(state)
-			{
-				case OPERATOR_QUEUED :
-				{
-					o->state = state;
-					state_changed = 1;
-					break;
-				}
-				case OPERATOR_WAITING :
-				{
-					o->store_locals_to_context(o);
-					o->state = state;
-					state_changed = 1;
-					break;
-				}
-				case OPERATOR_KILLED :
-				{
-					o->destroy_locals_context_input(o);
-					o->state = state;
-					state_changed = 1;
-					break;
-				}
-				default :
-				{
-					state_changed = 0;
-					break;
-				}
-			}
-			break;
-		}
-		case OPERATOR_WAITING :
-		{
-			switch(state)
-			{
-				case OPERATOR_QUEUED :
-				{
-					o->state = state;
-					state_changed = 1;
-					break;
-				}
-				case OPERATOR_KILLED :
-				{
-					o->destroy_locals_context_input(o);
-					o->state = state;
-					state_changed = 1;
-					break;
-				}
-				default :
-				{
-					state_changed = 0;
-					break;
-				}
-			}
-			break;
-		}
-		case OPERATOR_KILLED :
-		{
-			state_changed = 0;
-			break;
-		}
-	}
-
-	EXIT:;
-
-	pthread_mutex_unlock(&(o->lock));
-
-	return state_changed;
-}
-
-void kill_OR_send_kill_to_operator(operator* o)
-{
-	pthread_mutex_lock(&(o->lock));
-
-	switch(o->state)
-	{
-		// in thse both states the operator can be directly killed
-		case OPERATOR_QUEUED :
-		case OPERATOR_WAITING :
-		{
-			o->destroy_locals_context_input(o);
-			o->state = OPERATOR_KILLED;
-			break;
-		}
-		// in this state, we can only send the operator the kill signal
-		case OPERATOR_RUNNING :
-		{
-			o->kill_signal_sent = 1;
-			break;
-		}
-		case OPERATOR_KILLED :
-		{
-			break;
-		}
-	}
-
-	pthread_mutex_unlock(&(o->lock));
-}
-
-static void* execute_operator(void* o_v)
-{
-	operator* o = o_v;
-
-	// first thing you do is set the operator to OPERATOR_RUNNING state
-	if(!set_operator_state(o, OPERATOR_RUNNING)) // if we can not do this, then we were killed way before annd must quit
-	{
-		set_operator_state(o, OPERATOR_KILLED);
-		return;
-	}
-
-	// execute the operator
-	o->execute(o);
-}
-
-void enqueue_operator(operator* o)
-{
-	if(o->thread_pool)
-		submit_job_executor(o->thread_pool, execute_operator, o, NULL, NULL, BLOCKING);
-	else
-		execute_operator(o);
+	pthread_mutex_unlock(&(o->kill_lock));
 }
 
 // operator buffer functions
@@ -251,14 +89,8 @@ int decrement_operator_buffer_producers_count(operator_buffer* ob, uint32_t chan
 
 	if(result && ob->producers_count == 0)
 	{
-		// kill (or send kill) to all waiting consumers (as soon as) producers_count reaches 0
-		while(!is_empty_linkedlist(&(ob->waiting_consumers)))
-		{
-			operator* oc = (operator*) get_head_of_linkedlist(&(ob->waiting_consumers));
-			remove_from_linkedlist(&(ob->waiting_consumers), oc);
-
-			kill_OR_send_kill_to_operator(oc);
-		}
+		// producers count just reached 0, no new data will be available so wake up all consumers
+		tiber_cond_broadcast(&(ob->wait));
 	}
 
 	EXIT:;
