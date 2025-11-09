@@ -29,6 +29,8 @@ struct operator
 
 	tiber opertor_tiber;	// the fiber that executes the operator, along with it's thread_pool, and all of it's state context
 
+	void (*initialize_operator_tiber)(operator* o); // this function will be called from outside the operator, you may not initialize your tiber on your own
+
 	// this function get's called before operator goes into waiting on lock_table or the operator_buffer
 	void (*operator_release_latches_and_store_contexts)(operator* o);
 
