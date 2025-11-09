@@ -179,7 +179,7 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 	rdb->cached_thread_pool = new_executor(CACHED_THREAD_POOL_EXECUTOR, min(max_concurrent_users_count * 10, 500), min(max_concurrent_users_count * 10, 2000), 1000000ULL, NULL, NULL, NULL);
 
 	// initialize the compute thread pool with as many threads as the hardware has and with the same queue size
-	rdb->compute_thread_pool = new_executor(FIXED_THREAD_COUNT_EXECUTOR, sysconf(_SC_NPROCESSORS_ONLN), min(max_concurrent_users_count * 10, 2000), 0, NULL, NULL, NULL);
+	rdb->compute_thread_pool = new_executor(FIXED_THREAD_COUNT_EXECUTOR, sysconf(_SC_NPROCESSORS_ONLN), UNBOUNDED_SYNC_QUEUE, 0, NULL, NULL, NULL);
 
 	rdb->bufferpool_usage_limiter = new_resource_usage_limiter(bufferpool_frame_count);
 
