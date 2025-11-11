@@ -13,7 +13,7 @@ void print_mmap_pages_for_fd(int fd);
 
 void print_all_tuples(temp_tuple_store* tts_p)
 {
-	printf("\n\nprinting temp_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", tts_p->tuple_count, tts_p->next_tuple_offset, tts_p->total_size);
+	printf("\n\nprinting temp_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", tts_p->tuples_count, tts_p->next_tuple_offset, tts_p->total_size);
 	uint64_t index = 0;
 	uint64_t offset = 0;
 	tuple_region tr = INIT_TUPLE_REGION;
