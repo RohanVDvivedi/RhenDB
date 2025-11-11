@@ -41,6 +41,8 @@
    * joins -> with/without indexes (hashjoins using a temp_tuple_store as buckets)
    * union, set difference and intersection
 
+ PASS APPROPRIATE STACK SIZE, QUEUE MAX CAPACITY/TYPE AND WORKER COUNT FOR THE RHENDB THREADPOOLS
+
  2.* define catalog tables and indexes on it - persistent
    * stores only serialized immutable datatypes dti-s and things like bplus_tree_tuple_defs and persistent serialized immutable query_plans/functions and an LRU cache on them
    * there will also be reference counters for all of them, with LRU searches on them using name, index and their own pointers

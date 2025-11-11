@@ -176,10 +176,10 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 		uint64_t max_concurrent_users_count)
 {
 	// 10 times the user count, will be size of queue and same will be the number of threads, wait 1 second before you kill the thread
-	rdb->cached_thread_pool = new_executor(CACHED_THREAD_POOL_EXECUTOR, min(max_concurrent_users_count * 10, 500), min(max_concurrent_users_count * 10, 2000), 1000000ULL, NULL, NULL, NULL);
+	rdb->cached_thread_pool = new_executor(CACHED_THREAD_POOL_EXECUTOR, min(max_concurrent_users_count * 10, 500), min(max_concurrent_users_count * 10, 2000), 1000000ULL, NULL, NULL, NULL, 0);
 
 	// initialize the compute thread pool with as many threads as the hardware has and with the same queue size
-	rdb->compute_thread_pool = new_executor(FIXED_THREAD_COUNT_EXECUTOR, sysconf(_SC_NPROCESSORS_ONLN), UNBOUNDED_SYNC_QUEUE, 0, NULL, NULL, NULL);
+	rdb->compute_thread_pool = new_executor(FIXED_THREAD_COUNT_EXECUTOR, sysconf(_SC_NPROCESSORS_ONLN), UNBOUNDED_SYNC_QUEUE, 0, NULL, NULL, NULL, 0);
 
 	rdb->bufferpool_usage_limiter = new_resource_usage_limiter(bufferpool_frame_count);
 
