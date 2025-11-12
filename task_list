@@ -1,11 +1,6 @@
  PICKED TASKS
 
- * we nned to make provisions for operators that will get scheduled on the cached threadpool
- * with enough threads for each one of them, to be able to do IO
- * operator_buffer must be able to perform both tiber and thread based wakeup and waits
- * operators can be any of them compute intensive OR scans/disk and network intensive
- * mintxengine is completely thread based and will be left so, so figure out how to do this
- * same way network will also remain blocking thread based
+ * use pthread and boompar based threading, we will fix things later by using a glibc + pthread based shim
 
  * code review query_plan_interface functions
 
