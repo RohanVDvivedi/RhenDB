@@ -1,5 +1,7 @@
 #include<rhendb/query_plan_interface.h>
 
+#include<posixutils/pthread_cond_utils.h>
+
 // operator functions
 
 int is_kill_signal_sent(operator* o)
@@ -202,7 +204,7 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee
 	// only then we are allowed to wait
 	while((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && ob->producers_count > 0 && ob->consumers_count > 0 && !is_kill_signal_sent(callee))
 	{
-		callee->operator_release_latches_and_store_contexts(callee);
+		callee->operator_release_latches_and_store_context(callee);
 		pthread_cond_wait(&(ob->wait), &(ob->lock));
 	}
 
@@ -226,4 +228,84 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee
 	pthread_mutex_unlock(&(ob->lock));
 
 	return tts;
+}
+
+// query plan functions
+
+query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count, uint32_t operator_buffers_count)
+{
+	query_plan* qp = malloc(sizeof(query_plan));
+	if(qp == NULL)
+		exit(-1);
+
+	qp->curr_tx = curr_tx;
+	if(!initialize_arraylist(&(qp->operators), operators_count))
+		exit(-1);
+	if(!initialize_arraylist(&(qp->operator_buffers), operator_buffers_count))
+		exit(-1);
+
+	return qp;
+}
+
+operator_buffer* get_new_registered_operator_buffer_for_query_plan(query_plan* qp)
+{
+	operator_buffer* ob = malloc(sizeof(operator_buffer));
+
+	if(is_full_arraylist(&(qp->operator_buffers)) && !expand_arraylist(&(qp->operator_buffers)))
+		exit(-1);
+	push_back_to_arraylist(&(qp->operator_buffers), ob);
+
+	pthread_mutex_init(&(ob->lock), NULL);
+	pthread_cond_init_with_monotonic_clock(&(ob->wait));
+	ob->tuple_stores_count = 0;
+	ob->tuples_count = 0;
+	initialize_linkedlist(&(ob->tuple_stores), offsetof(temp_tuple_store, embed_node_ll));
+	ob->producers_count = 1;
+	ob->consumers_count = 1;
+
+	return ob;
+}
+
+void register_operator_for_query_plan(query_plan* qp, operator* o)
+{
+	if(is_full_arraylist(&(qp->operators)) && !expand_arraylist(&(qp->operators)))
+		exit(-1);
+	push_back_to_arraylist(&(qp->operators), o);
+}
+
+void shutdown_and_destroy_query_plan(query_plan* qp)
+{
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
+	{
+		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
+		send_kill_and_wait_for_operator_to_die(o);
+		o->free_resources(o);
+		free(o);
+	}
+
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operator_buffers)); i++)
+	{
+		operator_buffer* ob = (operator_buffer*) get_from_arraylist(&(qp->operator_buffers), i);
+
+		pthread_mutex_lock(&(ob->lock));
+
+		while(NULL != get_head_of_linkedlist(&(ob->tuple_stores)))
+		{
+			temp_tuple_store* tts = (temp_tuple_store*) get_head_of_linkedlist(&(ob->tuple_stores));
+			remove_from_linkedlist(&(ob->tuple_stores), tts);
+
+			delete_temp_tuple_store(tts);
+		}
+
+		pthread_mutex_unlock(&(ob->lock));
+
+		pthread_mutex_destroy(&(ob->lock));
+		pthread_cond_destroy(&(ob->wait));
+
+		free(ob);
+	}
+
+	deinitialize_arraylist(&(qp->operators));
+	deinitialize_arraylist(&(qp->operator_buffers));
+	free(qp);
 }

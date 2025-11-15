@@ -7,6 +7,8 @@
 
 #include<rhendb/temp_tuple_store.h>
 
+#include<cutlery/arraylist.h>
+
 typedef struct query_plan query_plan;
 
 // operator is actually a task in the pipeline of the query_plan, it must be implemented single threadedly to pull resources
@@ -26,8 +28,12 @@ struct operator
 
 	void* context;			// to store positions of the operator in the scans
 
+	void (*start_execution)(operator* o);	// this will be called only once and operator must start execution only after this call
+
 	// this function get's called before operator goes into waiting on lock_table or the operator_buffer
 	void (*operator_release_latches_and_store_context)(operator* o);
+
+	void (*free_resources)(operator* o);	// only thing left to be done after this call must be to call free on the operator
 
 	// below variables are only necessary if you are interested in killing the operator OR waiting for it to be killed
 
@@ -89,12 +95,18 @@ struct query_plan
 	transaction* curr_tx;
 
 	// operators scans, writers, and also the joins, sorts and groupbys
-	uint32_t operators_count;
-	operator** operators;
+	arraylist operators;
 
 	// operator outputs including the intermediate ones
-	uint32_t operator_buffers_count;
-	operator_buffer** operator_buffers;
+	arraylist operator_buffers;
 };
+
+query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count, uint32_t operator_buffers_count);
+
+operator_buffer* get_new_registered_operator_buffer_for_query_plan(query_plan* qp);
+
+void register_operator_for_query_plan(query_plan* qp, operator* o);
+
+void shutdown_and_destroy_query_plan(query_plan* qp);
 
 #endif
