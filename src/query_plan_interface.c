@@ -34,7 +34,7 @@ void mark_operator_self_killed(operator* o)
 	pthread_mutex_unlock(&(o->kill_lock));
 }
 
-void send_kill_and_wait_for_operator_to_die_FROM_NON_OPERATOR(operator* o)
+void send_kill_and_wait_for_operator_to_die(operator* o)
 {
 	pthread_mutex_lock(&(o->kill_lock));
 
@@ -101,7 +101,7 @@ int decrement_operator_buffer_producers_count(operator_buffer* ob, uint32_t chan
 	if(result && ob->producers_count == 0)
 	{
 		// producers count just reached 0, no new data will be available so wake up all consumers
-		tiber_cond_broadcast(&(ob->wait));
+		pthread_cond_broadcast(&(ob->wait));
 	}
 
 	EXIT:;
@@ -183,7 +183,7 @@ int push_to_operator_buffer(operator_buffer* ob, operator* callee, temp_tuple_st
 			ob->tuples_count += tts->tuples_count;
 
 			// wake up blocking waiters
-			tiber_cond_signal(&(ob->wait));
+			pthread_cond_signal(&(ob->wait));
 		}
 	}
 
@@ -203,7 +203,7 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee
 	while((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && ob->producers_count > 0 && ob->consumers_count > 0 && !is_kill_signal_sent(callee))
 	{
 		callee->operator_release_latches_and_store_contexts(callee);
-		tiber_cond_wait(&(ob->wait), &(ob->lock));
+		pthread_cond_wait(&(ob->wait), &(ob->lock));
 	}
 
 	if(ob->consumers_count == 0)

@@ -4,7 +4,6 @@
 #include<stdlib.h>
 
 #include<pthread.h>
-#include<boompar/tiber.h>
 
 #include<rhendb/temp_tuple_store.h>
 
@@ -27,12 +26,8 @@ struct operator
 
 	void* context;			// to store positions of the operator in the scans
 
-	tiber opertor_tiber;	// the fiber that executes the operator, along with it's thread_pool, and all of it's state context
-
-	void (*initialize_operator_tiber)(operator* o); // this function will be called from outside the operator, you may not initialize your tiber on your own
-
 	// this function get's called before operator goes into waiting on lock_table or the operator_buffer
-	void (*operator_release_latches_and_store_contexts)(operator* o);
+	void (*operator_release_latches_and_store_context)(operator* o);
 
 	// below variables are only necessary if you are interested in killing the operator OR waiting for it to be killed
 
@@ -50,15 +45,14 @@ int is_kill_signal_sent(operator* o);
 void mark_operator_self_killed(operator* o);
 
 // call this function from user threads of the cached threadpool, never from the operator
-// this is a non-tiber function
-void send_kill_and_wait_for_operator_to_die_FROM_NON_OPERATOR(operator* o);
+void send_kill_and_wait_for_operator_to_die(operator* o);
 
 typedef struct operator_buffer operator_buffer;
 struct operator_buffer
 {
 	pthread_mutex_t lock;	// global lock for the operator_buffer
 
-	tiber_cond wait;		// wait for the data here blockingly
+	pthread_cond_t wait;		// wait for the data here blockingly
 
 	uint64_t tuple_stores_count;
 	uint64_t tuples_count;
