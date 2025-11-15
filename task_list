@@ -1,14 +1,16 @@
  PICKED TASKS
 
- * implement query_pan insert functions for inserting an operator and creating a operator_buffer
- * shutdown for query_plan_interface
- * add fucntion calls to release latches on waiting
  * function to get operator by operator id
- * function to destroy query_plan
+ * function to start all the operators
+
+ * first send all kill signals to all operators
+ * then send broadcast to all operator_buffers and the condition variable that the lock tables will be using
+ * then wait for all of them to die
+
+ * implement query_plan callback for the lock_manager
+ * function for the operators to lock, transition and release the lock
 
  * code review query_plan_interface functions
-
- * implement query_plan callback for the lock_manager, to wait and to wakeup/notify
 
 
 
