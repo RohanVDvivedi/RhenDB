@@ -1,11 +1,11 @@
  PICKED TASKS
 
- * use pthread and boompar based threading, we will fix things later by using a glibc + pthread based shim
-
  * code review query_plan_interface functions
 
  * implement query_plan callback for the lock_manager, to wait and to wakeup/notify
- * query_plan structure holds pointers to rhendb and the transaction struct
+
+
+
 
  * even selection and projection functions can be implemented as a synchronous operators (think about it)
 
@@ -63,6 +63,9 @@
    * unix epoch to date, day, month, year, second, millisecond, microsecond, with timezones
    * build more complex functions transformers with local variables and bytecode stored in context
    * length of string, blob, array, tuple, etc
+
+ 7.*tiber runtime integration
+   * make everything tiber runtime based, for all projects involved post Cutlery, BoomPar and ConnMan
 
  * Design methodology
    * we will use postgresql architecture over (mysql like) mini transactions
