@@ -1,5 +1,11 @@
  PICKED TASKS
 
+ * implement query_pan insert functions for inserting an operator and creating a operator_buffer
+ * shutdown for query_plan_interface
+ * add fucntion calls to release latches on waiting
+ * function to get operator by operator id
+ * function to destroy query_plan
+
  * code review query_plan_interface functions
 
  * implement query_plan callback for the lock_manager, to wait and to wakeup/notify
