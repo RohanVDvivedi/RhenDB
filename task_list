@@ -1,18 +1,11 @@
  PICKED TASKS
 
- * first send all kill signals to all operators
- * then send broadcast to all operator_buffers and the condition variable that the lock tables will be using
- * then wait for all of them to die
-
  * implement query_plan callback for the lock_manager
  * function for the operators to lock, transition and release the lock
 
  * code review query_plan_interface functions
 
 
-
-
- * even selection and projection functions can be implemented as a synchronous operators (think about it)
 
  * make typed_user_value also hold where does it store it's extended bytes, and upon freeing free them too (for volatile page store)
  * selection and projection may instead be implemented using a complex transformer, how about we use python as a scripting tool to do this
@@ -21,6 +14,7 @@
  * a user defined function can be a series of transformers applied one after the another over a set of local variables
  * basically implement a RVM (RhenDB Virtual Machine)
  * that basically takes a transformer and converts it into C code function, then we compile it into binary machine code and execute it, like in JIT machines
+ * make simple transformers for selections and projections using this
 
   * what operators to implement
     * scan on b+tree/hash index (sort rids (per 1 or set of buckets for hash index OR about some 1000 pages for bplus tree) and then scan the table), scan on table(start and move ahead linearly)
