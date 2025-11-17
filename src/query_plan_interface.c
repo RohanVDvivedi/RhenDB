@@ -36,11 +36,18 @@ void mark_operator_self_killed(operator* o)
 	pthread_mutex_unlock(&(o->kill_lock));
 }
 
-void send_kill_and_wait_for_operator_to_die(operator* o)
+void send_kill_signal_to_operator(operator* o)
 {
 	pthread_mutex_lock(&(o->kill_lock));
 
 	o->is_kill_signal_sent = 1;
+
+	pthread_mutex_unlock(&(o->kill_lock));
+}
+
+void wait_for_operator_to_die(operator* o)
+{
+	pthread_mutex_lock(&(o->kill_lock));
 
 	while(!(o->is_killed))
 		pthread_cond_wait(&(o->wait_until_killed), &(o->kill_lock));
@@ -295,10 +302,22 @@ operator* get_operator_for_query_plan(query_plan* qp, uint32_t operator_id)
 
 void shutdown_and_destroy_query_plan(query_plan* qp)
 {
+	// send kill signal to all the operators
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
 	{
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
-		send_kill_and_wait_for_operator_to_die(o);
+		send_kill_signal_to_operator(o);
+	}
+
+	// spurious wake up all operator_buffer waiters
+
+	// spurious wake up all operatos waiting on the lock tables
+
+	// wait for the operator to die, then release all of their resources
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
+	{
+		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
+		wait_for_operator_to_die(o);
 		o->free_resources(o);
 		free(o);
 	}
