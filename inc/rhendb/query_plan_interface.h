@@ -35,6 +35,9 @@ struct operator
 
 	void (*free_resources)(operator* o);	// only thing left to be done after this call must be to call free on the operator
 
+	// below is the condition variable that this operator will wait on, when it needs to acquire locks on the database entities in the lock table
+	pthread_cond_t wait_on_lock_table_for_lock;
+
 	// below variables are only necessary if you are interested in killing the operator OR waiting for it to be killed
 
 	pthread_mutex_t kill_lock;		// global lock for the operator
