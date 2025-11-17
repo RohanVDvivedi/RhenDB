@@ -1,8 +1,5 @@
  PICKED TASKS
 
- * function to get operator by operator id
- * function to start all the operators
-
  * first send all kill signals to all operators
  * then send broadcast to all operator_buffers and the condition variable that the lock tables will be using
  * then wait for all of them to die
