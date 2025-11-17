@@ -273,6 +273,26 @@ void register_operator_for_query_plan(query_plan* qp, operator* o)
 	push_back_to_arraylist(&(qp->operators), o);
 }
 
+void start_all_operators_for_query_plan(query_plan* qp)
+{
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
+	{
+		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
+		o->start_execution(o);
+	}
+}
+
+operator* get_operator_for_query_plan(query_plan* qp, uint32_t operator_id)
+{
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
+	{
+		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
+		if(o->operator_id == operator_id)
+			return o;
+	}
+	return NULL;
+}
+
 void shutdown_and_destroy_query_plan(query_plan* qp)
 {
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)

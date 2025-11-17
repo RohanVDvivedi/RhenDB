@@ -107,6 +107,10 @@ operator_buffer* get_new_registered_operator_buffer_for_query_plan(query_plan* q
 
 void register_operator_for_query_plan(query_plan* qp, operator* o);
 
+void start_all_operators_for_query_plan(query_plan* qp);
+
+operator* get_operator_for_query_plan(query_plan* qp, uint32_t operator_id);
+
 void shutdown_and_destroy_query_plan(query_plan* qp);
 
 #endif
