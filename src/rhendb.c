@@ -254,7 +254,7 @@ static void notify_unblocked(void* context_p, uint256 transaction_id, uint32_t t
 	{
 		pthread_mutex_lock(&(rdb->lock_manager_external_lock));
 
-		transaction* tx = find_from_hashmap(&(rdb->active_transactions), &((const transaction){.transaction_id = &transaction_id}));
+		transaction* tx = find_in_hashmap(&(rdb->active_transactions), &((const transaction){.transaction_id = &transaction_id}));
 		if(tx != NULL && tx->curr_query != NULL)
 		{
 			operator* o = get_operator_for_query_plan(tx->curr_query, task_id);
