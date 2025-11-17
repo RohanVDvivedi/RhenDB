@@ -55,12 +55,6 @@ int is_kill_signal_sent(operator* o);
 // to be called from inside the operator once it is killed
 void mark_operator_self_killed(operator* o);
 
-// called by the query_plan to send kill to an operator
-void send_kill_signal_to_operator(operator* o);
-
-// wait here after you send the operators a kill signal, waiting for them to die
-void wait_for_operator_to_die(operator* o);
-
 typedef struct operator_buffer operator_buffer;
 struct operator_buffer
 {

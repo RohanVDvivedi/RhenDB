@@ -1,5 +1,7 @@
 #include<rhendb/query_plan_interface.h>
 
+#include<rhendb/transaction.h>
+
 #include<posixutils/pthread_cond_utils.h>
 
 // operator functions
@@ -36,7 +38,8 @@ void mark_operator_self_killed(operator* o)
 	pthread_mutex_unlock(&(o->kill_lock));
 }
 
-void send_kill_signal_to_operator(operator* o)
+// called by the query_plan to send kill to an operator
+static void send_kill_signal_to_operator(operator* o)
 {
 	pthread_mutex_lock(&(o->kill_lock));
 
@@ -45,7 +48,8 @@ void send_kill_signal_to_operator(operator* o)
 	pthread_mutex_unlock(&(o->kill_lock));
 }
 
-void wait_for_operator_to_die(operator* o)
+// wait here after you send the operators a kill signal, waiting for them to die
+static void wait_for_operator_to_die(operator* o)
 {
 	pthread_mutex_lock(&(o->kill_lock));
 
@@ -53,6 +57,11 @@ void wait_for_operator_to_die(operator* o)
 		pthread_cond_wait(&(o->wait_until_killed), &(o->kill_lock));
 
 	pthread_mutex_unlock(&(o->kill_lock));
+}
+
+static void spurious_wake_up_operator(operator* o)
+{
+	pthread_cond_broadcast(&(o->wait_on_lock_table_for_lock));
 }
 
 // operator buffer functions
@@ -237,6 +246,13 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee
 	return tts;
 }
 
+static void spurious_wake_up_all_for_operator_buffer(operator_buffer* ob)
+{
+	pthread_mutex_lock(&(ob->lock));
+		pthread_cond_broadcast(&(ob->wait));
+	pthread_mutex_unlock(&(ob->lock));
+}
+
 // query plan functions
 
 query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count, uint32_t operator_buffers_count)
@@ -310,8 +326,20 @@ void shutdown_and_destroy_query_plan(query_plan* qp)
 	}
 
 	// spurious wake up all operator_buffer waiters
+	pthread_mutex_lock(&(qp->curr_tx->db->lock_manager_external_lock));
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
+	{
+		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
+		spurious_wake_up_operator(o);
+	}
+	pthread_mutex_unlock(&(qp->curr_tx->db->lock_manager_external_lock));
 
 	// spurious wake up all operatos waiting on the lock tables
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operator_buffers)); i++)
+	{
+		operator_buffer* ob = (operator_buffer*) get_from_arraylist(&(qp->operator_buffers), i);
+		spurious_wake_up_all_for_operator_buffer(ob);
+	}
 
 	// wait for the operator to die, then release all of their resources
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
