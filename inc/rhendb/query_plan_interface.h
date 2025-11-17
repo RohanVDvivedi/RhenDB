@@ -37,6 +37,7 @@ struct operator
 
 	// below is the condition variable that this operator will wait on, when it needs to acquire locks on the database entities in the lock table
 	// only scans/writers on indexes and heap tables will need this
+	// the mutex to be used with this condition variable must be operator * o->self_query_plan->curr_tx->db->lock_manager_external_lock
 	pthread_cond_t wait_on_lock_table_for_lock;
 
 	// below variables are only necessary if you are interested in killing the operator OR waiting for it to be killed
