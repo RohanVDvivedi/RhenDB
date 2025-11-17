@@ -218,6 +218,8 @@ void register_transaction_with_rhendb(rhendb* rdb, transaction* tx)
 {
 	pthread_mutex_lock(&(rdb->lock_manager_external_lock));
 
+	tx->db = rdb;
+
 	insert_in_hashmap(&(rdb->active_transactions), tx);
 
 	pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
@@ -228,6 +230,8 @@ void deregister_transaction_with_rhendb(rhendb* rdb, transaction* tx)
 	pthread_mutex_lock(&(rdb->lock_manager_external_lock));
 
 	remove_from_hashmap(&(rdb->active_transactions), tx);
+
+	tx->db = NULL;
 
 	pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
 }
@@ -254,7 +258,7 @@ static void notify_unblocked(void* context_p, uint256 transaction_id, uint32_t t
 	{
 		pthread_mutex_lock(&(rdb->lock_manager_external_lock));
 
-		transaction* tx = find_in_hashmap(&(rdb->active_transactions), &((const transaction){.transaction_id = &transaction_id}));
+		transaction* tx = (transaction*) find_equals_in_hashmap(&(rdb->active_transactions), &((const transaction){.transaction_id = &transaction_id}));
 		if(tx != NULL && tx->curr_query != NULL)
 		{
 			operator* o = get_operator_for_query_plan(tx->curr_query, task_id);
