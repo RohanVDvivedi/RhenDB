@@ -248,9 +248,33 @@ static void notify_unblocked(void* context_p, uint256 transaction_id, uint32_t t
 	// rhendb provided the callback so we are the context
 	rhendb* rdb = context_p;
 
-	printf("notify_unblocked( trx_id = ");
-	print_transaction_id(transaction_id);
-	printf(" , task_id = %"PRIu32" )\n\n", task_id);
+	int operator_found = 0;
+
+	// wake up the right operator, for the corresponding transaction
+	{
+		pthread_mutex_lock(&(rdb->lock_manager_external_lock));
+
+		transaction* tx = find_from_hashmap(&(rdb->active_transactions), &((const transaction){.transaction_id = &transaction_id}));
+		if(tx != NULL && tx->curr_query != NULL)
+		{
+			operator* o = get_operator_for_query_plan(tx->curr_query, task_id);
+			if(o != NULL)
+			{
+				pthread_cond_broadcast(&(o->wait_on_lock_table_for_lock));
+				operator_found = 1;
+			}
+		}
+
+		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
+	}
+
+	// debug print of the operator was not found
+	if(!operator_found)
+	{
+		printf("notify_unblocked( trx_id = ");
+		print_transaction_id(transaction_id);
+		printf(" , task_id = %"PRIu32" )\n\n", task_id);
+	}
 }
 
 static void notify_deadlocked(void* context_p, uint256 transaction_id)
