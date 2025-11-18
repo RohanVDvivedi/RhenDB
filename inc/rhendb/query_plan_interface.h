@@ -86,7 +86,7 @@ int decrement_operator_buffer_consumers_count(operator_buffer* ob, uint32_t chan
 
 int push_to_operator_buffer(operator_buffer* ob, operator* callee, temp_tuple_store* tts);
 
-temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee);
+temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee, uint64_t timeout_in_microseconds);
 
 typedef struct transaction transaction;
 

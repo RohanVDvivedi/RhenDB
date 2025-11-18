@@ -210,9 +210,11 @@ int push_to_operator_buffer(operator_buffer* ob, operator* callee, temp_tuple_st
 	return pushed;
 }
 
-temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee)
+temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee, uint64_t timeout_in_microseconds)
 {
 	temp_tuple_store* tts = NULL;
+
+	int latches_released = 0;
 
 	pthread_mutex_lock(&(ob->lock));
 
@@ -220,8 +222,11 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee
 	// only then we are allowed to wait
 	while((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && ob->producers_count > 0 && ob->consumers_count > 0 && !is_kill_signal_sent(callee))
 	{
-		callee->operator_release_latches_and_store_context(callee);
-		pthread_cond_wait(&(ob->wait), &(ob->lock));
+		// if latches had not been released up until now, then do it
+		if(!latches_released)
+			callee->operator_release_latches_and_store_context(callee);
+
+		pthread_cond_timedwait_for_microseconds(&(ob->wait), &(ob->lock), &timeout_in_microseconds);
 	}
 
 	if(ob->consumers_count == 0)
