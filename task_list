@@ -1,11 +1,9 @@
  PICKED TASKS
 
- * function for the operators to lock, transition and release the lock
-
  * set killed_reason and killed_description for the operator, the present handling is just not enough
    * this can be set by the operator while killing itself upon completion or while sending kill signal
 
- * implement query plan call back to kill all operators for a dead lock
+ * implement query plan call back to kill all operators for a dead lock, passing them a reson for killing
 
  * code review query_plan_interface functions
 
