@@ -16,8 +16,6 @@ typedef struct query_plan query_plan;
 typedef struct operator operator;
 struct operator
 {
-	// below attributes are static and you do not need lock to access them
-
 	// operator_id is the id of this operator
 	uint32_t operator_id;
 
@@ -26,7 +24,7 @@ struct operator
 
 	void* inputs;			// pointer for the operator to store input params
 
-	void* context;			// to store positions of the operator in the scans
+	void* context;			// to store positions of the scans for the operator
 
 	void (*start_execution)(operator* o);	// this will be called only once and operator must start execution only after this call
 
@@ -46,7 +44,11 @@ struct operator
 	pthread_cond_t wait_until_killed; // wait for the operator to get into OPERATOR_KILLED state
 
 	int is_killed:1;
+
 	int is_kill_signal_sent:1;
+
+	// this kill_reason will be set while sending a kill signal to the operator
+	dstring kill_reason;
 };
 
 // keep on checking this signal from the operator and kill your self once it returns true
