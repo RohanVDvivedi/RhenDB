@@ -55,6 +55,8 @@ int is_kill_signal_sent(operator* o);
 // to be called from inside the operator once it is killed
 void mark_operator_self_killed(operator* o);
 
+
+
 typedef struct operator_buffer operator_buffer;
 struct operator_buffer
 {
