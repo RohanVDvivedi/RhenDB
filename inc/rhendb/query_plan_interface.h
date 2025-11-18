@@ -55,7 +55,10 @@ int is_kill_signal_sent(operator* o);
 // to be called from inside the operator once it is killed
 void mark_operator_self_killed(operator* o);
 
+// returns 0, if lock not acquired 1 if acquired, and -1 if an abort must be performed
+int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, uint64_t timeout_in_microseconds);
 
+void release_lock_on_resource_from_operator(operator* o, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
 typedef struct operator_buffer operator_buffer;
 struct operator_buffer

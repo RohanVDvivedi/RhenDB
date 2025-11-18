@@ -64,6 +64,71 @@ static void spurious_wake_up_operator(operator* o)
 	pthread_cond_broadcast(&(o->wait_on_lock_table_for_lock));
 }
 
+int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, uint64_t timeout_in_microseconds)
+{
+	int result = 0;
+	int latches_released = 0;
+	int non_blocking = (timeout_in_microseconds == NON_BLOCKING);
+
+	pthread_mutex_lock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
+
+	int wait_error = 0;
+	while(!is_kill_signal_sent(o) && !(wait_error))
+	{
+		lock_result locking_result = acquire_lock_with_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), *(o->self_query_plan->curr_tx->transaction_id), o->operator_id, resource_type, resource_id, resource_id_size, new_lock_mode, non_blocking);
+
+		if(locking_result == LOCK_ACQUIRED || locking_result == LOCK_TRANSITIONED || locking_result == LOCK_ALREADY_HELD)
+		{
+			result = 1;
+			break;
+		}
+		else if(locking_result == LOCKING_FAILED)
+		{
+			result = 0;
+			break;
+		}
+		else if(locking_result == MUST_BLOCK_FOR_LOCK)
+		{
+			if(timeout_in_microseconds == NON_BLOCKING)
+			{
+				printf("BUG: in operator for query_plan_interface, lock manager asked us to wait for lock when requesting for a lock non-blockingly\n");
+				exit(-1);
+			}
+
+			// release latches before going into wait
+			if(!latches_released)
+			{
+				o->operator_release_latches_and_store_context(o);
+				latches_released = 1;
+			}
+
+			wait_error = pthread_cond_timedwait_for_microseconds(&(o->wait_on_lock_table_for_lock), &(o->self_query_plan->curr_tx->db->lock_manager_external_lock), &timeout_in_microseconds);
+
+			// if a kill signal was sent while we were waiting then break, and return -1
+			if(is_kill_signal_sent(o))
+			{
+				result = -1;
+				break;
+			}
+			else // else just continue
+				continue;
+		}
+	}
+
+	pthread_mutex_unlock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
+
+	return result;
+}
+
+void release_lock_on_resource_from_operator(operator* o, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+{
+	pthread_mutex_lock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
+
+	release_lock_with_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), *(o->self_query_plan->curr_tx->transaction_id), o->operator_id, resource_type, resource_id, resource_id_size);
+
+	pthread_mutex_unlock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
+}
+
 // operator buffer functions
 
 int increment_operator_buffer_producers_count(operator_buffer* ob, uint32_t change_amount)
@@ -228,7 +293,10 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee
 		{
 			// if latches had not been released up until now, then do it
 			if(!latches_released)
+			{
 				callee->operator_release_latches_and_store_context(callee);
+				latches_released = 1;
+			}
 
 			wait_error = pthread_cond_timedwait_for_microseconds(&(ob->wait), &(ob->lock), &timeout_in_microseconds);
 		}
