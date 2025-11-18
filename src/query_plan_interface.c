@@ -210,7 +210,7 @@ int push_to_operator_buffer(operator_buffer* ob, operator* callee, temp_tuple_st
 	return pushed;
 }
 
-temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee, uint64_t timeout_in_microseconds)
+temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee, uint64_t timeout_in_microseconds, int* no_more_data)
 {
 	temp_tuple_store* tts = NULL;
 
@@ -243,6 +243,12 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee
 
 		ob->tuple_stores_count -= 1;
 		ob->tuples_count -= tts->tuples_count;
+	}
+	else // if there is no more data
+	{
+		// if there are no more producers then there won't be any more pushes, i.e. end of stream
+		if(ob->producers_count == 0)
+			(*no_more_data) = 1;
 	}
 
 	EXIT:;
