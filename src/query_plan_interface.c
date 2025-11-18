@@ -212,6 +212,7 @@ int push_to_operator_buffer(operator_buffer* ob, operator* callee, temp_tuple_st
 
 temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee, uint64_t timeout_in_microseconds, int* no_more_data)
 {
+	(*no_more_data) = 0;
 	temp_tuple_store* tts = NULL;
 
 	int latches_released = 0;
@@ -220,25 +221,37 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee
 
 	// if there is not data and there are producers producing and there is atleast 1 consumer and the callee has not received kill signal yet
 	// only then we are allowed to wait
-	while((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && ob->producers_count > 0 && ob->consumers_count > 0 && !is_kill_signal_sent(callee))
+	if(timeout_in_microseconds != NON_BLOCKING)
 	{
-		// if latches had not been released up until now, then do it
-		if(!latches_released)
-			callee->operator_release_latches_and_store_context(callee);
+		int wait_error = 0;
+		while((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && ob->producers_count > 0 && ob->consumers_count > 0 && !is_kill_signal_sent(callee) && (!wait_error))
+		{
+			// if latches had not been released up until now, then do it
+			if(!latches_released)
+				callee->operator_release_latches_and_store_context(callee);
 
-		pthread_cond_timedwait_for_microseconds(&(ob->wait), &(ob->lock), &timeout_in_microseconds);
+			wait_error = pthread_cond_timedwait_for_microseconds(&(ob->wait), &(ob->lock), &timeout_in_microseconds);
+		}
 	}
 
 	if(ob->consumers_count == 0)
+	{
+		(*no_more_data) = 1;
 		goto EXIT;
+	}
 
 	if(is_kill_signal_sent(callee))
+	{
+		(*no_more_data) = 1;
 		goto EXIT;
+	}
 
 	// now if there is data, remove it from the queue and exit
 	tts = (temp_tuple_store*) get_head_of_linkedlist(&(ob->tuple_stores));
 	if(tts != NULL)
 	{
+		(*no_more_data) = 0;
+
 		remove_from_linkedlist(&(ob->tuple_stores), tts);
 
 		ob->tuple_stores_count -= 1;
@@ -249,6 +262,8 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee
 		// if there are no more producers then there won't be any more pushes, i.e. end of stream
 		if(ob->producers_count == 0)
 			(*no_more_data) = 1;
+		else
+			(*no_more_data) = 0;
 	}
 
 	EXIT:;
