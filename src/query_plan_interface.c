@@ -28,9 +28,18 @@ int is_kill_signal_sent_OR_is_killed(operator* o)
 	return is_kill_signal_sent_OR_is_killed;
 }
 
-void mark_operator_self_killed(operator* o)
+void mark_operator_self_killed(operator* o, dstring kill_reason)
 {
 	pthread_mutex_lock(&(o->kill_lock));
+
+	// concatenate the kill reason passed
+	{
+		if(!is_empty_dstring(&(o->kill_reason)))
+			if(!concatenate_char(&(o->kill_reason), '$'))
+				exit(-1);
+		if(!concatenate_dstring(&(o->kill_reason), &kill_reason))
+			exit(-1);
+	}
 
 	o->is_killed = 1;
 	pthread_cond_broadcast(&(o->wait_until_killed));
@@ -39,9 +48,18 @@ void mark_operator_self_killed(operator* o)
 }
 
 // called by the query_plan to send kill to an operator
-static void send_kill_signal_to_operator(operator* o)
+static void send_kill_signal_to_operator(operator* o, dstring kill_reason)
 {
 	pthread_mutex_lock(&(o->kill_lock));
+
+	// concatenate the kill reason passed
+	{
+		if(!is_empty_dstring(&(o->kill_reason)))
+			if(!concatenate_char(&(o->kill_reason), '$'))
+				exit(-1);
+		if(!concatenate_dstring(&(o->kill_reason), &kill_reason))
+			exit(-1);
+	}
 
 	o->is_kill_signal_sent = 1;
 
@@ -436,13 +454,13 @@ operator* get_operator_for_query_plan(query_plan* qp, uint32_t operator_id)
 	return NULL;
 }
 
-void shutdown_query_plan(query_plan* qp)
+void shutdown_query_plan(query_plan* qp, dstring kill_reason)
 {
 	// send kill signal to all the operators
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
 	{
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
-		send_kill_signal_to_operator(o);
+		send_kill_signal_to_operator(o, kill_reason);
 	}
 
 	// spurious wake up all operator_buffer waiters
@@ -472,7 +490,7 @@ void wait_for_completion_of_shutdown_query_plan(query_plan* qp)
 	}
 }
 
-void destroy_query_plan(query_plan* qp)
+void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 {
 	// release all of the operator resources
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
@@ -497,6 +515,15 @@ void destroy_query_plan(query_plan* qp)
 		pthread_cond_destroy(&(o->wait_until_killed));
 		o->is_killed = 0;
 		o->is_kill_signal_sent = 0;
+
+		// concatenate the kill reason passed
+		{
+			if(!concatenate_dstring(kill_reasons, &(o->kill_reason)))
+				exit(-1);
+			if(!concatenate_char(kill_reasons, '\n'))
+				exit(-1);
+		}
+
 		init_empty_dstring(&(o->kill_reason), 0);
 
 		free(o);

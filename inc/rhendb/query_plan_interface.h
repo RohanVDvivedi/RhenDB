@@ -51,6 +51,7 @@ struct operator
 
 	// this kill_reason will be set while sending a kill signal to the operator
 	// kill_reason is valid only if a kill signal was sent
+	// kill_reasons only get appended here
 	dstring kill_reason;
 };
 
@@ -58,7 +59,7 @@ struct operator
 int is_kill_signal_sent(operator* o);
 
 // to be called from inside the operator once it is killed
-void mark_operator_self_killed(operator* o);
+void mark_operator_self_killed(operator* o, dstring kill_reason);
 
 // returns 0, if lock not acquired 1 if acquired, and -1 if an abort must be performed
 int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, uint64_t timeout_in_microseconds);
@@ -124,11 +125,11 @@ void start_all_operators_for_query_plan(query_plan* qp);
 operator* get_operator_for_query_plan(query_plan* qp, uint32_t operator_id);
 
 // may be called as many times as you desire
-void shutdown_query_plan(query_plan* qp);
+void shutdown_query_plan(query_plan* qp, dstring kill_reasons);
 
 void wait_for_completion_of_shutdown_query_plan(query_plan* qp);
 
 // must be called only after the query_plan is shutdown
-void destroy_query_plan(query_plan* qp);
+void destroy_query_plan(query_plan* qp, dstring* kill_reasons);
 
 #endif
