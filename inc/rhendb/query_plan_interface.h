@@ -120,6 +120,12 @@ void start_all_operators_for_query_plan(query_plan* qp);
 
 operator* get_operator_for_query_plan(query_plan* qp, uint32_t operator_id);
 
-void shutdown_and_destroy_query_plan(query_plan* qp);
+// may be called as many times as you desire
+void shutdown_query_plan(query_plan* qp);
+
+void wait_for_completion_of_shutdown_query_plan(query_plan* qp);
+
+// must be called only after the query_plan is shutdown
+void destroy_query_plan(query_plan* qp);
 
 #endif

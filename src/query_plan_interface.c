@@ -410,7 +410,7 @@ operator* get_operator_for_query_plan(query_plan* qp, uint32_t operator_id)
 	return NULL;
 }
 
-void shutdown_and_destroy_query_plan(query_plan* qp)
+void shutdown_query_plan(query_plan* qp)
 {
 	// send kill signal to all the operators
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
@@ -428,22 +428,37 @@ void shutdown_and_destroy_query_plan(query_plan* qp)
 	}
 	pthread_mutex_unlock(&(qp->curr_tx->db->lock_manager_external_lock));
 
-	// spurious wake up all operatos waiting on the lock tables
+	// spurious wake up all operators waiting on the lock tables
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operator_buffers)); i++)
 	{
 		operator_buffer* ob = (operator_buffer*) get_from_arraylist(&(qp->operator_buffers), i);
 		spurious_wake_up_all_for_operator_buffer(ob);
 	}
+}
 
-	// wait for the operator to die, then release all of their resources
+void wait_for_completion_of_shutdown_query_plan(query_plan* qp)
+{
+	// wait for the operator to die
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
 	{
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
 		wait_for_operator_to_die(o);
+	}
+}
+
+void destroy_query_plan(query_plan* qp)
+{
+	// release all of the operator resources
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
+	{
+		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
+
 		o->free_resources(o);
+
 		free(o);
 	}
 
+	// release all resources for all operator buffers
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operator_buffers)); i++)
 	{
 		operator_buffer* ob = (operator_buffer*) get_from_arraylist(&(qp->operator_buffers), i);
