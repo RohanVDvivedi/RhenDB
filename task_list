@@ -1,9 +1,6 @@
  PICKED TASKS
 
- * set killed_reason and killed_description for the operator, the present handling is just not enough
-   * this can be set by the operator while killing itself upon completion or while sending kill signal
-
- * implement query plan call back to kill all operators for a dead lock, passing them a reson for killing
+ * send_kill_signal_to_operator takes in a kill_reason that get's cloned inside the operator
 
  * code review query_plan_interface functions
 
