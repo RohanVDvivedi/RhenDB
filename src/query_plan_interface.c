@@ -367,6 +367,8 @@ query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count, u
 operator_buffer* get_new_registered_operator_buffer_for_query_plan(query_plan* qp)
 {
 	operator_buffer* ob = malloc(sizeof(operator_buffer));
+	if(ob == NULL)
+		exit(-1);
 
 	if(is_full_arraylist(&(qp->operator_buffers)) && !expand_arraylist(&(qp->operator_buffers)))
 		exit(-1);
@@ -383,11 +385,36 @@ operator_buffer* get_new_registered_operator_buffer_for_query_plan(query_plan* q
 	return ob;
 }
 
-void register_operator_for_query_plan(query_plan* qp, operator* o)
+operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 {
+	operator* o = malloc(sizeof(operator));
+	if(o == NULL)
+		exit(-1);
+
 	if(is_full_arraylist(&(qp->operators)) && !expand_arraylist(&(qp->operators)))
 		exit(-1);
 	push_back_to_arraylist(&(qp->operators), o);
+
+	o->operator_id = get_element_count_arraylist(&(qp->operators));
+
+	o->self_query_plan = qp;
+
+	o->inputs = NULL;
+	o->context = NULL;
+
+	o->start_execution = NULL;
+	o->operator_release_latches_and_store_context = NULL;
+	o->free_resources = NULL;
+
+	pthread_cond_init_with_monotonic_clock(&(o->wait_on_lock_table_for_lock));
+
+	pthread_mutex_init(&(o->kill_lock), NULL);
+	pthread_cond_init_with_monotonic_clock(&(o->wait_until_killed));
+	o->is_killed = 0;
+	o->is_kill_signal_sent = 0;
+	init_empty_dstring(&(o->kill_reason), 0);
+
+	return o;
 }
 
 void start_all_operators_for_query_plan(query_plan* qp)

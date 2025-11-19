@@ -116,7 +116,7 @@ query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count, u
 
 operator_buffer* get_new_registered_operator_buffer_for_query_plan(query_plan* qp);
 
-void register_operator_for_query_plan(query_plan* qp, operator* o);
+operator* get_new_registered_operator_for_query_plan(query_plan* qp);
 
 void start_all_operators_for_query_plan(query_plan* qp);
 
