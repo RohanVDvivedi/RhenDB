@@ -50,6 +50,7 @@ struct operator
 	int is_kill_signal_sent:1;
 
 	// this kill_reason will be set while sending a kill signal to the operator
+	// kill_reason is valid only if a kill signal was sent
 	dstring kill_reason;
 };
 
