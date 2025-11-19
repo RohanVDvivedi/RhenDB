@@ -31,6 +31,8 @@ struct operator
 	// this function get's called before operator goes into waiting on lock_table or the operator_buffer
 	void (*operator_release_latches_and_store_context)(operator* o);
 
+	// the free_resources function gets called after the operator is killed
+	// it should only be responsible for cleaning up inputs and contexts used by the operator
 	void (*free_resources)(operator* o);	// only thing left to be done after this call must be to call free on the operator
 
 	// below is the condition variable that this operator will wait on, when it needs to acquire locks on the database entities in the lock table
