@@ -396,7 +396,6 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	push_back_to_arraylist(&(qp->operators), o);
 
 	o->operator_id = get_element_count_arraylist(&(qp->operators));
-
 	o->self_query_plan = qp;
 
 	o->inputs = NULL;
@@ -481,6 +480,24 @@ void destroy_query_plan(query_plan* qp)
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
 
 		o->free_resources(o);
+
+		o->operator_id = 0;
+		o->self_query_plan = NULL;
+
+		o->inputs = NULL;
+		o->context = NULL;
+
+		o->start_execution = NULL;
+		o->operator_release_latches_and_store_context = NULL;
+		o->free_resources = NULL;
+
+		pthread_cond_destroy(&(o->wait_on_lock_table_for_lock));
+
+		pthread_mutex_destroy(&(o->kill_lock));
+		pthread_cond_destroy(&(o->wait_until_killed));
+		o->is_killed = 0;
+		o->is_kill_signal_sent = 0;
+		init_empty_dstring(&(o->kill_reason), 0);
 
 		free(o);
 	}
