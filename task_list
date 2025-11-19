@@ -1,7 +1,5 @@
  PICKED TASKS
 
- * send_kill_signal_to_operator takes in a kill_reason that get's cloned inside the operator
-
  * code review query_plan_interface functions
 
 
