@@ -365,7 +365,22 @@ static void spurious_wake_up_all_for_operator_buffer(operator_buffer* ob)
 	pthread_mutex_unlock(&(ob->lock));
 }
 
-void OPERATOR_NO_OP_FUNCTION(operator* o){}
+void OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION(operator* o){}
+
+void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
+{
+	if(o->inputs)
+	{
+		free(o->inputs);
+		o->inputs = NULL;
+	}
+
+	if(o->contexts)
+	{
+		free(o->contexts);
+		o->contexts = NULL;
+	}
+}
 
 // query plan functions
 

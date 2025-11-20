@@ -64,8 +64,11 @@ int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, 
 
 void release_lock_on_resource_from_operator(operator* o, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
-// below is a no-op function to be used with operator_release_latches_and_store_context OR free_resources function replacements
-void OPERATOR_NO_OP_FUNCTION(operator* o);
+// below is a no-op function to be used with operator_release_latches_and_store_context
+void OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION(operator* o);
+
+// below is a simple flat free_resource function to be used with simple operators
+void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o);
 
 typedef struct operator_buffer operator_buffer;
 struct operator_buffer
