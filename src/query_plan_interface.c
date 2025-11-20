@@ -394,10 +394,6 @@ operator_buffer* get_new_registered_operator_buffer_for_query_plan(query_plan* q
 	if(ob == NULL)
 		exit(-1);
 
-	if(is_full_arraylist(&(qp->operator_buffers)) && !expand_arraylist(&(qp->operator_buffers)))
-		exit(-1);
-	push_back_to_arraylist(&(qp->operator_buffers), ob);
-
 	pthread_mutex_init(&(ob->lock), NULL);
 	pthread_cond_init_with_monotonic_clock(&(ob->wait));
 	ob->tuple_stores_count = 0;
@@ -405,6 +401,10 @@ operator_buffer* get_new_registered_operator_buffer_for_query_plan(query_plan* q
 	initialize_linkedlist(&(ob->tuple_stores), offsetof(temp_tuple_store, embed_node_ll));
 	ob->producers_count = 1;
 	ob->consumers_count = 1;
+
+	if(is_full_arraylist(&(qp->operator_buffers)) && !expand_arraylist(&(qp->operator_buffers)))
+		exit(-1);
+	push_back_to_arraylist(&(qp->operator_buffers), ob);
 
 	return ob;
 }
@@ -415,10 +415,7 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	if(o == NULL)
 		exit(-1);
 
-	if(is_full_arraylist(&(qp->operators)) && !expand_arraylist(&(qp->operators)))
-		exit(-1);
-	push_back_to_arraylist(&(qp->operators), o);
-
+	// ith created operator has i as it's operator_id, and is as ith index in the qp->operators
 	o->operator_id = get_element_count_arraylist(&(qp->operators));
 	o->self_query_plan = qp;
 
@@ -437,6 +434,10 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	o->is_kill_signal_sent = 0;
 	init_empty_dstring(&(o->kill_reason), 0);
 
+	if(is_full_arraylist(&(qp->operators)) && !expand_arraylist(&(qp->operators)))
+		exit(-1);
+	push_back_to_arraylist(&(qp->operators), o);
+
 	return o;
 }
 
@@ -451,9 +452,10 @@ void start_all_operators_for_query_plan(query_plan* qp)
 
 operator* get_operator_for_query_plan(query_plan* qp, uint32_t operator_id)
 {
-	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
+	// using the fact that the operator with given operator_id will always be at the ith index
+	if(operator_id < get_element_count_arraylist(&(qp->operators)))
 	{
-		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
+		operator* o = (operator*) get_from_arraylist(&(qp->operators), operator_id);
 		if(o->operator_id == operator_id)
 			return o;
 	}
