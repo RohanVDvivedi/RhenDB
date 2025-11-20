@@ -232,9 +232,7 @@ int increment_operator_buffer_consumers_count(operator_buffer* ob, uint32_t chan
 	if(ob->consumers_count == 0)
 		goto EXIT;
 
-	// you can not add more consumers, if the producers_count has reached 0
-	if(ob->producers_count == 0)
-		goto EXIT;
+	// you can not add more consumers, even if the producers_count has reached 0, in order to consume everything quickly
 
 	// only possible to increment consumers, while there still are some consumers
 	if(!will_unsigned_sum_overflow(uint32_t, ob->consumers_count, change_amount))
