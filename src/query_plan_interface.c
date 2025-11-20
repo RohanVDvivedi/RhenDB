@@ -289,7 +289,7 @@ int push_to_operator_buffer(operator_buffer* ob, operator* callee, temp_tuple_st
 			ob->tuple_stores_count += 1;
 			ob->tuples_count += tts->tuples_count;
 
-			// wake up blocking waiters
+			// wake up some blocked waiter
 			pthread_cond_signal(&(ob->wait));
 		}
 	}
