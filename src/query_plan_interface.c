@@ -542,8 +542,6 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 	{
 		operator_buffer* ob = (operator_buffer*) get_from_arraylist(&(qp->operator_buffers), i);
 
-		pthread_mutex_lock(&(ob->lock));
-
 		while(NULL != get_head_of_linkedlist(&(ob->tuple_stores)))
 		{
 			temp_tuple_store* tts = (temp_tuple_store*) get_head_of_linkedlist(&(ob->tuple_stores));
@@ -552,7 +550,11 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 			delete_temp_tuple_store(tts);
 		}
 
-		pthread_mutex_unlock(&(ob->lock));
+		ob->tuples_count = 0;
+		ob->tuple_stores_count = 0;
+
+		ob->consumers_count = 0;
+		ob->consumers_count = 0;
 
 		pthread_mutex_destroy(&(ob->lock));
 		pthread_cond_destroy(&(ob->wait));
