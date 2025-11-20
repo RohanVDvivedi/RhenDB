@@ -308,7 +308,7 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee
 
 	pthread_mutex_lock(&(ob->lock));
 
-	// if there is not data and there are producers producing and there is atleast 1 consumer and the callee has not received kill signal yet
+	// if there is no data and there are producers producing and there is atleast 1 consumer and the callee has not received kill signal yet
 	// only then we are allowed to wait
 	if(timeout_in_microseconds != NON_BLOCKING)
 	{
