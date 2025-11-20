@@ -365,6 +365,8 @@ static void spurious_wake_up_all_for_operator_buffer(operator_buffer* ob)
 	pthread_mutex_unlock(&(ob->lock));
 }
 
+void OPERATOR_NO_OP_FUNCTION(operator* o){}
+
 // query plan functions
 
 query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count, uint32_t operator_buffers_count)
