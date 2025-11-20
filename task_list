@@ -1,6 +1,12 @@
  PICKED TASKS
 
- * code review query_plan_interface functions
+ * we need a struct/interface to fetch the transaction status of a transaction_id safely, and make the same struct for the transaction_table of our system, put this struct/interface in transaction_status header and source
+ * vaccum_horizon_transaction_id can be more efficiently calculates: it could possibly always be the smallest_active_transaction_id_in_snapshot in the oldest active transaction OR the next_assignable_transaction_id
+ * test query_plan interface, make simple operators and they need only 1 function to set them up called setup_hash_join, or setup_index_scan etc
+   * make simple operators to print tuples on the file descriptors
+   * make identity operator to pass the tuple_stores as is
+   * make a random/sequence generator operators
+   * put them up in a queue and watch them work for testing
 
 
 
