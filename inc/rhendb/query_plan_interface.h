@@ -131,6 +131,9 @@ operator* get_operator_for_query_plan(query_plan* qp, uint32_t operator_id);
 // may be called as many times as you desire
 void shutdown_query_plan(query_plan* qp, dstring kill_reasons);
 
+// below function is the identical version of the function above that needs to be called with lock_manager_external_lock held
+void shutdown_query_plan_LOCK_TABLE_UNSAFE(query_plan* qp, dstring kill_reasons);
+
 void wait_for_shutdown_of_query_plan(query_plan* qp);
 
 // must be called only after the query_plan is shutdown

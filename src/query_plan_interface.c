@@ -488,6 +488,30 @@ void shutdown_query_plan(query_plan* qp, dstring kill_reason)
 	}
 }
 
+void shutdown_query_plan_LOCK_TABLE_UNSAFE(query_plan* qp, dstring kill_reason)
+{
+	// send kill signal to all the operators
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
+	{
+		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
+		send_kill_signal_to_operator(o, kill_reason);
+	}
+
+	// spurious wake up all operators waiting on the lock tables
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
+	{
+		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
+		spurious_wake_up_operator(o);
+	}
+
+	// spurious wake up all operator_buffer waiters
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operator_buffers)); i++)
+	{
+		operator_buffer* ob = (operator_buffer*) get_from_arraylist(&(qp->operator_buffers), i);
+		spurious_wake_up_all_for_operator_buffer(ob);
+	}
+}
+
 void wait_for_shutdown_of_query_plan(query_plan* qp)
 {
 	// wait for the operator to die
