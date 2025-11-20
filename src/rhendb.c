@@ -272,7 +272,7 @@ static void notify_unblocked(void* context_p, uint256 transaction_id, uint32_t t
 		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
 	}
 
-	// debug print of the operator was not found
+	// debug print if the operator was not found
 	if(!operator_found)
 	{
 		printf("notify_unblocked( trx_id = ");
@@ -286,7 +286,27 @@ static void notify_deadlocked(void* context_p, uint256 transaction_id)
 	// rhendb provided the callback so we are the context
 	rhendb* rdb = context_p;
 
-	printf("notify_deadlocked( trx_id = ");
-	print_transaction_id(transaction_id);
-	printf(" )\n\n");
+	int transaction_found = 0;
+
+	// notify the right transaction's curr_query, for the deadlock
+	{
+		pthread_mutex_lock(&(rdb->lock_manager_external_lock));
+
+		transaction* tx = (transaction*) find_equals_in_hashmap(&(rdb->active_transactions), &((const transaction){.transaction_id = &transaction_id}));
+		if(tx != NULL && tx->curr_query != NULL)
+		{
+			shutdown_query_plan_LOCK_TABLE_UNSAFE(tx->curr_query, get_dstring_pointing_to_literal_cstring("DEADLOCK DETECTED"));
+			transaction_found = 1;
+		}
+
+		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
+	}
+
+	// debug print if the transaction was not found
+	if(!transaction_found)
+	{
+		printf("notify_deadlocked( trx_id = ");
+		print_transaction_id(transaction_id);
+		printf(" )\n\n");
+	}
 }
