@@ -1,5 +1,6 @@
  PICKED TASKS
 
+ * we can have slight performance boost, by not changing the TX_IN_PROGRESS -> TX_ABORTED state for a transaction with a flush, as this any reads after a crash may just read it as aborted helping up with quick runtime performance, but a bit slower start in transaction_table
  * we need a struct/interface to fetch the transaction status of a transaction_id safely, and make the same struct for the transaction_table of our system, put this struct/interface in transaction_status header and source
  * vaccum_horizon_transaction_id can be more efficiently calculates: it could possibly always be the smallest_active_transaction_id_in_snapshot in the oldest active transaction OR the next_assignable_transaction_id
  * test query_plan interface, make simple operators and they need only 1 function to set them up called setup_hash_join, or setup_index_scan etc
