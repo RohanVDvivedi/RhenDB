@@ -147,6 +147,23 @@ void release_lock_on_resource_from_operator(operator* o, uint32_t resource_type,
 	pthread_mutex_unlock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
 }
 
+void OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION(operator* o){}
+
+void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
+{
+	if(o->inputs)
+	{
+		free(o->inputs);
+		o->inputs = NULL;
+	}
+
+	if(o->contexts)
+	{
+		free(o->contexts);
+		o->contexts = NULL;
+	}
+}
+
 // operator buffer functions
 
 int increment_operator_buffer_producers_count(operator_buffer* ob, uint32_t change_amount)
@@ -363,23 +380,6 @@ static void spurious_wake_up_all_for_operator_buffer(operator_buffer* ob)
 	pthread_mutex_lock(&(ob->lock));
 		pthread_cond_broadcast(&(ob->wait));
 	pthread_mutex_unlock(&(ob->lock));
-}
-
-void OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION(operator* o){}
-
-void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
-{
-	if(o->inputs)
-	{
-		free(o->inputs);
-		o->inputs = NULL;
-	}
-
-	if(o->contexts)
-	{
-		free(o->contexts);
-		o->contexts = NULL;
-	}
 }
 
 // query plan functions
