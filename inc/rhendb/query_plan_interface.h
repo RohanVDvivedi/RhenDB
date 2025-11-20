@@ -40,8 +40,8 @@ struct operator
 
 	// below variables are only necessary if you are interested in killing the operator OR waiting for it to be killed
 
-	pthread_mutex_t kill_lock;		// global lock for the operator
-	pthread_cond_t wait_until_killed; // wait for the operator to get into OPERATOR_KILLED state
+	pthread_mutex_t kill_lock;			// kill lock for the operator
+	pthread_cond_t wait_until_killed; 	// wait for the operator to be killed
 
 	int is_killed:1;
 
@@ -105,7 +105,7 @@ struct query_plan
 	// the transaction that this query belongs to
 	transaction* curr_tx;
 
-	// operators scans, writers, and also the joins, sorts and groupbys
+	// operators like scans, writers, and also the joins, sorts and groupbys
 	arraylist operators;
 
 	// operator outputs including the intermediate ones
@@ -125,7 +125,7 @@ operator* get_operator_for_query_plan(query_plan* qp, uint32_t operator_id);
 // may be called as many times as you desire
 void shutdown_query_plan(query_plan* qp, dstring kill_reasons);
 
-void wait_for_completion_of_shutdown_query_plan(query_plan* qp);
+void wait_for_shutdown_of_query_plan(query_plan* qp);
 
 // must be called only after the query_plan is shutdown
 void destroy_query_plan(query_plan* qp, dstring* kill_reasons);

@@ -480,7 +480,7 @@ void shutdown_query_plan(query_plan* qp, dstring kill_reason)
 	}
 }
 
-void wait_for_completion_of_shutdown_query_plan(query_plan* qp)
+void wait_for_shutdown_of_query_plan(query_plan* qp)
 {
 	// wait for the operator to die
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
