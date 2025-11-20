@@ -1,8 +1,6 @@
 #ifndef OPERATOR_INTERFACE_H
 #define OPERATOR_INTERFACE_H
 
-#include<stdlib.h>
-
 #include<pthread.h>
 
 #include<rhendb/temp_tuple_store.h>
