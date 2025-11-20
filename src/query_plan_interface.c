@@ -17,17 +17,6 @@ int is_kill_signal_sent(operator* o)
 	return is_kill_signal_sent;
 }
 
-int is_kill_signal_sent_OR_is_killed(operator* o)
-{
-	pthread_mutex_lock(&(o->kill_lock));
-
-	int is_kill_signal_sent_OR_is_killed = (o->is_kill_signal_sent) || (o->is_killed);
-
-	pthread_mutex_unlock(&(o->kill_lock));
-
-	return is_kill_signal_sent_OR_is_killed;
-}
-
 void mark_operator_self_killed(operator* o, dstring kill_reason)
 {
 	pthread_mutex_lock(&(o->kill_lock));
@@ -157,10 +146,10 @@ void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
 		o->inputs = NULL;
 	}
 
-	if(o->contexts)
+	if(o->context)
 	{
-		free(o->contexts);
-		o->contexts = NULL;
+		free(o->context);
+		o->context = NULL;
 	}
 }
 
