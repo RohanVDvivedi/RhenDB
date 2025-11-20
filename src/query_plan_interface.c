@@ -22,6 +22,7 @@ void mark_operator_self_killed(operator* o, dstring kill_reason)
 	pthread_mutex_lock(&(o->kill_lock));
 
 	// concatenate the kill reason passed
+	if(!is_empty_dstring(&kill_reason))
 	{
 		if(!is_empty_dstring(&(o->kill_reason)))
 			if(!concatenate_char(&(o->kill_reason), '$'))
@@ -42,6 +43,7 @@ static void send_kill_signal_to_operator(operator* o, dstring kill_reason)
 	pthread_mutex_lock(&(o->kill_lock));
 
 	// concatenate the kill reason passed
+	if(!is_empty_dstring(&kill_reason))
 	{
 		if(!is_empty_dstring(&(o->kill_reason)))
 			if(!concatenate_char(&(o->kill_reason), '$'))
