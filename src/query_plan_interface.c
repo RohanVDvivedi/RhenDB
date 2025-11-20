@@ -471,7 +471,7 @@ void shutdown_query_plan(query_plan* qp, dstring kill_reason)
 		send_kill_signal_to_operator(o, kill_reason);
 	}
 
-	// spurious wake up all operator_buffer waiters
+	// spurious wake up all operators waiting on the lock tables
 	pthread_mutex_lock(&(qp->curr_tx->db->lock_manager_external_lock));
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
 	{
@@ -480,7 +480,7 @@ void shutdown_query_plan(query_plan* qp, dstring kill_reason)
 	}
 	pthread_mutex_unlock(&(qp->curr_tx->db->lock_manager_external_lock));
 
-	// spurious wake up all operators waiting on the lock tables
+	// spurious wake up all operator_buffer waiters
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operator_buffers)); i++)
 	{
 		operator_buffer* ob = (operator_buffer*) get_from_arraylist(&(qp->operator_buffers), i);
