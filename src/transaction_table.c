@@ -509,7 +509,7 @@ mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl)
 
 	write_unlock(&(ttbl->transaction_table_cache_lock));
 
-	// set the transaction status in the persistent table, with flush=1
+	// set the transaction status in the persistent table, with flush=1 (so it does not get reassigned after a crash)
 	set_transaction_status_in_table(ttbl, snp->transaction_id, TX_IN_PROGRESS, 1);
 
 	write_unlock(&(ttbl->transaction_table_lock));
@@ -604,8 +604,10 @@ int update_transaction_status(transaction_table* ttbl, uint256 transaction_id, t
 
 	write_unlock(&(ttbl->transaction_table_cache_lock));
 
-	// update the actual on-disk transaction table, with flush=1
-	set_transaction_status_in_table(ttbl, transaction_id, status, 1);
+	// update the actual on-disk transaction table, with flush-ing only if it is meant to commit (so that a crash still thinks of it being committed)
+	// a transaction abort may fail upon a crash, but it's status after a crash being in-progress still means it is aborted
+	// NOTE: upon getting an undesired behaviour, just make the flush parameter of the below call equal to 1 (making it a bit unoptimized), and hope for the best!!!
+	set_transaction_status_in_table(ttbl, transaction_id, status, (status == TX_COMMITTED));
 
 	write_unlock(&(ttbl->transaction_table_lock));
 
