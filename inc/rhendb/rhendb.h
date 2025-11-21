@@ -34,6 +34,7 @@ struct rhendb
 
 	// transaction table => stored on the persistent_acid_rage_engine
 	transaction_table tx_table;
+	transaction_status_getter tsg; // an interface to get the transaction statuses
 
 	// external lock for the lock
 	// and the lck_table => stored on the volatile_rage_engine
