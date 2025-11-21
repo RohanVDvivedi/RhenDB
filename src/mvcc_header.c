@@ -119,7 +119,7 @@ void print_mvcc_header(const mvcc_header* mvcchdr_p)
 	}
 }
 
-transaction_status fetch_status_for_transaction_id_with_hints(transaction_id_with_hints* transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated)
+transaction_status fetch_status_for_transaction_id_with_hints(transaction_id_with_hints* transaction_id, transaction_status_getter* tsg_p, int* were_hints_updated)
 {
 	// first try and answer from hints if possible
 	if(transaction_id->is_committed)
@@ -129,7 +129,7 @@ transaction_status fetch_status_for_transaction_id_with_hints(transaction_id_wit
 		return TX_ABORTED;
 
 	// go to the table and try to fetch it
-	transaction_status status = get_transaction_status(transaction_id->transaction_id);
+	transaction_status status = get_transaction_status_for_transaction_id(tsg_p, transaction_id->transaction_id);
 
 	// update the hints
 	switch(status)

@@ -55,6 +55,6 @@ void print_mvcc_header(const mvcc_header* mvcchdr_p);
 #include<rhendb/transaction_status.h>
 
 // below functions updates the hints if it is not uptodate, and will set the were_hints_updated if hints were updated
-transaction_status fetch_status_for_transaction_id_with_hints(transaction_id_with_hints* transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated);
+transaction_status fetch_status_for_transaction_id_with_hints(transaction_id_with_hints* transaction_id, transaction_status_getter* tsg_p, int* were_hints_updated);
 
 #endif

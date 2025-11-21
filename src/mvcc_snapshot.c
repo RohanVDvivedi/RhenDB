@@ -64,18 +64,18 @@ void deinitialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
 	deinitialize_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids));
 }
 
-int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, transaction_id_with_hints* transaction_id, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated)
+int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, transaction_id_with_hints* transaction_id, transaction_status_getter* tsg_p, int* were_hints_updated)
 {
 	// you can only see your changes OR changes of transactions that committed before you
 	return is_self_transaction_for_mvcc_snapshot(mvccsnp_p, transaction_id->transaction_id) ||
 		(was_completed_transaction_at_mvcc_snapshot(mvccsnp_p, transaction_id->transaction_id) &&
-		(fetch_status_for_transaction_id_with_hints(transaction_id, get_transaction_status, were_hints_updated) == TX_COMMITTED));
+		(fetch_status_for_transaction_id_with_hints(transaction_id, tsg_p, were_hints_updated) == TX_COMMITTED));
 }
 
-int is_tuple_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated)
+int is_tuple_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status_getter* tsg_p, int* were_hints_updated)
 {
 	// if xmin is not visible the tuple is not visible
-	if(!are_changes_for_transaction_id_visible_at_mvcc_snapshot(mvccsnp_p, &(mvcchdr_p->xmin), get_transaction_status, were_hints_updated))
+	if(!are_changes_for_transaction_id_visible_at_mvcc_snapshot(mvccsnp_p, &(mvcchdr_p->xmin), tsg_p, were_hints_updated))
 		return 0;
 
 	// if xmax is null, then tuple is alive until infinity and is visible
@@ -83,7 +83,7 @@ int is_tuple_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_heade
 		return 1;
 
 	// if the changes from xmax is visible, then the tuple is dead for you, so not visible
-	if(are_changes_for_transaction_id_visible_at_mvcc_snapshot(mvccsnp_p, &(mvcchdr_p->xmax), get_transaction_status, were_hints_updated))
+	if(are_changes_for_transaction_id_visible_at_mvcc_snapshot(mvccsnp_p, &(mvcchdr_p->xmax), tsg_p, were_hints_updated))
 		return 0;
 
 	return 1;
@@ -96,10 +96,10 @@ char const * const can_delete_result_string[] = {
 	[MUST_ABORT] = "MUST_ABORT",
 };
 
-can_delete_result can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), int* were_hints_updated)
+can_delete_result can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status_getter* tsg_p, int* were_hints_updated)
 {
 	// you can not delete a tuple not visible to you
-	if(!is_tuple_visible_to_mvcc_snapshot(mvccsnp_p, mvcchdr_p, get_transaction_status, were_hints_updated))
+	if(!is_tuple_visible_to_mvcc_snapshot(mvccsnp_p, mvcchdr_p, tsg_p, were_hints_updated))
 		return IN_VISIBLE_TUPLE;
 
 	// if xmax is null, then tuple can be immediately deleted by writing a new xmax to it
@@ -110,7 +110,7 @@ can_delete_result can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsn
 	if(is_self_transaction_for_mvcc_snapshot(mvccsnp_p, mvcchdr_p->xmax.transaction_id))
 		return IN_VISIBLE_TUPLE;
 
-	switch (fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmax), get_transaction_status, were_hints_updated))
+	switch (fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmax), tsg_p, were_hints_updated))
 	{
 		case TX_ABORTED : // the status of xmax must be ABORTED for xmax to delete it
 			return CAN_DELETE;
@@ -145,15 +145,15 @@ void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p)
 	printf("]\n\n");
 }
 
-int can_vaccum_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status (*get_transaction_status)(uint256 transaction_id), uint256 vaccum_horizon_transaction_id, int* were_hints_updated)
+int can_vaccum_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status_getter* tsg_p, uint256 vaccum_horizon_transaction_id, int* were_hints_updated)
 {
 	// tuple created by an aborted transaction, vaccum immediately
-	if(fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmin), get_transaction_status, were_hints_updated) == TX_ABORTED)
+	if(fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmin), tsg_p, were_hints_updated) == TX_ABORTED)
 		return 1;
 
 	// if xmax is not NULL, and xmax is committed before the vaccum_horizon_transaction_id, then this tuple is not visible to any transaction, hence you may vaccum it
 	if((!mvcchdr_p->is_xmax_NULL)
-		&& (fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmax), get_transaction_status, were_hints_updated) == TX_COMMITTED)
+		&& (fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmax), tsg_p, were_hints_updated) == TX_COMMITTED)
 		&& (compare_uint256(mvcchdr_p->xmax.transaction_id, vaccum_horizon_transaction_id) < 0))
 		return 1;
 
