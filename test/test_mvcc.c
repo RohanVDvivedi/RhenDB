@@ -8,7 +8,7 @@ uint256 self;
 uint256* in_progress_list;
 uint32_t in_progress_count;
 
-transaction_status get_transaction_status_internal(uint256 transaction_id)
+transaction_status get_transaction_status_internal(void* NULL_p, uint256 transaction_id)
 {
 	// self is always in_progress
 	if(are_equal_uint256(transaction_id, self))
@@ -41,14 +41,16 @@ transaction_status get_transaction_status_internal(uint256 transaction_id)
 		return TX_COMMITTED;
 }
 
-transaction_status get_transaction_status__(uint256 transaction_id)
+transaction_status get_transaction_status__(void* NULL_p, uint256 transaction_id)
 {
-	transaction_status res = get_transaction_status_internal(transaction_id);
+	transaction_status res = get_transaction_status_internal(NULL_p, transaction_id);
 	char temp[80] = {};
 	serialize_to_decimal_uint256(temp, transaction_id);
 	printf("status(%s) => %s\n", temp, transaction_status_string[res]);
 	return res;
 }
+
+transaction_status_getter tsg = {NULL, get_transaction_status__};
 
 int main()
 {
@@ -144,7 +146,7 @@ int main()
 			int is_self = is_self_transaction_for_mvcc_snapshot(&snap, test_tx_ids[i]);
 			int was_completed = was_completed_transaction_at_mvcc_snapshot(&snap, test_tx_ids[i]);
 			int were_hints_updated = 0;
-			int is_visible = are_changes_for_transaction_id_visible_at_mvcc_snapshot(&snap, &((transaction_id_with_hints){0,0,test_tx_ids[i]}), get_transaction_status__, &were_hints_updated);
+			int is_visible = are_changes_for_transaction_id_visible_at_mvcc_snapshot(&snap, &((transaction_id_with_hints){0,0,test_tx_ids[i]}), &tsg, &were_hints_updated);
 			serialize_to_decimal_uint256(temp, test_tx_ids[i]);
 			printf("%s => self=%d, completed=%d, visible=%d, hints_updated=%d\n", temp, is_self, was_completed, is_visible, were_hints_updated);
 		}
@@ -170,8 +172,8 @@ int main()
 			{
 				mvcc_header hdr = {.xmin = header_ids[xmin_i], .is_xmax_NULL = are_equal_uint256(header_ids[xmax_i].transaction_id, get_uint256(0)), .xmax = header_ids[xmax_i]};
 				int were_hints_updated = 0;
-				int is_visible = is_tuple_visible_to_mvcc_snapshot(&snap, &hdr, get_transaction_status__, &were_hints_updated);
-				can_delete_result can_delete = can_delete_tuple_for_mvcc_snapshot(&snap, &hdr, get_transaction_status__, &were_hints_updated);
+				int is_visible = is_tuple_visible_to_mvcc_snapshot(&snap, &hdr, &tsg, &were_hints_updated);
+				can_delete_result can_delete = can_delete_tuple_for_mvcc_snapshot(&snap, &hdr, &tsg, &were_hints_updated);
 				print_mvcc_header(&hdr);printf("\n\n");
 				printf("is_visble=%d can_delete=%s\n\n\n", is_visible, can_delete_result_string[can_delete]);
 			}
