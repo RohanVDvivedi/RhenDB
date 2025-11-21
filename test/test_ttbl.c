@@ -71,7 +71,7 @@ int main()
 
 	for(uint256 tid = get_0_uint256(); compare_uint256(tid, last_txid_in_session) <= 0; add_uint256(&tid, tid, get_1_uint256()))
 	{
-		transaction_status status = get_transaction_status(&(rdb.tx_table), tid);
+		transaction_status status = get_transaction_status_for_transaction_id(&(rdb.tsg), tid);
 		printf("%"PRIu64" -> %s\n", tid.limbs[0], transaction_status_string[status]);
 	}
 
