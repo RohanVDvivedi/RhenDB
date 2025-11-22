@@ -11,7 +11,7 @@ struct active_transaction_id_entry
 	uint256 transaction_id; // note: it should always be the first attribute
 
 	// this is the smallest transaction_id in the snapshot of this transaction, including it's own transaction_id
-	uint256 smallest_active_transaction_id_in_snapshot;
+	uint256 smallest_transaction_id_in_snapshot;
 
 	bstnode embed_node;
 };
@@ -372,9 +372,9 @@ static int insert_in_currently_active_transaction_ids(transaction_table* ttbl, c
 	// initialize it
 	atid_p->transaction_id = snp->transaction_id;
 	if(NULL != get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0)) // if the snapshot has even a single in_progress_transaction_id, then it is bound to be lower than it's own transaction_id
-		atid_p->smallest_active_transaction_id_in_snapshot = *get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0);
+		atid_p->smallest_transaction_id_in_snapshot = *get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0);
 	else // else set it to the transaction_id of the snapshot itself
-		atid_p->smallest_active_transaction_id_in_snapshot = snp->transaction_id;
+		atid_p->smallest_transaction_id_in_snapshot = snp->transaction_id;
 	initialize_bstnode(&(atid_p->embed_node));
 
 	// then insert it
@@ -619,7 +619,7 @@ static void minimize_vaccum_horizon_transaction_id(const void* data, const void*
 {
 	uint256* vaccum_horizon_transaction_id = (uint256*) additional_params;
 	const active_transaction_id_entry* atid_p = data;
-	(*vaccum_horizon_transaction_id) = min_uint256((*vaccum_horizon_transaction_id), atid_p->smallest_active_transaction_id_in_snapshot);
+	(*vaccum_horizon_transaction_id) = min_uint256((*vaccum_horizon_transaction_id), atid_p->smallest_transaction_id_in_snapshot);
 }
 */
 
@@ -632,9 +632,9 @@ uint256 get_vaccum_horizon_transaction_id(transaction_table* ttbl)
 	vaccum_horizon_transaction_id = ttbl->next_assignable_transaction_id;
 
 	// for_each_in_order_in_currently_active_transaction_ids(ttbl, minimize_vaccum_horizon_transaction_id, &vaccum_horizon_transaction_id);
-	// I have a small optimization for the above line, the oldest transaction id, always has the minimum smallest_active_transaction_id_in_snapshot
+	// I have a small optimization for the above line, the oldest transaction id, always has the minimum smallest_transaction_id_in_snapshot
 	if(!is_empty_bst(&(ttbl->currently_active_transaction_ids)))
-		vaccum_horizon_transaction_id = ((const active_transaction_id_entry*)(find_smallest_in_bst(&(ttbl->currently_active_transaction_ids))))->smallest_active_transaction_id_in_snapshot;
+		vaccum_horizon_transaction_id = ((const active_transaction_id_entry*)(find_smallest_in_bst(&(ttbl->currently_active_transaction_ids))))->smallest_transaction_id_in_snapshot;
 
 	read_unlock(&(ttbl->transaction_table_cache_lock));
 
