@@ -65,7 +65,7 @@
    * length of string, blob, array, tuple, etc
 
  7.*tiber runtime integration
-   * make everything tiber runtime based, for all projects involved post Cutlery, BoomPar and ConnMan
+   * make compute intensive tasks bundel them into tibers and then execute them, this could be filters and projections, sorts and joins and offload only mimimal work to them
 
  * Design methodology
    * we will use postgresql architecture over (mysql like) mini transactions
