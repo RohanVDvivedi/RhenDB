@@ -6,6 +6,23 @@
    * make a random/sequence generator operators
    * put them up in a queue and watch them work for testing
 
+ * mvcc_snapshot
+   * mvcc_snapshot to store unseen_transaction_id, as the minimum transaction_id beyond which all transaction_ids are future transactions
+   * this will be different from the transaction_id, transaction_id is the current_transaction_id which may or may be present, store a flag has_transaction_id
+   * make the following functions
+     * is_present_transaction_id(snp, uint256 transaction_id) -> returns true, only if snp has transaction_id and is equal to the passed value
+     * is_past_tranaction_id(snp, uint256 transaction_id) -> returns true if not present, and is lesser than unseen_transaction_id and is not present in active transaction ids list
+     * is_future_transaction_id(snp, uint256 transaction_id) -> return true, if not present and not past
+   * use this functions instead for all operations
+   * allow setting transaction_id separately but do not allow clearing it
+   * reset_snapshot clears the active transaction ids list and zeros out the unseen_transaction_id, and insert functons can be called again
+   * refactor all functions to use these notions and new functions
+
+ * in transaction_table
+   * implement 2 variants for
+     * renew_mvcc_snapshot -> pass it an empty plain snapshot and it gets a new read view, new active_transaction_ids and unseen_transaction_id
+     * get_new_transaction_id -> gives you a new mvcc snapshot with a transaction_id assigned, works as before
+
 
 
  * make typed_user_value also hold where does it store it's extended bytes, and upon freeing free them too (for volatile page store)
