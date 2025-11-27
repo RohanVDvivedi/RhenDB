@@ -24,13 +24,13 @@ static compare_direction all_ascending[] = {ASC, ASC, ASC, ASC, ASC, ASC, ASC, A
 ** internal structures
 */
 
-#define MAX_SERIALIZED_LOCK_ENTRY_SIZE (sizeof(uint256) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + sizeof(uint32_t) + 2) // +2 for the size and offset of resource_id
+#define MAX_SERIALIZED_LOCK_ENTRY_SIZE (sizeof(void*) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + sizeof(uint32_t) + 2) // +2 for the size and offset of resource_id
 
 typedef struct lock_entry lock_entry;
 struct lock_entry
 {
-	// transaction_id that holds the lock
-	uint256 transaction_id;
+	// transaction that holds the lock
+	void* transaction;
 
 	// this is the resource_type for the below resource_id
 	// this dictates what lock_modes can be used for this resource_type
@@ -50,7 +50,7 @@ static void serialize_lock_entry_record(void* to, const lock_entry* from, const 
 {
 	init_tuple(lckmgr_p->lock_record_def, to);
 
-	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(0), to, &((user_value){.large_uint_value = from->transaction_id}), 0);
+	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(0), to, &((user_value){.uint_value = ((uintptr_t)(from->transaction))}), 0);
 	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(1), to, &((user_value){.uint_value = from->resource_type}), 0);
 	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(2), to, &((user_value){.blob_size = from->resource_id_size, .blob_value = from->resource_id}), MAX_RESOURCE_ID_SIZE+1); // +1 for the size prefix
 	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(3), to, &((user_value){.uint_value = from->lock_mode}), 0);
@@ -61,7 +61,7 @@ static void deserialize_lock_entry_record(const void* from, lock_entry* to, cons
 	{
 		user_value uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(0), from);
-		to->transaction_id = uval.large_uint_value;
+		to->transaction = (void*)((uintptr_t)uval.uint_value);
 	}
 
 	{
@@ -88,21 +88,21 @@ static positional_accessor tx_locks_keys[] = {STATIC_POSITION(0), STATIC_POSITIO
 
 static positional_accessor rs_locks_keys[] = {STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(0)};
 
-#define MAX_SERIALIZED_WAIT_ENTRY_SIZE (sizeof(uint256) + sizeof(uint32_t) + sizeof(uint256) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + 2) // +2 for the size and offset of resource_id
+#define MAX_SERIALIZED_WAIT_ENTRY_SIZE (sizeof(void*) + sizeof(void*) + sizeof(void*) + sizeof(uint32_t) + MAX_RESOURCE_ID_SIZE + 2) // +2 for the size and offset of resource_id
 
 typedef struct wait_entry wait_entry;
 struct wait_entry
 {
-	// transaction_id that is waiting for the lock
-	uint256 waiting_transaction_id;
+	// transaction that is waiting for the lock
+	void* waiting_transaction;
 
-	// task_id of the above transaction that is waiting for the lock
-	uint32_t waiting_task_id;
+	// task of the above transaction that is waiting for the lock
+	void* waiting_task;
 
-	// ON the transaction_id and the resource attributes below
+	// ON the transaction and the resource attributes below
 
-	// transaction_id that holds the lock
-	uint256 transaction_id;
+	// transaction that holds the lock
+	void* transaction;
 
 	// this is the resource_type for the below resource_id
 	// this dictates what lock_modes can be used for this resource_type
@@ -119,9 +119,9 @@ static void serialize_wait_entry_record(void* to, const wait_entry* from, const 
 {
 	init_tuple(lckmgr_p->wait_record_def, to);
 
-	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(0), to, &((user_value){.large_uint_value = from->waiting_transaction_id}), 0);
-	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(1), to, &((user_value){.uint_value = from->waiting_task_id}), 0);
-	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(2), to, &((user_value){.large_uint_value = from->transaction_id}), 0);
+	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(0), to, &((user_value){.uint_value = ((uintptr_t)(from->waiting_transaction))}), 0);
+	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(1), to, &((user_value){.uint_value = ((uintptr_t)(from->waiting_task))}), 0);
+	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(2), to, &((user_value){.uint_value = ((uintptr_t)(from->transaction))}), 0);
 	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(3), to, &((user_value){.uint_value = from->resource_type}), 0);
 	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(4), to, &((user_value){.blob_size = from->resource_id_size, .blob_value = from->resource_id}), MAX_RESOURCE_ID_SIZE+1); // +1 for the size prefix
 }
@@ -131,19 +131,19 @@ static void deserialize_wait_entry_record(const void* from, wait_entry* to, cons
 	{
 		user_value uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(0), from);
-		to->waiting_transaction_id = uval.large_uint_value;
+		to->waiting_transaction = (void*)((uintptr_t)uval.uint_value);
 	}
 
 	{
 		user_value uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(1), from);
-		to->waiting_task_id = uval.uint_value;
+		to->waiting_task = (void*)((uintptr_t)uval.uint_value);
 	}
 
 	{
 		user_value uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(2), from);
-		to->transaction_id = uval.large_uint_value;
+		to->transaction = (void*)((uintptr_t)uval.uint_value);
 	}
 
 	{
