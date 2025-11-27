@@ -14,13 +14,13 @@
 
 	1 transaction may have multiple threads (referenced using the task) executing the transaction, hence multiple threads of the same transactions are allowed to acquire multiple locks simultaneously and block until it is acquired or transitioned
 
-	locks are not owned by the task's of the transaction, the are owned by the transaction itself
+	locks are not owned by the task's of the transaction, they are owned by the transaction itself
 	it is just that specific task that is waiting for the lock is woken up / notified if it could be unblocked
 */
 
 /*
 	The api is designed to take in transaction (a void pointer), and task (again a void pointer), they must not be NULL
-	They must be stable pointers (data not copiable to a new location) pointing to your struct representations at fixed locations
+	They must be stable pointers (data not copyable to a new location) pointing to your struct representations at fixed locations
 
 	These structs and their pointers (because they are stable pointers) must represent a logical transaction or it's belonging task uniquely
 */
@@ -80,7 +80,7 @@ struct lock_manager
 	uint64_t waits_back_root_page_id;
 	bplus_tree_tuple_defs* waits_back_td;
 
-	// above tables can only be modified by the (waiting_transaction, waiting_task) going in to or returning from the wait, using the acquire function
+	// above tables can only be modified by the (waiting_transaction, waiting_task) going for or returning from the wait, using the acquire function
 	// waits_for(transaction), can only read them and call the notify_unblocked(waiting_transaction, waiting_task), and never modify the entries
 
 	// below is the volatile non-ACID rage_engine that powers the transaction_table
@@ -96,7 +96,7 @@ struct lock_manager
 */
 
 // maximum number of bytes to be allocated for the resource_id of the resource to be locked
-#define MAX_RESOURCE_ID_SIZE 16
+#define MAX_RESOURCE_ID_SIZE 24
 
 fail_build_on(MAX_RESOURCE_ID_SIZE > 100)
 
@@ -140,13 +140,18 @@ extern char const * const lock_result_strings[];
 lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, void* transaction, void* task, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int non_blocking);
 
 // since a task is not actually holding the lock, its the transaction that holds the lock, so any task can release the lock that was priorly acquired by any other task
-// i.e. you may release locks using a dummy task (lets say = 100) that were in the past, request by and granted to some (already completed) task = 55
+// i.e. you may release locks using a dummy task (lets say = 100) that were in the past, requested by and granted to some (already completed) task = 55
 // the task is accpeted by this function just to discard all the pending wait-entries by this transaction, task, because it is now known to have been not blocked and is deemed to be active
 void release_lock_with_lock_manager(lock_manager* lckmgr_p, void* transaction, void* task, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
-// this function does remove all the wait-entries for the transaction as a whole for all it's task-s, no notify_unblocked() will be issued
+// the below 2 tasks are identical, they just remove wair-entries where the (transaction, task) are set as the (waiting_transaction, waiting_task)
+// these functions can be used when the task of a transaction terminates, or the particular query terminates, to discard all the corresponding wait_entries, as they no longer will be waiting
+void discard_all_wait_entries_in_lock_manager1(lock_manager* lckmgr_p, void* transaction, void* task);
+void discard_all_wait_entries_in_lock_manager2(lock_manager* lckmgr_p, void* transaction);
+
+// this function does remove all the wait-entries for the transaction as a whole for all it's tasks
 // this will also release all the locks and also issue notify_unblocked() to all the transactions and tasks that were waiting for the resource that this transaction has locks on
-// so call this function only after you join all the tasks executing on behalf of the transaction, because they won't be woken up by this function call
+// so call this function only after you join all the tasks executing on behalf of the transaction (rigth after committing)
 void conclude_all_business_with_lock_manager(lock_manager* lckmgr_p, void* transaction);
 
 // prints all the contents of the lock manager to the printf
