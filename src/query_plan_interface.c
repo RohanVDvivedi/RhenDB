@@ -610,7 +610,7 @@ void notify_unblocked(void* context_p, void* transaction_vp, void* task_vp)
 	}
 
 	// debug print if the operator was not found
-	printf("notify_unblocked( trx_id = %"PRIuPTR", task_id = %"PRIuPTR" )\n\n", ((uintptr_t)transaction_vp), ((uintptr_t)task_vp));
+	printf("notify_unblocked( trx_id = %"PRIuPTR" , task_id = %"PRIuPTR" )\n\n", ((uintptr_t)transaction_vp), ((uintptr_t)task_vp));
 }
 
 void notify_deadlocked(void* context_p, void* transaction_vp)
