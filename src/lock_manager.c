@@ -213,7 +213,7 @@ static int remove_wait_entry(lock_manager* lckmgr_p, const wait_entry* we_p)
 */
 
 // 2 - remove wait_entries for a particular waiters
-static void remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 waiting_transaction_id, uint32_t waiting_task_id)
+static void remove_all_wait_entries_for_task(lock_manager* lckmgr_p, void* waiting_transaction, void* waiting_task)
 {
 	// we need to construct the wait_entry_key
 	char wait_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
@@ -222,7 +222,7 @@ static void remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 
 		// construct wait_entry_tuple
 		char wait_entry_tuple[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
 		{
-			wait_entry we = {.waiting_transaction_id = waiting_transaction_id, .waiting_task_id = waiting_task_id};
+			wait_entry we = {.waiting_transaction = waiting_transaction, .waiting_task = waiting_task};
 			serialize_wait_entry_record(wait_entry_tuple, &we, lckmgr_p);
 		}
 
@@ -230,7 +230,7 @@ static void remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 
 		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->waits_for_td, wait_entry_tuple, wait_entry_key);
 	}
 
-	// create an iterator using the first 2 keys (waiting_transaction_id, waiting_task_id)
+	// create an iterator using the first 2 keys (waiting_transaction, waiting_task)
 	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_key, 2, GREATER_THAN_EQUALS, 1, WRITE_LOCK, lckmgr_p->waits_for_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, &abort_error);
 
 	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
@@ -241,7 +241,7 @@ static void remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 
 		deserialize_wait_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &we, lckmgr_p);
 
 		// if it is not the right tuple, we break out
-		if(!are_equal_uint256(waiting_transaction_id, we.waiting_transaction_id) || waiting_task_id != we.waiting_task_id)
+		if(waiting_transaction != we.waiting_transaction || waiting_task != we.waiting_task)
 			break;
 
 		// remove the wait_entry
@@ -260,7 +260,7 @@ static void remove_all_wait_entries_for_task_id(lock_manager* lckmgr_p, uint256 
 	delete_bplus_tree_iterator(bpi_p, NULL, &abort_error);
 }
 
-static void remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, uint256 waiting_transaction_id)
+static void remove_all_wait_entries_for_transaction(lock_manager* lckmgr_p, void* waiting_transaction)
 {
 	// we need to construct the wait_entry_key
 	char wait_entry_key[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
@@ -269,7 +269,7 @@ static void remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, u
 		// construct wait_entry_tuple
 		char wait_entry_tuple[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
 		{
-			wait_entry we = {.waiting_transaction_id = waiting_transaction_id};
+			wait_entry we = {.waiting_transaction = waiting_transaction};
 			serialize_wait_entry_record(wait_entry_tuple, &we, lckmgr_p);
 		}
 
@@ -277,7 +277,7 @@ static void remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, u
 		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->waits_for_td, wait_entry_tuple, wait_entry_key);
 	}
 
-	// create an iterator using the first 1 keys (waiting_transaction_id)
+	// create an iterator using the first 1 keys (waiting_transaction)
 	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->waits_for_root_page_id, wait_entry_key, 1, GREATER_THAN_EQUALS, 1, WRITE_LOCK, lckmgr_p->waits_for_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, &abort_error);
 
 	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
@@ -288,7 +288,7 @@ static void remove_all_wait_entries_for_transaction_id(lock_manager* lckmgr_p, u
 		deserialize_wait_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &we, lckmgr_p);
 
 		// if it is not the right tuple, we break out
-		if(!are_equal_uint256(waiting_transaction_id, we.waiting_transaction_id))
+		if(waiting_transaction != we.waiting_transaction)
 			break;
 
 		// remove the wait_entry
@@ -341,8 +341,8 @@ static void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager
 		if(we.resource_type != resource_type || we.resource_id_size != resource_id_size || memory_compare(we.resource_id, resource_id, resource_id_size))
 			break;
 
-		// wake up that transaction_id's task_id
-		lckmgr_p->notifier.notify_unblocked(lckmgr_p->notifier.context_p, we.waiting_transaction_id, we.waiting_task_id);
+		// wake up that transaction's task
+		lckmgr_p->notifier.notify_unblocked(lckmgr_p->notifier.context_p, we.waiting_transaction, we.waiting_task);
 
 		// continue ahead with the next tuple
 		next_bplus_tree_iterator(bpi_p, NULL, &abort_error);
@@ -351,8 +351,8 @@ static void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager
 	delete_bplus_tree_iterator(bpi_p, NULL, &abort_error);
 }
 
-// 4 - find function for the lock_entry, the primary key is transaction_id and the resource (type + id)
-static uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+// 4 - find function for the lock_entry, the primary key is transaction and the resource (type + id)
+static uint32_t find_lock_entry(lock_manager* lckmgr_p, void* transaction, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
 {
 	// initialize the lock_mode, this is the return value
 	uint32_t lock_mode = NO_LOCK_HELD_LOCK_MODE;
@@ -363,7 +363,7 @@ static uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, 
 		// construct lock_entry_tuple
 		char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 		{
-			lock_entry le = {.transaction_id = transaction_id, .resource_type = resource_type, .resource_id_size = resource_id_size};
+			lock_entry le = {.transaction = transaction, .resource_type = resource_type, .resource_id_size = resource_id_size};
 			memory_move(le.resource_id, resource_id, resource_id_size);
 			serialize_lock_entry_record(lock_entry_tuple, &le, lckmgr_p);
 		}
@@ -372,7 +372,7 @@ static uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, 
 		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, lock_entry_tuple, lock_entry_key);
 	}
 
-	// create an iterator using the first 3 keys (transaction_id, resource_type, resource_id)
+	// create an iterator using the first 3 keys (transaction, resource_type, resource_id)
 	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, 3, GREATER_THAN_EQUALS, 0, READ_LOCK, lckmgr_p->tx_locks_td, lckmgr_p->lckmgr_engine->pam_p, NULL, NULL, &abort_error);
 
 	// if the bplus_tree is not empty and it has a current tuple to be processed, then move forward with the test
@@ -383,7 +383,7 @@ static uint32_t find_lock_entry(lock_manager* lckmgr_p, uint256 transaction_id, 
 		deserialize_lock_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &le, lckmgr_p);
 
 		// if it is the right tuple, extract the lock_mode
-		if(are_equal_uint256(le.transaction_id, transaction_id) && le.resource_type == resource_type && le.resource_id_size == resource_id_size && 0 == memory_compare(le.resource_id, resource_id, resource_id_size))
+		if(le.transaction == transaction && le.resource_type == resource_type && le.resource_id_size == resource_id_size && 0 == memory_compare(le.resource_id, resource_id, resource_id_size))
 			lock_mode = le.lock_mode;
 	}
 
@@ -424,12 +424,12 @@ static int insert_or_update_lock_entry(const void* context, const tuple_def* rec
 	return 1;
 }
 
-static int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode)
+static int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, void* transaction, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode)
 {
 	// construct lock_entry_tuple, that we aim to insert or update with
 	char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 	{
-		lock_entry le = {.transaction_id = transaction_id, .resource_type = resource_type, .resource_id_size = resource_id_size, .lock_mode = new_lock_mode};
+		lock_entry le = {.transaction = transaction, .resource_type = resource_type, .resource_id_size = resource_id_size, .lock_mode = new_lock_mode};
 		memory_move(le.resource_id, resource_id, resource_id_size);
 		serialize_lock_entry_record(lock_entry_tuple, &le, lckmgr_p);
 	}
@@ -447,9 +447,9 @@ static int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_
 	return inserted_OR_updated;
 }
 
-static int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+static int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, void* transaction, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
 {
-	lock_entry le = {.transaction_id = transaction_id, .resource_type = resource_type, .resource_id_size = resource_id_size};
+	lock_entry le = {.transaction = transaction, .resource_type = resource_type, .resource_id_size = resource_id_size};
 	memory_move(le.resource_id, resource_id, resource_id_size);
 	char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 
@@ -477,7 +477,7 @@ static int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, uint256
 	return res;
 }
 
-static void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, uint256 transaction_id)
+static void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, void* transaction)
 {
 	// we need to construct the lock_entry_key
 	char lock_entry_key[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
@@ -486,7 +486,7 @@ static void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, 
 		// construct lock_entry_tuple
 		char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 		{
-			lock_entry le = {.transaction_id = transaction_id};
+			lock_entry le = {.transaction = transaction};
 			serialize_lock_entry_record(lock_entry_tuple, &le, lckmgr_p);
 		}
 
@@ -494,7 +494,7 @@ static void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, 
 		extract_key_from_record_tuple_using_bplus_tree_tuple_definitions(lckmgr_p->tx_locks_td, lock_entry_tuple, lock_entry_key);
 	}
 
-	// create an iterator using the first 1 keys (transaction_id)
+	// create an iterator using the first 1 keys (transaction)
 	bplus_tree_iterator* bpi_p = find_in_bplus_tree(lckmgr_p->tx_locks_root_page_id, lock_entry_key, 1, GREATER_THAN_EQUALS, 1, WRITE_LOCK, lckmgr_p->tx_locks_td, lckmgr_p->lckmgr_engine->pam_p, lckmgr_p->lckmgr_engine->pmm_p, NULL, &abort_error);
 
 	// keep looping while the bplus_tree is not empty and it has a current tuple to be processed
@@ -505,7 +505,7 @@ static void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, 
 		deserialize_lock_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &le, lckmgr_p);
 
 		// if it is not the right tuple, we break out
-		if(!are_equal_uint256(transaction_id, le.transaction_id))
+		if(transaction != le.transaction)
 			break;
 
 		// remove the lock_entry and wake up waiters waiting on this resource
@@ -530,9 +530,9 @@ static void remove_all_lock_entries_and_wake_up_waiters(lock_manager* lckmgr_p, 
 // 6 - below function inserts wait_entries for the corresponding conflicts only if the do_insert_wait_entries = 1,
 // return value only suggests if there are any lock_conflicts or not
 // return = 1, means there are lock conflicts, else it returns 0, if the lock can be readily taken
-// please note that this function skips all the lock_entries that have the same transaction_id, and same resource
+// please note that this function skips all the lock_entries that have the same transaction, and same resource
 // uses utility functions of section 1
-static int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int do_insert_wait_entries)
+static int check_lock_conflicts(lock_manager* lckmgr_p, void* transaction, void* task, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int do_insert_wait_entries)
 {
 	int has_conflicts = 0;
 
@@ -566,8 +566,8 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, 
 		if(le.resource_id_size != resource_id_size || memory_compare(le.resource_id, resource_id, resource_id_size))
 			break;
 
-		// skip entries for the transaction_id that wants this lock
-		if(are_equal_uint256(le.transaction_id, transaction_id))
+		// skip entries for the transaction that wants this lock
+		if(le.transaction == transaction)
 		{
 			next_bplus_tree_iterator(bpi_p, NULL, &abort_error);
 			continue;
@@ -589,7 +589,7 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, 
 
 		// insert wait entry for this lock conflict
 		{
-			wait_entry to_ins = {.waiting_transaction_id = transaction_id, .waiting_task_id = task_id, .transaction_id = le.transaction_id, .resource_type = resource_type, .resource_id_size = resource_id_size};
+			wait_entry to_ins = {.waiting_transaction = transaction, .waiting_task = task, .transaction = le.transaction, .resource_type = resource_type, .resource_id_size = resource_id_size};
 			memory_move(to_ins.resource_id, resource_id, resource_id_size);
 			insert_wait_entry(lckmgr_p, &to_ins);
 		}
@@ -605,9 +605,7 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, uint256 transaction_id, 
 
 // --
 
-#include<rhendb/bytes_for_transaction_id.h>
-
-void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, const lock_manager_notifier* notifier, uint256 overflow_transaction_id, rage_engine* lckmgr_engine)
+void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_lock, const lock_manager_notifier* notifier, rage_engine* lckmgr_engine)
 {
 	lckmgr_p->external_lock = external_lock;
 
@@ -617,9 +615,6 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 	lckmgr_p->lock_matrices = NULL;
 
 	lckmgr_p->lckmgr_engine = lckmgr_engine;
-
-	uint32_t transaction_id_bytes = get_bytes_required_for_transaction_id(overflow_transaction_id);
-	printf("lock manager initialized to support %u number of bytes for transaction_id\n", transaction_id_bytes);
 
 	lckmgr_p->resource_id_type_info = malloc(sizeof(data_type_info));
 	if(lckmgr_p->resource_id_type_info == NULL)
@@ -632,8 +627,8 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 			exit(-1);
 		initialize_tuple_data_type_info(dti, "lock_entry", 0, MAX_SERIALIZED_LOCK_ENTRY_SIZE, 4);
 
-		strcpy(dti->containees[0].field_name, "transaction_id");
-		dti->containees[0].al.type_info = LARGE_UINT_NON_NULLABLE[transaction_id_bytes];
+		strcpy(dti->containees[0].field_name, "transaction");
+		dti->containees[0].al.type_info = UINT_NON_NULLABLE[sizeof(void*)];
 
 		strcpy(dti->containees[1].field_name, "resource_type");
 		dti->containees[1].al.type_info = UINT_NON_NULLABLE[4];
@@ -676,14 +671,14 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 			exit(-1);
 		initialize_tuple_data_type_info(dti, "wait_entry", 0, MAX_SERIALIZED_WAIT_ENTRY_SIZE, 5);
 
-		strcpy(dti->containees[0].field_name, "waiting_transaction_id");
-		dti->containees[0].al.type_info = LARGE_UINT_NON_NULLABLE[transaction_id_bytes];
+		strcpy(dti->containees[0].field_name, "waiting_transaction");
+		dti->containees[0].al.type_info = UINT_NON_NULLABLE[sizeof(void*)];
 
-		strcpy(dti->containees[1].field_name, "waiting_task_id");
-		dti->containees[1].al.type_info = UINT_NON_NULLABLE[4];
+		strcpy(dti->containees[1].field_name, "waiting_task");
+		dti->containees[1].al.type_info = UINT_NON_NULLABLE[sizeof(void*)];
 
-		strcpy(dti->containees[2].field_name, "transaction_id");
-		dti->containees[2].al.type_info = LARGE_UINT_NON_NULLABLE[transaction_id_bytes];
+		strcpy(dti->containees[2].field_name, "transaction");
+		dti->containees[2].al.type_info = UINT_NON_NULLABLE[sizeof(void*)];
 
 		strcpy(dti->containees[3].field_name, "resource_type");
 		dti->containees[3].al.type_info = UINT_NON_NULLABLE[4];
@@ -730,28 +725,28 @@ uint32_t register_lock_type_with_lock_manager(lock_manager* lckmgr_p, glock_matr
 	return lckmgr_p->locks_type_count++;
 }
 
-uint32_t get_lock_mode_for_lock_from_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+uint32_t get_lock_mode_for_lock_from_lock_manager(lock_manager* lckmgr_p, void* transaction, void* task, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
 {
-	// task_id, for the transacton_id, is indeed calling this function, so it is no longer blocked or waiting, so remove it's wait entries
-	remove_all_wait_entries_for_task_id(lckmgr_p, transaction_id, task_id);
+	// task, for the transacton_id, is indeed calling this function, so it is no longer blocked or waiting, so remove it's wait entries
+	remove_all_wait_entries_for_task(lckmgr_p, transaction, task);
 
-	return find_lock_entry(lckmgr_p, transaction_id, resource_type, resource_id, resource_id_size);
+	return find_lock_entry(lckmgr_p, transaction, resource_type, resource_id, resource_id_size);
 }
 
-lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int non_blocking)
+lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, void* transaction, void* task, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, int non_blocking)
 {
-	// task_id, for the transacton_id, is indeed calling this function, so it is no longer blocked or waiting, so remove it's wait entries
-	remove_all_wait_entries_for_task_id(lckmgr_p, transaction_id, task_id);
+	// task, for the transacton_id, is indeed calling this function, so it is no longer blocked or waiting, so remove it's wait entries
+	remove_all_wait_entries_for_task(lckmgr_p, transaction, task);
 
-	// get the old_lock_mode for the transaction_id and resource given
-	uint32_t old_lock_mode = find_lock_entry(lckmgr_p, transaction_id, resource_type, resource_id, resource_id_size);
+	// get the old_lock_mode for the transaction and resource given
+	uint32_t old_lock_mode = find_lock_entry(lckmgr_p, transaction, resource_type, resource_id, resource_id_size);
 
 	// if the old_lock_mode is same as the one requested, then return success
 	if(old_lock_mode == new_lock_mode)
 		return LOCK_ALREADY_HELD;
 
 	// the return value of this function suggests if we encountered any lock conflicts
-	int has_conflicts = check_lock_conflicts(lckmgr_p, transaction_id, task_id, resource_type, resource_id, resource_id_size, new_lock_mode, !non_blocking); // do insert wait entries if it is a blocking call
+	int has_conflicts = check_lock_conflicts(lckmgr_p, transaction, task, resource_type, resource_id, resource_id_size, new_lock_mode, !non_blocking); // do insert wait entries if it is a blocking call
 
 	if(has_conflicts) // this means failure
 	{
@@ -763,7 +758,7 @@ lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 trans
 
 	// now we are sure that we can grab the lock
 	// so add or update the lock entry with the new_lock_mode, and wake up waiters
-	insert_or_update_lock_entry_and_wake_up_waiters(lckmgr_p, transaction_id, resource_type, resource_id, resource_id_size, new_lock_mode);
+	insert_or_update_lock_entry_and_wake_up_waiters(lckmgr_p, transaction, resource_type, resource_id, resource_id_size, new_lock_mode);
 
 	// if the old_lock_mode was not held, then we acquired the lock, else we just transitioned
 	if(old_lock_mode == NO_LOCK_HELD_LOCK_MODE)
@@ -772,22 +767,22 @@ lock_result acquire_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 trans
 		return LOCK_TRANSITIONED;
 }
 
-void release_lock_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id, uint32_t task_id, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
+void release_lock_with_lock_manager(lock_manager* lckmgr_p, void* transaction, void* task, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
 {
-	// task_id, for the transacton_id, is indeed calling this function, so it is no longer blocked or waiting, so remove it's wait entries
-	remove_all_wait_entries_for_task_id(lckmgr_p, transaction_id, task_id);
+	// task, for the transacton_id, is indeed calling this function, so it is no longer blocked or waiting, so remove it's wait entries
+	remove_all_wait_entries_for_task(lckmgr_p, transaction, task);
 
 	// try to remove the lock, and wake up waiters if any
-	remove_lock_entry_and_wake_up_waiters(lckmgr_p, transaction_id, resource_type, resource_id, resource_id_size);
+	remove_lock_entry_and_wake_up_waiters(lckmgr_p, transaction, resource_type, resource_id, resource_id_size);
 }
 
-void conclude_all_business_with_lock_manager(lock_manager* lckmgr_p, uint256 transaction_id)
+void conclude_all_business_with_lock_manager(lock_manager* lckmgr_p, void* transaction)
 {
 	// transacton_id, is indeed calling this function, so it is no longer expected to be blocked, it is aborting or committing, so we remove all it's wait_entries
-	remove_all_wait_entries_for_transaction_id(lckmgr_p, transaction_id);
+	remove_all_wait_entries_for_transaction(lckmgr_p, transaction);
 
 	// remove all lock_entries and wake up all waiters on those resources
-	remove_all_lock_entries_and_wake_up_waiters(lckmgr_p, transaction_id);
+	remove_all_lock_entries_and_wake_up_waiters(lckmgr_p, transaction);
 }
 
 void debug_print_lock_manager_tables(lock_manager* lckmgr_p)
