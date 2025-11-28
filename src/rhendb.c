@@ -162,10 +162,6 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 	free(system_roots_record);
 }
 
-static void notify_unblocked(void* context_p, uint256 transaction_id, uint32_t task_id);
-
-static void notify_deadlocked(void* context_p, uint256 transaction_id);
-
 void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 		uint32_t page_id_width,
 		uint32_t page_size_mte, uint32_t lsn_width, uint64_t bufferpool_frame_count, uint64_t wale_buffer_count,
@@ -197,9 +193,7 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 
 	// for lck_table
 	pthread_mutex_init(&(rdb->lock_manager_external_lock), NULL);
-	initialize_lock_manager(&(rdb->lck_table), &(rdb->lock_manager_external_lock), &((const lock_manager_notifier){rdb, notify_unblocked, notify_deadlocked}), rdb->tx_table.overflow_transaction_id, &(rdb->volatile_rage_engine));
-
-	initialize_hashmap(&(rdb->active_transactions), ELEMENTS_AS_RED_BLACK_BST, ((max_concurrent_users_count / 5) + 5), &simple_hasher(hash_transaction_by_transaction_id), &simple_comparator(compare_transaction_by_transaction_id), offsetof(transaction, embed_node_active_transactions_in_rhendb));
+	initialize_lock_manager(&(rdb->lck_table), &(rdb->lock_manager_external_lock), &((const lock_manager_notifier){rdb, notify_unblocked, notify_deadlocked}), &(rdb->volatile_rage_engine));
 }
 
 void deinitialize_rhendb(rhendb* rdb)
@@ -215,101 +209,4 @@ void deinitialize_rhendb(rhendb* rdb)
 	deinitialize_mini_transaction_engine((mini_transaction_engine*)(rdb->persistent_acid_rage_engine.context));
 
 	deinitialize_volatile_page_store((volatile_page_store*)(rdb->volatile_rage_engine.context));
-}
-
-void register_transaction_with_rhendb(rhendb* rdb, transaction* tx)
-{
-	pthread_mutex_lock(&(rdb->lock_manager_external_lock));
-
-	tx->db = rdb;
-
-	insert_in_hashmap(&(rdb->active_transactions), tx);
-
-	pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
-}
-
-void deregister_transaction_with_rhendb(rhendb* rdb, transaction* tx)
-{
-	pthread_mutex_lock(&(rdb->lock_manager_external_lock));
-
-	remove_from_hashmap(&(rdb->active_transactions), tx);
-
-	tx->db = NULL;
-
-	pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
-}
-
-// TODO: rewrite the below functions for waking up the transaction_id's current query's operator's respective thread
-
-static void print_transaction_id(uint256 transaction_id)
-{
-	{
-		char temp[80] = {};
-		serialize_to_decimal_uint256(temp, transaction_id);
-		printf("%s", temp);
-	}
-}
-
-static void notify_unblocked(void* context_p, uint256 transaction_id, uint32_t task_id)
-{
-	// rhendb provided the callback so we are the context
-	rhendb* rdb = context_p;
-
-	int operator_found = 0;
-
-	// wake up the right operator, for the corresponding transaction
-	{
-		pthread_mutex_lock(&(rdb->lock_manager_external_lock));
-
-		transaction* tx = (transaction*) find_equals_in_hashmap(&(rdb->active_transactions), &((const transaction){.transaction_id = &transaction_id}));
-		if(tx != NULL && tx->curr_query != NULL)
-		{
-			operator* o = get_operator_for_query_plan(tx->curr_query, task_id);
-			if(o != NULL)
-			{
-				pthread_cond_broadcast(&(o->wait_on_lock_table_for_lock));
-				operator_found = 1;
-			}
-		}
-
-		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
-	}
-
-	// debug print if the operator was not found
-	if(!operator_found)
-	{
-		printf("notify_unblocked( trx_id = ");
-		print_transaction_id(transaction_id);
-		printf(" , task_id = %"PRIu32" )\n\n", task_id);
-	}
-}
-
-static void notify_deadlocked(void* context_p, uint256 transaction_id)
-{
-	// rhendb provided the callback so we are the context
-	rhendb* rdb = context_p;
-
-	int transaction_found = 0;
-
-	// notify the right transaction's curr_query, for the deadlock
-	{
-		pthread_mutex_lock(&(rdb->lock_manager_external_lock));
-
-		transaction* tx = (transaction*) find_equals_in_hashmap(&(rdb->active_transactions), &((const transaction){.transaction_id = &transaction_id}));
-		if(tx != NULL && tx->curr_query != NULL)
-		{
-			shutdown_query_plan_LOCK_TABLE_UNSAFE(tx->curr_query, get_dstring_pointing_to_literal_cstring("DEADLOCK DETECTED"));
-			transaction_found = 1;
-		}
-
-		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
-	}
-
-	// debug print if the transaction was not found
-	if(!transaction_found)
-	{
-		printf("notify_deadlocked( trx_id = ");
-		print_transaction_id(transaction_id);
-		printf(" )\n\n");
-	}
 }

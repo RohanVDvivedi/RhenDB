@@ -139,4 +139,12 @@ void wait_for_shutdown_of_query_plan(query_plan* qp);
 // must be called only after the query_plan is shutdown
 void destroy_query_plan(query_plan* qp, dstring* kill_reasons);
 
+/*
+	callbacks for lock_manager
+*/
+
+void notify_unblocked(void* context_p, void* transaction, void* task);
+
+void notify_deadlocked(void* context_p, void* transaction);
+
 #endif

@@ -84,7 +84,7 @@ int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, 
 	int wait_error = 0;
 	while(!is_kill_signal_sent(o) && !(wait_error))
 	{
-		lock_result locking_result = acquire_lock_with_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), *(o->self_query_plan->curr_tx->transaction_id), o->operator_id, resource_type, resource_id, resource_id_size, new_lock_mode, non_blocking);
+		lock_result locking_result = acquire_lock_with_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), o->self_query_plan->curr_tx, o, resource_type, resource_id, resource_id_size, new_lock_mode, non_blocking);
 
 		if(locking_result == LOCK_ACQUIRED || locking_result == LOCK_TRANSITIONED || locking_result == LOCK_ALREADY_HELD)
 		{
@@ -133,7 +133,7 @@ void release_lock_on_resource_from_operator(operator* o, uint32_t resource_type,
 {
 	pthread_mutex_lock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
 
-	release_lock_with_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), *(o->self_query_plan->curr_tx->transaction_id), o->operator_id, resource_type, resource_id, resource_id_size);
+	release_lock_with_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), o->self_query_plan->curr_tx, o, resource_type, resource_id, resource_id_size);
 
 	pthread_mutex_unlock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
 }
@@ -589,4 +589,46 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 	deinitialize_arraylist(&(qp->operators));
 	deinitialize_arraylist(&(qp->operator_buffers));
 	free(qp);
+}
+
+void notify_unblocked(void* context_p, void* transaction_vp, void* task_vp)
+{
+	// rhendb provided the callback so we are the context
+	rhendb* rdb = context_p;
+
+	// wake up the right operator, for the corresponding transaction
+	if(((uintptr_t)transaction_vp) >= 1024)
+	{
+		pthread_mutex_lock(&(rdb->lock_manager_external_lock));
+
+		transaction* tx = transaction_vp;
+		operator* o = task_vp;
+		if(o->self_query_plan->curr_tx == tx)
+			pthread_cond_broadcast(&(o->wait_on_lock_table_for_lock));
+
+		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
+	}
+
+	// debug print if the operator was not found
+	printf("notify_unblocked( trx_id = %"PRIuPTR", task_id = %"PRIuPTR" )\n\n", ((uintptr_t)transaction_vp), ((uintptr_t)task_vp));
+}
+
+void notify_deadlocked(void* context_p, void* transaction_vp)
+{
+	// rhendb provided the callback so we are the context
+	rhendb* rdb = context_p;
+
+	// notify the right transaction's curr_query, for the deadlock
+	if(((uintptr_t)transaction_vp) >= 1024)
+	{
+		pthread_mutex_lock(&(rdb->lock_manager_external_lock));
+
+		transaction* tx = transaction_vp;
+		shutdown_query_plan_LOCK_TABLE_UNSAFE(tx->curr_query, get_dstring_pointing_to_literal_cstring("DEADLOCK DETECTED"));
+
+		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
+	}
+
+	// debug print if the transaction was not found
+	printf("notify_deadlocked( trx_id = %"PRIuPTR" )\n\n",  ((uintptr_t)transaction_vp));
 }

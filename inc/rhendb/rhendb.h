@@ -40,12 +40,6 @@ struct rhendb
 	// and the lck_table => stored on the volatile_rage_engine
 	pthread_mutex_t lock_manager_external_lock;
 	lock_manager lck_table;
-
-	// hashset of active transactions, also protected by the lock_manager_external_lock
-	// anytransaction that is ever allocated by the transaction_table must first register here, and after completion must remove it from here
-	// you may hold it's reference as long as you like, it has to be your local variable, so we do not care
-	// this struct is found in transaction.h
-	hashmap active_transactions;
 };
 
 void initialize_rhendb(rhendb* rdb, const char* database_file_name,
@@ -58,13 +52,5 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 		uint64_t max_concurrent_users_count);
 
 void deinitialize_rhendb(rhendb* rdb);
-
-typedef struct transaction transaction;
-
-// after getting a new snapshot for a transaction, do the below register immediately before you do anything else
-// then upon abort or commit, deregister it, in the meanwhile only the registered transaction will every actually be interacted-with by rhendb
-// there is no reference counting involved for this struct, so hold as many references of this struct as you like, and it should be 0 initialized to be safe
-void register_transaction_with_rhendb(rhendb* rdb, transaction* tx);
-void deregister_transaction_with_rhendb(rhendb* rdb, transaction* tx);
 
 #endif
