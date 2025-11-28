@@ -1,11 +1,5 @@
  PICKED TASKS
 
- * test query_plan interface, make simple operators and they need only 1 function to set them up called setup_hash_join, or setup_index_scan etc
-   * make simple operators to print tuples on the file descriptors
-   * make identity operator to pass the tuple_stores as is
-   * make a random/sequence generator operators
-   * put them up in a queue and watch them work for testing
-
  * mvcc_snapshot
    * mvcc_snapshot to store unseen_transaction_id, as the minimum transaction_id beyond which all transaction_ids are future transactions
    * this will be different from the transaction_id, transaction_id is the current_transaction_id which may or may be present, store a flag has_transaction_id
@@ -23,6 +17,12 @@
      * renew_mvcc_snapshot -> pass it an empty plain snapshot and it gets a new read view, new active_transaction_ids and unseen_transaction_id
      * get_new_transaction_id -> gives you a new mvcc snapshot with a transaction_id assigned, works as before
 
+ * test query_plan interface, make simple operators
+   * make simple operators to print tuples on the file descriptors
+   * make identity operator to pass the tuple_stores as is
+   * make a random/sequence generator operators
+   * put them up in a queue and watch them work for testing
+
 
 
  * make typed_user_value also hold where does it store it's extended bytes, and upon freeing free them too (for volatile page store)
@@ -39,6 +39,7 @@
     * sort (external sorting, N-way)
     * joins (nested loop with per block, index nested loop, sort merge join, hash join)
     * group_by (based on hash or sorted input data otherwise)
+  * they need only 1 function to set them up called setup_hash_join, or setup_index_scan etc
 
  1.0* implement SQL parser (possibly in a different directory)
  1.1* implement query plan tree
