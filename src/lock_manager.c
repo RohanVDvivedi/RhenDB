@@ -776,6 +776,16 @@ void release_lock_with_lock_manager(lock_manager* lckmgr_p, void* transaction, v
 	remove_lock_entry_and_wake_up_waiters(lckmgr_p, transaction, resource_type, resource_id, resource_id_size);
 }
 
+void discard_all_wait_entries_for_task_in_lock_manager(lock_manager* lckmgr_p, void* transaction, void* task)
+{
+	remove_all_wait_entries_for_task(lckmgr_p, transaction, task);
+}
+
+void discard_all_wait_entries_for_transaction_in_lock_manager(lock_manager* lckmgr_p, void* transaction)
+{
+	remove_all_wait_entries_for_transaction(lckmgr_p, transaction);
+}
+
 void conclude_all_business_with_lock_manager(lock_manager* lckmgr_p, void* transaction)
 {
 	// transacton_id, is indeed calling this function, so it is no longer expected to be blocked, it is aborting or committing, so we remove all it's wait_entries

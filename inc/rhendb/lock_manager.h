@@ -148,8 +148,8 @@ void release_lock_with_lock_manager(lock_manager* lckmgr_p, void* transaction, v
 
 // the below 2 tasks are identical, they just remove wair-entries where the (transaction, task) are set as the (waiting_transaction, waiting_task)
 // these functions can be used when the task of a transaction terminates, or the particular query terminates, to discard all the corresponding wait_entries, as they no longer will be waiting
-void discard_all_wait_entries_in_lock_manager1(lock_manager* lckmgr_p, void* transaction, void* task);
-void discard_all_wait_entries_in_lock_manager2(lock_manager* lckmgr_p, void* transaction);
+void discard_all_wait_entries_for_task_in_lock_manager(lock_manager* lckmgr_p, void* transaction, void* task);
+void discard_all_wait_entries_for_transaction_in_lock_manager(lock_manager* lckmgr_p, void* transaction);
 
 // this function does remove all the wait-entries for the transaction as a whole for all it's tasks
 // this will also release all the locks and also issue notify_unblocked() to all the transactions and tasks that were waiting for the resource that this transaction has locks on
