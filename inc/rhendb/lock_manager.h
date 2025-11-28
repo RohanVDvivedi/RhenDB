@@ -96,7 +96,7 @@ struct lock_manager
 */
 
 // maximum number of bytes to be allocated for the resource_id of the resource to be locked
-#define MAX_RESOURCE_ID_SIZE 24
+#define MAX_RESOURCE_ID_SIZE 25
 
 fail_build_on(MAX_RESOURCE_ID_SIZE > 100)
 

@@ -38,7 +38,7 @@ struct lock_entry
 	// i.e. resource_type = lock_type, resulting into fixed usable number of lock_mode-s that you can acquire on it
 	uint32_t resource_type;
 
-	// the resource_id that is locked, it is atmost 16 bytes wide, i.e. 128 bits
+	// the resource_id that is locked, it is atmost 25 bytes wide, i.e. 200 bits
 	uint8_t resource_id_size;
 	uint8_t resource_id[MAX_RESOURCE_ID_SIZE];
 
@@ -110,7 +110,7 @@ struct wait_entry
 	// i.e. resource_type = lock_type, resulting into fixed usable number of lock_mode-s that you can acquire on it
 	uint32_t resource_type;
 
-	// the resource_id that is locked, it is atmost 16 bytes wide, i.e. 128 bits
+	// the resource_id that is locked, it is atmost 25 bytes wide, i.e. 200 bits
 	uint8_t resource_id_size;
 	uint8_t resource_id[MAX_RESOURCE_ID_SIZE];
 };
