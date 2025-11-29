@@ -153,7 +153,7 @@ void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p)
 		printf("self : %s\n\n", temp);
 	}
 	else
-		printf("self : UNASSIGNED\n\n", temp);
+		printf("self : UNASSIGNED\n\n");
 
 	printf("in_progress_transactions : [\n");
 	for(cy_uint i = 0; i < get_element_count_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids)); i++)
