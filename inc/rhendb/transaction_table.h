@@ -83,7 +83,12 @@ void initialize_transaction_table(transaction_table* ttbl, uint64_t* root_page_i
 
 // gives you a new unassiged transaction_id wrappin it in a mvcc_snapshot
 // this transaction will be in TX_IN_RPOGRESS status
-mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl);
+void get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* snp);
+
+// for read committed isolation level you may later call this, this will not modify the existing self_transaction_id of the snapshot
+void revise_mvcc_snapshot(transaction_table* ttbl, mvcc_snapshot* snp);
+
+// in both the above 2 function it is assumed that the snp struct is in initialized condition
 
 // exit(-1) if you pass in an unassigned transaction_id
 // else returns the status
