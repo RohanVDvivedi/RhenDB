@@ -493,6 +493,8 @@ static void mvcc_snapshot_inserter(const void* data, const void* additional_para
 {
 	mvcc_snapshot* snp = (mvcc_snapshot*) additional_params;
 	const active_transaction_id_entry* atid_p = data;
+	if(is_self_transaction_for_mvcc_snapshot(snp, atid_p->transaction_id)) // do not insert the transaction_id of the snapshot itself in the in_progress transaction ids for the snapshot
+		return;
 	if(!insert_in_progress_transaction_in_mvcc_snapshot(snp, atid_p->transaction_id))
 	{
 		printf("BUG (in transaction_table) :: inserting an active transaction_id in the mvcc_snapshot failed\n");
@@ -506,13 +508,13 @@ void get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* snp)
 
 	// setup mvcc snapshot
 	begin_taking_mvcc_snapshot(snp, ttbl->next_assignable_transaction_id);
-	for_each_in_order_in_currently_active_transaction_ids(ttbl, mvcc_snapshot_inserter, snp);
-	finalize_mvcc_snapshot(snp);
 	if(!set_self_transaction_id_in_mvcc_snapshot(snp))
 	{
 		printf("BUG (in transaction_table) :: setting self transaction id for mvcc_snapshot failed\n");
 		exit(-1);
 	}
+	for_each_in_order_in_currently_active_transaction_ids(ttbl, mvcc_snapshot_inserter, snp);
+	finalize_mvcc_snapshot(snp);
 
 	// increment ttbl->next_assignable_transaction_id
 	if(!add_overflow_safe_uint256(&(ttbl->next_assignable_transaction_id), ttbl->next_assignable_transaction_id, get_1_uint256(), ttbl->overflow_transaction_id))
