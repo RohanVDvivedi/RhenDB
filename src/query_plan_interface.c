@@ -271,6 +271,12 @@ int decrement_operator_buffer_consumers_count(operator_buffer* ob, uint32_t chan
 		result = 1;
 	}
 
+	if(result && ob->consumers_count == 0)
+	{
+		// consumers count just reached 0, no new data will be consumable so wake up all consumers
+		pthread_cond_broadcast(&(ob->wait));
+	}
+
 	EXIT:;
 	pthread_mutex_unlock(&(ob->lock));
 
