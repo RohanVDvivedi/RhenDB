@@ -5,20 +5,29 @@
 
 #include<cutlery/value_arraylist.h>
 
-data_definitions_value_arraylist(sorted_transaction_list, uint256)
+data_definitions_value_arraylist(sorted_transaction_ids_list, uint256)
 
 typedef struct mvcc_snapshot mvcc_snapshot;
 struct mvcc_snapshot
 {
-	uint256 transaction_id; // id of the transaction that this snapshot belongs to
+	sorted_transaction_ids_list in_progress_transaction_ids; // list of in_progress_transactions ( < least_unassigned_transaction_id) at the time of taking this snapshot
 
-	sorted_transaction_list in_progress_transaction_ids; // list of in_progress_transactions ( < transaction_id) at the time of taking this snapshot
+	uint256 least_unassigned_transaction_id; // this is the next_assignable_transaction_id from transaction table, at the time of taking this snapshot
+
+	int has_self_transaction_id; // this boolean suggests if a transaction_id was assigned for this snapshot, if false, transaction_id attribiute is expected to be absent
+	uint256 self_transaction_id; // id of the transaction that this snapshot belongs to
+
+	// must condition => (self_transaction_id <= least_unassigned_transaction_id)
+	// and for any in_progress_transaction_ids <= least_unassigned_transaction_id
 };
 
-void initialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, uint256 transaction_id);
+void initialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
+
+// this function marks the start of taking the snapshot, it will set the least_unassigned_transaction_id, and also clears the in_progress_transaction_ids
+void begin_taking_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, uint256 least_unassigned_transaction_id);
 
 // below function fails on the following conditions
-// transaction_id >= in_progress_transaction_id
+// least_unassigned_transaction_id >= in_progress_transaction_id
 // in_progress_transaction_id <= last inserted in_progress_transaction_id
 // if the memory allocation fails
 // in all the three conditions you can do nothing except exit(-1);
@@ -27,6 +36,12 @@ int insert_in_progress_transaction_in_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, ui
 
 void finalize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
 
+// set self_transaction_id for the mvcc snapshot
+// fails if it already has a self_transaction_id
+// it effectively copies the least_unassigned_transaction_id, and sets it to self_transaction_id
+// and fails if it alreadh has one
+int set_self_transaction_id_in_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
+
 // avoid using this function.
 const uint256* get_in_progress_transaction_ids_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, cy_uint index);
 
@@ -34,6 +49,9 @@ const uint256* get_in_progress_transaction_ids_for_mvcc_snapshot(const mvcc_snap
 	The usage of this functions (to fully initialize a mvcc_snapshot) is as follows
 
 	initialize_mvcc_snapshot(...);
+
+	// the for taking the snapshot run the below lines of code
+	begin_taking_mvcc_snapshot(...);
 	insert_in_progress_transaction_in_mvcc_snapshot(...);
 	insert_in_progress_transaction_in_mvcc_snapshot(...);
 	insert_in_progress_transaction_in_mvcc_snapshot(...);
@@ -42,7 +60,9 @@ const uint256* get_in_progress_transaction_ids_for_mvcc_snapshot(const mvcc_snap
 	.
 	finalize_mvcc_snapshot(...);
 
-	the finalize_mvcc_snapshot() is required only if you plan to reduce the memory utilization for the snapshot, it releases the unsed memory of in_progress_transaction_ids back to the system
+	// then anytime later and only once, we can do
+	// when are about to make a write query. assign a transaction_id for the snapshot
+	set_transaction_id_in_mvcc_snapshot(...);
 */
 
 // below function returns true, only if (transaction_id == mvccsnp_p->transaction_id)
@@ -82,6 +102,6 @@ can_delete_result can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsn
 void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p);
 
 // test if a tuple can be vaccummed
-int can_vaccum_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status_getter* tsg_p, uint256 vaccum_horizon_transaction_id, int* were_hints_updated);
+int can_vaccum_tuple_for_mvcc(mvcc_header* mvcchdr_p, transaction_status_getter* tsg_p, uint256 vaccum_horizon_transaction_id, int* were_hints_updated);
 
 #endif

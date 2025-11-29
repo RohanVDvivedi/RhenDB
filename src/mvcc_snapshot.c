@@ -4,64 +4,85 @@
 
 #include<stdlib.h>
 
-declarations_value_arraylist(sorted_transaction_list, uint256, static inline)
+declarations_value_arraylist(sorted_transaction_ids_list, uint256, static inline)
 #define EXPANSION_FACTOR 1.5
-function_definitions_value_arraylist(sorted_transaction_list, uint256, static inline)
+function_definitions_value_arraylist(sorted_transaction_ids_list, uint256, static inline)
 
-void initialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, uint256 transaction_id)
+void initialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
 {
-	mvccsnp_p->transaction_id = transaction_id;
-
-	if(!initialize_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids), 4))
+	if(!initialize_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids), 4))
 		exit(-1);
+
+	mvccsnp_p->has_self_transaction_id = 0;
+}
+
+void begin_taking_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, uint256 least_unassigned_transaction_id)
+{
+	mvccsnp_p->least_unassigned_transaction_id = least_unassigned_transaction_id;
+	remove_all_from_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids));
 }
 
 int insert_in_progress_transaction_in_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, uint256 in_progress_transaction_id)
 {
-	if(compare_uint256(in_progress_transaction_id, mvccsnp_p->transaction_id) >= 0) // if the new in_progress_transaction_id >= mvccsnp_p->transaction_id, then fail
+	if(compare_uint256(in_progress_transaction_id, mvccsnp_p->least_unassigned_transaction_id) >= 0) // if the new in_progress_transaction_id >= mvccsnp_p->least_unassigned_transaction_id, then fail
 		return 0;
 
 	// in_progress_transaction_id must be > last inserted one
-	if((!is_empty_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids))) && compare_uint256(in_progress_transaction_id, *get_back_of_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids))) <= 0)
+	if((!is_empty_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids))) && compare_uint256(in_progress_transaction_id, *get_back_of_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids))) <= 0)
 		return 0;
 
 	// if the container is full and we can not insert, then crash, we are out of memory
-	if(is_full_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)) && !expand_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)))
+	if(is_full_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids)) && !expand_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids)))
 		exit(-1);
 
 	// now, this must succeed
-	return push_back_to_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids), &in_progress_transaction_id);
+	return push_back_to_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids), &in_progress_transaction_id);
 }
 
 void finalize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
 {
 	// just shrink to fit
-	shrink_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids));
+	shrink_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids));
+}
+
+int set_self_transaction_id_in_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
+{
+	if(mvccsnp_p->has_self_transaction_id)
+		return 0;
+
+	mvccsnp_p->has_self_transaction_id = 1;
+	mvccsnp_p->self_transaction_id = mvccsnp_p->least_unassigned_transaction_id;
+
+	return 1;
 }
 
 const uint256* get_in_progress_transaction_ids_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, cy_uint index)
 {
-	return get_from_front_of_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids), index);
+	return get_from_front_of_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids), index);
 }
 
 int is_self_transaction_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint256 transaction_id)
 {
-	// only if transaction_id == mvccsnp_p->transaction_id
-	return are_equal_uint256(transaction_id, mvccsnp_p->transaction_id);
+	// only if transaction_id == mvccsnp_p->self_transaction_id
+	return (mvccsnp_p->has_self_transaction_id) && are_equal_uint256(transaction_id, mvccsnp_p->self_transaction_id);
 }
 
 int was_completed_transaction_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint256 transaction_id)
 {
-	index_accessed_interface iai = get_index_accessed_interface_for_front_of_sorted_transaction_list((sorted_transaction_list*)(&(mvccsnp_p->in_progress_transaction_ids)));
+	// self_transaction_id of the snapshot is never completed
+	if(is_self_transaction_for_mvcc_snapshot(mvccsnp_p, transaction_id))
+		return 0;
 
-	// (transaction_id < mvccsnp_p->transaction_id) && (transaction_id not in mvccsnp_p->in_progress_transaction_ids)
-	return (compare_uint256(transaction_id, mvccsnp_p->transaction_id) < 0) && (is_empty_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)) ||
-		(INVALID_INDEX == binary_search_in_sorted_iai(&iai, 0, get_element_count_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)) - 1, &transaction_id, &simple_comparator(compare_uint256_with_ptrs), FIRST_OCCURENCE)));
+	index_accessed_interface iai = get_index_accessed_interface_for_front_of_sorted_transaction_ids_list((sorted_transaction_ids_list*)(&(mvccsnp_p->in_progress_transaction_ids)));
+
+	// (transaction_id < mvccsnp_p->least_unassigned_transaction_id) && (transaction_id not in mvccsnp_p->in_progress_transaction_ids)
+	return (compare_uint256(transaction_id, mvccsnp_p->least_unassigned_transaction_id) < 0) && (is_empty_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids)) ||
+		(INVALID_INDEX == binary_search_in_sorted_iai(&iai, 0, get_element_count_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids)) - 1, &transaction_id, &simple_comparator(compare_uint256_with_ptrs), FIRST_OCCURENCE)));
 }
 
 void deinitialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
 {
-	deinitialize_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids));
+	deinitialize_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids));
 }
 
 int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, transaction_id_with_hints* transaction_id, transaction_status_getter* tsg_p, int* were_hints_updated)
@@ -112,9 +133,9 @@ can_delete_result can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsn
 
 	switch (fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmax), tsg_p, were_hints_updated))
 	{
-		case TX_ABORTED : // the status of xmax must be ABORTED for xmax to delete it
+		case TX_ABORTED : // the status of xmax must be ABORTED to delete it
 			return CAN_DELETE;
-		case TX_IN_PROGRESS : // if (logically future) xmax is in_progress -> then wait for it to abort, of abort yourselfs
+		case TX_IN_PROGRESS : // if (logically future) xmax is in_progress -> then wait for it to abort, or abort yourself
 			return WAIT_FOR_XMAX_TO_ABORT;
 		case TX_COMMITTED : // if (logically future) xmax is committed -> then abort the current transaction
 			return MUST_ABORT;
@@ -125,27 +146,36 @@ can_delete_result can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsn
 
 void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p)
 {
+	if(mvccsnp_p->has_self_transaction_id)
 	{
 		char temp[80] = {};
-		serialize_to_decimal_uint256(temp, mvccsnp_p->transaction_id);
+		serialize_to_decimal_uint256(temp, mvccsnp_p->self_transaction_id);
 		printf("self : %s\n\n", temp);
 	}
+	else
+		printf("self : UNASSIGNED\n\n", temp);
 
 	printf("in_progress_transactions : [\n");
-	for(cy_uint i = 0; i < get_element_count_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids)); i++)
+	for(cy_uint i = 0; i < get_element_count_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids)); i++)
 	{
 		if(i % 8 == 0)
 			printf("\t");
 		char temp[80] = {};
-		serialize_to_decimal_uint256(temp, *get_from_front_of_sorted_transaction_list(&(mvccsnp_p->in_progress_transaction_ids), i));
+		serialize_to_decimal_uint256(temp, *get_from_front_of_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids), i));
 		printf(" %s,", temp);
 		if((i+1) % 8 == 0)
 			printf("\n");
 	}
 	printf("]\n\n");
+
+	{
+		char temp[80] = {};
+		serialize_to_decimal_uint256(temp, mvccsnp_p->least_unassigned_transaction_id);
+		printf("least_unassigned_transaction_id : %s\n\n", temp);
+	}
 }
 
-int can_vaccum_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status_getter* tsg_p, uint256 vaccum_horizon_transaction_id, int* were_hints_updated)
+int can_vaccum_tuple_for_mvcc(mvcc_header* mvcchdr_p, transaction_status_getter* tsg_p, uint256 vaccum_horizon_transaction_id, int* were_hints_updated)
 {
 	// tuple created by an aborted transaction, vaccum immediately
 	if(fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmin), tsg_p, were_hints_updated) == TX_ABORTED)
