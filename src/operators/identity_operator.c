@@ -16,7 +16,7 @@ static void start_execution(operator* o)
 {
 	if(!submit_job_executor(((input_values*)(o->inputs))->thread_pool, execute, o, NULL, NULL, BLOCKING))
 	{
-		printf("FAILED TO SUBMIT INDENTITY OPERATOR\n");
+		printf("FAILED TO SUBMIT INDENTITY OPERATOR TO THREAD POOL\n");
 		exit(-1);
 	}
 }
