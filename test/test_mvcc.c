@@ -110,7 +110,9 @@ int main()
 
 		mvcc_snapshot snap;
 
-		initialize_mvcc_snapshot(&snap, get_uint256(777));
+		initialize_mvcc_snapshot(&snap);
+
+		begin_taking_mvcc_snapshot(&snap, get_uint256(777));
 
 		for(uint32_t i = 0; i < in_progress_count; i++)
 		{
@@ -121,6 +123,8 @@ int main()
 		printf("\n");
 
 		finalize_mvcc_snapshot(&snap);
+
+		set_self_transaction_id_in_mvcc_snapshot(&snap);
 
 		print_mvcc_snapshot(&snap);
 
