@@ -113,6 +113,9 @@ int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, 
 
 			wait_error = pthread_cond_timedwait_for_microseconds(&(o->wait_on_lock_table_for_lock), &(o->self_query_plan->curr_tx->db->lock_manager_external_lock), &timeout_in_microseconds);
 
+			// we just came out from wait, so make the lock_manager discard our wait entries
+			discard_all_wait_entries_for_task_in_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), o->self_query_plan->curr_tx, o);
+
 			// if a kill signal was sent while we were waiting then break, and return -1
 			if(is_kill_signal_sent(o))
 			{
