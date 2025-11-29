@@ -10,13 +10,10 @@
 typedef struct query_plan query_plan;
 
 // operator is actually a task in the pipeline of the query_plan, it must be implemented single threadedly to pull resources
-// for multithreading make other compute threads or clone new operators into the query_plan
+// and for multithreading clone new operators from your current one into the query_plan
 typedef struct operator operator;
 struct operator
 {
-	// operator_id is the id of this operator
-	uint32_t operator_id;
-
 	// pointer to the query_plan that this operator is part of
 	query_plan* self_query_plan;
 
@@ -125,8 +122,6 @@ operator_buffer* get_new_registered_operator_buffer_for_query_plan(query_plan* q
 operator* get_new_registered_operator_for_query_plan(query_plan* qp);
 
 void start_all_operators_for_query_plan(query_plan* qp);
-
-operator* get_operator_for_query_plan(query_plan* qp, uint32_t operator_id);
 
 // may be called as many times as you desire
 void shutdown_query_plan(query_plan* qp, dstring kill_reasons);

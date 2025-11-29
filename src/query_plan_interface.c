@@ -424,8 +424,6 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	if(o == NULL)
 		exit(-1);
 
-	// ith created operator has i as it's operator_id, and is as ith index in the qp->operators
-	o->operator_id = get_element_count_arraylist(&(qp->operators));
 	o->self_query_plan = qp;
 
 	o->inputs = NULL;
@@ -457,18 +455,6 @@ void start_all_operators_for_query_plan(query_plan* qp)
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
 		o->start_execution(o);
 	}
-}
-
-operator* get_operator_for_query_plan(query_plan* qp, uint32_t operator_id)
-{
-	// using the fact that the operator with given operator_id will always be at the ith index
-	if(operator_id < get_element_count_arraylist(&(qp->operators)))
-	{
-		operator* o = (operator*) get_from_arraylist(&(qp->operators), operator_id);
-		if(o->operator_id == operator_id)
-			return o;
-	}
-	return NULL;
 }
 
 void shutdown_query_plan(query_plan* qp, dstring kill_reason)
@@ -540,7 +526,6 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 
 		o->free_resources(o);
 
-		o->operator_id = 0;
 		o->self_query_plan = NULL;
 
 		o->inputs = NULL;
@@ -617,9 +602,8 @@ void notify_unblocked(void* context_p, void* transaction_vp, void* task_vp)
 
 		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
 	}
-
-	// debug print if the operator was not found
-	printf("notify_unblocked( trx_id = %"PRIuPTR" , task_id = %"PRIuPTR" )\n\n", ((uintptr_t)transaction_vp), ((uintptr_t)task_vp));
+	else
+		printf("notify_unblocked( trx_id = %"PRIuPTR" , task_id = %"PRIuPTR" )\n\n", ((uintptr_t)transaction_vp), ((uintptr_t)task_vp));
 }
 
 void notify_deadlocked(void* context_p, void* transaction_vp)
@@ -637,7 +621,6 @@ void notify_deadlocked(void* context_p, void* transaction_vp)
 
 		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
 	}
-
-	// debug print if the transaction was not found
-	printf("notify_deadlocked( trx_id = %"PRIuPTR" )\n\n",  ((uintptr_t)transaction_vp));
+	else
+		printf("notify_deadlocked( trx_id = %"PRIuPTR" )\n\n",  ((uintptr_t)transaction_vp));
 }
