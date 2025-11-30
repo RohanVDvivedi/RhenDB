@@ -9,7 +9,10 @@ struct input_values
 	operator_buffer* input;
 };
 
-static void* execute(void* o_v);
+static void execute(operator* o)
+{
+	// TODO
+}
 
 void setup_identity_operator(operator* o, operator_buffer* output, operator_buffer* input)
 {

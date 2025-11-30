@@ -11,7 +11,10 @@ struct input_values
 	tuple_def* generator_tuple_def;
 };
 
-static void* execute(void* o_v);
+static void execute(operator* o)
+{
+	// TODO
+}
 
 void setup_generator_operator(operator* o, operator_buffer* output, void* (*generator)(void* generator_context), void* generator_context, tuple_def* generator_tuple_def)
 {

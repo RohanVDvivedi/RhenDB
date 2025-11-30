@@ -10,7 +10,10 @@ struct input_values
 	tuple_def* input_tuple_def;
 };
 
-static void* execute(void* o_v);
+static void execute(operator* o)
+{
+	// TODO
+}
 
 void setup_printf_operator(operator* o, operator_buffer* input, tuple_def* input_tuple_def)
 {
