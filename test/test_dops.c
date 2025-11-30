@@ -168,6 +168,8 @@ void intHandler(int dummy)
 
 int main()
 {
+	signal(SIGINT, intHandler);
+
 	rhendb rdb;
 	initialize_rhendb(&rdb, "./test.db",
 		5,
