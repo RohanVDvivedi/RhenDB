@@ -226,7 +226,7 @@ int main()
 
 	deinitialize_rhendb(&rdb);
 
-	printf("TEST COMPLETED");
+	printf("TEST COMPLETED\n");
 
 	return 0;
 }
