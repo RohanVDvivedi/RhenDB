@@ -1,5 +1,4 @@
 #include<rhendb/rhendb.h>
-#include<rhendb/lock_manager.h>
 
 #include<stdlib.h>
 
