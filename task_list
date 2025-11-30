@@ -1,8 +1,6 @@
  PICKED TASKS
 
  * make operator only contain execute function and no need to let operators themselves push the job to the threadpool
- * make transaction struct store mvcc_snapshot as a value and not as a pointer
- * implement initialize function for the transation struct
 
  * test query_plan interface, make simple operators
    * make simple operators to print tuples on the file descriptors
