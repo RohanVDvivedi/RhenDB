@@ -1,10 +1,6 @@
  PICKED TASKS
 
- * test query_plan interface, make simple operators
-   * make simple operators to print tuples on the file descriptors
-   * make identity operator to pass the tuple_stores as is
-   * make a random/sequence generator operators
-   * put them up in a queue and watch them work for testing
+ * test query_plan interface, using simple operators we just implemented
 
 
 
