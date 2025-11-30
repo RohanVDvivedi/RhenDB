@@ -1,5 +1,7 @@
 #include<rhendb/rhendb.h>
 
+#include<rhendb/transaction.h>
+
 #include<stdlib.h>
 
 #define USERS_COUNT 10
@@ -17,6 +19,9 @@ int main()
 		USERS_COUNT);
 	printf("database initialized\n\n");
 
+	transaction tx = initialize_transaction(&rdb);
+
+	deinitialize_transaction(&tx);
 
 	deinitialize_rhendb(&rdb);
 
