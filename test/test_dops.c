@@ -152,7 +152,7 @@ void* generator(void* generator_context, tuple_def* generator_tuple_def)
 	construct_record(generated, (*generator_number), 0, "Rohan Dvivedi");
 
 	(*generator_number)++;
-	return NULL;
+	return generated;
 }
 
 int main()
@@ -204,7 +204,7 @@ int main()
 	dstring kill_reasons = new_dstring("", 0);
 	destroy_query_plan(qp, &kill_reasons);
 
-	printf("\n\nKILL REASONE : \n");
+	printf("\n\nKILL REASONS : \n");
 	printf_dstring(&kill_reasons);
 	printf("\n\nKILL REASONS END\n\n");
 
