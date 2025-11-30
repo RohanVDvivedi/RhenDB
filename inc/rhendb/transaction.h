@@ -18,7 +18,7 @@ struct transaction
 	// database that this transaction belongs to
 	rhendb* db;
 
-	// mvcc snapshot, for snapshot isolation
+	// mvcc snapshot, for isolation level
 	mvcc_snapshot snapshot;
 
 	// transaction_id points to the transaction_id in the snapshot for this transaction
@@ -27,6 +27,10 @@ struct transaction
 	// actual query plan, for the current query being executed
 	query_plan* curr_query;
 };
+
+transaction initialize_transaction(rhendb* db);
+
+void deinitialize_transaction(transaction* tx);
 
 // helper compare and hash functions to insert the transaction in your data structures
 
