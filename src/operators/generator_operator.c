@@ -26,7 +26,7 @@ static void execute(operator* o)
 
 		tts = get_new_temp_tuple_store(".");
 		tuple_region tr = INIT_TUPLE_REGION;
-		while(tts->next_tuple_offset < 128)
+		while(tts->next_tuple_offset < 128 && !is_kill_signal_sent(o))
 		{
 			void* curr_tuple = inputs->generator(inputs->generator_context, inputs->generator_tuple_def);
 			if(curr_tuple == NULL)
@@ -48,9 +48,6 @@ static void execute(operator* o)
 		if(tts != NULL)
 		{
 			int pushed = push_to_operator_buffer(inputs->output, o, tts);
-
-			if(is_kill_signal_sent(o))
-				goto EXIT;
 
 			if(!pushed)
 			{

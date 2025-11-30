@@ -22,14 +22,8 @@ static void execute(operator* o)
 
 	while(1)
 	{
-		if(is_kill_signal_sent(o))
-			goto EXIT;
-
 		int no_more_data = 0;
 		tts = pop_from_operator_buffer(inputs->input, 0, 1000000, &no_more_data);
-
-		if(is_kill_signal_sent(o))
-			goto EXIT;
 
 		if(no_more_data)
 			goto EXIT;

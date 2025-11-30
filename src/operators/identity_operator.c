@@ -19,14 +19,8 @@ static void execute(operator* o)
 
 	while(1)
 	{
-		if(is_kill_signal_sent(o))
-			goto EXIT;
-
 		int no_more_data = 0;
 		tts = pop_from_operator_buffer(inputs->input, 0, 1000000, &no_more_data);
-
-		if(is_kill_signal_sent(o))
-			goto EXIT;
 
 		if(no_more_data)
 			goto EXIT;
@@ -34,9 +28,6 @@ static void execute(operator* o)
 		if(tts != NULL)
 		{
 			int pushed = push_to_operator_buffer(inputs->output, o, tts);
-
-			if(is_kill_signal_sent(o))
-				goto EXIT;
 
 			if(!pushed)
 			{
