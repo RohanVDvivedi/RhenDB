@@ -171,11 +171,11 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 			uint64_t truncator_period_us,
 		uint64_t max_concurrent_users_count)
 {
-	// 10 times the user count, will be size of queue and same will be the number of threads, wait 1 second before you kill the thread
-	rdb->cached_thread_pool = new_executor(CACHED_THREAD_POOL_EXECUTOR, min(max_concurrent_users_count * 10, 500), min(max_concurrent_users_count * 10, 2000), 1000000ULL, NULL, NULL, NULL, 0);
+	uint64_t threadpool_count = min(max_concurrent_users_count * 10, 1024);
 
-	// initialize the compute thread pool with as many threads as the hardware has and with the same queue size
-	rdb->compute_thread_pool = new_executor(FIXED_THREAD_COUNT_EXECUTOR, sysconf(_SC_NPROCESSORS_ONLN), UNBOUNDED_SYNC_QUEUE, 0, NULL, NULL, NULL, 0);
+	rdb->operator_thread_pool_usage_limiter = new_resource_usage_limiter(threadpool_count);
+
+	rdb->operator_thread_pool = new_executor(CACHED_THREAD_POOL_EXECUTOR, threadpool_count, JOB_QUEUE_AS_LINKEDLIST, 1000000ULL, NULL, NULL, NULL, 0);
 
 	rdb->bufferpool_usage_limiter = new_resource_usage_limiter(bufferpool_frame_count);
 
@@ -198,11 +198,10 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 
 void deinitialize_rhendb(rhendb* rdb)
 {
-	shutdown_executor(rdb->cached_thread_pool, 1);
-	delete_executor(rdb->cached_thread_pool);
+	delete_resource_usage_limiter(rdb->operator_thread_pool_usage_limiter, 0);
 
-	shutdown_executor(rdb->compute_thread_pool, 1);
-	delete_executor(rdb->compute_thread_pool);
+	shutdown_executor(rdb->operator_thread_pool, 1);
+	delete_executor(rdb->operator_thread_pool);
 
 	delete_resource_usage_limiter(rdb->bufferpool_usage_limiter, 0);
 

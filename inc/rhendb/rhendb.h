@@ -14,12 +14,12 @@
 typedef struct rhendb rhendb;
 struct rhendb
 {
-	// cached threadpool for disk accessor operators like scan and writers to tables
-	// max thread pool size = max job queue size = max_concurrent_users_count * 10
-	executor* cached_thread_pool;
+	// prevent from over allocating operator threads
+	resource_usage_limiter* operator_thread_pool_usage_limiter;
 
-	// fixed sized theadpool for non io operators
-	executor* compute_thread_pool;
+	// cached threadpool for operators
+	// max thread pool size =  max_concurrent_users_count * 10
+	executor* operator_thread_pool;
 
 	rage_engine persistent_acid_rage_engine;
 
