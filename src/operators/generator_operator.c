@@ -6,7 +6,7 @@ typedef struct input_values input_values;
 struct input_values
 {
 	operator_buffer* output;
-	void* (*generator)(void* generator_context);
+	void* (*generator)(void* generator_context, tuple_def* generator_tuple_def);
 	void* generator_context;
 	tuple_def* generator_tuple_def;
 };
@@ -16,7 +16,7 @@ static void execute(operator* o)
 	// TODO
 }
 
-void setup_generator_operator(operator* o, operator_buffer* output, void* (*generator)(void* generator_context), void* generator_context, tuple_def* generator_tuple_def)
+void setup_generator_operator(operator* o, operator_buffer* output, void* (*generator)(void* generator_context, tuple_def* generator_tuple_def), void* generator_context, tuple_def* generator_tuple_def)
 {
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
