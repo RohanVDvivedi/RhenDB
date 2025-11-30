@@ -144,12 +144,13 @@ void* generator(void* generator_context, tuple_def* generator_tuple_def)
 {
 	int* generator_number = generator_context;
 
-	if((*generator_number) >= 100)
+	if((*generator_number) >= 50)
 		return NULL;
 
 	void* generated = malloc(BUFFER_SIZE);
 
 	construct_record(generated, (*generator_number), 0, "Rohan Dvivedi");
+	usleep(100000);
 
 	(*generator_number)++;
 	return generated;

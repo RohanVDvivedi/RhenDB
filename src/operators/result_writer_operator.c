@@ -23,7 +23,7 @@ static void execute(operator* o)
 	while(1)
 	{
 		int no_more_data = 0;
-		tts = pop_from_operator_buffer(inputs->input, o, 1000000, &no_more_data);
+		tts = pop_from_operator_buffer(inputs->input, o, 100000, &no_more_data);
 
 		if(no_more_data)
 			goto EXIT;
