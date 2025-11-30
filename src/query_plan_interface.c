@@ -554,7 +554,7 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 				exit(-1);
 		}
 
-		init_empty_dstring(&(o->kill_reason), 0);
+		deinit_dstring(&(o->kill_reason), 0);
 
 		free(o);
 	}
