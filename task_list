@@ -1,6 +1,5 @@
  PICKED TASKS
 
- * make rhendb have a single cached thread pool (LINKEDLIST based not queue size) and a threadpool's resource usage limiter
  * make operator only contain execute function and no need to let operators themselves push the job to the threadpool
  * make transaction struct store mvcc_snapshot as a value and not as a pointer
  * implement initialize function for the transation struct
