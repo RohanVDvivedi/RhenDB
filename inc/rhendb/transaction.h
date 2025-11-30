@@ -19,16 +19,13 @@ struct transaction
 	rhendb* db;
 
 	// mvcc snapshot, for snapshot isolation
-	mvcc_snapshot* snapshot;
+	mvcc_snapshot snapshot;
 
-	// transaction_id points to the transaction_id in the snapshot
+	// transaction_id points to the transaction_id in the snapshot for this transaction
 	uint256* transaction_id;
 
 	// actual query plan, for the current query being executed
 	query_plan* curr_query;
-
-	// embedded node for linking it in active_transactions in rhendb
-	bstnode embed_node_active_transactions_in_rhendb;
 };
 
 // helper compare and hash functions to insert the transaction in your data structures
