@@ -208,6 +208,7 @@ int main()
 
 	printf("\n\nKILL REASONS : \n");
 	printf_dstring(&kill_reasons);
+	deinit_dstring(&kill_reasons);
 	printf("\n\nKILL REASONS END\n\n");
 
 	deinitialize_transaction(&tx);
