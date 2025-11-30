@@ -4,6 +4,7 @@
 #include<rhendb/operators.h>
 
 #include<stdlib.h>
+#include<unistd.h>
 
 #define USERS_COUNT 10
 
