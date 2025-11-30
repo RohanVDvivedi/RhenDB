@@ -5,6 +5,7 @@
 
 #include<stdlib.h>
 #include<unistd.h>
+#include<signal.h>
 
 #define USERS_COUNT 10
 
@@ -157,6 +158,14 @@ void* generator(void* generator_context, tuple_def* generator_tuple_def)
 	return generated;
 }
 
+query_plan* qp = NULL;
+
+void intHandler(int dummy)
+{
+	printf("\nCaught Ctrl+C! shuting down query plan\n");
+	shutdown_query_plan(qp, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
+}
+
 int main()
 {
 	rhendb rdb;
@@ -175,7 +184,7 @@ int main()
 
 	transaction tx = initialize_transaction(&rdb);
 
-	query_plan* qp = get_new_query_plan(&tx, TOTAL_OPERATORS_COUNT, OPERATOR_BUFFERS_COUNT);
+	qp = get_new_query_plan(&tx, TOTAL_OPERATORS_COUNT, OPERATOR_BUFFERS_COUNT);
 
 	// make operators
 
