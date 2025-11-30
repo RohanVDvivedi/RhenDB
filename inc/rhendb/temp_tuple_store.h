@@ -95,8 +95,7 @@ int mmap_for_writing_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, tuple_si
 	both the mmap functions may pass their tuple_regions to each other, it will just force the mmap_* function to remap the regions
 */
 
-// fails if you pass a is_only_readable flagged tuple
-// else it forwards the next_tuple_offset
+// it forwards the next_tuple_offset
 // this function may be called as many times as you like, intermediary, to finalize the same tuple
 int finalize_written_tuple(temp_tuple_store* tts_p, tuple_region* tr_p);
 
