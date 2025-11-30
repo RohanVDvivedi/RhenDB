@@ -1,9 +1,5 @@
  PICKED TASKS
 
- * test query_plan interface, using simple operators we just implemented
-
-
-
  * make typed_user_value also hold where does it store it's extended bytes, and upon freeing free them too (for volatile page store)
  * selection and projection may instead be implemented using a complex transformer, how about we use python as a scripting tool to do this
    * the current design is limited to using only 1 operand for each comparison from 1 tuple OR just sinply combine a few non constant field tuples into 1 attribute into a single output tuple's attribute for projection, which is a very limited usecase
