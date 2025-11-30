@@ -429,7 +429,7 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	o->inputs = NULL;
 	o->context = NULL;
 
-	o->start_execution = NULL;
+	o->execute = NULL;
 	o->operator_release_latches_and_store_context = NULL;
 	o->free_resources = NULL;
 
@@ -453,7 +453,11 @@ void start_all_operators_for_query_plan(query_plan* qp)
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
 	{
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
-		o->start_execution(o);
+		if(!submit_job_executor(qp->curr_tx->db->operator_thread_pool, (void* (*)(void*))(o->execute), o, NULL, NULL, BLOCKING))
+		{
+			printf("FAILED TO SUBMIT INDENTITY OPERATOR TO THREAD POOL\n");
+			exit(-1);
+		}
 	}
 }
 
@@ -531,7 +535,7 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		o->inputs = NULL;
 		o->context = NULL;
 
-		o->start_execution = NULL;
+		o->execute = NULL;
 		o->operator_release_latches_and_store_context = NULL;
 		o->free_resources = NULL;
 

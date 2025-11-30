@@ -21,7 +21,7 @@ struct operator
 
 	void* context;			// to store positions of the scans for the operator
 
-	void (*start_execution)(operator* o);	// this will be called only once and operator must start execution only after this call
+	void (*execute)(operator* o);	// this will be the function that will get pushed into the operator_thread_pool for execution
 
 	// this function get's called before operator goes into waiting on lock_table or the operator_buffer
 	void (*operator_release_latches_and_store_context)(operator* o);

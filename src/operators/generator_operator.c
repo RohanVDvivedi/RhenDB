@@ -5,7 +5,6 @@
 typedef struct input_values input_values;
 struct input_values
 {
-	executor* thread_pool;
 	operator_buffer* output;
 	void* (*generator)(void* generator_context);
 	void* generator_context;
@@ -14,24 +13,14 @@ struct input_values
 
 static void* execute(void* o_v);
 
-static void start_execution(operator* o)
+void setup_generator_operator(operator* o, operator_buffer* output, void* (*generator)(void* generator_context), void* generator_context, tuple_def* generator_tuple_def)
 {
-	if(!submit_job_executor(((input_values*)(o->inputs))->thread_pool, execute, o, NULL, NULL, BLOCKING))
-	{
-		printf("FAILED TO SUBMIT GENERATOR OPERATOR TO THREAD POOL\n");
-		exit(-1);
-	}
-}
-
-void setup_generator_operator(operator* o, executor* thread_pool, operator_buffer* output, void* (*generator)(void* generator_context), void* generator_context, tuple_def* generator_tuple_def)
-{
-	o->start_execution = start_execution;
+	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
-		.thread_pool = thread_pool,
 		.output = output,
 		.generator = generator,
 		.generator_context = generator_context,

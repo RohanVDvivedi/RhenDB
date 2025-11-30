@@ -6,10 +6,10 @@
 #include<boompar/executor.h>
 #include<cutlery/stream.h>
 
-void setup_generator_operator(operator* o, executor* thread_pool, operator_buffer* output, void* (*generator)(void* generator_context), void* generator_context, tuple_def* generator_tuple_def);
+void setup_generator_operator(operator* o, operator_buffer* output, void* (*generator)(void* generator_context), void* generator_context, tuple_def* generator_tuple_def);
 
-void setup_identity_operator(operator* o, executor* thread_pool, operator_buffer* output, operator_buffer* input);
+void setup_identity_operator(operator* o, operator_buffer* output, operator_buffer* input);
 
-void setup_printf_operator(operator* o, executor* thread_pool, operator_buffer* input, tuple_def* input_tuple_def);
+void setup_printf_operator(operator* o, operator_buffer* input, tuple_def* input_tuple_def);
 
 #endif
