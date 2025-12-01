@@ -1,13 +1,6 @@
  PICKED TASKS
 
- * make typed_user_value also hold where does it store it's extended bytes, and upon freeing free them too (for volatile page store)
- * selection and projection may instead be implemented using a complex transformer, how about we use python as a scripting tool to do this
-   * the current design is limited to using only 1 operand for each comparison from 1 tuple OR just sinply combine a few non constant field tuples into 1 attribute into a single output tuple's attribute for projection, which is a very limited usecase
- * a selection or projection can be a single transformer statement (selection compare the output, if it NULL or ZERO it is considered as false)
- * a user defined function can be a series of transformers applied one after the another over a set of local variables
- * basically implement a RVM (RhenDB Virtual Machine)
- * that basically takes a transformer and converts it into C code function, then we compile it into binary machine code and execute it, like in JIT machines
- * make simple transformers for selections and projections using this
+  * find a way to compile a runtime function and it's validate counterpart from C or SQL code into binary and load it and run it
 
   * what operators to implement
     * scan on b+tree/hash index (sort rids (per 1 or set of buckets for hash index OR about some 1000 pages for bplus tree) and then scan the table), scan on table(start and move ahead linearly)
@@ -56,9 +49,6 @@
    * unix epoch to date, day, month, year, second, millisecond, microsecond, with timezones
    * build more complex functions transformers with local variables and bytecode stored in context
    * length of string, blob, array, tuple, etc
-
- 7.*tiber runtime integration
-   * make compute intensive tasks bundle them into tibers and then execute them, this could be filters and projections, sorts and joins and offload only mimimal work to them
 
  * Design methodology
    * we will use postgresql architecture over (mysql like) mini transactions
