@@ -2,12 +2,34 @@
 
   * find a way to compile a runtime function and it's validate counterpart from C or SQL code into binary and load it and run it
 
+  * start with catalog tables (hash_table-s)
+    * table for runtime_type -> name, data_type_info
+    * table for runtime_function -> name to runtime_function both validate and function itself
+    * table for disk_structures -> name, type (heap_table, hash_table, bplus_tree, linked_page_list, array_table, *r_tree), root_page_id, runtime_type.name, key_element_count, key_index_accessors(extended if required), sort_directions(extended if required), the whole tuple must fit 1/4th of the page
+    * only hash_table and bplus_tree need key_element_count, and key_index_accessors, and sort_dirs are only needed by bplus_tree
+    * data structures that do not need particular attributes may keep them empty or NULL
+    * disk_structure_relationships (last 2 values are just page_id and tuple_index in the index's runtime_type, for uniqueness constraint)
+      * table_name, index_name, key_index, how to get key from the tuple of the table => direct mapping or a runtime_function over the table's tuple
+    * all of the tuple_defs for data_structures, type_infos and runtime_functions are all reference_counted and are read-only, they can not be modified
+    * data_structure relation ships still can be queried
+
   * what operators to implement
     * scan on b+tree/hash index (sort rids (per 1 or set of buckets for hash index OR about some 1000 pages for bplus tree) and then scan the table), scan on table(start and move ahead linearly)
     * sort (external sorting, N-way)
     * joins (nested loop with per block, index nested loop, sort merge join, hash join)
     * group_by (based on hash or sorted input data otherwise)
+    * read/write operators over simple data_structures (for full tuple indexer like access will be implemented later)
   * they need only 1 function to set them up called setup_hash_join, or setup_index_scan etc
+
+  *implement various types of default runtime functions
+   * boolean(convert NULL and ZERO to false and rest everything is true)
+   * sign(negatives to -1, 0 to 0, and positives to 1)
+   * compare(for comparing any types)
+   * add, sub, mul, divide, mod, gcd, lcm, pow, sin, cos, multiplicate inverse, additive inverse
+   * strings and blobs to be concatenated, substring with from and to
+   * unix epoch to date, day, month, year, second, millisecond, microsecond, with timezones
+   * build more complex functions transformers with local variables and bytecode stored in context
+   * length of string, blob, array, tuple, etc
 
  1.0* implement SQL parser (possibly in a different directory)
  1.1* implement query plan tree
@@ -37,18 +59,6 @@
  4.* lock table remaining tasks (*future)
    * deadlock detection and resolution task job (*future, for now rely on timeouts to back off and abort)
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock (*future, do it when query optimizer and catalog tables are ready )
-
- 5.*selection implement optimize function
-
- 6.*implement various types of transformers
-   * boolean(convert NULL and ZERO to false and rest everything is true)
-   * sign(negatives to -1, 0 to 0, and positives to 1)
-   * compare(for comparing any types)
-   * add, sub, mul, divide, mod, gcd, lcm, pow, sin, cos, multiplicate inverse, additive inverse
-   * strings and blobs to be concatenated, substring with from and to
-   * unix epoch to date, day, month, year, second, millisecond, microsecond, with timezones
-   * build more complex functions transformers with local variables and bytecode stored in context
-   * length of string, blob, array, tuple, etc
 
  * Design methodology
    * we will use postgresql architecture over (mysql like) mini transactions
