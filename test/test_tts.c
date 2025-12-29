@@ -19,7 +19,7 @@ void print_all_tuples(temp_tuple_store* tts_p)
 	tuple_region tr = INIT_TUPLE_REGION;
 	while(mmap_for_reading_tuple(tts_p, &tr, offset, &(tpl_d.size_def)))
 	{
-		printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32"\n", index, offset, curr_tuple_size_for_tuple_region(&tr));
+		printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32" @ %p\n", index, offset, curr_tuple_size_for_tuple_region(&tr), tr.region_memory);
 		print_tuple(tr.tuple, &tpl_d);
 		printf("\n\n");
 		offset = next_tuple_offset_for_tuple_region(&tr);
