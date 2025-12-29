@@ -6,6 +6,8 @@
 
 #include<tuplestore/tuple.h>
 
+#define MMAP_READ_REGION_MIN_SIZE 0 // (1024 * 1024)
+
 tuple_def tpl_d;
 data_type_info dti;
 
@@ -17,7 +19,7 @@ void print_all_tuples(temp_tuple_store* tts_p)
 	uint64_t index = 0;
 	uint64_t offset = 0;
 	tuple_region tr = INIT_TUPLE_REGION;
-	while(mmap_for_reading_tuple(tts_p, &tr, offset, &(tpl_d.size_def)))
+	while(mmap_for_reading_tuple(tts_p, &tr, offset, &(tpl_d.size_def), MMAP_READ_REGION_MIN_SIZE))
 	{
 		printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32" @ %p\n", index, offset, curr_tuple_size_for_tuple_region(&tr), tr.region_memory);
 		print_tuple(tr.tuple, &tpl_d);
