@@ -34,7 +34,7 @@ static void execute(operator* o)
 			uint64_t index = 0;
 			uint64_t offset = 0;
 			tuple_region tr = INIT_TUPLE_REGION;
-			while(mmap_for_reading_tuple(tts, &tr, offset, &(inputs->input_tuple_def->size_def)))
+			while(mmap_for_reading_tuple(tts, &tr, offset, &(inputs->input_tuple_def->size_def), 0))
 			{
 				printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32"\n", index, offset, curr_tuple_size_for_tuple_region(&tr));
 				print_tuple(tr.tuple, inputs->input_tuple_def);

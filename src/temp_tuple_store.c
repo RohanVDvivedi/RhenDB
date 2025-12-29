@@ -72,7 +72,7 @@ uint32_t get_tuple_size_for_temp_tuple_store(const temp_tuple_store* tts_p, uint
 	return get_tuple_size_from_stream_using_tuple_size_def(tpl_sz_d, buffer, &bytes_read, &((tuple_size_getter_context){tts_p->fd, tuple_offset}), tuple_size_getter_reader);
 }
 
-int mmap_for_reading_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, uint64_t offset, tuple_size_def* tpl_sz_d)
+int mmap_for_reading_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, uint64_t offset, tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap)
 {
 	// offset must be withing readable file region to begin with, with enough bytes for the smallest sized tuple
 	if(offset + get_minimum_tuple_size_using_tuple_size_def(tpl_sz_d) > tts_p->next_tuple_offset)
@@ -100,7 +100,8 @@ int mmap_for_reading_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, uint64_t
 
 	// build up region offsets
 	uint64_t region_offset_start = UINT_ALIGN_DOWN(tuple_offset_start, sysconf(_SC_PAGE_SIZE));
-	uint64_t region_offset_end = UINT_ALIGN_UP(tuple_offset_end, sysconf(_SC_PAGE_SIZE));
+	// place region_offset_end right after the max of the position of tuple_offset_end OR min_bytes_to_mmap after the tuple (and ofcourse not overflowing the next_tuple_offse)t
+	uint64_t region_offset_end = UINT_ALIGN_UP(min(max(tuple_offset_end, tuple_offset_start + min_bytes_to_mmap), tts_p->next_tuple_offset), sysconf(_SC_PAGE_SIZE));
 	uint32_t region_size = region_offset_end - region_offset_start;
 
 	// map the new tuple_region and return it

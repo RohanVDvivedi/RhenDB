@@ -37,7 +37,7 @@
 typedef struct temp_tuple_store temp_tuple_store;
 struct temp_tuple_store
 {
-	uint64_t total_size; // total memory region to be used by the file or the (in-) memory region below
+	uint64_t total_size; // total size of the file
 
 	uint64_t next_tuple_offset; // next tuple gets appended here, it starts with 0 and increments by writable tuple_regions upon calling finalize_written_tuple() operation
 
@@ -82,7 +82,8 @@ uint32_t get_tuple_size_for_temp_tuple_store(const temp_tuple_store* tts_p, uint
 // remaps the tr_p to a new offset, if it is valid else creates a new mapping
 // it may use the same mapping, if the tuple fits in this region
 // you can have multiple reading tuple_regions open
-int mmap_for_reading_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, uint64_t offset, tuple_size_def* tpl_sz_d);
+// min_bytes_to_mmap may be 0, if you want excatly same number of bytes mmaped as the size of the tuple
+int mmap_for_reading_tuple(temp_tuple_store* tts_p, tuple_region* tr_p, uint64_t offset, tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap);
 
 // remaps the tr_p to the current next_tuple_offset, holding as much memory as required_size
 // it may use the same mapping, if the tuple fits in this region
