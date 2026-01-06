@@ -9,7 +9,7 @@
 	is_xmin_committed BIT_FIELD[1] (non_nullable)
 	is_xmin_aborted   BIT_FIELD[1] (non_nullable)
 
-	xmin              LARGE_UINT[transaction_id_width] (non_nullable)
+	xmin              LARGE_UINT[transaction_id_width] (nullable, tuple is not visible if this field is NULL)
 
 	is_xmax_committed BIT_FIELD[1] (non_nullable)
 	is_xmax_aborted   BIT_FIELD[1] (non_nullable)
@@ -39,6 +39,8 @@ struct transaction_id_with_hints
 typedef struct mvcc_header mvcc_header;
 struct mvcc_header
 {
+	int is_xmin_NULL:1; // xmin makes sense if this bit is 0, if 1, this tuple is not visible and is ready for vaccum
+
 	transaction_id_with_hints xmin;
 
 	int is_xmax_NULL:1; // xmax makes sense if this bit is 0

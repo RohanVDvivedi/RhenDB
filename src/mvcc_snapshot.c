@@ -95,6 +95,10 @@ int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot*
 
 int is_tuple_visible_to_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status_getter* tsg_p, int* were_hints_updated)
 {
+	// if xmin is NULL, this tuple is not visible to any snapshot
+	if(mvcchdr_p->is_xmin_NULL)
+		return 0;
+
 	// if xmin is not visible the tuple is not visible
 	if(!are_changes_for_transaction_id_visible_at_mvcc_snapshot(mvccsnp_p, &(mvcchdr_p->xmin), tsg_p, were_hints_updated))
 		return 0;
@@ -119,6 +123,10 @@ char const * const can_delete_result_string[] = {
 
 can_delete_result can_delete_tuple_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, mvcc_header* mvcchdr_p, transaction_status_getter* tsg_p, int* were_hints_updated)
 {
+	// if xmin is NULL, this tuple is not visible to anyone and can not be deleted by anyone, it can though only be vaccummed
+	if(mvcchdr_p->is_xmin_NULL)
+		return IN_VISIBLE_TUPLE;
+
 	// you can not delete a tuple not visible to you
 	if(!is_tuple_visible_to_mvcc_snapshot(mvccsnp_p, mvcchdr_p, tsg_p, were_hints_updated))
 		return IN_VISIBLE_TUPLE;
@@ -177,6 +185,10 @@ void print_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p)
 
 int can_vaccum_tuple_for_mvcc(mvcc_header* mvcchdr_p, transaction_status_getter* tsg_p, uint256 vaccum_horizon_transaction_id, int* were_hints_updated)
 {
+	// if xmin is NULL, this tuple is not visible to anyone and can be vaccummed rightaway
+	if(mvcchdr_p->is_xmin_NULL)
+		return 1;
+
 	// tuple created by an aborted transaction, vaccum immediately
 	if(fetch_status_for_transaction_id_with_hints(&(mvcchdr_p->xmin), tsg_p, were_hints_updated) == TX_ABORTED)
 		return 1;

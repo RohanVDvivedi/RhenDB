@@ -17,7 +17,7 @@ tuple_def* get_mvcc_header_tuple_definition(uint8_t transaction_id_width)
 	dti_p->containees[1].al.type_info = BIT_FIELD_NON_NULLABLE[1];
 
 	strcpy(dti_p->containees[2].field_name, "xmin");
-	dti_p->containees[2].al.type_info = LARGE_UINT_NON_NULLABLE[transaction_id_width];
+	dti_p->containees[2].al.type_info = LARGE_UINT_NULLABLE[transaction_id_width];
 
 	strcpy(dti_p->containees[3].field_name, "is_xmax_committed");
 	dti_p->containees[3].al.type_info = BIT_FIELD_NON_NULLABLE[1];
@@ -39,70 +39,91 @@ void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_tup, const tup
 {
 	user_value uval;
 
-	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(0), mvcchdr_tup))
-		exit(-1);
-	mvcchdr_p->xmin.is_committed = uval.bit_field_value;
-
-	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(1), mvcchdr_tup))
-		exit(-1);
-	mvcchdr_p->xmin.is_aborted = uval.bit_field_value;
-
 	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(2), mvcchdr_tup))
 		exit(-1);
-	mvcchdr_p->xmin.transaction_id = uval.large_uint_value;
+	if(is_user_value_NULL(&uval))
+	{
+		mvcchdr_p->is_xmin_NULL = 1;
+	}
+	else
+	{
+		mvcchdr_p->is_xmin_NULL = 0;
+		mvcchdr_p->xmin.transaction_id = uval.large_uint_value;
+
+		if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(0), mvcchdr_tup))
+			exit(-1);
+		mvcchdr_p->xmin.is_committed = uval.bit_field_value;
+
+		if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(1), mvcchdr_tup))
+			exit(-1);
+		mvcchdr_p->xmin.is_aborted = uval.bit_field_value;
+	}
 
 	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(5), mvcchdr_tup))
 		exit(-1);
 	if(is_user_value_NULL(&uval))
 	{
 		mvcchdr_p->is_xmax_NULL = 1;
-		return;
 	}
 	else
+	{
 		mvcchdr_p->is_xmax_NULL = 0;
-	mvcchdr_p->xmax.transaction_id = uval.large_uint_value;
+		mvcchdr_p->xmax.transaction_id = uval.large_uint_value;
 
-	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(3), mvcchdr_tup))
-		exit(-1);
-	mvcchdr_p->xmax.is_committed = uval.bit_field_value;
+		if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(3), mvcchdr_tup))
+			exit(-1);
+		mvcchdr_p->xmax.is_committed = uval.bit_field_value;
 
-	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(4), mvcchdr_tup))
-		exit(-1);
-	mvcchdr_p->xmax.is_aborted = uval.bit_field_value;
+		if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(4), mvcchdr_tup))
+			exit(-1);
+		mvcchdr_p->xmax.is_aborted = uval.bit_field_value;
+	}
 }
 
 void write_mvcc_header(void* mvcchdr_tup, const tuple_def* mvcchdr_def, const mvcc_header* mvcchdr_p)
 {
 	init_tuple(mvcchdr_def, mvcchdr_tup);
 
-	if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(0), mvcchdr_tup, &((user_value){.bit_field_value = mvcchdr_p->xmin.is_committed}), 0))
-		exit(-1);
+	if(mvcchdr_p->is_xmin_NULL)
+	{
+		if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(2), mvcchdr_tup, NULL_USER_VALUE, 0))
+			exit(-1);
+	}
+	else
+	{
+		if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(0), mvcchdr_tup, &((user_value){.bit_field_value = mvcchdr_p->xmin.is_committed}), 0))
+			exit(-1);
 
-	if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(1), mvcchdr_tup, &((user_value){.bit_field_value = mvcchdr_p->xmin.is_aborted}), 0))
-		exit(-1);
+		if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(1), mvcchdr_tup, &((user_value){.bit_field_value = mvcchdr_p->xmin.is_aborted}), 0))
+			exit(-1);
 
-	if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(2), mvcchdr_tup, &((user_value){.large_uint_value = mvcchdr_p->xmin.transaction_id}), 0))
-		exit(-1);
+		if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(2), mvcchdr_tup, &((user_value){.large_uint_value = mvcchdr_p->xmin.transaction_id}), 0))
+			exit(-1);
+	}
 
 	if(mvcchdr_p->is_xmax_NULL)
 	{
 		if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(5), mvcchdr_tup, NULL_USER_VALUE, 0))
 			exit(-1);
-		return;
 	}
+	else
+	{
+		if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(3), mvcchdr_tup, &((user_value){.bit_field_value = mvcchdr_p->xmax.is_committed}), 0))
+			exit(-1);
 
-	if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(3), mvcchdr_tup, &((user_value){.bit_field_value = mvcchdr_p->xmax.is_committed}), 0))
-		exit(-1);
+		if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(4), mvcchdr_tup, &((user_value){.bit_field_value = mvcchdr_p->xmax.is_aborted}), 0))
+			exit(-1);
 
-	if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(4), mvcchdr_tup, &((user_value){.bit_field_value = mvcchdr_p->xmax.is_aborted}), 0))
-		exit(-1);
-
-	if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(5), mvcchdr_tup, &((user_value){.large_uint_value = mvcchdr_p->xmax.transaction_id}), 0))
-		exit(-1);
+		if(!set_element_in_tuple(mvcchdr_def, STATIC_POSITION(5), mvcchdr_tup, &((user_value){.large_uint_value = mvcchdr_p->xmax.transaction_id}), 0))
+			exit(-1);
+	}
 }
 
 void print_mvcc_header(const mvcc_header* mvcchdr_p)
 {
+	if(mvcchdr_p->is_xmin_NULL)
+		printf("xmin => NULL\n");
+	else
 	{
 		char temp[80] = {};
 		serialize_to_decimal_uint256(temp, mvcchdr_p->xmin.transaction_id);
