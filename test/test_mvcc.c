@@ -58,6 +58,7 @@ int main()
 		tuple_def* mvcc_header_def = get_mvcc_header_tuple_definition(20);
 
 		mvcc_header a = {
+			.is_xmin_NULL = 0,
 			.xmin = {
 				.is_committed = 0,
 				.is_aborted = 1,
@@ -166,7 +167,7 @@ int main()
 			{0,0,get_uint256(777)}, // SELF
 			{0,0,get_uint256(801)}, // FUTURE COMMITTED
 			{0,0,get_uint256(805)}, // FUTURE ABORTED
-			{0,0,get_uint256(0)}, // NULL (c0nsider it as NULL)
+			{0,0,get_uint256(0)}, // NULL (consider it as NULL)
 		};
 		uint32_t header_ids_count = sizeof(header_ids)/sizeof(transaction_id_with_hints);
 
@@ -174,7 +175,7 @@ int main()
 		{
 			for(uint32_t xmax_i = xmin_i + 1; xmax_i < header_ids_count; xmax_i++)
 			{
-				mvcc_header hdr = {.xmin = header_ids[xmin_i], .is_xmax_NULL = are_equal_uint256(header_ids[xmax_i].transaction_id, get_uint256(0)), .xmax = header_ids[xmax_i]};
+				mvcc_header hdr = {.is_xmin_NULL = 0, .xmin = header_ids[xmin_i], .is_xmax_NULL = are_equal_uint256(header_ids[xmax_i].transaction_id, get_uint256(0)), .xmax = header_ids[xmax_i]};
 				int were_hints_updated = 0;
 				int is_visible = is_tuple_visible_to_mvcc_snapshot(&snap, &hdr, &tsg, &were_hints_updated);
 				can_delete_result can_delete = can_delete_tuple_for_mvcc_snapshot(&snap, &hdr, &tsg, &were_hints_updated);
