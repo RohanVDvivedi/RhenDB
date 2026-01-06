@@ -53,10 +53,17 @@
    * functions and queries and functions can call other functions, reference them
    * we will use reference counting to already cached catalog objects, implement on_destroy and on_reference callbacks of type static_type_info_callback-s, that increment and decrement the reference counter for the dtis, that need to be passed around
 
- 3.* define statistics tables (*future) - persistent and possibly in a different database
+ 3.*maintain the inserts and deletes log as a stack in volatile page store and allow save points
+   * savepoints will flip the is_xmin_NULL bit to 1 to undo an insert
+   * and will flip the is_max_NULL bit to 1 to undo a delete
+   * then we will do this until we hit a ROLLBACK to savepoint is hit
+   * we will let vaccum do it's task of cleaning up inserts later in time
+   * this stack will be in volatile page store and upon a crash we will just consider this transaction as aborted and we will never need this information
+
+ 4.* define statistics tables (*future) - persistent and possibly in a different database
    * same as indexes and heap_tables (low priority)
 
- 4.* lock table remaining tasks (*future)
+ 5.* lock table remaining tasks (*future)
    * deadlock detection and resolution task job (*future, for now rely on timeouts to back off and abort)
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock (*future, do it when query optimizer and catalog tables are ready )
 
