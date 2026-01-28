@@ -1,4 +1,12 @@
  PICKED TASKS
+  * GLOBAL TRACKING MVCC HEADER
+    * mvcc_snapshot make it have a llnode to link them all together
+    * make transaction_table store a linkedlist of these mvcc_snapshot
+	* make functions to take in a mvcc_snapshot ifthe user has one and generate a new read_only snapshot or update an existing snapshot or generate a snapshot with transaction_id or just assign the next trsanction_id, make all these functions as a single function all api
+	* this function takes in input snapshot if the user wants it updated OR NULL if a new one needs to be created and linked into the list
+	* horizon transaction id goes through this linkedlist to compute the current horizon transaction_id, over all the existing snapshots
+	* commit/abort discards this view, and actually commits on the disk if the transaction_id was assigned
+	* flags required need to be decided later
 
   * find a way to compile a runtime function and it's validate counterpart from C or SQL code into binary and load it and run it
 
