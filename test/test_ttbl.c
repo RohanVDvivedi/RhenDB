@@ -33,7 +33,9 @@ int main()
 	print_mvcc_snapshot(t2);printf("\n\n\n");
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	mvcc_snapshot* t3 = get_new_transaction_id(&(rdb.tx_table), NULL);
+	mvcc_snapshot* t3 = get_or_revise_mvcc_snapshot(&(rdb.tx_table), NULL);
+	print_mvcc_snapshot(t3);printf("\n\n\n");
+	t3 = get_new_transaction_id(&(rdb.tx_table), t3);
 	print_mvcc_snapshot(t3);printf("\n\n\n");
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
@@ -57,7 +59,9 @@ int main()
 	update_transaction_status(&(rdb.tx_table), t3, TX_COMMITTED);
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	mvcc_snapshot* t5 = get_new_transaction_id(&(rdb.tx_table), NULL);
+	mvcc_snapshot* t5 = get_or_revise_mvcc_snapshot(&(rdb.tx_table), NULL);
+	print_mvcc_snapshot(t5);printf("\n\n\n");
+	t5 = get_new_transaction_id(&(rdb.tx_table), t5);
 	print_mvcc_snapshot(t5);printf("\n\n\n");
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
