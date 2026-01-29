@@ -4,6 +4,7 @@
 #include<serint/large_uints.h>
 
 #include<cutlery/value_arraylist.h>
+#include<cutlery/linkedlist.h>
 
 data_definitions_value_arraylist(sorted_transaction_ids_list, uint256)
 
@@ -23,7 +24,6 @@ struct mvcc_snapshot
 	// below is an embed_node for maintaining a global linkedlist of all active snapshots in the transaction_table
 	// having pointer to mvcc_snapshot does not mean you can access this embed_node
 	// it is protected by the locks/latches internal to the transaction_table
-	// it is initialized and used by transaction_table itself and never touched outside transaction_table's functions
 	llnode embed_node;
 };
 

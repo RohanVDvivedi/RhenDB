@@ -14,6 +14,8 @@ void initialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
 		exit(-1);
 
 	mvccsnp_p->has_self_transaction_id = 0;
+
+	initialize_llnode(&(mvccsnp_p->embed_node));
 }
 
 void begin_taking_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, uint256 least_unassigned_transaction_id)
