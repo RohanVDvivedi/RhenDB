@@ -44,9 +44,7 @@ void finalize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
 
 // set self_transaction_id for the mvcc snapshot
 // fails if it already has a self_transaction_id
-// it effectively copies the least_unassigned_transaction_id, and sets it to self_transaction_id
-// and fails if it alreadh has one
-int set_self_transaction_id_in_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
+int set_self_transaction_id_in_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, uint256 self_transaction_id);
 
 // avoid using this function.
 const uint256* get_in_progress_transaction_ids_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, cy_uint index);

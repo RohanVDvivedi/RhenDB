@@ -10,9 +10,6 @@ struct active_transaction_id_entry
 	// this transaction_id will be in TX_IN_PROGRESS status
 	uint256 transaction_id; // note: it should always be the first attribute
 
-	// this is the smallest transaction_id in the snapshot of this transaction, including it's own transaction_id
-	uint256 smallest_transaction_id_in_snapshot;
-
 	bstnode embed_node;
 };
 
@@ -358,57 +355,36 @@ static void for_each_in_order_in_currently_active_transaction_ids(const transact
 }
 
 // insert to currently_active_transaction_ids, the mvcc_snapshot that we just generated
-static int insert_in_currently_active_transaction_ids(transaction_table* ttbl, const mvcc_snapshot* snp)
+static int insert_in_currently_active_transaction_ids(transaction_table* ttbl, uint256 transaction_id)
 {
-	active_transaction_id_entry* atid_p = (active_transaction_id_entry*) find_equals_in_bst(&(ttbl->currently_active_transaction_ids), &(snp->self_transaction_id), FIRST_OCCURENCE);
+	active_transaction_id_entry* atid_p = (active_transaction_id_entry*) find_equals_in_bst(&(ttbl->currently_active_transaction_ids), &(transaction_id), FIRST_OCCURENCE);
 	if(atid_p != NULL)
 		return 0;
 
-	// malloc a new entry
+	// malloc a new entry and initialize it
 	atid_p = malloc(sizeof(active_transaction_id_entry));
 	if(atid_p == NULL)
 		exit(-1);
-
-	// initialize it
-	atid_p->transaction_id = snp->self_transaction_id;
-	atid_p->smallest_transaction_id_in_snapshot = min_uint256(snp->self_transaction_id, snp->least_unassigned_transaction_id);
-	if(NULL != get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0))
-		atid_p->smallest_transaction_id_in_snapshot = min_uint256(*get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0), atid_p->smallest_transaction_id_in_snapshot);
-	initialize_bstnode(&(atid_p->embed_node));
+	atid_p->transaction_id = transaction_id;
 
 	// then insert it
-	int inserted = insert_in_bst(&(ttbl->currently_active_transaction_ids), atid_p);
+	insert_in_bst(&(ttbl->currently_active_transaction_ids), atid_p);
 
-	if(!inserted)
-		free(atid_p);
-
-	return inserted;
-}
-
-static int update_in_currently_active_transaction_ids(transaction_table* ttbl, const mvcc_snapshot* snp)
-{
-	active_transaction_id_entry* atid_p = (active_transaction_id_entry*) find_equals_in_bst(&(ttbl->currently_active_transaction_ids), &(snp->self_transaction_id), FIRST_OCCURENCE);
-	if(atid_p != NULL) // we found an entry, all we need to do is to update it's smallest_transaction_id_in_snapshot to the new value from the snapshot
-	{
-		atid_p->smallest_transaction_id_in_snapshot = min_uint256(snp->self_transaction_id, snp->least_unassigned_transaction_id);
-		if(NULL != get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0))
-			atid_p->smallest_transaction_id_in_snapshot = min_uint256(*get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0), atid_p->smallest_transaction_id_in_snapshot);
-
-		return 1;
-	}
-
-	return 0;
+	return 1;
 }
 
 // remove a entry from the currently_active_transaction_ids
-static int remove_from_currently_active_transaction_ids(transaction_table* ttbl, active_transaction_id_entry* atid_p)
+static int remove_from_currently_active_transaction_ids(transaction_table* ttbl, uint256 transaction_id)
 {
-	int removed = remove_from_bst(&(ttbl->currently_active_transaction_ids), atid_p);
+	active_transaction_id_entry* atid_p = (active_transaction_id_entry*) find_equals_in_bst(&(ttbl->currently_active_transaction_ids), &(transaction_id), FIRST_OCCURENCE);
+	if(atid_p == NULL)
+		return 0;
 
-	if(removed)
-		free(atid_p);
+	// then remove it
+	remove_from_bst(&(ttbl->currently_active_transaction_ids), atid_p);
+	free(atid_p);
 
-	return removed;
+	return 1;
 }
 
 // --
@@ -505,17 +481,35 @@ static void mvcc_snapshot_inserter(const void* data, const void* additional_para
 
 mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* snp)
 {
+	// it is NO-OP function, if the provided snp already has a self_transaction_id
+	if(snp != NULL && snp->has_self_transaction_id)
+		return snp;
+
 	write_lock(&(ttbl->transaction_table_cache_lock), BLOCKING);
 
-	// setup mvcc snapshot
-	begin_taking_mvcc_snapshot(snp, ttbl->next_assignable_transaction_id);
-	if(!set_self_transaction_id_in_mvcc_snapshot(snp))
+	if(snp == NULL)
+	{
+		// create a read only snapshot if one does not exists
+		snp = malloc(sizeof(mvcc_snapshot));
+		if(snp == NULL)
+			exit(-1);
+		initialize_mvcc_snapshot(snp);
+
+		// link it in the global linkedlist
+		insert_tail_in_linkedlist(&(ttbl->active_mvcc_snapshots), snp);
+
+		// setup mvcc snapshot's read only view
+		begin_taking_mvcc_snapshot(snp, ttbl->next_assignable_transaction_id);
+		for_each_in_order_in_currently_active_transaction_ids(ttbl, mvcc_snapshot_inserter, snp);
+		finalize_mvcc_snapshot(snp);
+	}
+
+	// assign it the next possible assignable transaction_id
+	if(!set_self_transaction_id_in_mvcc_snapshot(snp, ttbl->next_assignable_transaction_id))
 	{
 		printf("BUG (in transaction_table) :: setting self transaction id for mvcc_snapshot failed\n");
 		exit(-1);
 	}
-	for_each_in_order_in_currently_active_transaction_ids(ttbl, mvcc_snapshot_inserter, snp);
-	finalize_mvcc_snapshot(snp);
 
 	// increment ttbl->next_assignable_transaction_id
 	if(!add_overflow_safe_uint256(&(ttbl->next_assignable_transaction_id), ttbl->next_assignable_transaction_id, get_1_uint256(), ttbl->overflow_transaction_id))
@@ -526,7 +520,7 @@ mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* sn
 	}
 
 	// insert it as an active new transaction_id
-	if(!insert_in_currently_active_transaction_ids(ttbl, snp))
+	if(!insert_in_currently_active_transaction_ids(ttbl, snp->self_transaction_id))
 	{
 		printf("BUG (in transaction_table) :: mvcc_snapshot insert in currently_active_transaction_ids failed\n");
 		exit(-1);
@@ -541,34 +535,34 @@ mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* sn
 
 	write_unlock(&(ttbl->transaction_table_lock));
 
-	return;
+	return snp;
 }
 
-mvcc_snapshot* revise_mvcc_snapshot(transaction_table* ttbl, mvcc_snapshot* snp)
+mvcc_snapshot* get_or_revise_mvcc_snapshot(transaction_table* ttbl, mvcc_snapshot* snp)
 {
-	if(!(snp->has_self_transaction_id))
-	{
-		printf("BUG (in transaction_table) :: asked to revise snapshot of a mvcc snapshot that does not have self transaction id\n");
-		exit(-1);
-	}
-
 	write_lock(&(ttbl->transaction_table_cache_lock), BLOCKING);
 
-	// setup mvcc snapshot but not it's self_transaction_id
+	// if a snp does not exist, create one
+	if(snp == NULL)
+	{
+		// create a read only snapshot if one does not exists
+		snp = malloc(sizeof(mvcc_snapshot));
+		if(snp == NULL)
+			exit(-1);
+		initialize_mvcc_snapshot(snp);
+
+		// link it in the global linkedlist
+		insert_tail_in_linkedlist(&(ttbl->active_mvcc_snapshots), snp);
+	}
+
+	// setup mvcc snapshot's read only view
 	begin_taking_mvcc_snapshot(snp, ttbl->next_assignable_transaction_id);
 	for_each_in_order_in_currently_active_transaction_ids(ttbl, mvcc_snapshot_inserter, snp);
 	finalize_mvcc_snapshot(snp);
 
-	// update it as an active new transaction_id
-	if(!update_in_currently_active_transaction_ids(ttbl, snp))
-	{
-		printf("BUG (in transaction_table) :: mvcc_snapshot update in currently_active_transaction_ids failed\n");
-		exit(-1);
-	}
-
 	write_unlock(&(ttbl->transaction_table_cache_lock));
 
-	return;
+	return snp;
 }
 
 transaction_status get_transaction_status(transaction_table* ttbl, uint256 transaction_id)
@@ -689,3 +683,8 @@ uint256 get_vaccum_horizon_transaction_id(transaction_table* ttbl)
 
 	return vaccum_horizon_transaction_id;
 }
+/*
+smallest_transaction_id_in_snapshot = min_uint256(snp->self_transaction_id, snp->least_unassigned_transaction_id);
+	if(NULL != get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0))
+		atid_p->smallest_transaction_id_in_snapshot = min_uint256(*get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0), atid_p->smallest_transaction_id_in_snapshot);
+	initialize_bstnode(&(atid_p->embed_node));*/

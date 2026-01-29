@@ -47,13 +47,13 @@ void finalize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
 	shrink_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids));
 }
 
-int set_self_transaction_id_in_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
+int set_self_transaction_id_in_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, uint256 self_transaction_id)
 {
 	if(mvccsnp_p->has_self_transaction_id)
 		return 0;
 
 	mvccsnp_p->has_self_transaction_id = 1;
-	mvccsnp_p->self_transaction_id = mvccsnp_p->least_unassigned_transaction_id;
+	mvccsnp_p->self_transaction_id = self_transaction_id;
 
 	return 1;
 }
