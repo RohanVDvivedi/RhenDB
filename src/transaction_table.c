@@ -478,6 +478,7 @@ void initialize_transaction_table(transaction_table* ttbl, uint64_t* root_page_i
 	initialize_bst(&(ttbl->currently_active_transaction_ids), RED_BLACK_TREE, &simple_comparator(compare_active_transaction_id_entry), offsetof(active_transaction_id_entry, embed_node));
 	ttbl->transaction_table_cache_capacity = transaction_table_cache_capacity;
 	initialize_cachemap(&(ttbl->transaction_table_cache), NULL, NEVER_PINNED, ((transaction_table_cache_capacity / 5) + 5), &simple_hasher(hash_passive_transaction_id_entry), &simple_comparator(compare_passive_transaction_id_entry), offsetof(passive_transaction_id_entry, embed_node));
+	initialize_linkedlist(&(ttbl->active_mvcc_snapshots), offsetof(mvcc_snapshot, embed_node));
 
 	// compute the overflow_transaction_id, that you not go at or beyond
 	mul_uint256(&(ttbl->overflow_transaction_id), get_uint256(UINT64_MAX), get_uint256(ttbl->transaction_statuses_per_bitmap_page));
