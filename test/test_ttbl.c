@@ -25,81 +25,64 @@ int main()
 			10000000ULL,
 		USERS_COUNT);
 
-	mvcc_snapshot t1;
-	initialize_mvcc_snapshot(&t1);
-	get_new_transaction_id(&(rdb.tx_table), &t1);
-	print_mvcc_snapshot(&t1);printf("\n\n\n");
+	mvcc_snapshot* t1 = get_new_transaction_id(&(rdb.tx_table), NULL);
+	print_mvcc_snapshot(t1);printf("\n\n\n");
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	mvcc_snapshot t2;
-	initialize_mvcc_snapshot(&t2);
-	get_new_transaction_id(&(rdb.tx_table), &t2);
-	print_mvcc_snapshot(&t2);printf("\n\n\n");
+	mvcc_snapshot* t2 = get_new_transaction_id(&(rdb.tx_table), NULL);
+	print_mvcc_snapshot(t2);printf("\n\n\n");
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	mvcc_snapshot t3;
-	initialize_mvcc_snapshot(&t3);
-	get_new_transaction_id(&(rdb.tx_table), &t3);
-	print_mvcc_snapshot(&t3);printf("\n\n\n");
+	mvcc_snapshot* t3 = get_new_transaction_id(&(rdb.tx_table), NULL);
+	print_mvcc_snapshot(t3);printf("\n\n\n");
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	printf("ABORTING : %"PRIu64"\n\n\n", t2.self_transaction_id.limbs[0]);
-	update_transaction_status(&(rdb.tx_table), t2.self_transaction_id, TX_ABORTED);
+	printf("ABORTING : %"PRIu64"\n\n\n", t2->self_transaction_id.limbs[0]);
+	update_transaction_status(&(rdb.tx_table), t2, TX_ABORTED);
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	revise_mvcc_snapshot(&(rdb.tx_table), &t1);
-	print_mvcc_snapshot(&t1);printf("\n\n\n");
+	t1 = get_or_revise_mvcc_snapshot(&(rdb.tx_table), t1);
+	print_mvcc_snapshot(t1);printf("\n\n\n");
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	revise_mvcc_snapshot(&(rdb.tx_table), &t3);
-	print_mvcc_snapshot(&t3);printf("\n\n\n");
+	t3 = get_or_revise_mvcc_snapshot(&(rdb.tx_table), t3);
+	print_mvcc_snapshot(t3);printf("\n\n\n");
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	mvcc_snapshot t4;
-	initialize_mvcc_snapshot(&t4);
-	get_new_transaction_id(&(rdb.tx_table), &t4);
-	print_mvcc_snapshot(&t4);printf("\n\n\n");
+	mvcc_snapshot* t4 = get_new_transaction_id(&(rdb.tx_table), NULL);
+	print_mvcc_snapshot(t4);printf("\n\n\n");
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	printf("COMMITTING : %"PRIu64"\n\n\n", t3.self_transaction_id.limbs[0]);
-	update_transaction_status(&(rdb.tx_table), t3.self_transaction_id, TX_COMMITTED);
+	printf("COMMITTING : %"PRIu64"\n\n\n", t3->self_transaction_id.limbs[0]);
+	update_transaction_status(&(rdb.tx_table), t3, TX_COMMITTED);
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	mvcc_snapshot t5;
-	initialize_mvcc_snapshot(&t5);
-	get_new_transaction_id(&(rdb.tx_table), &t5);
-	print_mvcc_snapshot(&t5);printf("\n\n\n");
+	mvcc_snapshot* t5 = get_new_transaction_id(&(rdb.tx_table), NULL);
+	print_mvcc_snapshot(t5);printf("\n\n\n");
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	printf("ABORTING : %"PRIu64"\n\n\n", t1.self_transaction_id.limbs[0]);
-	update_transaction_status(&(rdb.tx_table), t1.self_transaction_id, TX_ABORTED);
+	printf("ABORTING : %"PRIu64"\n\n\n", t1->self_transaction_id.limbs[0]);
+	update_transaction_status(&(rdb.tx_table), t1, TX_ABORTED);
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	revise_mvcc_snapshot(&(rdb.tx_table), &t4);
-	print_mvcc_snapshot(&t4);printf("\n\n\n");
+	t4 = get_or_revise_mvcc_snapshot(&(rdb.tx_table), t4);
+	print_mvcc_snapshot(t4);printf("\n\n\n");
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	revise_mvcc_snapshot(&(rdb.tx_table), &t5);
-	print_mvcc_snapshot(&t5);printf("\n\n\n");
+	t5 = get_or_revise_mvcc_snapshot(&(rdb.tx_table), t5);
+	print_mvcc_snapshot(t5);printf("\n\n\n");
 	print_vaccum_horizon_transaction_id(&(rdb.tx_table));printf("\n\n\n");
 
-	uint256 last_txid_in_session = t5.self_transaction_id;
-
-	deinitialize_mvcc_snapshot(&t5);
-
-	deinitialize_mvcc_snapshot(&t4);
-
-	deinitialize_mvcc_snapshot(&t3);
-
-	deinitialize_mvcc_snapshot(&t2);
-
-	deinitialize_mvcc_snapshot(&t1);
+	uint256 last_txid_in_session = t5->self_transaction_id;
 
 	for(uint256 tid = get_0_uint256(); compare_uint256(tid, last_txid_in_session) <= 0; add_uint256(&tid, tid, get_1_uint256()))
 	{
 		transaction_status status = get_transaction_status_for_transaction_id(&(rdb.tsg), tid);
 		printf("%"PRIu64" -> %s\n", tid.limbs[0], transaction_status_string[status]);
 	}
+
+	deinitialize_mvcc_snapshot(t5);free(t5);
+	deinitialize_mvcc_snapshot(t4);free(t4);
 
 	deinitialize_rhendb(&rdb);
 

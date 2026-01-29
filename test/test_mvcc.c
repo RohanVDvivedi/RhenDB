@@ -125,7 +125,7 @@ int main()
 
 		finalize_mvcc_snapshot(&snap);
 
-		set_self_transaction_id_in_mvcc_snapshot(&snap);
+		set_self_transaction_id_in_mvcc_snapshot(&snap, get_uint256(777));
 
 		print_mvcc_snapshot(&snap);
 
