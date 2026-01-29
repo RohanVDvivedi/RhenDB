@@ -60,8 +60,8 @@
    * we will let vaccum do it's task of cleaning up inserts later in time
    * this stack will be in volatile page store and upon a crash we will just consider this transaction as aborted and we will never need this information
 
- 4.* define statistics tables (*future) - persistent and possibly in a different database
-   * same as indexes and heap_tables (low priority)
+ 4.* define statistics tables (*future and (low priority)) - persistent and possibly in a different database
+   * same structurally and composed of indexes and heap_tables 
 
  5.* lock table remaining tasks (*future)
    * deadlock detection and resolution task job (*future, for now rely on timeouts to back off and abort)
