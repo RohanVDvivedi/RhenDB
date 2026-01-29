@@ -1,19 +1,4 @@
  PICKED TASKS
- * GLOBAL TRACKING MVCC HEADER
-  * mvcc_snapshot make it have a llnode to link them all together
-  * make transaction_table store a linkedlist of these mvcc_snapshot
-  * mvcc snapshots are tracked inside transaction_table api in a linkedlist, commit/abort removed the element and frees it
-  * this linkedlist is protected by transaction_table_cache_lock
-  * calloc-like designed api :
-    * if snp is NULL, make a new snapshot, assign to it a new transaction_id and return it
-    * if snp is not NULL, and snp has a transaction_id, return it as is
-    * if snp is not NULL, and snp does not have a transaction_id, assign it a transactions_id
-      mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* snp);
-    * if snp is NULL, make a new read-only (without transaction_id) snapshot and return it
-      if snp is not NULL, renew the read-only snapshot, deinitializing the old one
-      mvcc_snapshot* get_or_revise_mvcc_snapshot(transaction_table* ttbl, mvcc_snapshot* snp);
-	* horizon transaction id goes through this linkedlist to compute the current horizon transaction_id, over all the existing snapshots
-	* commit/abort discards this view, and actually commits on the disk if the transaction_id was assigned
 
   * find a way to compile a runtime function and it's validate counterpart from C or SQL code into binary and load it and run it
 
