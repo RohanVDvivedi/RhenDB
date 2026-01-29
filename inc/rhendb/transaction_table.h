@@ -20,6 +20,10 @@
 typedef struct transaction_table transaction_table;
 struct transaction_table
 {
+	// no transction_id greter than or equal to overflow_transaction_id will ever be assigned
+	// this becomes the program's configuration level constant
+	uint256 overflow_transaction_id;
+
 	// next transaction_id that was assignable at the beginning right after initialization of the transaction_table
 	// any transaction_id in TX_IN_PROGRESS state (in persistent memory) before this transaction_id is and will be set as TX_ABORTED state, after any of it's access
 	// this is read-only attribute
@@ -31,9 +35,6 @@ struct transaction_table
 
 	// next transaction id to be assigned
 	uint256 next_assignable_transaction_id;
-
-	// no transction_id gretaer than or equal to overflow_transaction_id will ever be assigned
-	uint256 overflow_transaction_id;
 
 	// this bst stores the ids of all the transaction that are IN_PROGRESS state and could be making progress
 	// it is maintaned continuously (as new transaction_ids are assigned) and is used to generate mvcc_snapshot
