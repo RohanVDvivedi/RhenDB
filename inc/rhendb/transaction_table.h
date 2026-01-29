@@ -1,6 +1,7 @@
 #ifndef TRANSACTION_TABLE_H
 #define TRANSACTION_TABLE_H
 
+#include<cutlery/linkedlist.h>
 #include<cutlery/bst.h>
 #include<cutlery/cachemap.h>
 
@@ -44,6 +45,9 @@ struct transaction_table
 	// only holds transaction_id -> transaction_status mappings for TX_COMMITTED or TX_ABORTED transactions (not for TX_IN_PROGRESS transactions)
 	cy_uint transaction_table_cache_capacity; // this is the number of elements that the transaction_table_cache is allowed to hold
 	cachemap transaction_table_cache;
+
+	// all read-only and read-write transactions get a mvcc_snapshot and they are all linked here for quick access for calculating the vaccum_horizon_transaction_id
+	linkedlist active_mvcc_snapshots;
 
 	// below attributes only work with the transaction_table that is persistently stored on the disk
 
