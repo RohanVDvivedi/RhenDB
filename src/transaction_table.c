@@ -366,6 +366,7 @@ static int insert_in_currently_active_transaction_ids(transaction_table* ttbl, u
 	if(atid_p == NULL)
 		exit(-1);
 	atid_p->transaction_id = transaction_id;
+	initialize_bstnode(&(atid_p->embed_node));
 
 	// then insert it
 	insert_in_bst(&(ttbl->currently_active_transaction_ids), atid_p);
@@ -621,7 +622,7 @@ transaction_status get_transaction_status(transaction_table* ttbl, uint256 trans
 int update_transaction_status(transaction_table* ttbl, mvcc_snapshot* snp, transaction_status status)
 {
 	// if transaction_id >= overflow_transaction_id, then there is a bug
-	if(compare_uint256(transaction_id, ttbl->overflow_transaction_id) >= 0)
+	if(snp->has_self_transaction_id && compare_uint256(snp->self_transaction_id, ttbl->overflow_transaction_id) >= 0)
 	{
 		printf("BUG (in transaction_table) :: out-of-bounds transaction id encountered\n");
 		exit(-1);
@@ -636,6 +637,19 @@ int update_transaction_status(transaction_table* ttbl, mvcc_snapshot* snp, trans
 
 	write_lock(&(ttbl->transaction_table_cache_lock), BLOCKING);
 
+	uint256 transaction_id = snp->self_transaction_id;
+	int is_valid_transaction_id = snp->has_self_transaction_id;
+
+	remove_from_linkedlist(&(ttbl->active_mvcc_snapshots), snp);
+	deinitialize_mvcc_snapshot(snp);
+	free(snp);
+
+	if(!is_valid_transaction_id)
+	{
+		write_unlock(&(ttbl->transaction_table_cache_lock));
+		return 1;
+	}
+
 	// find a corresponsing active_transaction_id_entry and remove it from the active transactions
 	active_transaction_id_entry* atid_p = (active_transaction_id_entry*) find_in_currently_active_transaction_ids(ttbl, transaction_id);
 	if(NULL == atid_p)
@@ -643,7 +657,7 @@ int update_transaction_status(transaction_table* ttbl, mvcc_snapshot* snp, trans
 		printf("BUG (in transaction_table) :: caller attempting to update transaction status for a non-TX_IN_PROGRESS transaction\n");
 		exit(-1);
 	}
-	remove_from_currently_active_transaction_ids(ttbl, atid_p);
+	remove_from_currently_active_transaction_ids(ttbl, transaction_id);
 
 	// insert a cached copy for it
 	set_transaction_status_in_cache(ttbl, transaction_id, status);
@@ -665,8 +679,16 @@ int update_transaction_status(transaction_table* ttbl, mvcc_snapshot* snp, trans
 static void minimize_vaccum_horizon_transaction_id(const void* data, const void* additional_params)
 {
 	uint256* vaccum_horizon_transaction_id = (uint256*) additional_params;
-	const active_transaction_id_entry* atid_p = data;
-	(*vaccum_horizon_transaction_id) = min_uint256((*vaccum_horizon_transaction_id), atid_p->smallest_transaction_id_in_snapshot);
+
+	mvcc_snapshot* snp = (mvcc_snapshot*) data;
+
+	if(snp->has_self_transaction_id)
+		(*vaccum_horizon_transaction_id) = min_uint256((*vaccum_horizon_transaction_id), snp->self_transaction_id);
+
+	(*vaccum_horizon_transaction_id) = min_uint256((*vaccum_horizon_transaction_id), snp->least_unassigned_transaction_id);
+
+	if(NULL != get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0))
+		(*vaccum_horizon_transaction_id) = min_uint256((*vaccum_horizon_transaction_id), *get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0));
 }
 
 uint256 get_vaccum_horizon_transaction_id(transaction_table* ttbl)
@@ -677,14 +699,9 @@ uint256 get_vaccum_horizon_transaction_id(transaction_table* ttbl)
 
 	vaccum_horizon_transaction_id = ttbl->next_assignable_transaction_id;
 
-	for_each_in_order_in_currently_active_transaction_ids(ttbl, minimize_vaccum_horizon_transaction_id, &vaccum_horizon_transaction_id);
+	for_each_in_linkedlist(&(ttbl->active_mvcc_snapshots), minimize_vaccum_horizon_transaction_id, &vaccum_horizon_transaction_id);
 
 	read_unlock(&(ttbl->transaction_table_cache_lock));
 
 	return vaccum_horizon_transaction_id;
 }
-/*
-smallest_transaction_id_in_snapshot = min_uint256(snp->self_transaction_id, snp->least_unassigned_transaction_id);
-	if(NULL != get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0))
-		atid_p->smallest_transaction_id_in_snapshot = min_uint256(*get_in_progress_transaction_ids_for_mvcc_snapshot(snp, 0), atid_p->smallest_transaction_id_in_snapshot);
-	initialize_bstnode(&(atid_p->embed_node));*/
