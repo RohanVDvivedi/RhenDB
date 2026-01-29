@@ -86,12 +86,14 @@ struct transaction_table
 // here the root_page_id is an in-out parameter, pass it as NULL_PAGE_ID to create a new transaction table, or an existing one to open that particular transaction_table
 void initialize_transaction_table(transaction_table* ttbl, uint64_t* root_page_id, rage_engine* ttbl_engine, uint32_t transaction_table_cache_capacity);
 
-// gives you a new unassiged transaction_id wrappin it in a mvcc_snapshot
-// this transaction will be in TX_IN_RPOGRESS status
-void get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* snp);
+// if snp is NULL, a new mvcc_snapshot with a new transaction_id assigned is returned to the user
+// if snp is not NULL, a transaction_id is assigned only if it does not already have one
+// else this function is a NO-OP
+mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* snp);
 
-// for read committed isolation level you may later call this, this will not modify the existing self_transaction_id of the snapshot
-void revise_mvcc_snapshot(transaction_table* ttbl, mvcc_snapshot* snp);
+// if snp is NULL, a new mvcc_snapshot without a transaction_id is returned to the user
+// if snp is not NULL, only the mvcc_snapshot is revised (for the current instance in time) and returned
+mvcc_snapshot* get_or_revise_mvcc_snapshot(transaction_table* ttbl, mvcc_snapshot* snp);
 
 // in both the above 2 function it is assumed that the snp struct is in initialized condition
 
@@ -99,9 +101,10 @@ void revise_mvcc_snapshot(transaction_table* ttbl, mvcc_snapshot* snp);
 // else returns the status
 transaction_status get_transaction_status(transaction_table* ttbl, uint256 transaction_id);
 
+// if the snp does not have a self_transaction_id, the snapshot will only be deleted from existence, else it also do the below task
 // updates transaction_status of the transaction from TX_IN_PROGRESS to either TX_COMMITTED or TX_ABORTED status
 // this implies that the transaction_id provided must be in the currently_active_transaction_ids bst
-int update_transaction_status(transaction_table* ttbl, uint256 transaction_id, transaction_status status);
+int update_transaction_status(transaction_table* ttbl, mvcc_snapshot* snp, transaction_status status);
 
 // returns horizon transaction id, changes of all transactions under this value are visible to one or other future transaction
 uint256 get_vaccum_horizon_transaction_id(transaction_table* ttbl);

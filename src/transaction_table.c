@@ -503,7 +503,7 @@ static void mvcc_snapshot_inserter(const void* data, const void* additional_para
 	}
 }
 
-void get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* snp)
+mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* snp)
 {
 	write_lock(&(ttbl->transaction_table_cache_lock), BLOCKING);
 
@@ -544,7 +544,7 @@ void get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* snp)
 	return;
 }
 
-void revise_mvcc_snapshot(transaction_table* ttbl, mvcc_snapshot* snp)
+mvcc_snapshot* revise_mvcc_snapshot(transaction_table* ttbl, mvcc_snapshot* snp)
 {
 	if(!(snp->has_self_transaction_id))
 	{
@@ -624,7 +624,7 @@ transaction_status get_transaction_status(transaction_table* ttbl, uint256 trans
 	return status;
 }
 
-int update_transaction_status(transaction_table* ttbl, uint256 transaction_id, transaction_status status)
+int update_transaction_status(transaction_table* ttbl, mvcc_snapshot* snp, transaction_status status)
 {
 	// if transaction_id >= overflow_transaction_id, then there is a bug
 	if(compare_uint256(transaction_id, ttbl->overflow_transaction_id) >= 0)
