@@ -24,7 +24,7 @@
 
 	These structs and their pointers (because they are stable pointers) must represent a logical transaction or it's belonging task uniquely
 
-	The passes inputs are void* to allow you to have a cutom transaction struct for your database
+	The passed inputs are void* to allow you to have a cutom transaction struct for your database
 
 	It is not transaction_id (possibly a uint256) or task_id (possibly a uint32_t) because you can never have more number of transactions or it's associated tasks than the amount of virtual memory you will own on that machine
 	and read-only transactions may not even have an associated transactions_id, but will always have an handle (a pointer to your struct) to request locks with
