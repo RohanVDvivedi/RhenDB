@@ -19,7 +19,7 @@ struct transaction
 	rhendb* db;
 
 	// mvcc snapshot, for isolation level
-	mvcc_snapshot snapshot;
+	mvcc_snapshot* snapshot;
 
 	// transaction_id points to the transaction_id in the snapshot for this transaction
 	uint256* transaction_id;
@@ -31,11 +31,5 @@ struct transaction
 transaction initialize_transaction(rhendb* db);
 
 void deinitialize_transaction(transaction* tx);
-
-// helper compare and hash functions to insert the transaction in your data structures
-
-int compare_transaction_by_transaction_id(const void* tx1, const void* tx2);
-
-cy_uint hash_transaction_by_transaction_id(const void* tx);
 
 #endif
