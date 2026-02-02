@@ -27,7 +27,7 @@ struct mvcc_snapshot
 	llnode embed_node;
 };
 
-void initialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
+mvcc_snapshot* get_new_mvcc_snapshot();
 
 // this function marks the start of taking the snapshot, it will set the least_unassigned_transaction_id, and also clears the in_progress_transaction_ids
 void begin_taking_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, uint256 least_unassigned_transaction_id);
@@ -76,7 +76,7 @@ int is_self_transaction_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint25
 // returns (transaction_id < mvccsnp_p->transaction_id) && (transaction_id not in mvccsnp_p->in_progress_transaction_ids)
 int was_completed_transaction_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint256 transaction_id);
 
-void deinitialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
+void delete_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
 
 #include<rhendb/mvcc_header.h>
 #include<rhendb/transaction_status.h>

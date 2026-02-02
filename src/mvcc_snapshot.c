@@ -8,14 +8,18 @@ declarations_value_arraylist(sorted_transaction_ids_list, uint256, static inline
 #define EXPANSION_FACTOR 1.5
 function_definitions_value_arraylist(sorted_transaction_ids_list, uint256, static inline)
 
-void initialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
+mvcc_snapshot* get_new_mvcc_snapshot()
 {
+	mvcc_snapshot* mvccsnp_p = malloc(sizeof(mvcc_snapshot));
+
 	if(!initialize_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids), 4))
 		exit(-1);
 
 	mvccsnp_p->has_self_transaction_id = 0;
 
 	initialize_llnode(&(mvccsnp_p->embed_node));
+
+	return mvccsnp_p;
 }
 
 void begin_taking_mvcc_snapshot(mvcc_snapshot* mvccsnp_p, uint256 least_unassigned_transaction_id)
@@ -82,9 +86,11 @@ int was_completed_transaction_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, u
 		(INVALID_INDEX == binary_search_in_sorted_iai(&iai, 0, get_element_count_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids)) - 1, &transaction_id, &simple_comparator(compare_uint256_with_ptrs), FIRST_OCCURENCE)));
 }
 
-void deinitialize_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
+void delete_mvcc_snapshot(mvcc_snapshot* mvccsnp_p)
 {
 	deinitialize_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids));
+
+	free(mvccsnp_p);
 }
 
 int are_changes_for_transaction_id_visible_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, transaction_id_with_hints* transaction_id, transaction_status_getter* tsg_p, int* were_hints_updated)
