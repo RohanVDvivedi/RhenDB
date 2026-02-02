@@ -109,25 +109,23 @@ int main()
 		in_progress_list = in_progress;
 		in_progress_count = sizeof(in_progress)/sizeof(uint256);
 
-		mvcc_snapshot snap;
+		mvcc_snapshot* snap = get_new_mvcc_snapshot();
 
-		initialize_mvcc_snapshot(&snap);
-
-		begin_taking_mvcc_snapshot(&snap, get_uint256(777));
+		begin_taking_mvcc_snapshot(snap, get_uint256(777));
 
 		for(uint32_t i = 0; i < in_progress_count; i++)
 		{
 			char temp[80] = {};
 			serialize_to_decimal_uint256(temp, in_progress_list[i]);
-			printf("insert (%s) => %d\n", temp, insert_in_progress_transaction_in_mvcc_snapshot(&snap, in_progress_list[i]));
+			printf("insert (%s) => %d\n", temp, insert_in_progress_transaction_in_mvcc_snapshot(snap, in_progress_list[i]));
 		}
 		printf("\n");
 
-		finalize_mvcc_snapshot(&snap);
+		finalize_mvcc_snapshot(snap);
 
-		set_self_transaction_id_in_mvcc_snapshot(&snap, get_uint256(777));
+		set_self_transaction_id_in_mvcc_snapshot(snap, get_uint256(777));
 
-		print_mvcc_snapshot(&snap);
+		print_mvcc_snapshot(snap);
 
 		uint256 test_tx_ids[] = {
 			get_uint256(1),
@@ -148,10 +146,10 @@ int main()
 		for(uint32_t i = 0; i < sizeof(test_tx_ids)/sizeof(uint256); i++)
 		{
 			char temp[80] = {};
-			int is_self = is_self_transaction_for_mvcc_snapshot(&snap, test_tx_ids[i]);
-			int was_completed = was_completed_transaction_at_mvcc_snapshot(&snap, test_tx_ids[i]);
+			int is_self = is_self_transaction_for_mvcc_snapshot(snap, test_tx_ids[i]);
+			int was_completed = was_completed_transaction_at_mvcc_snapshot(snap, test_tx_ids[i]);
 			int were_hints_updated = 0;
-			int is_visible = are_changes_for_transaction_id_visible_at_mvcc_snapshot(&snap, &((transaction_id_with_hints){0,0,test_tx_ids[i]}), &tsg, &were_hints_updated);
+			int is_visible = are_changes_for_transaction_id_visible_at_mvcc_snapshot(snap, &((transaction_id_with_hints){0,0,test_tx_ids[i]}), &tsg, &were_hints_updated);
 			serialize_to_decimal_uint256(temp, test_tx_ids[i]);
 			printf("%s => self=%d, completed=%d, visible=%d, hints_updated=%d\n", temp, is_self, was_completed, is_visible, were_hints_updated);
 		}
@@ -177,14 +175,14 @@ int main()
 			{
 				mvcc_header hdr = {.is_xmin_NULL = are_equal_uint256(header_ids[xmin_i].transaction_id, get_uint256(0)), .xmin = header_ids[xmin_i], .is_xmax_NULL = are_equal_uint256(header_ids[xmax_i].transaction_id, get_uint256(0)), .xmax = header_ids[xmax_i]};
 				int were_hints_updated = 0;
-				int is_visible = is_tuple_visible_to_mvcc_snapshot(&snap, &hdr, &tsg, &were_hints_updated);
-				can_delete_result can_delete = can_delete_tuple_for_mvcc_snapshot(&snap, &hdr, &tsg, &were_hints_updated);
+				int is_visible = is_tuple_visible_to_mvcc_snapshot(snap, &hdr, &tsg, &were_hints_updated);
+				can_delete_result can_delete = can_delete_tuple_for_mvcc_snapshot(snap, &hdr, &tsg, &were_hints_updated);
 				print_mvcc_header(&hdr);printf("\n\n");
 				printf("is_visble=%d can_delete=%s\n\n\n", is_visible, can_delete_result_string[can_delete]);
 			}
 		}
 
-		deinitialize_mvcc_snapshot(&snap);
+		delete_mvcc_snapshot(snap);
 	}
 
 	return 0;

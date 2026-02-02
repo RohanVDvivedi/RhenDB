@@ -85,9 +85,6 @@ int main()
 		printf("%"PRIu64" -> %s\n", tid.limbs[0], transaction_status_string[status]);
 	}
 
-	deinitialize_mvcc_snapshot(t5);free(t5);
-	deinitialize_mvcc_snapshot(t4);free(t4);
-
 	deinitialize_rhendb(&rdb);
 
 	return 0;
