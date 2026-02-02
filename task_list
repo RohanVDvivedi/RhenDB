@@ -1,9 +1,5 @@
  PICKED TASKS
 
-  * make mvcc_snapshot object created and deleted only using get_new ad delete functions
-    * do not let anyone except transaction_table create it
-    * refactor test cases too
-
   * find a way to compile a runtime function and it's validate counterpart from C or SQL code into binary and load it and run it
 
   * start with catalog tables (hash_table-s)
