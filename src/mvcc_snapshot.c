@@ -11,6 +11,8 @@ function_definitions_value_arraylist(sorted_transaction_ids_list, uint256, stati
 mvcc_snapshot* get_new_mvcc_snapshot()
 {
 	mvcc_snapshot* mvccsnp_p = malloc(sizeof(mvcc_snapshot));
+	if(mvccsnp_p == NULL)
+		exit(-1);
 
 	if(!initialize_sorted_transaction_ids_list(&(mvccsnp_p->in_progress_transaction_ids), 4))
 		exit(-1);
