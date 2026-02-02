@@ -490,11 +490,8 @@ mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* sn
 
 	if(snp == NULL)
 	{
-		// create a read only snapshot if one does not exists
-		snp = malloc(sizeof(mvcc_snapshot));
-		if(snp == NULL)
-			exit(-1);
-		initialize_mvcc_snapshot(snp);
+		// first create a read only snapshot if one does not exists
+		snp = get_new_mvcc_snapshot();
 
 		// link it in the global linkedlist
 		insert_tail_in_linkedlist(&(ttbl->active_mvcc_snapshots), snp);
@@ -505,7 +502,7 @@ mvcc_snapshot* get_new_transaction_id(transaction_table* ttbl, mvcc_snapshot* sn
 		finalize_mvcc_snapshot(snp);
 	}
 
-	// assign it the next possible assignable transaction_id
+	// then assign it the next possible assignable transaction_id
 	if(!set_self_transaction_id_in_mvcc_snapshot(snp, ttbl->next_assignable_transaction_id))
 	{
 		printf("BUG (in transaction_table) :: setting self transaction id for mvcc_snapshot failed\n");
@@ -547,10 +544,7 @@ mvcc_snapshot* get_or_revise_mvcc_snapshot(transaction_table* ttbl, mvcc_snapsho
 	if(snp == NULL)
 	{
 		// create a read only snapshot if one does not exists
-		snp = malloc(sizeof(mvcc_snapshot));
-		if(snp == NULL)
-			exit(-1);
-		initialize_mvcc_snapshot(snp);
+		snp = get_new_mvcc_snapshot();
 
 		// link it in the global linkedlist
 		insert_tail_in_linkedlist(&(ttbl->active_mvcc_snapshots), snp);
@@ -641,8 +635,7 @@ int update_transaction_status(transaction_table* ttbl, mvcc_snapshot* snp, trans
 	int is_valid_transaction_id = snp->has_self_transaction_id;
 
 	remove_from_linkedlist(&(ttbl->active_mvcc_snapshots), snp);
-	deinitialize_mvcc_snapshot(snp);
-	free(snp);
+	delete_mvcc_snapshot(snp);
 
 	if(!is_valid_transaction_id)
 	{
