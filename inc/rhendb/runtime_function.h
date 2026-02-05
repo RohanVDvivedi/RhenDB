@@ -4,7 +4,7 @@
 #include<rhendb/rage_engine.h>
 
 #include<tuplestore/data_type_info.h>
-#include<tuplestore/user_value.h>
+#include<tuplestore/datum.h>
 #include<tuplestore/tuple_def.h>
 #include<tuplestore/tuple.h>
 
@@ -17,7 +17,7 @@ struct runtime_data
 	const data_type_info* type;
 
 	// value itself, it may not have been materialized
-	user_value value;
+	datum value;
 
 	// if it is an extended data type, we will need rage_engine to read it
 	// please do not attempt to store the output here, even if it is an extended data_type, instead malloc a larger chunk for value and change the type to inline

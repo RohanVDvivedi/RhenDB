@@ -55,7 +55,7 @@ void append_all_tuples(temp_tuple_store* tts_p, uint32_t chunk_size, char** stri
 			mmap_for_writing_tuple(tts_p, &tr, &(tpl_d.size_def), len_added + len_to_add);
 
 			init_tuple(&tpl_d, tr.tuple);
-			set_element_in_tuple(&tpl_d, SELF, tr.tuple, &((user_value){.string_value = (*t), .string_size = len_added + len_to_add}), len_added + len_to_add);
+			set_element_in_tuple(&tpl_d, SELF, tr.tuple, &((datum){.string_value = (*t), .string_size = len_added + len_to_add}), len_added + len_to_add);
 			printf("appended : ");
 			print_tuple(tr.tuple, &tpl_d);
 			printf("\n\n");

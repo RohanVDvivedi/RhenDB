@@ -50,35 +50,35 @@ static void serialize_lock_entry_record(void* to, const lock_entry* from, const 
 {
 	init_tuple(lckmgr_p->lock_record_def, to);
 
-	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(0), to, &((user_value){.uint_value = ((uintptr_t)(from->transaction))}), 0);
-	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(1), to, &((user_value){.uint_value = from->resource_type}), 0);
-	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(2), to, &((user_value){.blob_size = from->resource_id_size, .blob_value = from->resource_id}), MAX_RESOURCE_ID_SIZE+1); // +1 for the size prefix
-	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(3), to, &((user_value){.uint_value = from->lock_mode}), 0);
+	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(0), to, &((datum){.uint_value = ((uintptr_t)(from->transaction))}), 0);
+	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(1), to, &((datum){.uint_value = from->resource_type}), 0);
+	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(2), to, &((datum){.binary_size = from->resource_id_size, .binary_value = from->resource_id}), MAX_RESOURCE_ID_SIZE+1); // +1 for the size prefix
+	set_element_in_tuple(lckmgr_p->lock_record_def, STATIC_POSITION(3), to, &((datum){.uint_value = from->lock_mode}), 0);
 }
 
 static void deserialize_lock_entry_record(const void* from, lock_entry* to, const lock_manager* lckmgr_p)
 {
 	{
-		user_value uval;
+		datum uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(0), from);
 		to->transaction = (void*)((uintptr_t)uval.uint_value);
 	}
 
 	{
-		user_value uval;
+		datum uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(1), from);
 		to->resource_type = uval.uint_value;
 	}
 
 	{
-		user_value uval;
+		datum uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(2), from);
-		to->resource_id_size = uval.blob_size;
-		memory_move(to->resource_id, uval.blob_value, to->resource_id_size);
+		to->resource_id_size = uval.binary_size;
+		memory_move(to->resource_id, uval.binary_value, to->resource_id_size);
 	}
 
 	{
-		user_value uval;
+		datum uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(3), from);
 		to->lock_mode = uval.uint_value;
 	}
@@ -119,44 +119,44 @@ static void serialize_wait_entry_record(void* to, const wait_entry* from, const 
 {
 	init_tuple(lckmgr_p->wait_record_def, to);
 
-	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(0), to, &((user_value){.uint_value = ((uintptr_t)(from->waiting_transaction))}), 0);
-	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(1), to, &((user_value){.uint_value = ((uintptr_t)(from->waiting_task))}), 0);
-	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(2), to, &((user_value){.uint_value = ((uintptr_t)(from->transaction))}), 0);
-	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(3), to, &((user_value){.uint_value = from->resource_type}), 0);
-	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(4), to, &((user_value){.blob_size = from->resource_id_size, .blob_value = from->resource_id}), MAX_RESOURCE_ID_SIZE+1); // +1 for the size prefix
+	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(0), to, &((datum){.uint_value = ((uintptr_t)(from->waiting_transaction))}), 0);
+	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(1), to, &((datum){.uint_value = ((uintptr_t)(from->waiting_task))}), 0);
+	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(2), to, &((datum){.uint_value = ((uintptr_t)(from->transaction))}), 0);
+	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(3), to, &((datum){.uint_value = from->resource_type}), 0);
+	set_element_in_tuple(lckmgr_p->wait_record_def, STATIC_POSITION(4), to, &((datum){.binary_size = from->resource_id_size, .binary_value = from->resource_id}), MAX_RESOURCE_ID_SIZE+1); // +1 for the size prefix
 }
 
 static void deserialize_wait_entry_record(const void* from, wait_entry* to, const lock_manager* lckmgr_p)
 {
 	{
-		user_value uval;
+		datum uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(0), from);
 		to->waiting_transaction = (void*)((uintptr_t)uval.uint_value);
 	}
 
 	{
-		user_value uval;
+		datum uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(1), from);
 		to->waiting_task = (void*)((uintptr_t)uval.uint_value);
 	}
 
 	{
-		user_value uval;
+		datum uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(2), from);
 		to->transaction = (void*)((uintptr_t)uval.uint_value);
 	}
 
 	{
-		user_value uval;
+		datum uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(3), from);
 		to->resource_type = uval.uint_value;
 	}
 
 	{
-		user_value uval;
+		datum uval;
 		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(4), from);
-		to->resource_id_size = uval.blob_size;
-		memory_move(to->resource_id, uval.blob_value, to->resource_id_size);
+		to->resource_id_size = uval.binary_size;
+		memory_move(to->resource_id, uval.binary_value, to->resource_id_size);
 	}
 }
 
@@ -619,7 +619,7 @@ void initialize_lock_manager(lock_manager* lckmgr_p, pthread_mutex_t* external_l
 	lckmgr_p->resource_id_type_info = malloc(sizeof(data_type_info));
 	if(lckmgr_p->resource_id_type_info == NULL)
 		exit(-1);
-	*(lckmgr_p->resource_id_type_info) = get_variable_length_blob_type("resource_id_type", MAX_RESOURCE_ID_SIZE + 2);
+	*(lckmgr_p->resource_id_type_info) = get_variable_length_binary_type("resource_id_type", MAX_RESOURCE_ID_SIZE + 2);
 
 	{
 		data_type_info* dti = malloc(sizeof_tuple_data_type_info(4));

@@ -15,9 +15,9 @@ void destroy_runtime_data(runtime_data* rd)
 			free((void*)(rd->value.string_value));
 			break;
 		}
-		case BLOB :
+		case BINARY :
 		{
-			free((void*)(rd->value.blob_value));
+			free((void*)(rd->value.binary_value));
 			break;
 		}
 		case TUPLE :
@@ -37,7 +37,7 @@ void destroy_runtime_data(runtime_data* rd)
 	}
 
 	rd->type = NULL;
-	rd->value = *NULL_USER_VALUE;
+	rd->value = *NULL_DATUM;
 	rd->db = NULL;
 	rd->value_needs_to_be_freed = 0;
 }

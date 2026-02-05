@@ -77,8 +77,8 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 			initialize_transaction_table(&(rdb->tx_table), &(tx_table_root_page_id), &(rdb->persistent_acid_rage_engine), max_concurrent_users_count);
 
 			init_tuple(&(system_roots_record_def), tuple_buffer);
-			set_element_in_tuple(&(system_roots_record_def), STATIC_POSITION(0), tuple_buffer, &((user_value){.string_value = TX_TABLE_ROOT_PAGE_ID_KEY, .string_size = sizeof(TX_TABLE_ROOT_PAGE_ID_KEY)}), 100);
-			set_element_in_tuple(&(system_roots_record_def), STATIC_POSITION(1), tuple_buffer, &((user_value){.uint_value = tx_table_root_page_id}), 100);
+			set_element_in_tuple(&(system_roots_record_def), STATIC_POSITION(0), tuple_buffer, &((datum){.string_value = TX_TABLE_ROOT_PAGE_ID_KEY, .string_size = sizeof(TX_TABLE_ROOT_PAGE_ID_KEY)}), 100);
+			set_element_in_tuple(&(system_roots_record_def), STATIC_POSITION(1), tuple_buffer, &((datum){.uint_value = tx_table_root_page_id}), 100);
 
 			insert_in_bplus_tree(root_page_id, tuple_buffer, &bpttd, rdb->persistent_acid_rage_engine.pam_p, rdb->persistent_acid_rage_engine.pmm_p, sub_transaction_id, &abort_error);
 			if(abort_error)
@@ -120,11 +120,11 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 			const void* curr_tuple = get_tuple_bplus_tree_iterator(bpi_p);
 			print_tuple(curr_tuple, &(system_roots_record_def));
 
-			user_value system_table_name = {};
+			datum system_table_name = {};
 			uint64_t system_root_page_id = 0;
 			{
 				get_value_from_element_from_tuple(&system_table_name, &(system_roots_record_def), STATIC_POSITION(0), curr_tuple);
-				user_value uval;
+				datum uval;
 				get_value_from_element_from_tuple(&uval, &(system_roots_record_def), STATIC_POSITION(1), curr_tuple);
 				system_root_page_id = uval.uint_value;
 			}
