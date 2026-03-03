@@ -19,16 +19,6 @@
     * read/write operators over simple data_structures (for full tuple indexer like access will be implemented later)
   * they need only 1 function to set them up called setup_hash_join, or setup_index_scan etc
 
-  *implement various types of default runtime functions
-   * boolean(convert NULL and ZERO to false and rest everything is true)
-   * sign(negatives to -1, 0 to 0, and positives to 1)
-   * compare(for comparing any types)
-   * add, sub, mul, divide, mod, gcd, lcm, pow, sin, cos, multiplicate inverse, additive inverse
-   * strings and blobs to be concatenated, substring with from and to
-   * unix epoch to date, day, month, year, second, millisecond, microsecond, with timezones
-   * build more complex functions transformers with local variables and bytecode stored in context
-   * length of string, blob, array, tuple, etc
-
  1.0* implement SQL parser (possibly in a different directory)
  1.1* implement query plan tree
    * with operators
@@ -50,6 +40,18 @@
    * they also point to each other, dtis pointing to other dtis in there and bplus_tree_tuple_defs and alike, pointing to record_defs that are dtis in there itself
    * functions and queries and functions can call other functions, reference them
    * we will use reference counting to already cached catalog objects, implement on_destroy and on_reference callbacks of type static_type_info_callback-s, that increment and decrement the reference counter for the dtis, that need to be passed around
+
+  * expression evaluation using operator grammar and expression trees from SQLtoAST
+   * that carry type and datum with itself
+  * implement various types of default runtime functions
+   * boolean(convert NULL and ZERO to false and rest everything is true)
+   * sign(negatives to -1, 0 to 0, and positives to 1)
+   * compare(for comparing any types)
+   * add, sub, mul, divide, mod, gcd, lcm, pow, sin, cos, multiplicate inverse, additive inverse
+   * strings and blobs to be concatenated, substring with from and to
+   * unix epoch to date, day, month, year, second, millisecond, microsecond, with timezones
+   * build more complex functions transformers with local variables and bytecode stored in context
+   * length of string, blob, array, tuple, etc
 
  3.*maintain the inserts and deletes log as a stack in volatile page store and allow save points
    * savepoints will flip the is_xmin_NULL bit to 1 to undo an insert
