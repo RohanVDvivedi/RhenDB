@@ -26,6 +26,22 @@
   * every operator will have an output queue and a filter, that filters rows going into it's output queue right
   * they need only 1 function to set them up called setup_hash_join, or setup_index_scan etc
 
+ * catalog tables
+  * types
+    * bitfield 1-64, int 1-32, uint 1-32, float, double, binary, string, and rest will be custom user defined tuples
+    * definition:    id, name
+    * primark key: id
+  * type_attributes
+    * definition:    parent_id -> types, position, name, child_id -> types, array_size [0 -> variable length, 1 -> no array inside, directly compositing the element, N >= 2 -> fixed sized array]
+    * primary key: parent_id, position
+    * secondary key: name, parent_id, position
+  * db_objects
+    * definition:    id, name, db_object_type[table, btree, hash, rtree, inverted], type_id -> types, is_index_of_id -> db_objects[db_object_type = table], is_altered_from_id -> db_objects[name = name]
+    * primary key: id
+    * secondary key: name, id
+  * indexed_attributes
+    * definition:    index_id -> db_objects, position, table_positional_accessor(array of uint32_t or NULL), sql_expression(over the whole row)
+
  1.0* implement query plan tree
    * with operators
    * need functions to compare, and hash, including extended data types from tuple large types, two positons inside tuples or a tuple position and a materialized value, like materialized numeric
