@@ -1,16 +1,17 @@
  PICKED TASKS
 
-  * come up with new query plan interface
-    * operators have a queue built into their outputs, built as a wrapper
-    * pulling from an operator pulls from these output queues
-    * sink operators have no such queues
-    * an operator may have multiple such queues
-    * operator can be executing as a tiber or a pthread
-    * operators are only allowed to spin up tibers for compute intensive jobs
-    * there should be a way to force execute the parent operators as and when needed
-    * operators can pull temp_tuple_store from multiple operators acting as parent, but can only push to atmost 1 child (none if it is sink)
-    * find a way to minimize number of threads, yet keep the operators making the tuples flowing
-    * each of the operators output queues can take in input tuples and they filter tuple outputs using operator expression evaluation
+  * new query plan interface
+    * operators have a output temp_tuple_store built into them to store their outputs (only the sink operators will havethem and not use them)
+    * every tuple output gets put into it, or a new temp_tuple_store is created for it if a prior one was consumed by the consuming child operator
+    * only operators that touch the mini transaction engine for scan will get access to threads
+    * the operators are allowed to push tuples they produce and pull from parent operators
+    * this operator interface may have functions like
+      * execute() // may schedule tibers/threads/jobs(on boompar's thread pool)/execute one chunk synchronously completely upto the operator
+        * it is NO-OP if it is_executing() == 1
+      * is_executing() // 0 for paused, or killed
+      * is_killed()
+    * execute function is called by the parent operator when it finishes for it's child to consume the rest
+    * it is called by the child operator when it does not have any thing to consume
 
   * start with catalog tables (hash_table-s)
 
