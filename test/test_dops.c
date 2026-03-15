@@ -191,17 +191,15 @@ int main()
 	// make operators
 
 	{
-		operator_buffer* input = get_new_registered_operator_buffer_for_query_plan(qp);
 		operator* o = get_new_registered_operator_for_query_plan(qp);
-
 		setup_generator_operator(o, input, generator, &generator_number, &record_def);
+		operator* input = o;
 
 		for(int i = 0; i < IDENTITY_OPERATORS_COUNT; i++)
 		{
-			operator_buffer* output = get_new_registered_operator_buffer_for_query_plan(qp);
 			o = get_new_registered_operator_for_query_plan(qp);
-			setup_identity_operator(o, output, input);
-			input = output;
+			setup_identity_operator(o, input);
+			input = o;
 		}
 
 		o = get_new_registered_operator_for_query_plan(qp);
