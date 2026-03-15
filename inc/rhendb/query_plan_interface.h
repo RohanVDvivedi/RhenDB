@@ -64,7 +64,9 @@ struct operator
 	// but there may be many producer operators for any 1 consumer operator
 	operator* consumer_operator; // [MUST BE SET DURING THE SETUP PHASE]
 
-	// when these many bytes are accumulated the consumer_operator will receive a trigger_execution() call
+	// after these many bytes are accumulated the consumer_operator will receive a trigger_execution() call
+	// we check after every produce call and trigger_execution() on the consumer, if (consumer_trigger_on_bytes_accumulated >= next_tuple_offset)
+	// this check is done after every tuple produced, and is skipped if this value is set to 0
 	uint64_t consumer_trigger_on_bytes_accumulated; // [MUST BE SET DURING THE SETUP PHASE]
 
 	// definition of the produced output tuples
