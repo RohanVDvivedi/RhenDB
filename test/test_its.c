@@ -1,4 +1,4 @@
-#include<rhendb/temp_tuple_store.h>
+#include<rhendb/interim_tuple_store.h>
 
 #include<unistd.h>
 #include<stdio.h>
@@ -13,35 +13,35 @@ data_type_info dti;
 
 void print_mmap_pages_for_fd(int fd);
 
-void print_all_tuples(temp_tuple_store* tts_p)
+void print_all_tuples(interim_tuple_store* its_p)
 {
-	printf("\n\nprinting temp_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", tts_p->tuples_count, tts_p->next_tuple_offset, tts_p->total_size);
+	printf("\n\nprinting interim_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", its_p->tuples_count, its_p->next_tuple_offset, its_p->total_size);
 	uint64_t index = 0;
 	uint64_t offset = 0;
-	tuple_region tr = INIT_TUPLE_REGION;
-	while(mmap_for_reading_tuple(tts_p, &tr, offset, &(tpl_d.size_def), MMAP_READ_REGION_MIN_SIZE))
+	interim_tuple_region tr = INIT_INTERIM_TUPLE_REGION;
+	while(mmap_for_reading_tuple(its_p, &tr, offset, &(tpl_d.size_def), MMAP_READ_REGION_MIN_SIZE))
 	{
-		printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32" @ %p\n", index, offset, curr_tuple_size_for_tuple_region(&tr), tr.region_memory);
+		printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32" @ %p\n", index, offset, curr_tuple_size_for_interim_tuple_region(&tr), tr.region_memory);
 		print_tuple(tr.tuple, &tpl_d);
 		printf("\n\n");
-		offset = next_tuple_offset_for_tuple_region(&tr);
+		offset = next_tuple_offset_for_interim_tuple_region(&tr);
 		index++;
 	}
-	print_mmap_pages_for_fd(tts_p->fd);
-	unmap_for_tuple_region(&tr);
-	print_mmap_pages_for_fd(tts_p->fd);
+	print_mmap_pages_for_fd(its_p->fd);
+	unmap_for_interim_tuple_region(&tr);
+	print_mmap_pages_for_fd(its_p->fd);
 	printf("\n\n");
 }
 
-void append_all_tuples(temp_tuple_store* tts_p, uint32_t chunk_size, char** strings_to_insert)
+void append_all_tuples(interim_tuple_store* its_p, uint32_t chunk_size, char** strings_to_insert)
 {
-	tuple_region tr = INIT_TUPLE_REGION;
+	interim_tuple_region tr = INIT_INTERIM_TUPLE_REGION;
 	for(char** t = strings_to_insert; (*t) != NULL; t++)
 	{
 		uint32_t len = strlen((*t));
 
 		uint32_t required_size = 20;
-		mmap_for_writing_tuple(tts_p, &tr, &(tpl_d.size_def), required_size);
+		mmap_for_writing_tuple(its_p, &tr, &(tpl_d.size_def), required_size);
 
 		init_tuple(&tpl_d, tr.tuple);
 		printf("appended : ");
@@ -52,7 +52,7 @@ void append_all_tuples(temp_tuple_store* tts_p, uint32_t chunk_size, char** stri
 		{
 			uint32_t len_to_add = min(chunk_size, len - len_added);
 
-			mmap_for_writing_tuple(tts_p, &tr, &(tpl_d.size_def), len_added + len_to_add);
+			mmap_for_writing_tuple(its_p, &tr, &(tpl_d.size_def), len_added + len_to_add);
 
 			init_tuple(&tpl_d, tr.tuple);
 			set_element_in_tuple(&tpl_d, SELF, tr.tuple, &((datum){.string_value = (*t), .string_size = len_added + len_to_add}), len_added + len_to_add);
@@ -64,11 +64,11 @@ void append_all_tuples(temp_tuple_store* tts_p, uint32_t chunk_size, char** stri
 		}
 
 		printf("finalized tuple\n\n");
-		finalize_written_tuple(tts_p, &tr);
+		finalize_written_tuple(its_p, &tr);
 	}
-	print_mmap_pages_for_fd(tts_p->fd);
-	unmap_for_tuple_region(&tr);
-	print_mmap_pages_for_fd(tts_p->fd);
+	print_mmap_pages_for_fd(its_p->fd);
+	unmap_for_interim_tuple_region(&tr);
+	print_mmap_pages_for_fd(its_p->fd);
 }
 
 char* ROHAN   = "ROHAN--rgqbkwudilfarbkgowqyhwkbeebrkfcttqrttyreecaqjrzljcpcdsurbuerfklektzdczgyfdduadwqiioinuomijlzmnkbsbuhxakrsdjzgusuwqzinkgwhfukxdzacprgnkgghtvjhpdvhrcxvgrxcpwgrfdbgaatecqovtskrricrjgzaonpsyuhlnokidhjfqxedmikypnkuablwyfhokchqvxkwribvxyqqjspteeuickvwqjtqfdlfhasveykjhqivzuymsihxlwbvpkzdwlmkqppyixzrnnjpkkdwvnqdwniemglmwxuurxnofxisuqbyfcftjiigikkyoeksmbqweuiqaanrgazlhfxbwvkroroxsdwfaumebgngxgwkasweliuemjiwpzqqyxsdwmjidbyvuexixsplmegcizubmkhxyjbfamvlmnfzfloadqvmtwddbkbmayxakbhonaticlfjwjjvdiesponugmtknqjeryrozahrpjghphxruqcfybybvtubfilgaztsjygubguokcnpojitnqcqqlxeuvrstickykhblsjplymjpecxzegfodbdrakypmjiomnnellrcxgsyboqkuidushuisdsegcljbcdiymfhmpajllrmpnierbjnqunphwhtnixyvzmifhdswldpmctivexevckdihjynypuwoqwhpgdftvcsfkeyftmugguqacbxtmrvhkcfjeotndpdmoxtmceagpcvcogbnvmsyeaclobcktconagktzjhjfrrtorxwvotqycfevdjgmsjgrxusexgsjtbvplijmgntcrpxclsbburtajaweujjraciiiilzvlssjwcwutvmcdwodjycmavmhklwaawqnmnrvbeovaugstsfkklfefnfbkozlbrzizisbxyahxabbufgaqvqdnxhugturagkoztpdzjenwvsejmfjksjjradgmguzcmygkegluotkufylpiltiytyoaacjjzqguzibatuonumuqynahbxitarpyiplrimtpkdhqofvkaxrqpwcbcmbreubwwyffxpljeqxecmcaleahkukutxtphdfygyzsgcxmeutypeoliaeelefbzsdkhcaawbksxmzsgyrnjjcdtqtvsevxulauctgcztgwrpivdkpvawukwhzswvjihtjluypccyxvomnusoelcfmwxzlzvrgsyflxqlbcmmsqocmsxjpxqvxcwynkyqusuickjxaajqjpqqbkgtmyvwjnvsrsfyegspvpdzrgdqymdztncerxoidlfrpokaatxaawvjimwimbnkepnytkakwagkqktyawtiqrhvouoebqrwxhxxaplvkparyzqryqctorlklrnwvzbgoizdulbozfsewzzzjulfmciutquffeosgpudqxdngzpzjkhptvrnaczqbueriwevtuascotxzrqjfbcuajwpapihsurhfwlyycfbnjbyqlnwaktmgedikxfwzoiitnecihogajurqpaenauzgxevwdrxmejzadvzgyihkrxbesjljbekkenwfqbhwjhfpjzzflosyzozckdvuydqsrpomwyvefcqjuhutwaaavuyvexavueqenhlbavehfqvxxonguoclimupdjrolznxmerjusunracppktmvwqarhjgshhwluifymdqjybexinmgogxuyndilddwguehdzwwbnrgzuwpmbkegfwncucpjfdpfvixioxiubqocxonzlzqrjtunftuyjhldcwyslzavltjqmxyuwgwknqngzlqjjiparlzbcylgqicleuqggfuhumkvfvcuafachufxbkmspdhetxmnpmkblzuuxyivdgywkmsdmmlwuolghghnopfnyiydbmprmvrhxhivkkibddokyiyxwccaprexmzdxgmtqkvtxevicpjihqayofwikvclcxnqlnupjgenkprpyxxaknjqubjilcvynfcdtypbwafudknybnrikrntxbyexyvkslupymenctwejcshagrehbpgykooeacyvefvzybmnfjlwjnkkeavtzqplwsfgfeuxwfbzntmcuqcellhzutennrdafuvxqbdrscxfpwymbsyoamrtxqngbmgziyvlwhdrojqpjxluvoakysmyeampnwptjxvceqvbfcivodoynraxvqrlnjsjawlsumkaiketmvlxmpbnyfhfltjoobaarfudoxvyovvdvwdzpahucddnkflnctdalhmcmmtdqpfagyfxienbxwzphmjuzxrshxzhfqqdsolfbdyvczcnmitwaotylrzorrqxteuzmrgourazndsbhsftelxgzwqdhhwssavgpsbaaxysiafseziqskkrhyxorpcqddffvnrakpsbztstsvdpmequgykjcbaiovtdgaijbsgtexeyziayxgojntjtapcomauztocrifdespmbrfifsceqdgiddoqkklvawqfaxablyxhmcmfylckcueegouzlzadkudqrydbmuocxcekstxylpyxqhzzytvppkqluszunwfydxhwraisjmmqvufmlamlxdlvojkvnvbljrsofroqdqbvklwucaqkyfekrssqjgwxdfgqjwbfktbbtgpvejjfmihcishmfhumparjidryqlttmoyekpaxmelnuddjaxkxhyclbkycomfdyvakuijvdqqvaxepzrektayrxiftttuslqqbnapehdmkmeczgvtqukuenoksecngxxuerphtfzbajqceqspztyxxojdcrisuspzzazisjquwcqvxzoajiswvzktcaizoeloqsyrksfvoqhbpjgsrshgmmpcgpnipnkxutjuinqjehpoxiytnijkmlilwxfkvwvypdcturlysguexlukthmwylzfscyfjjaghuhbfosdfotravxkyqpoqfkptnlmywpqgushvjdozunisefulnmqhagifkvwitmwkvthppyryhiubacfzwvwvgbmiyuvlguwfnnrpnvepmygfogchecibqvdvnvnnjcdpbtiybnnzbvfcduhqjtfdkeuatrcblssreqnziyyjklbahqqmbzxieqpztowgncmtqrnqllwwsivhntaghjtptavpdtxqeltoahgqswmfjnfftifohdnzbotmdoesvblcxojklberjoxoantepxjnsxkzvmisovcqpbdavcuvbhxagwglumpadrcauwscycxozswgavhcytzoevlhllmaxoqkrrpetcrwkswuwhunfylgptxigyjrbghwroctmsvitxdiifljlbjbmdnxnmxfbvtxuffdbffdprfuycwunbxjgqsibfjawbpepkvvspbnutdfqwdleccceabxqwtmxexjrkfsbbjyfkklnrvdnpduisbfxanrkfkuodsomcbbiurppbkccttdprfbnekzfyfmgnrmsfaqolhivkbrqrwcbhicqlsvkeoraangaubzgwdwyquzrjxgmibvayseorkrtmiofhcoydxzmubqwqfygupqnbpieuubajlizmmtxbasmdfewjeyowwqigfbinvfxqofztaopgoevevomurisbpfmopffwsfieyeibtbyqnittpyjtebkeaptacahmkfazdtfxjzzwziyyviwepwtobjtyuylnjwhjnoenxqjdeujghjozerariizfrtkufvotrowdvlbthbxwnmxsamdkipusdtcvgcprvwumpmtarduwwooqzzxocgbgdfvwttlrigzflkboinogmyzphbgeledkhfookbmwiwubxtdgkkctiftlhwhzbihvblxzhsrgwudhycsjkasrnwinqciiwnejwumhxpwdnsueuoyzjsyllyducmxyzisjpzzkilsevhhgudszyovggcsufycdgkgguvagybbhtesgxdalpzxllpgkxqhnxvwbulrwttpzrcaozfebvxyhhfoaelfocmmyagnwfshsfgnmrtpaspyjyojwouyowouwrljpgfubfztyrtzrzoewqzwsoizuzeeonxqqocpeyowygdqyxifoeeoyjatsjzoatharkvqhprchmxyqmxsvqykacyimpzgomocjonwxscnpowzeigrqgvuakqcslsuqaqdeoeccumnotxnodfmizirbghwsuvgmufhbkpoxzslthoemactamtppsqkfrvyhztunbszkiciwbicgvivfzmrgvamasggaedgfknuwkmxouolooyzewvsnfpsfgmsabayoirtsxgjyjtehxnwovoaswrtofdacifqxrhyyftggplxdhypsnqdjivieekncjkqydwjrdrtqougwopmijjafxxcagxhrwjqastixouyrkkmzvyyddbdwqljgnifavqtzmamxbydukljuxaxvsxzsrknhqxvughdfdugxqyheysjovllcpnjzndqijywlcmhcwxfixmyjzxmsiygzehumrwjqjdrqkjmcufoslmhvxlxcgtcwvrvsuppbfaodrvtxiviitopairhkwjxlermvhyahdjcwpjlvysursexjpwynzdwwfiaprdeydgjtqxsaqqsxukullywccgvbqdmtzqvjcvhtulhnewgviegoyepzuidhmjngtbpkscinjqivzbawrpjzkmzgpohvppfsynegqdepuhmdqjntohgfpzdyowmxnxgbkshesllxkiryxmtzeaplugaezlyuddfupxhucbgzxxiwsqxmgxhkpjacjisuuiqvfbvforrpivzctlagbpgcbytzjojqmcsqhyzsnvkyvepcbpuzxezqikfabmyocvsrooahpfsbzxowkrzynttdtjaeuoanfpkehpyqzgjajkeqqkvtwzbvtbodsizhhtspilmugxxwoyozwtkjuxzfllttahbammbqdkulzaooqattizphilwlyijqfckqpkljjlrqdszkbsikwvkzzgzfpbtjvucwjhhdrlxfzwjjyyerxretadktpjkododanfvsausiqyyrnpnxmturwstjumogdjhkijqlseumhsrquwmojhnuybaemcvsucxtjapknrrnraaobiggxqscruakchbdkgrwzybnkdaclnkxunmjzaaymdhgmvvckuwizvvvdserfixynznqlhnxypjrxdpxfkdmdekucwkymwtoygutqiicwpwuakquaadkvczlmcaoqpuqlzzqagilbiqjyhbrmabsnjdycsfeisrlvoagqkwedoljzjwlqncntcdonreunzlhxrwvsstmriddaaujyfahjysakphezbcwonstqyzjafvdaithoipzpqstskqhfeybhhxykxoxfdyjhgvgztyedrhcwyvdpjzzpytrpmhkgpmukaeprpjtvmtbldoiiseqozxlshfhjkkibphxwazwnwgsdzixyxztdhegmwqfkzfryspeqzbfellwvhyswlbibwdnxocaqebmtyjsqxykhkcdhbewfizuqlktbjpszujemiimrhghnbgesoubfpxaeqxtwsyammkeyjycfyylcuahqmaaezwggxoxtjgionqnafjweqkhyifjskkyschfjyrsgsfllnxruvfqfqjjyyezixbrmccofidcuhtvfdwtcptmevxmzsnjlkaycmnfgxfosvjzwkiorapbtaweydudhkrgdqcqctneefkfzheznxxwrszokkzhqwvhoyykgggkmnnlrwskqvqrwrpxwnmivoebusiobmakhrdgiruoenajpmrreveqfwpzykmesckbqooctbotztiucbequyvxvdqbpvobtjggzgncylowfvjocrfilutdcpmzuaosbruglzzhnigxceodsexjzovgxeeqfqblhiaxwlmmmiyszwxjtcruawvvgtyqoacmikzmdkfbdk--ROHAN";
@@ -83,59 +83,59 @@ int main()
 
 	print_tuple_def(&tpl_d);
 
-	temp_tuple_store* tts_p = get_new_temp_tuple_store(".");
+	interim_tuple_store* its_p = get_new_interim_tuple_store(".");
 
 	// init complete
 
-	print_mmap_pages_for_fd(tts_p->fd);
+	print_mmap_pages_for_fd(its_p->fd);
 
 	printf("----------------------------------------------\n\n");
 
-	print_all_tuples(tts_p);
+	print_all_tuples(its_p);
 
-	print_mmap_pages_for_fd(tts_p->fd);
-
-	printf("----------------------------------------------\n\n");
-
-	append_all_tuples(tts_p, 10, (char* []){"Rohan Vipulkumar Dvivedi", "Rupa Vipulkumar Dvivedi", "Vipulkumar Bhanuprasad Dvivedi", NULL});
-
-	print_mmap_pages_for_fd(tts_p->fd);
+	print_mmap_pages_for_fd(its_p->fd);
 
 	printf("----------------------------------------------\n\n");
 
-	print_all_tuples(tts_p);
+	append_all_tuples(its_p, 10, (char* []){"Rohan Vipulkumar Dvivedi", "Rupa Vipulkumar Dvivedi", "Vipulkumar Bhanuprasad Dvivedi", NULL});
 
-	print_mmap_pages_for_fd(tts_p->fd);
-
-	printf("----------------------------------------------\n\n");
-
-	append_all_tuples(tts_p, 10, (char* []){"Devashree Vipulkumar Dvivedi", "Manan Joshi", "Devashree Manan Joshi", NULL});
-
-	print_mmap_pages_for_fd(tts_p->fd);
+	print_mmap_pages_for_fd(its_p->fd);
 
 	printf("----------------------------------------------\n\n");
 
-	print_all_tuples(tts_p);
+	print_all_tuples(its_p);
 
-	print_mmap_pages_for_fd(tts_p->fd);
-
-	printf("----------------------------------------------\n\n");
-
-	append_all_tuples(tts_p, 500, (char* []){ROHAN, DVIVEDI, NULL});
-
-	print_mmap_pages_for_fd(tts_p->fd);
+	print_mmap_pages_for_fd(its_p->fd);
 
 	printf("----------------------------------------------\n\n");
 
-	print_all_tuples(tts_p);
+	append_all_tuples(its_p, 10, (char* []){"Devashree Vipulkumar Dvivedi", "Manan Joshi", "Devashree Manan Joshi", NULL});
 
-	print_mmap_pages_for_fd(tts_p->fd);
+	print_mmap_pages_for_fd(its_p->fd);
+
+	printf("----------------------------------------------\n\n");
+
+	print_all_tuples(its_p);
+
+	print_mmap_pages_for_fd(its_p->fd);
+
+	printf("----------------------------------------------\n\n");
+
+	append_all_tuples(its_p, 500, (char* []){ROHAN, DVIVEDI, NULL});
+
+	print_mmap_pages_for_fd(its_p->fd);
+
+	printf("----------------------------------------------\n\n");
+
+	print_all_tuples(its_p);
+
+	print_mmap_pages_for_fd(its_p->fd);
 
 	printf("----------------------------------------------\n\n");
 
 	// deinit start
 
-	delete_temp_tuple_store(tts_p);
+	delete_interim_tuple_store(its_p);
 	return 0;
 }
 
