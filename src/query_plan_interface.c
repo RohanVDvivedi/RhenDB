@@ -35,6 +35,10 @@ void mark_operator_self_killed(operator* o, dstring kill_reason)
 	pthread_cond_broadcast(&(o->wait_until_killed));
 
 	pthread_mutex_unlock(&(o->kill_lock));
+
+	// force the consumer to read through all that has been left to be consumed
+	if(o->consumer != NULL)
+		o->consumer->trigger_execution(o->consumer);
 }
 
 // called by the query_plan to send kill to an operator
@@ -160,129 +164,6 @@ void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
 
 // operator buffer functions
 
-int increment_operator_buffer_producers_count(operator_buffer* ob, uint32_t change_amount)
-{
-	if(change_amount == 0)
-		return 1;
-
-	int result = 0;
-
-	pthread_mutex_lock(&(ob->lock));
-
-	// we can not update producers_count once it reaches 0
-	if(ob->producers_count == 0)
-		goto EXIT;
-
-	// you can not add more producers, if the consumers_count has reached 0
-	if(ob->consumers_count == 0)
-		goto EXIT;
-
-	if(!will_unsigned_sum_overflow(uint32_t, ob->producers_count, change_amount))
-	{
-		ob->producers_count += change_amount;
-		result = 1;
-	}
-
-	EXIT:;
-	pthread_mutex_unlock(&(ob->lock));
-
-	return result;
-}
-
-int decrement_operator_buffer_producers_count(operator_buffer* ob, uint32_t change_amount)
-{
-	if(change_amount == 0)
-		return 1;
-
-	int result = 0;
-
-	pthread_mutex_lock(&(ob->lock));
-
-	// we can not update producers_count once it reaches 0
-	if(ob->producers_count == 0)
-		goto EXIT;
-
-	// you can still decrement producers_count, if there are no consumers
-
-	if(ob->producers_count >= change_amount)
-	{
-		ob->producers_count -= change_amount;
-		result = 1;
-	}
-
-	if(result && ob->producers_count == 0)
-	{
-		// producers count just reached 0, no new data will be available so wake up all consumers
-		pthread_cond_broadcast(&(ob->wait));
-	}
-
-	EXIT:;
-	pthread_mutex_unlock(&(ob->lock));
-
-	return result;
-}
-
-int increment_operator_buffer_consumers_count(operator_buffer* ob, uint32_t change_amount)
-{
-	if(change_amount == 0)
-		return 1;
-
-	int result = 0;
-
-	pthread_mutex_lock(&(ob->lock));
-
-	// we can not update consumers_count once it reaches 0
-	if(ob->consumers_count == 0)
-		goto EXIT;
-
-	// you can not add more consumers, even if the producers_count has reached 0, in order to consume everything quickly
-
-	// only possible to increment consumers, while there still are some consumers
-	if(!will_unsigned_sum_overflow(uint32_t, ob->consumers_count, change_amount))
-	{
-		ob->consumers_count += change_amount;
-		result = 1;
-	}
-
-	EXIT:;
-	pthread_mutex_unlock(&(ob->lock));
-
-	return result;
-}
-
-int decrement_operator_buffer_consumers_count(operator_buffer* ob, uint32_t change_amount)
-{
-	if(change_amount == 0)
-		return 1;
-
-	int result = 0;
-
-	pthread_mutex_lock(&(ob->lock));
-
-	// we can not update consumers_count once it reaches 0
-	if(ob->consumers_count == 0)
-		goto EXIT;
-
-	// you can still decrement consumers_count, if there are no producers
-
-	if(ob->consumers_count >= change_amount)
-	{
-		ob->consumers_count -= change_amount;
-		result = 1;
-	}
-
-	if(result && ob->consumers_count == 0)
-	{
-		// consumers count just reached 0, no new data will be consumable so wake up all consumers
-		pthread_cond_broadcast(&(ob->wait));
-	}
-
-	EXIT:;
-	pthread_mutex_unlock(&(ob->lock));
-
-	return result;
-}
-
 int push_to_operator_buffer(operator_buffer* ob, operator* callee, temp_tuple_store* tts)
 {
 	int pushed = 0;
@@ -371,13 +252,6 @@ temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee
 	pthread_mutex_unlock(&(ob->lock));
 
 	return tts;
-}
-
-static void spurious_wake_up_all_for_operator_buffer(operator_buffer* ob)
-{
-	pthread_mutex_lock(&(ob->lock));
-		pthread_cond_broadcast(&(ob->wait));
-	pthread_mutex_unlock(&(ob->lock));
 }
 
 // query plan functions
