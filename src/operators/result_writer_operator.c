@@ -20,44 +20,36 @@ static void trigger_execution(operator* o)
 
 	interim_tuple_store* its = NULL;
 
-	{
-		int no_more_data = 0;
-		interim_tuple_store* its = consume_from_operator(inputs->input_operator, 500, &no_more_data);
-		if(no_more_data)
-			goto EXIT;
+	int no_more_data = 0;
 
-		if(its != NULL)
-		{
-			printf("\n\nprinting interim_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", its->tuples_count, its->next_tuple_offset, its->total_size);
-			uint64_t index = 0;
-			uint64_t offset = 0;
-			tuple_region tr = INIT_TUPLE_REGION;
-			while(mmap_for_reading_tuple(its, &tr, offset, &(inputs->input_tuple_def->size_def), 0))
-			{
-				printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32"\n", index, offset, curr_tuple_size_for_interim_tuple_region(&tr));
-				print_tuple(tr.tuple, inputs->input_tuple_def);
-				printf("\n\n");
-				offset = next_tuple_offset_for_interim_tuple_region(&tr);
-				index++;
-			}
-			unmap_for_tuple_region(&tr);
-			printf("\n\n");
+	interim_tuple_store* its = consume_from_operator(inputs->input_operator, 500, &no_more_data);
+	if(no_more_data)
+		mark_operator_self_killed(o, kill_reason);
+	if(can_not_proceed_for_execution_operator(o))
+		mark_operator_self_killed(o, kill_reason);
 
-			delete_temp_tuple_store(its);
-			its = NULL;
-		}
-	}
-
-	return;
-
-	EXIT:
 	if(its != NULL)
 	{
-		delete_interim_tuple_store(its);
+		printf("\n\nprinting interim_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", its->tuples_count, its->next_tuple_offset, its->total_size);
+		uint64_t index = 0;
+		uint64_t offset = 0;
+		tuple_region tr = INIT_TUPLE_REGION;
+		while(mmap_for_reading_tuple(its, &tr, offset, &(inputs->input_tuple_def->size_def), 0))
+		{
+			printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32"\n", index, offset, curr_tuple_size_for_interim_tuple_region(&tr));
+			print_tuple(tr.tuple, inputs->input_tuple_def);
+			printf("\n\n");
+			offset = next_tuple_offset_for_interim_tuple_region(&tr);
+			index++;
+		}
+		unmap_for_tuple_region(&tr);
+		printf("\n\n");
+
+		delete_temp_tuple_store(its);
 		its = NULL;
 	}
 
-	mark_operator_self_killed(o, kill_reason);
+	return;
 }
 
 void setup_printf_operator(operator* o, operator* input_operator, tuple_def* input_tuple_def)
