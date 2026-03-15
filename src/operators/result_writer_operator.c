@@ -20,7 +20,7 @@ static void trigger_execution(operator* o)
 
 	int no_more_data = 0;
 
-	interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, 500, &no_more_data);
+	interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, 300, &no_more_data);
 	if(no_more_data)
 		mark_operator_self_killed(o, kill_reason);
 	if(can_not_proceed_for_execution_operator(o))
@@ -63,4 +63,5 @@ void setup_printf_operator(operator* o, operator* input_operator, tuple_def* inp
 	};
 
 	input_operator->consumer_operator = o;
+	input_operator->consumer_trigger_on_bytes_accumulated = 300;
 }
