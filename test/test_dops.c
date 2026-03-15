@@ -186,13 +186,13 @@ int main()
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, TOTAL_OPERATORS_COUNT, OPERATOR_BUFFERS_COUNT);
+	qp = get_new_query_plan(&tx, TOTAL_OPERATORS_COUNT);
 
 	// make operators
 
 	{
 		operator* o = get_new_registered_operator_for_query_plan(qp);
-		setup_generator_operator(o, input, generator, &generator_number, &record_def);
+		setup_generator_operator(o, generator, &generator_number, &record_def);
 		operator* input = o;
 
 		for(int i = 0; i < IDENTITY_OPERATORS_COUNT; i++)
