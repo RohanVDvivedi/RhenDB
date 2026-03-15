@@ -152,6 +152,9 @@ void* generator(void* generator_context, tuple_def* generator_tuple_def)
 	void* generated = malloc(BUFFER_SIZE);
 
 	construct_record(generated, (*generator_number), 0, "Rohan Dvivedi");
+	printf("PRODUCED : ");
+	print_tuple(generated, generator_tuple_def);
+	printf("\n\n");
 	usleep(100000);
 
 	(*generator_number)++;
