@@ -3,7 +3,7 @@
 
 #include<pthread.h>
 
-#include<rhendb/temp_tuple_store.h>
+#include<rhendb/interim_tuple_store.h>
 
 #include<cutlery/arraylist.h>
 
@@ -21,7 +21,18 @@ struct operator
 
 	void* context;			// to store positions of the scans for the operator
 
-	void (*execute)(operator* o);	// this will be the function that will get pushed into the operator_thread_pool for execution
+	void (*trigger_execution)(operator* o);
+	// this trigger_execution() is called when ever you want this operator to start doing some work
+	// you may even make it force call trigger_execution() on the operators that it consumes from
+	// you can even make it synchronous and make it use the thread of the calling function to do some work
+	/*
+		you can make it
+		 * submit a long running thread (completes when the operator finished)
+		 * submit a short job to just complete processing on the currently accumulated threads
+		 * execute and process the current set fo tuples synchronously in the same call
+		just do anything that makes the pipeline progress
+		 * including calling the trigger_execution() on the operators that this operator is meant to consume from
+	*/
 
 	// this function get's called before operator goes into waiting on lock_table or the operator_buffer
 	void (*operator_release_latches_and_store_context)(operator* o);
@@ -34,6 +45,38 @@ struct operator
 	// only scans/writers on indexes and heap tables will need this
 	// the mutex to be used with this condition variable must be operator * o->self_query_plan->curr_tx->db->lock_manager_external_lock
 	pthread_cond_t wait_on_lock_table_for_lock;
+
+	// -----------------------------------------------------------------------------------------------------
+
+	// for the produced results from this operator use the following
+
+	// lock protecting the output_buffers
+	pthread_mutex_t output_lock;
+
+	// singlylist of interim_tuple_store
+	// new tuple is always appended to last interim_tuple_store in this list else a new interim_tuple_store is created
+	singlylist output_buffers;
+
+	// the operator that is meant to consume the output of this operator must be registered here
+	// every insert to the output_buffers forces a trigger_execution() for the consumer_operator, driving the data in the pipeline forward
+	// the design permits for only 1 consumer for every 1 producer operator
+	// but there may be many producer operators for any 1 consumer operator
+	operator* consumer_operator; // [MUST BE SET DURING THE SETUP PHASE]
+
+	// definition of the produced output tuples
+
+	// these are most likely populated and then cleaned up by the operator itself
+	// they can be used by the operators that are meant to consume the output of this operator
+
+	// to be used by the consumers of the output of this operator
+	const tuple_def* output_tuple_def; // [MUST BE SET DURING THE SETUP PHASE]
+
+	// if the output is sorted, then the following attributes are set by the operator itself
+	const positional_accessor* output_key_element_ids; // [MUST BE SET DURING THE SETUP PHASE]
+	const compare_direction* output_key_compare_direction; // [MUST BE SET DURING THE SETUP PHASE]
+	uint32_t output_key_element_count; // [MUST BE SET DURING THE SETUP PHASE]
+
+	// -----------------------------------------------------------------------------------------------------
 
 	// below variables are only necessary if you are interested in killing the operator OR waiting for it to be killed
 
