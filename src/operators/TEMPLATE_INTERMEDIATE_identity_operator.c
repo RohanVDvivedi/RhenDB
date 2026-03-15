@@ -4,6 +4,10 @@
 
 #include<boompar/executor.h>
 
+/*
+	TEMPLATE FOR INTERMEDIATE OPERATORS (sorting(ordering), joins(hash_joins), aggregations(groupby->aggregates))
+*/
+
 typedef struct input_values input_values;
 struct input_values
 {

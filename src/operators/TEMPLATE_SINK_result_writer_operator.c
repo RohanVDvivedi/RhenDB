@@ -7,6 +7,10 @@
 #include<boompar/executor.h>
 #include<cutlery/stream.h>
 
+/*
+	TEMPLATE FOR SINK OPERATORS (writers to file descriptors)
+*/
+
 typedef struct input_values input_values;
 struct input_values
 {

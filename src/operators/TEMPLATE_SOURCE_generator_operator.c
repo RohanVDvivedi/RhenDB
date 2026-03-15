@@ -4,6 +4,10 @@
 
 #include<boompar/executor.h>
 
+/*
+	TEMPLATE FOR SOURCE OPERATORS (scans)
+*/
+
 typedef struct input_values input_values;
 struct input_values
 {
