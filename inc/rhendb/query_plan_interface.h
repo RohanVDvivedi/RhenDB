@@ -49,6 +49,7 @@ struct operator
 	// -----------------------------------------------------------------------------------------------------
 
 	// for the produced results from this operator use the following
+	// you may not need these below attributes if it is a sink operator
 
 	// lock protecting the output_buffers
 	pthread_mutex_t output_lock;
@@ -110,38 +111,15 @@ void OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION(operator* o);
 // below is a simple flat free_resource function to be used with simple operators
 void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o);
 
-typedef struct operator_buffer operator_buffer;
-struct operator_buffer
-{
-	pthread_mutex_t lock;	// global lock for the operator_buffer
+// appends tuple to the latest output_buffers
+int produce_tuple_from_operator(operator* o, void* tuple);
 
-	pthread_cond_t wait;		// wait for the data here blockingly
+// appends tuples at the end of the output_buffers
+int produce_tuples_from_operator(operator* o, interim_tuple_store* tuples);
 
-	uint64_t tuple_stores_count;
-	uint64_t tuples_count;
-
-	linkedlist tuple_stores;	// temp_tuple_store produced by the operator gets stored here
-
-	// number of operator tasks producing to this operator buffer
-	uint32_t producers_count;
-
-	// number of operator tasks consuming from this operator buffer
-	uint32_t consumers_count;
-};
-
-int increment_operator_buffer_producers_count(operator_buffer* ob, uint32_t change_amount);
-
-int decrement_operator_buffer_producers_count(operator_buffer* ob, uint32_t change_amount);
-
-int increment_operator_buffer_consumers_count(operator_buffer* ob, uint32_t change_amount);
-
-int decrement_operator_buffer_consumers_count(operator_buffer* ob, uint32_t change_amount);
-
-// there should be only 1 operator execution context calling these operator_bufffer functions
-
-int push_to_operator_buffer(operator_buffer* ob, operator* callee, temp_tuple_store* tts);
-
-temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee, uint64_t timeout_in_microseconds, int* no_more_data);
+// consmes the interim_tuple_store from the procuder, the consumer is already assigned in the producer
+// no_more_data flag will be set if the producer is killed for sure
+interim_tuple_store* consume_from_operator(operator* producer, int* no_more_data);
 
 typedef struct transaction transaction;
 
@@ -153,14 +131,9 @@ struct query_plan
 
 	// operators like scans, writers, and also the joins, sorts and groupbys
 	arraylist operators;
-
-	// operator outputs including the intermediate ones
-	arraylist operator_buffers;
 };
 
 query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count, uint32_t operator_buffers_count);
-
-operator_buffer* get_new_registered_operator_buffer_for_query_plan(query_plan* qp);
 
 operator* get_new_registered_operator_for_query_plan(query_plan* qp);
 
