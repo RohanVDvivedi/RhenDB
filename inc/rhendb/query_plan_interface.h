@@ -124,7 +124,8 @@ int produce_tuples_from_operator(operator* o, interim_tuple_store* tuples);
 
 // consmes the interim_tuple_store from the procuder, the consumer is already assigned in the producer
 // no_more_data flag will be set if the producer is killed for sure
-interim_tuple_store* consume_from_operator(operator* producer, int* no_more_data);
+// we also have a min_bytes_to_consume, the successfull consume happens only if there are excess of these many bytes or excess interim_tuple_stores in the output_buffers
+interim_tuple_store* consume_from_operator(operator* producer, uint64_t min_bytes_to_consume, int* no_more_data);
 
 typedef struct transaction transaction;
 
