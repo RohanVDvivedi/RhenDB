@@ -12,7 +12,7 @@ struct input_values
 	tuple_def* input_tuple_def;
 };
 
-static void execute(operator* o)
+static void trigger_execution(operator* o)
 {
 	input_values* inputs = o->inputs;
 
@@ -20,7 +20,6 @@ static void execute(operator* o)
 
 	temp_tuple_store* tts = NULL;
 
-	while(1)
 	{
 		int no_more_data = 0;
 		tts = pop_from_operator_buffer(inputs->input, o, 100000, &no_more_data);
@@ -50,6 +49,8 @@ static void execute(operator* o)
 		}
 	}
 
+	return;
+
 	EXIT:
 	if(tts != NULL)
 	{
@@ -57,14 +58,12 @@ static void execute(operator* o)
 		tts = NULL;
 	}
 
-	decrement_operator_buffer_consumers_count(inputs->input, 1);
-
 	mark_operator_self_killed(o, kill_reason);
 }
 
 void setup_printf_operator(operator* o, operator_buffer* input, tuple_def* input_tuple_def)
 {
-	o->execute = execute;
+	o->trigger_execution = trigger_execution;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
