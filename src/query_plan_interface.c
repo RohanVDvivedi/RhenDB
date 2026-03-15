@@ -293,7 +293,7 @@ interim_tuple_store* consume_from_operator(operator* producer, uint64_t min_byte
 
 // query plan functions
 
-query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count, uint32_t operator_buffers_count)
+query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count)
 {
 	query_plan* qp = malloc(sizeof(query_plan));
 	if(qp == NULL)

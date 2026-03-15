@@ -145,7 +145,7 @@ struct query_plan
 	arraylist operators;
 };
 
-query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count, uint32_t operator_buffers_count);
+query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count);
 
 operator* get_new_registered_operator_for_query_plan(query_plan* qp);
 
