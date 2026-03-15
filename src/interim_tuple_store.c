@@ -193,7 +193,7 @@ int unmap_for_interim_tuple_region(interim_tuple_region* itr_p)
 
 	if(0 == munmap(itr_p->region_memory, itr_p->region_size))
 	{
-		(*itr_p) = INIT_interim_TUPLE_REGION;
+		(*itr_p) = INIT_INTERIM_TUPLE_REGION;
 		return 1;
 	}
 
