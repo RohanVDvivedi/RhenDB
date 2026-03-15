@@ -17,30 +17,39 @@ static void* execute(void* o_vp)
 
 	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
 
-	int no_more_data = 0;
-
-	interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, 300, &no_more_data);
-	if(no_more_data)
+	while(1)
 	{
-		mark_operator_self_killed(o, kill_reason);
-		return NULL;
-	}
-	if(can_not_proceed_for_execution_operator(o))
-	{
-		mark_operator_self_killed(o, kill_reason);
-		return NULL;
-	}
-
-	if(its_p != NULL)
-	{
-		int produced = produce_tuples_from_operator(o, its_p);
-		if(!produced)
+		int no_more_data = 0;
+		interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, 300, &no_more_data);
+		if(no_more_data)
 		{
-			kill_reason = get_dstring_pointing_to_literal_cstring("pushed_failed_from_identity_oerator_and_so_killed");
-			delete_interim_tuple_store(its_p);
+			if(is_killed_operator(inputs->input_operator))
+			{
+				mark_operator_self_killed(o, kill_reason);
+				return NULL;
+			}
+			else
+				break;
+		}
+		if(can_not_proceed_for_execution_operator(o))
+		{
 			mark_operator_self_killed(o, kill_reason);
 			return NULL;
 		}
+
+		if(its_p != NULL)
+		{
+			int produced = produce_tuples_from_operator(o, its_p);
+			if(!produced)
+			{
+				kill_reason = get_dstring_pointing_to_literal_cstring("pushed_failed_from_identity_oerator_and_so_killed");
+				delete_interim_tuple_store(its_p);
+				mark_operator_self_killed(o, kill_reason);
+				return NULL;
+			}
+		}
+		else
+			break;
 	}
 
 	return NULL;

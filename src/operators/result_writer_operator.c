@@ -21,39 +21,48 @@ static void* execute(void* o_vp)
 
 	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
 
-	int no_more_data = 0;
-
-	interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, 300, &no_more_data);
-	if(no_more_data)
+	while(1)
 	{
-		mark_operator_self_killed(o, kill_reason);
-		return NULL;
-	}
-	if(can_not_proceed_for_execution_operator(o))
-	{
-		mark_operator_self_killed(o, kill_reason);
-		return NULL;
-	}
-
-	if(its_p != NULL)
-	{
-		printf("\n\nprinting interim_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", its_p->tuples_count, its_p->next_tuple_offset, its_p->total_size);
-		uint64_t index = 0;
-		uint64_t offset = 0;
-		interim_tuple_region tr = INIT_INTERIM_TUPLE_REGION;
-		while(mmap_for_reading_tuple(its_p, &tr, offset, &(inputs->input_tuple_def->size_def), 0))
+		int no_more_data = 0;
+		interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, 300, &no_more_data);
+		if(no_more_data)
 		{
-			printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32"\n", index, offset, curr_tuple_size_for_interim_tuple_region(&tr));
-			print_tuple(tr.tuple, inputs->input_tuple_def);
-			printf("\n\n");
-			offset = next_tuple_offset_for_interim_tuple_region(&tr);
-			index++;
+			if(is_killed_operator(inputs->input_operator))
+			{
+				mark_operator_self_killed(o, kill_reason);
+				return NULL;
+			}
+			else
+				break;
 		}
-		unmap_for_interim_tuple_region(&tr);
-		printf("\n\n");
+		if(can_not_proceed_for_execution_operator(o))
+		{
+			mark_operator_self_killed(o, kill_reason);
+			return NULL;
+		}
 
-		delete_interim_tuple_store(its_p);
-		its_p = NULL;
+		if(its_p != NULL)
+		{
+			printf("\n\nprinting interim_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", its_p->tuples_count, its_p->next_tuple_offset, its_p->total_size);
+			uint64_t index = 0;
+			uint64_t offset = 0;
+			interim_tuple_region tr = INIT_INTERIM_TUPLE_REGION;
+			while(mmap_for_reading_tuple(its_p, &tr, offset, &(inputs->input_tuple_def->size_def), 0))
+			{
+				printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32"\n", index, offset, curr_tuple_size_for_interim_tuple_region(&tr));
+				print_tuple(tr.tuple, inputs->input_tuple_def);
+				printf("\n\n");
+				offset = next_tuple_offset_for_interim_tuple_region(&tr);
+				index++;
+			}
+			unmap_for_interim_tuple_region(&tr);
+			printf("\n\n");
+
+			delete_interim_tuple_store(its_p);
+			its_p = NULL;
+		}
+		else
+			break;
 	}
 
 	return NULL;
