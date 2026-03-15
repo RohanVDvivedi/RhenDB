@@ -8,7 +8,7 @@
 typedef struct input_values input_values;
 struct input_values
 {
-	operator_buffer* input;
+	operator* input_operator;
 	tuple_def* input_tuple_def;
 };
 
@@ -18,50 +18,49 @@ static void trigger_execution(operator* o)
 
 	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
 
-	temp_tuple_store* tts = NULL;
+	interim_tuple_store* its = NULL;
 
 	{
 		int no_more_data = 0;
-		tts = pop_from_operator_buffer(inputs->input, o, 100000, &no_more_data);
-
+		interim_tuple_store* its = consume_from_operator(inputs->input_operator, 500, &no_more_data);
 		if(no_more_data)
 			goto EXIT;
 
-		if(tts != NULL)
+		if(its != NULL)
 		{
-			printf("\n\nprinting temp_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", tts->tuples_count, tts->next_tuple_offset, tts->total_size);
+			printf("\n\nprinting interim_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", its->tuples_count, its->next_tuple_offset, its->total_size);
 			uint64_t index = 0;
 			uint64_t offset = 0;
 			tuple_region tr = INIT_TUPLE_REGION;
-			while(mmap_for_reading_tuple(tts, &tr, offset, &(inputs->input_tuple_def->size_def), 0))
+			while(mmap_for_reading_tuple(its, &tr, offset, &(inputs->input_tuple_def->size_def), 0))
 			{
-				printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32"\n", index, offset, curr_tuple_size_for_tuple_region(&tr));
+				printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32"\n", index, offset, curr_tuple_size_for_interim_tuple_region(&tr));
 				print_tuple(tr.tuple, inputs->input_tuple_def);
 				printf("\n\n");
-				offset = next_tuple_offset_for_tuple_region(&tr);
+				offset = next_tuple_offset_for_interim_tuple_region(&tr);
 				index++;
 			}
 			unmap_for_tuple_region(&tr);
 			printf("\n\n");
 
-			delete_temp_tuple_store(tts);
-			tts = NULL;
+			delete_temp_tuple_store(its);
+			its = NULL;
 		}
 	}
 
 	return;
 
 	EXIT:
-	if(tts != NULL)
+	if(its != NULL)
 	{
-		delete_temp_tuple_store(tts);
-		tts = NULL;
+		delete_interim_tuple_store(its);
+		its = NULL;
 	}
 
 	mark_operator_self_killed(o, kill_reason);
 }
 
-void setup_printf_operator(operator* o, operator_buffer* input, tuple_def* input_tuple_def)
+void setup_printf_operator(operator* o, operator* input_operator, tuple_def* input_tuple_def)
 {
 	o->trigger_execution = trigger_execution;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -69,7 +68,7 @@ void setup_printf_operator(operator* o, operator_buffer* input, tuple_def* input
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
-		.input = input,
+		.input_operator = input_operator,
 		.input_tuple_def = input_tuple_def,
 	};
 }
