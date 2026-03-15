@@ -43,6 +43,7 @@ static void* execute(void* o_vp)
 		}
 	}
 
+	mark_operator_self_killed(o, kill_reason);
 	return NULL;
 }
 
