@@ -102,11 +102,11 @@ struct operator
 	dstring kill_reason;
 };
 
-int is_killed(operator* o);
+int is_killed_operator(operator* o);
 
 // check if the operator is allowed to do it's execution
 // returns 1, if the operator is_killed or is_kill_signal_sent
-int can_not_proceed_for_execution(operator* o);
+int can_not_proceed_for_execution_operator(operator* o);
 
 // to be called from inside the operator once it is killed
 void mark_operator_self_killed(operator* o, dstring kill_reason);

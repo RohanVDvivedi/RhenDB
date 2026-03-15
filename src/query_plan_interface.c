@@ -6,7 +6,7 @@
 
 // operator functions
 
-int is_killed(operator* o)
+int is_killed_operator(operator* o)
 {
 	pthread_mutex_lock(&(o->kill_lock));
 
@@ -17,7 +17,7 @@ int is_killed(operator* o)
 	return result;
 }
 
-int can_not_proceed_for_execution(operator* o)
+int can_not_proceed_for_execution_operator(operator* o)
 {
 	pthread_mutex_lock(&(o->kill_lock));
 
@@ -97,7 +97,7 @@ int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, 
 	pthread_mutex_lock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
 
 	int wait_error = 0;
-	while(!can_not_proceed_for_execution(o) && !(wait_error))
+	while(!can_not_proceed_for_execution_operator(o) && !(wait_error))
 	{
 		lock_result locking_result = acquire_lock_with_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), o->self_query_plan->curr_tx, o, resource_type, resource_id, resource_id_size, new_lock_mode, non_blocking);
 
@@ -132,7 +132,7 @@ int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, 
 			discard_all_wait_entries_for_task_in_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), o->self_query_plan->curr_tx, o);
 
 			// if a kill signal was sent while we were waiting then break, and return -1
-			if(can_not_proceed_for_execution(o))
+			if(can_not_proceed_for_execution_operator(o))
 			{
 				result = -1;
 				break;
@@ -180,7 +180,7 @@ static int need_to_wake_up_consumer_UNSAFE(operator* o)
 		return 0;
 
 	// no wake up, if the consumer may not be alive
-	if(can_not_proceed_for_execution(o->consumer_operator))
+	if(can_not_proceed_for_execution_operator(o->consumer_operator))
 		return 0;
 
 	// no wake up, if there is nothing to consume
@@ -208,7 +208,7 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 	pthread_mutex_lock(&(o->output_lock));
 
 	// proceed only if the consumer is alive
-	if((o->consumer_operator != NULL) && !can_not_proceed_for_execution(o->consumer_operator))
+	if((o->consumer_operator != NULL) && !can_not_proceed_for_execution_operator(o->consumer_operator))
 	{
 		pushed = 1;
 
@@ -249,7 +249,7 @@ int produce_tuples_from_operator(operator* o, interim_tuple_store* its_p)
 	pthread_mutex_lock(&(o->output_lock));
 
 	// proceed only if the consumer_operator is alive
-	if((o->consumer_operator != NULL) && !can_not_proceed_for_execution(o->consumer_operator))
+	if((o->consumer_operator != NULL) && !can_not_proceed_for_execution_operator(o->consumer_operator))
 	{
 		pushed = 1;
 
@@ -274,11 +274,11 @@ interim_tuple_store* consume_from_operator(operator* producer, uint64_t min_byte
 	pthread_mutex_lock(&(producer->output_lock));
 
 	// only if the operator is killed and ther is nothing in output_buffers then no_more_data will be produced
-	if(is_killed(producer) && is_empty_singlylist(&(producer->output_buffers)))
+	if(is_killed_operator(producer) && is_empty_singlylist(&(producer->output_buffers)))
 		(*no_more_data) = 1;
 
 	// proceed only if the consumer_operator is alive
-	if((!(*no_more_data)) && (producer->consumer_operator != NULL) && !can_not_proceed_for_execution(producer->consumer_operator))
+	if((!(*no_more_data)) && (producer->consumer_operator != NULL) && !can_not_proceed_for_execution_operator(producer->consumer_operator))
 	{
 		its_p = (interim_tuple_store*) get_head_of_singlylist(&(producer->output_buffers));
 		if(its_p != NULL)
