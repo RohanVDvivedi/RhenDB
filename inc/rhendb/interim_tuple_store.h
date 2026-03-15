@@ -1,0 +1,119 @@
+#ifndef INTERIM_TUPLE_STORE_H
+#define INTERIM_TUPLE_STORE_H
+
+// for using additional linux specific flags
+#define _GNU_SOURCE
+
+#include<inttypes.h>
+#include<pthread.h>
+
+#include<tuplestore/tuple_def.h>
+
+/*
+	interim_tuple_store is basically a sequentially inserted, non-page aligned collection of heterogeneous tuples (i.e. having different tuple_defs)
+	it will primarily be used for working with passing tuples between operator or for internal processing and collection of the tuples
+
+	yes this is look-alike of the volatile_page_store used as the volatie engine, and that too can be used by the relational operators that you design
+	but interim_tuple_store is more suited to tuples with tuple_defs for intermediate tuple stores because, there is no restriction for the size of the tuple to be stored here
+	as the tuple is laid out sequentially, one after the other, we may not need to chase pointers to recontruct the tuple in the memory, it will be paged in and out by the mmap calls
+	virtual memory comming to the rescue and saving us the hazzle, when we could be dealing with 32-bit systems
+	tuples generated from tuple_defs are still going to have to fit 2GB so that remains the constraint even here
+*/
+
+/*
+	please be sure to avoid overflowing the uint64_t for tuple_offsets and sizes passed and provided, because there are no overflow checks in this module
+*/
+
+// this module has been designed to be used by a single thread only, it's exposed functions are not thread safe
+
+// below headers are only necessary for the embedded nodes inside the interim_tuple_store
+#include<cutlery/singlylist.h>
+#include<cutlery/linkedlist.h>
+#include<cutlery/bst.h>
+#include<cutlery/hashmap.h>
+#include<cutlery/heap.h>
+#include<cutlery/pheap.h>
+
+typedef struct interim_tuple_store interim_tuple_store;
+struct interim_tuple_store
+{
+	uint64_t total_size; // total size of the file
+
+	uint64_t next_tuple_offset; // next tuple gets appended here, it starts with 0 and increments by writable interim_tuple_regions upon calling finalize_written_tuple() operation
+
+	// we will always have next_tuple_offset <= total_size
+
+	uint64_t tuples_count;
+
+	int fd; // file_descriptor to be accessed for mapping the memory
+
+	// embedded node to possibly put interim_tuple_store inside atmost any one type of datastructure
+	// embed_node_ll will be used to put it inside the output of the operators it gets passed out of
+	union
+	{
+		llnode embed_node_ll;
+		slnode embed_node_sl;
+		bstnode embed_node_bst;
+		rbhnode embed_node_rbh;
+		hpnode embed_node_hp;
+		phpnode embed_node_php;
+	};
+};
+
+typedef struct interim_tuple_region interim_tuple_region;
+struct interim_tuple_region
+{
+	void* region_memory;
+	uint64_t region_size; // possibly multiple of page size, covering the whole of the tupl
+	uint64_t region_offset; // possibly the offset of the region_memory in the interim_tuple_store
+
+	void* tuple; // a pointer to a complete tuple in the region_memory
+	tuple_size_def* tpl_sz_d; // this allows the interim_tuple_store get knowledge about the memory in use by this interim_tuple_region
+};
+
+// please be sure that page_size will be rounded to the next page_size available
+interim_tuple_store* get_new_interim_tuple_store(const char* directory);
+
+void delete_interim_tuple_store(interim_tuple_store* its_p);
+
+// gets size of the tuple at a known random offset
+uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p, uint64_t tuple_offset, tuple_size_def* tpl_sz_d);
+
+// remaps the itr_p to a new offset, if it is valid else creates a new mapping
+// it may use the same mapping, if the tuple fits in this region
+// you can have multiple reading interim_tuple_regions open
+// min_bytes_to_mmap may be 0, if you want excatly same number of bytes mmaped as the size of the tuple
+int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, uint64_t offset, tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap);
+
+// remaps the itr_p to the current next_tuple_offset, holding as much memory as required_size
+// it may use the same mapping, if the tuple fits in this region
+// you must have atmost 1 writing interim_tuple_regions open
+// this function may extend the interim_tuple_store if it's total_size is lesser than the next_tuple_offset + required_size
+// you may also recall this function if you have a better estimate of the size of the next tuple, before ofcourse you hit finalize
+int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, tuple_size_def* tpl_sz_d, uint32_t required_size);
+
+/*
+	both the mmap functions may pass their interim_tuple_regions to each other, it will just force the mmap_* function to remap the regions
+*/
+
+// it forwards the next_tuple_offset
+// this function may be called as many times as you like, intermediary, to finalize the same tuple
+int finalize_written_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p);
+
+// unmaps the interim_tuple_region provided and sets all its attributes to 0s
+int unmap_for_interim_tuple_region(interim_tuple_region* itr_p);
+
+// utility function for the interim_tuple_region below
+
+int is_empty_interim_tuple_region(const interim_tuple_region* itr_p);
+
+uint64_t curr_tuple_offset_for_interim_tuple_region(const interim_tuple_region* itr_p);
+uint32_t curr_tuple_size_for_interim_tuple_region(const interim_tuple_region* itr_p);
+uint64_t next_tuple_offset_for_interim_tuple_region(const interim_tuple_region* itr_p);
+
+// offset_start is inclusive and offset_end is exclusive
+int contains_for_interim_tuple_region(const interim_tuple_region* itr_p, uint64_t offset_start, uint64_t offset_end);
+
+#define INIT_INTERIM_TUPLE_REGION ((interim_tuple_region){})
+
+#endif
