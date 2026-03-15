@@ -61,4 +61,6 @@ void setup_printf_operator(operator* o, operator* input_operator, tuple_def* inp
 		.input_operator = input_operator,
 		.input_tuple_def = input_tuple_def,
 	};
+
+	input_operator->consumer_operator = o;
 }

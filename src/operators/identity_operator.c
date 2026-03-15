@@ -5,62 +5,50 @@
 typedef struct input_values input_values;
 struct input_values
 {
-	operator_buffer* output;
-	operator_buffer* input;
+	operator* input_operator;
 };
 
-static void execute(operator* o)
+static void trigger_execution(operator* o)
 {
 	input_values* inputs = o->inputs;
 
 	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
 
-	temp_tuple_store* tts = NULL;
+	int no_more_data = 0;
 
-	while(1)
+	interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, 500, &no_more_data);
+	if(no_more_data)
+		mark_operator_self_killed(o, kill_reason);
+	if(can_not_proceed_for_execution_operator(o))
+		mark_operator_self_killed(o, kill_reason);
+
+	if(its_p != NULL)
 	{
-		int no_more_data = 0;
-		tts = pop_from_operator_buffer(inputs->input, o, 100000, &no_more_data);
-
-		if(no_more_data)
-			goto EXIT;
-
-		if(tts != NULL)
+		int produced = produce_tuples_from_operator(o, its_p);
+		if(!produced)
 		{
-			int pushed = push_to_operator_buffer(inputs->output, o, tts);
-
-			if(!pushed)
-			{
-				kill_reason = get_dstring_pointing_to_literal_cstring("pushed_failed_from_identity_oerator_and_so_killed");
-				goto EXIT;
-			}
-
-			tts = NULL;
+			kill_reason = get_dstring_pointing_to_literal_cstring("pushed_failed_from_identity_oerator_and_so_killed");
+			delete_interim_tuple_store(its_p);
+			mark_operator_self_killed(o, kill_reason);
+			return;
 		}
 	}
 
-	EXIT:
-	if(tts != NULL)
-	{
-		delete_temp_tuple_store(tts);
-		tts = NULL;
-	}
-
-	decrement_operator_buffer_consumers_count(inputs->input, 1);
-	decrement_operator_buffer_producers_count(inputs->output, 1);
-
-	mark_operator_self_killed(o, kill_reason);
+	return ;
 }
 
-void setup_identity_operator(operator* o, operator_buffer* output, operator_buffer* input)
+void setup_identity_operator(operator* o, operator* input_operator)
 {
-	o->execute = execute;
+	o->trigger_execution = trigger_execution;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
+	o->output_tuple_def = NULL; // not necessary to know this
+
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
-		.output = output,
-		.input = input,
+		.input_operator = input_operator,
 	};
+
+	input_operator->consumer_operator = o;
 }
