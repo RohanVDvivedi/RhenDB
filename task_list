@@ -1,18 +1,5 @@
  PICKED TASKS
 
-  * new query plan interface
-    * operators have a output temp_tuple_store built into them to store their outputs (only the sink operators will havethem and not use them)
-    * every tuple output gets put into it, or a new temp_tuple_store is created for it if a prior one was consumed by the consuming child operator
-    * only operators that touch the mini transaction engine for scan will get access to threads
-    * the operators are allowed to push tuples they produce and pull from parent operators
-    * this operator interface may have functions like
-      * execute() // may schedule tibers/threads/jobs(on boompar's thread pool)/execute one chunk synchronously completely upto the operator
-        * it is NO-OP if it is_executing() == 1
-      * is_executing() // 0 for paused, or killed
-      * is_killed()
-    * execute function is called by the parent operator when it finishes for it's child to consume the rest
-    * it is called by the child operator when it does not have any thing to consume
-
   * start with catalog tables (hash_table-s)
 
   * what operators to implement
