@@ -6,15 +6,26 @@
 
 // operator functions
 
-int is_kill_signal_sent(operator* o)
+int is_killed(operator* o)
 {
 	pthread_mutex_lock(&(o->kill_lock));
 
-	int is_kill_signal_sent = !!(o->is_kill_signal_sent);
+	int result = (!!(o->is_killed));
 
 	pthread_mutex_unlock(&(o->kill_lock));
 
-	return is_kill_signal_sent;
+	return result;
+}
+
+int can_not_proceed_for_execution(operator* o)
+{
+	pthread_mutex_lock(&(o->kill_lock));
+
+	int result = (!!(o->is_kill_signal_sent)) || (!!(o->is_killed));
+
+	pthread_mutex_unlock(&(o->kill_lock));
+
+	return result;
 }
 
 void mark_operator_self_killed(operator* o, dstring kill_reason)
@@ -37,8 +48,8 @@ void mark_operator_self_killed(operator* o, dstring kill_reason)
 	pthread_mutex_unlock(&(o->kill_lock));
 
 	// force the consumer to read through all that has been left to be consumed
-	if(o->consumer != NULL)
-		o->consumer->trigger_execution(o->consumer);
+	if(o->consumer_operator != NULL)
+		o->consumer_operator->trigger_execution(o->consumer_operator);
 }
 
 // called by the query_plan to send kill to an operator
@@ -86,7 +97,7 @@ int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, 
 	pthread_mutex_lock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
 
 	int wait_error = 0;
-	while(!is_kill_signal_sent(o) && !(wait_error))
+	while(!can_not_proceed_for_execution(o) && !(wait_error))
 	{
 		lock_result locking_result = acquire_lock_with_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), o->self_query_plan->curr_tx, o, resource_type, resource_id, resource_id_size, new_lock_mode, non_blocking);
 
@@ -121,7 +132,7 @@ int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, 
 			discard_all_wait_entries_for_task_in_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), o->self_query_plan->curr_tx, o);
 
 			// if a kill signal was sent while we were waiting then break, and return -1
-			if(is_kill_signal_sent(o))
+			if(can_not_proceed_for_execution(o))
 			{
 				result = -1;
 				break;
@@ -162,96 +173,122 @@ void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
 	}
 }
 
-// operator buffer functions
+static int need_to_wake_up_consumer_UNSAFE(operator* o)
+{
+	// no wake up, if no consumer_operator
+	if(o->consumer_operator == NULL)
+		return 0;
 
-int push_to_operator_buffer(operator_buffer* ob, operator* callee, temp_tuple_store* tts)
+	// no wake up, if the consumer may not be alive
+	if(can_not_proceed_for_execution(o->consumer_operator))
+		return 0;
+
+	// no wake up, if there is nothing to consume
+	if(is_empty_singlylist(&(o->output_buffers)))
+		return 0;
+
+	// surely wake up if the output_buffers have more than 1 interim_tuple_stores
+	if(get_head_of_singlylist(&(o->output_buffers)) != get_tail_of_singlylist(&(o->output_buffers)))
+		return 1;
+
+	const interim_tuple_store* its_p = get_head_of_singlylist(&(o->output_buffers));
+	// wake up if there is more than consumer_trigger_on_bytes_accumulated bytes
+	if(o->consumer_trigger_on_bytes_accumulated > 0 && its_p->next_tuple_offset >= o->consumer_trigger_on_bytes_accumulated)
+		return 1;
+
+	return 0;
+}
+
+int produce_tuple_from_operator(operator* o, void* tuple)
 {
 	int pushed = 0;
 
-	pthread_mutex_lock(&(ob->lock));
+	uint32_t tuple_size = get_tuple_size(o->output_tuple_def, tuple);
 
-	// proceed only if there are both producers and consumers on this operator_buffer, and callee has not received kill_signal yet
-	if(ob->producers_count > 0 && ob->consumers_count > 0 && !is_kill_signal_sent(callee))
+	pthread_mutex_lock(&(o->output_lock));
+
+	// proceed only if the consumer is alive
+	if((o->consumer_operator != NULL) && !can_not_proceed_for_execution(o->consumer_operator))
 	{
-		pushed = insert_tail_in_linkedlist(&(ob->tuple_stores), tts);
-		if(pushed)
-		{
-			ob->tuple_stores_count += 1;
-			ob->tuples_count += tts->tuples_count;
+		pushed = 1;
 
-			// wake up some blocked waiter
-			pthread_cond_signal(&(ob->wait));
+		// fetch tail, create one and insert if it does not exists
+		interim_tuple_store* its_p = (interim_tuple_store*) get_tail_of_singlylist(&(o->output_buffers));
+		if(its_p != NULL)
+		{
+			its_p = get_new_interim_tuple_store(".");
+
+			if(!insert_tail_in_singlylist(&(o->output_buffers), its_p))
+				exit(-1);
+		}
+
+		// append the tuple in this tail interim_tuple_store
+		{
+			interim_tuple_region tr = INIT_INTERIM_TUPLE_REGION;
+			mmap_for_writing_tuple(its_p, &tr, (tuple_size_def*)(&(o->output_tuple_def->size_def)), tuple_size);
+			memory_move(tr.tuple, tuple, tuple_size);
+			finalize_written_tuple(its_p, &tr);
+			unmap_for_interim_tuple_region(&tr);
 		}
 	}
 
-	pthread_mutex_unlock(&(ob->lock));
+	int need_to_wake_up_consumer = pushed && need_to_wake_up_consumer_UNSAFE(o);
+
+	pthread_mutex_unlock(&(o->output_lock));
+
+	if(need_to_wake_up_consumer)
+		o->consumer_operator->trigger_execution(o->consumer_operator);
 
 	return pushed;
 }
 
-temp_tuple_store* pop_from_operator_buffer(operator_buffer* ob, operator* callee, uint64_t timeout_in_microseconds, int* no_more_data)
+int produce_tuples_from_operator(operator* o, interim_tuple_store* its_p)
 {
-	(*no_more_data) = 0;
-	temp_tuple_store* tts = NULL;
+	int pushed = 0;
 
-	int latches_released = 0;
+	pthread_mutex_lock(&(o->output_lock));
 
-	pthread_mutex_lock(&(ob->lock));
-
-	// if there is no data and there are producers producing and there is atleast 1 consumer and the callee has not received kill signal yet
-	// only then we are allowed to wait
-	if(timeout_in_microseconds != NON_BLOCKING)
+	// proceed only if the consumer_operator is alive
+	if((o->consumer_operator != NULL) && !can_not_proceed_for_execution(o->consumer_operator))
 	{
-		int wait_error = 0;
-		while((get_head_of_linkedlist(&(ob->tuple_stores)) == NULL) && ob->producers_count > 0 && ob->consumers_count > 0 && !is_kill_signal_sent(callee) && (!wait_error))
-		{
-			// if latches had not been released up until now, then do it
-			if(!latches_released)
-			{
-				callee->operator_release_latches_and_store_context(callee);
-				latches_released = 1;
-			}
+		pushed = 1;
 
-			wait_error = pthread_cond_timedwait_for_microseconds(&(ob->wait), &(ob->lock), &timeout_in_microseconds);
-		}
+		if(!insert_tail_in_singlylist(&(o->output_buffers), its_p))
+			exit(-1);
 	}
 
-	if(ob->consumers_count == 0)
-	{
+	int need_to_wake_up_consumer = pushed && need_to_wake_up_consumer_UNSAFE(o);
+
+	pthread_mutex_unlock(&(o->output_lock));
+
+	if(need_to_wake_up_consumer)
+		o->consumer_operator->trigger_execution(o->consumer_operator);
+
+	return pushed;
+}
+
+interim_tuple_store* consume_from_operator(operator* producer, uint64_t min_bytes_to_consume, int* no_more_data)
+{
+	interim_tuple_store* its_p = NULL;
+
+	pthread_mutex_lock(&(producer->output_lock));
+
+	// only if the operator is killed and ther is nothing in output_buffers then no_more_data will be produced
+	if(is_killed(producer) && is_empty_singlylist(&(producer->output_buffers)))
 		(*no_more_data) = 1;
-		goto EXIT;
-	}
 
-	if(is_kill_signal_sent(callee))
+	// proceed only if the consumer_operator is alive
+	if((!(*no_more_data)) && (producer->consumer_operator != NULL) && !can_not_proceed_for_execution(producer->consumer_operator))
 	{
-		(*no_more_data) = 1;
-		goto EXIT;
+		its_p = (interim_tuple_store*) get_head_of_singlylist(&(producer->output_buffers));
+		if(its_p != NULL)
+			if(!remove_head_from_singlylist(&(producer->output_buffers))) // remove must not fail
+				exit(-1);
 	}
 
-	// now if there is data, remove it from the queue and exit
-	tts = (temp_tuple_store*) get_head_of_linkedlist(&(ob->tuple_stores));
-	if(tts != NULL)
-	{
-		(*no_more_data) = 0;
+	pthread_mutex_unlock(&(producer->output_lock));
 
-		remove_from_linkedlist(&(ob->tuple_stores), tts);
-
-		ob->tuple_stores_count -= 1;
-		ob->tuples_count -= tts->tuples_count;
-	}
-	else // if there is no more data
-	{
-		// if there are no more producers then there won't be any more pushes, i.e. end of stream
-		if(ob->producers_count == 0)
-			(*no_more_data) = 1;
-		else
-			(*no_more_data) = 0;
-	}
-
-	EXIT:;
-	pthread_mutex_unlock(&(ob->lock));
-
-	return tts;
+	return its_p;
 }
 
 // query plan functions
@@ -265,31 +302,8 @@ query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count, u
 	qp->curr_tx = curr_tx;
 	if(!initialize_arraylist(&(qp->operators), operators_count))
 		exit(-1);
-	if(!initialize_arraylist(&(qp->operator_buffers), operator_buffers_count))
-		exit(-1);
 
 	return qp;
-}
-
-operator_buffer* get_new_registered_operator_buffer_for_query_plan(query_plan* qp)
-{
-	operator_buffer* ob = malloc(sizeof(operator_buffer));
-	if(ob == NULL)
-		exit(-1);
-
-	pthread_mutex_init(&(ob->lock), NULL);
-	pthread_cond_init_with_monotonic_clock(&(ob->wait));
-	ob->tuple_stores_count = 0;
-	ob->tuples_count = 0;
-	initialize_linkedlist(&(ob->tuple_stores), offsetof(temp_tuple_store, embed_node_ll));
-	ob->producers_count = 1;
-	ob->consumers_count = 1;
-
-	if(is_full_arraylist(&(qp->operator_buffers)) && !expand_arraylist(&(qp->operator_buffers)))
-		exit(-1);
-	push_back_to_arraylist(&(qp->operator_buffers), ob);
-
-	return ob;
 }
 
 operator* get_new_registered_operator_for_query_plan(query_plan* qp)
@@ -303,11 +317,20 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	o->inputs = NULL;
 	o->context = NULL;
 
-	o->execute = NULL;
+	o->trigger_execution = NULL;
 	o->operator_release_latches_and_store_context = NULL;
 	o->free_resources = NULL;
 
 	pthread_cond_init_with_monotonic_clock(&(o->wait_on_lock_table_for_lock));
+
+	pthread_mutex_init(&(o->output_lock), NULL);
+	initialize_singlylist(&(o->output_buffers), offsetof(interim_tuple_store, embed_node_sl));
+	o->consumer_operator = NULL;
+	o->consumer_trigger_on_bytes_accumulated = 8192;
+	o->output_tuple_def = NULL;
+	o->output_key_element_ids = NULL;
+	o->output_key_compare_direction = NULL;
+	o->output_key_element_count = 0;
 
 	pthread_mutex_init(&(o->kill_lock), NULL);
 	pthread_cond_init_with_monotonic_clock(&(o->wait_until_killed));
@@ -327,11 +350,7 @@ void start_all_operators_for_query_plan(query_plan* qp)
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
 	{
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
-		if(!submit_job_executor(qp->curr_tx->db->operator_thread_pool, (void* (*)(void*))(o->execute), o, NULL, NULL, BLOCKING))
-		{
-			printf("FAILED TO SUBMIT INDENTITY OPERATOR TO THREAD POOL\n");
-			exit(-1);
-		}
+		o->trigger_execution(o);
 	}
 }
 
@@ -352,13 +371,6 @@ void shutdown_query_plan(query_plan* qp, dstring kill_reason)
 		spurious_wake_up_operator(o);
 	}
 	pthread_mutex_unlock(&(qp->curr_tx->db->lock_manager_external_lock));
-
-	// spurious wake up all operator_buffer waiters
-	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operator_buffers)); i++)
-	{
-		operator_buffer* ob = (operator_buffer*) get_from_arraylist(&(qp->operator_buffers), i);
-		spurious_wake_up_all_for_operator_buffer(ob);
-	}
 }
 
 void shutdown_query_plan_LOCK_TABLE_UNSAFE(query_plan* qp, dstring kill_reason)
@@ -375,13 +387,6 @@ void shutdown_query_plan_LOCK_TABLE_UNSAFE(query_plan* qp, dstring kill_reason)
 	{
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
 		spurious_wake_up_operator(o);
-	}
-
-	// spurious wake up all operator_buffer waiters
-	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operator_buffers)); i++)
-	{
-		operator_buffer* ob = (operator_buffer*) get_from_arraylist(&(qp->operator_buffers), i);
-		spurious_wake_up_all_for_operator_buffer(ob);
 	}
 }
 
@@ -409,11 +414,26 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		o->inputs = NULL;
 		o->context = NULL;
 
-		o->execute = NULL;
+		o->trigger_execution = NULL;
 		o->operator_release_latches_and_store_context = NULL;
 		o->free_resources = NULL;
 
 		pthread_cond_destroy(&(o->wait_on_lock_table_for_lock));
+
+		while(NULL != get_head_of_singlylist(&(o->output_buffers)))
+		{
+			interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(o->output_buffers));
+			remove_head_from_singlylist(&(o->output_buffers));
+			delete_interim_tuple_store(its_p);
+		}
+
+		pthread_mutex_destroy(&(o->output_lock));
+		o->consumer_operator = NULL;
+		o->consumer_trigger_on_bytes_accumulated = 8192;
+		o->output_tuple_def = NULL;
+		o->output_key_element_ids = NULL;
+		o->output_key_compare_direction = NULL;
+		o->output_key_element_count = 0;
 
 		pthread_mutex_destroy(&(o->kill_lock));
 		pthread_cond_destroy(&(o->wait_until_killed));
@@ -433,33 +453,7 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		free(o);
 	}
 
-	// release all resources for all operator buffers
-	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operator_buffers)); i++)
-	{
-		operator_buffer* ob = (operator_buffer*) get_from_arraylist(&(qp->operator_buffers), i);
-
-		while(NULL != get_head_of_linkedlist(&(ob->tuple_stores)))
-		{
-			temp_tuple_store* tts = (temp_tuple_store*) get_head_of_linkedlist(&(ob->tuple_stores));
-			remove_from_linkedlist(&(ob->tuple_stores), tts);
-
-			delete_temp_tuple_store(tts);
-		}
-
-		ob->tuples_count = 0;
-		ob->tuple_stores_count = 0;
-
-		ob->consumers_count = 0;
-		ob->consumers_count = 0;
-
-		pthread_mutex_destroy(&(ob->lock));
-		pthread_cond_destroy(&(ob->wait));
-
-		free(ob);
-	}
-
 	deinitialize_arraylist(&(qp->operators));
-	deinitialize_arraylist(&(qp->operator_buffers));
 	free(qp);
 }
 

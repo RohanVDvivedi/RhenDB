@@ -5,6 +5,9 @@
 
 #include<rhendb/interim_tuple_store.h>
 
+#include<tuplestore/tuple_def.h>
+#include<tuplestore/tuple.h>
+
 #include<cutlery/arraylist.h>
 
 typedef struct query_plan query_plan;
@@ -99,8 +102,11 @@ struct operator
 	dstring kill_reason;
 };
 
-// keep on checking this signal from the operator and kill your self once it returns true
-int is_kill_signal_sent(operator* o);
+int is_killed(operator* o);
+
+// check if the operator is allowed to do it's execution
+// returns 1, if the operator is_killed or is_kill_signal_sent
+int can_not_proceed_for_execution(operator* o);
 
 // to be called from inside the operator once it is killed
 void mark_operator_self_killed(operator* o, dstring kill_reason);
@@ -120,7 +126,7 @@ void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o);
 int produce_tuple_from_operator(operator* o, void* tuple);
 
 // appends tuples at the end of the output_buffers
-int produce_tuples_from_operator(operator* o, interim_tuple_store* tuples);
+int produce_tuples_from_operator(operator* o, interim_tuple_store* its_p);
 
 // consmes the interim_tuple_store from the procuder, the consumer is already assigned in the producer
 // no_more_data flag will be set if the producer is killed for sure
