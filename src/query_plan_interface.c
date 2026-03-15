@@ -214,7 +214,7 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 
 		// fetch tail, create one and insert if it does not exists
 		interim_tuple_store* its_p = (interim_tuple_store*) get_tail_of_singlylist(&(o->output_buffers));
-		if(its_p != NULL)
+		if(its_p == NULL)
 		{
 			its_p = get_new_interim_tuple_store(".");
 
