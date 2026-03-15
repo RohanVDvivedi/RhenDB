@@ -25,9 +25,15 @@ static void* execute(void* o_vp)
 
 	interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, 300, &no_more_data);
 	if(no_more_data)
+	{
 		mark_operator_self_killed(o, kill_reason);
+		return NULL;
+	}
 	if(can_not_proceed_for_execution_operator(o))
+	{
 		mark_operator_self_killed(o, kill_reason);
+		return NULL;
+	}
 
 	if(its_p != NULL)
 	{
