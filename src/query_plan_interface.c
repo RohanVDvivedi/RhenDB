@@ -283,7 +283,7 @@ interim_tuple_store* consume_from_operator(operator* producer, uint64_t min_byte
 		its_p = (interim_tuple_store*) get_head_of_singlylist(&(producer->output_buffers));
 		if(its_p != NULL)
 		{
-			if((its_p->next_tuple_offset >= min_bytes_to_consume) || (get_head_of_singlylist(&(producer->output_buffers)) != get_tail_of_singlylist(&(producer->output_buffers))))
+			if((its_p->next_tuple_offset >= min_bytes_to_consume) || (get_head_of_singlylist(&(producer->output_buffers)) != get_tail_of_singlylist(&(producer->output_buffers))) || is_killed_operator(producer))
 			{
 				if(!remove_head_from_singlylist(&(producer->output_buffers))) // remove must not fail
 					exit(-1);
