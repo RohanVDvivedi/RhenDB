@@ -11,7 +11,8 @@
     * read/write operators over simple data_structures (for full tuple indexer like access will be implemented later)
     * and a single sink operator that writes data to a file descriptor, it writes the whole temp_tuple_store or just it's pointers
     * similarly we will have 2 different types of source operators too
-  * every operator will have an output queue and a filter, that filters rows going into it's output queue right
+  * every operator will have a filter and every operator's produce of a tuple, gets filtered and only them pushed to the output_buffers
+  * only source operators like scan will need a thread, all others can be implemented as just jobs that execute until there is nothing to process
   * they need only 1 function to set them up called setup_hash_join, or setup_index_scan etc
 
  * catalog tables
