@@ -109,7 +109,7 @@ void trigger_execution_on_operator(operator* o)
 		o->state = OPERATOR_QUEUED;
 		should_queue = 1;
 	}
-	pthread_mutex_lock(&(o->state_lock));
+	pthread_mutex_unlock(&(o->state_lock));
 
 	if(should_queue)
 	{
