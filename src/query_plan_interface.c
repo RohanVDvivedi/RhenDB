@@ -8,29 +8,29 @@
 
 int is_killed_operator(operator* o)
 {
-	pthread_mutex_lock(&(o->kill_lock));
+	pthread_mutex_lock(&(o->state_lock));
 
-	int result = (!!(o->is_killed));
+	int result = (o->state == OPERATOR_KILLED);
 
-	pthread_mutex_unlock(&(o->kill_lock));
+	pthread_mutex_unlock(&(o->state_lock));
 
 	return result;
 }
 
 int can_not_proceed_for_execution_operator(operator* o)
 {
-	pthread_mutex_lock(&(o->kill_lock));
+	pthread_mutex_lock(&(o->state_lock));
 
-	int result = (!!(o->is_kill_signal_sent)) || (!!(o->is_killed));
+	int result = (!!(o->is_kill_signal_sent)) || (o->state == OPERATOR_KILLED);
 
-	pthread_mutex_unlock(&(o->kill_lock));
+	pthread_mutex_unlock(&(o->state_lock));
 
 	return result;
 }
 
 void mark_operator_self_killed(operator* o, dstring kill_reason)
 {
-	pthread_mutex_lock(&(o->kill_lock));
+	pthread_mutex_lock(&(o->state_lock));
 
 	// concatenate the kill reason passed
 	if(!is_empty_dstring(&kill_reason))
@@ -42,20 +42,89 @@ void mark_operator_self_killed(operator* o, dstring kill_reason)
 			exit(-1);
 	}
 
-	o->is_killed = 1;
+	o->state = OPERATOR_KILLED;
 	pthread_cond_broadcast(&(o->wait_until_killed));
 
-	pthread_mutex_unlock(&(o->kill_lock));
+	pthread_mutex_unlock(&(o->state_lock));
 
 	// force the consumer to read through all that has been left to be consumed
 	if(o->consumer_operator != NULL)
-		o->consumer_operator->trigger_execution(o->consumer_operator);
+		trigger_execution_on_operator(o->consumer_operator);
+}
+
+static void* internal_execute(void* o_vp)
+{
+	operator* o = o_vp;
+	int was_killed = 0;
+
+	pthread_mutex_lock(&(o->state_lock));
+	if(o->is_kill_signal_sent)
+	{
+		o->state = OPERATOR_KILLED;
+		pthread_cond_broadcast(&(o->wait_until_killed));
+		was_killed = 1;
+	}
+	else
+		o->state = OPERATOR_RUNNING;
+	pthread_mutex_unlock(&(o->state_lock));
+
+	if(was_killed)
+	{
+		// force the consumer to read through all that has been left to be consumed, as we just kiled the operator
+		if(o->consumer_operator != NULL)
+			trigger_execution_on_operator(o->consumer_operator);
+		return NULL;
+	}
+
+	o->execute(o);
+
+	pthread_mutex_lock(&(o->state_lock));
+	if(o->is_kill_signal_sent) // if the user exited while running, then mark it now to be waiting
+	{
+		o->state = OPERATOR_KILLED;
+		pthread_cond_broadcast(&(o->wait_until_killed));
+		was_killed = 1;
+	}
+	else if(o->state == OPERATOR_RUNNING)
+		o->state = OPERATOR_WAITING;
+	pthread_mutex_unlock(&(o->state_lock));
+
+	if(was_killed)
+	{
+		// force the consumer to read through all that has been left to be consumed, as we just kiled the operator
+		if(o->consumer_operator != NULL)
+			trigger_execution_on_operator(o->consumer_operator);
+		return NULL;
+	}
+	return NULL;
+}
+
+void trigger_execution_on_operator(operator* o)
+{
+	int should_queue = 0;
+
+	pthread_mutex_lock(&(o->state_lock));
+	if(o->state == OPERATOR_WAITING)
+	{
+		o->state = OPERATOR_QUEUED;
+		should_queue = 1;
+	}
+	pthread_mutex_lock(&(o->state_lock));
+
+	if(should_queue)
+	{
+		if(!submit_job_executor(o->self_query_plan->curr_tx->db->operator_thread_pool, (void* (*)(void*))(internal_execute), o, NULL, NULL, BLOCKING))
+		{
+			printf("ISSUE in query_plan_interface : COULD NOT PUSH A PAUSED OPERATOR'S JOB TO QUEUE IT\n");
+			exit(-1);
+		}
+	}
 }
 
 // called by the query_plan to send kill to an operator
 static void send_kill_signal_to_operator(operator* o, dstring kill_reason)
 {
-	pthread_mutex_lock(&(o->kill_lock));
+	pthread_mutex_lock(&(o->state_lock));
 
 	// concatenate the kill reason passed
 	if(!is_empty_dstring(&kill_reason))
@@ -69,18 +138,18 @@ static void send_kill_signal_to_operator(operator* o, dstring kill_reason)
 
 	o->is_kill_signal_sent = 1;
 
-	pthread_mutex_unlock(&(o->kill_lock));
+	pthread_mutex_unlock(&(o->state_lock));
 }
 
 // wait here after you send the operators a kill signal, waiting for them to die
 static void wait_for_operator_to_die(operator* o)
 {
-	pthread_mutex_lock(&(o->kill_lock));
+	pthread_mutex_lock(&(o->state_lock));
 
-	while(!(o->is_killed))
-		pthread_cond_wait(&(o->wait_until_killed), &(o->kill_lock));
+	while(o->state != OPERATOR_KILLED)
+		pthread_cond_wait(&(o->wait_until_killed), &(o->state_lock));
 
-	pthread_mutex_unlock(&(o->kill_lock));
+	pthread_mutex_unlock(&(o->state_lock));
 }
 
 static void spurious_wake_up_operator(operator* o)
@@ -237,7 +306,7 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 	pthread_mutex_unlock(&(o->output_lock));
 
 	if(need_to_wake_up_consumer)
-		o->consumer_operator->trigger_execution(o->consumer_operator);
+		trigger_execution_on_operator(o->consumer_operator);
 
 	return pushed;
 }
@@ -262,7 +331,7 @@ int produce_tuples_from_operator(operator* o, interim_tuple_store* its_p)
 	pthread_mutex_unlock(&(o->output_lock));
 
 	if(need_to_wake_up_consumer)
-		o->consumer_operator->trigger_execution(o->consumer_operator);
+		trigger_execution_on_operator(o->consumer_operator);
 
 	return pushed;
 }
@@ -324,7 +393,7 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	o->inputs = NULL;
 	o->context = NULL;
 
-	o->trigger_execution = NULL;
+	o->execute = NULL;
 	o->operator_release_latches_and_store_context = NULL;
 	o->free_resources = NULL;
 
@@ -339,9 +408,9 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	o->output_key_compare_direction = NULL;
 	o->output_key_element_count = 0;
 
-	pthread_mutex_init(&(o->kill_lock), NULL);
+	pthread_mutex_init(&(o->state_lock), NULL);
 	pthread_cond_init_with_monotonic_clock(&(o->wait_until_killed));
-	o->is_killed = 0;
+	o->state = OPERATOR_WAITING;
 	o->is_kill_signal_sent = 0;
 	init_empty_dstring(&(o->kill_reason), 0);
 
@@ -357,7 +426,7 @@ void start_all_operators_for_query_plan(query_plan* qp)
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
 	{
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
-		o->trigger_execution(o);
+		trigger_execution_on_operator(o);
 	}
 }
 
@@ -421,7 +490,7 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		o->inputs = NULL;
 		o->context = NULL;
 
-		o->trigger_execution = NULL;
+		o->execute = NULL;
 		o->operator_release_latches_and_store_context = NULL;
 		o->free_resources = NULL;
 
@@ -442,9 +511,9 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		o->output_key_compare_direction = NULL;
 		o->output_key_element_count = 0;
 
-		pthread_mutex_destroy(&(o->kill_lock));
+		pthread_mutex_destroy(&(o->state_lock));
 		pthread_cond_destroy(&(o->wait_until_killed));
-		o->is_killed = 0;
+		o->state = OPERATOR_KILLED;
 		o->is_kill_signal_sent = 0;
 
 		// concatenate the kill reason passed

@@ -12,6 +12,15 @@
 
 typedef struct query_plan query_plan;
 
+typedef enum operator_state operator_state;
+enum operator_state
+{
+	OPERATOR_WAITING, // (begin state) -> then always goes to OPERATOR_RUNNING on being queued
+	OPERATOR_QUEUED,
+	OPERATOR_RUNNING, // -> always goes first to OPERATOR_PAUSED,
+	OPERATOR_KILLED, // (termianl state)
+};
+
 // operator is actually a task in the pipeline of the query_plan, it must be implemented single threadedly to pull resources
 // and for multithreading clone new operators from your current one into the query_plan
 typedef struct operator operator;
@@ -24,18 +33,10 @@ struct operator
 
 	void* context;			// to store positions of the scans for the operator
 
-	void (*trigger_execution)(operator* o);
-	// this trigger_execution() is called when ever you want this operator to start doing some work
-	// you may even make it force call trigger_execution() on the operators that it consumes from
-	// you can even make it synchronous and make it use the thread of the calling function to do some work
-	/*
-		you can make it
-		 * submit a long running thread (completes when the operator finished)
-		 * submit a short job to just complete processing on the currently accumulated threads
-		 * execute and process the current set fo tuples synchronously in the same call
-		just do anything that makes the pipeline progress
-		 * including calling the trigger_execution() on the operators that this operator is meant to consume from
-	*/
+	void (*execute)(operator* o); // the operator's main function that produces tuples until it dies or has nothing in it's input
+	// a source operator is always the thread hoarding operator in most simple cases
+	// other operators like join and group_by and sort are job based and exit when nothing is found in their input
+	// they get triggered again by the source operator when it pushes in the pipeline
 
 	// this function get's called before operator goes into waiting on lock_table or the operator_buffer
 	void (*operator_release_latches_and_store_context)(operator* o);
@@ -87,12 +88,12 @@ struct operator
 
 	// -----------------------------------------------------------------------------------------------------
 
-	// below variables are only necessary if you are interested in killing the operator OR waiting for it to be killed
+	// below variables are only needed for the internal function of the state machine of the operator
 
-	pthread_mutex_t kill_lock;			// kill lock for the operator
+	pthread_mutex_t state_lock;			// lock for all the operator's attributes given below, related to only states
 	pthread_cond_t wait_until_killed; 	// wait for the operator to be killed
 
-	int is_killed:1;
+	operator_state state;
 
 	int is_kill_signal_sent:1;
 
@@ -110,6 +111,9 @@ int can_not_proceed_for_execution_operator(operator* o);
 
 // to be called from inside the operator once it is killed
 void mark_operator_self_killed(operator* o, dstring kill_reason);
+
+// force an OPERATOR_WAITING stated operator into OPERATOR_QUEUED state, and push a corresponding job into the thread_pool for it's execution
+void trigger_execution_on_operator(operator* o);
 
 // returns 0, if lock not acquired 1 if acquired, and -1 if an abort must be performed
 int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, uint64_t timeout_in_microseconds);
