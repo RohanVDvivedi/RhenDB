@@ -15,6 +15,9 @@
   * only source operators like scan will need a thread, all others can be implemented as just jobs that execute until there is nothing to process
   * they need only 1 function to set them up called setup_hash_join, or setup_index_scan etc
 
+ * (DESIGN CHOICE) in query_plan_interface
+  * instead of making the operator block on a condition variable for lock acquisition, make it put itself to OPERATOR_WAITING, while releasing all the latches and resources, and make the motify_blocked and notify_deadlocked, instead trigger the concerned operators to notify them instead of signaling the conditon variable
+
  * catalog tables
   * types
     * bitfield 1-64, int 1-32, uint 1-32, float, double, binary, string, and rest will be custom user defined tuples
