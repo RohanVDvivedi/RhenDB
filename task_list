@@ -1,5 +1,10 @@
  PICKED TASKS
 
+ * query plan interface revamp into a single function
+  * single void execute(operator* o) function, gets called by the trigger_execution(operator* o) function
+  * that forces only 1 thread of execution
+  * maintain state and transition in the trigger_function OPERATOR_QUEUED, OPERATOR_EXECUTING, OPERATOR_KILLED, OPERATOR_WAITING
+
   * start with catalog tables (hash_table-s)
 
   * what operators to implement
