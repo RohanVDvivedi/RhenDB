@@ -155,6 +155,7 @@ static void wait_for_operator_to_die(operator* o)
 static void spurious_wake_up_operator(operator* o)
 {
 	pthread_cond_broadcast(&(o->wait_on_lock_table_for_lock));
+	trigger_execution_on_operator(o);
 }
 
 int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, uint64_t timeout_in_microseconds)
@@ -546,7 +547,7 @@ void notify_unblocked(void* context_p, void* transaction_vp, void* task_vp)
 		transaction* tx = transaction_vp;
 		operator* o = task_vp;
 		if(o->self_query_plan->curr_tx == tx)
-			pthread_cond_broadcast(&(o->wait_on_lock_table_for_lock));
+			spurious_wake_up_operator(o);
 
 		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
 	}
