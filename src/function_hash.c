@@ -6,9 +6,7 @@
 
 uint64_t hash_datum_rhendb(const datum* uval, const data_type_info* dti, tuple_hasher* th, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
 {
-	if(is_datum_NULL(uval)) // NULL, so no bytes to hash
-		return th->hash;
-	else if(!is_container_type_info(dti)) // non container types, primitive numbers: bit_field, uint, int, large_uint, large_int, float
+	if(!is_container_type_info(dti)) // non container types, primitive numbers: bit_field, uint, int, large_uint, large_int, float
 		return hash_datum(uval, dti, th);
 	else if(is_text_type_info(dti) || is_blob_type_info(dti) || is_numeric_type_info(dti)) // all string/blob and numeric types
 	{
