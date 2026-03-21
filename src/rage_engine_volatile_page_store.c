@@ -87,5 +87,11 @@ rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t 
 
 	e.mark_sub_transaction_aborted = NULL;
 
+	if(!init_worm_tuple_definitions(&(e.wtd), &(e.pam_p->pas)))
+	{
+		printf("FAILED to initialize volatile page store's wtd\n");
+		exit(-1);
+	}
+
 	return e;
 }
