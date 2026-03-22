@@ -1,11 +1,10 @@
 PICKED TASKS
 
+ * make a utility function to append an existing tuple, to reduce the use for tuple_region on output
+ * make a for_each iterator for the interim_tuple_store passing the min_bytes_to_mmap, and get tuple
  * implement a function to append 2 interim tuple_stores into one
    * write everything from the second interim_tuple_store into the first one
    * use copy_file_range() function, only after enabling 64 bit offset support
- * make a utility function to append an existing tuple, to reduce the use for tuple_region on output
- * add uint64_t[4], void* [4] and interim_tuple_region[4] in interim_tuple_store and call them embedded_(integers, pointers, regions) attributes, iniitialize them to 0 or empty, and unmap them for the tuple_regions on deletion
- * make a for_each iterator for the interim_tuple_store passing the min_bytes_to_mmap, and get tuple
 
  * make a tuple_processor struct that has a context and a close function, and a destory function
    * it is state full, and gets called if it exists on every push tuple, it is meant to do projection and filter both, and is called outside the output_lock
