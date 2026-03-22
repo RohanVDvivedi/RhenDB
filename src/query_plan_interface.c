@@ -454,7 +454,7 @@ void shutdown_query_plan(query_plan* qp, dstring kill_reason)
 	pthread_mutex_unlock(&(qp->curr_tx->db->lock_manager_external_lock));
 }
 
-void shutdown_query_plan_LOCK_TABLE_UNSAFE(query_plan* qp, dstring kill_reason)
+static void shutdown_query_plan_LOCK_TABLE_UNSAFE(query_plan* qp, dstring kill_reason)
 {
 	// send kill signal to all the operators
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
@@ -570,7 +570,7 @@ void notify_deadlocked(void* context_p, void* transaction_vp)
 		pthread_mutex_lock(&(rdb->lock_manager_external_lock));
 
 		transaction* tx = transaction_vp;
-		shutdown_query_plan_LOCK_TABLE_UNSAFE(tx->curr_query, get_dstring_pointing_to_literal_cstring("DEADLOCK DETECTED"));
+		shutdown_query_plan_LOCK_TABLE_UNSAFE(tx->curr_query, get_dstring_pointing_to_literal_cstring("DEADLOCK_DETECTED"));
 
 		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
 	}
