@@ -201,7 +201,7 @@ int main()
 		for(int i = 0; i < IDENTITY_OPERATORS_COUNT; i++)
 		{
 			o = get_new_registered_operator_for_query_plan(qp);
-			setup_identity_operator(o, input);
+			setup_identity_operator(o, input, 300 * (i+1));
 			input = o;
 		}
 
