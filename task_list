@@ -10,7 +10,7 @@ PICKED TASKS
  * make the produce_tuples_from_operator function into produce_bypassed_tuples_from_operator, and is bypassed from the tuple_processor
 
  * implement expression evaluation using the expression tree from SQLtoAST
- * and think about how to implement it in the pre_push_tuple_processor
+ * and think about how to implement it in the tuple_processor
 
  * implement sorter operator
    * runs are interim_tuple_store themselves
