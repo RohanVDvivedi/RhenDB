@@ -16,7 +16,7 @@ void print_mmap_pages_for_fd(int fd);
 void print_all_tuples(interim_tuple_store* its_p)
 {
 	printf("\n\nprinting interim_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", its_p->tuples_count, its_p->next_tuple_offset, its_p->total_size);
-	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(tpl_d.size_def), its_p, 0, {
+	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(tpl_d.size_def), its_p, MMAP_READ_REGION_MIN_SIZE, {
 		printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32" @ %p\n", tuple_index, tuple_offset, get_tuple_size(&tpl_d, tuple), _temp_tuple_region.region_memory);
 		print_tuple(tuple, &tpl_d);
 		printf("\n\n");
