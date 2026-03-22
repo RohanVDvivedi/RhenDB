@@ -193,21 +193,26 @@ int main()
 
 	// make operators
 
+	printf("Building pipeline :\n");
 	{
 		operator* o = get_new_registered_operator_for_query_plan(qp);
 		setup_generator_operator(o, generator, &generator_number, &record_def);
+		printf("source operator %p\n", o);
 		operator* input = o;
 
 		for(int i = 0; i < IDENTITY_OPERATORS_COUNT; i++)
 		{
 			o = get_new_registered_operator_for_query_plan(qp);
 			setup_identity_operator(o, input, 300 * (i+1));
+			printf("identity operator %p\n", o);
 			input = o;
 		}
 
 		o = get_new_registered_operator_for_query_plan(qp);
 		setup_printf_operator(o, input, &record_def);
+		printf("sink operator %p\n", o);
 	}
+	printf("\n\n");
 
 	// make operators completed
 
