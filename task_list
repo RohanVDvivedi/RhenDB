@@ -1,6 +1,5 @@
 PICKED TASKS
 
- * make a for_each iterator for the interim_tuple_store passing the min_bytes_to_mmap, and get tuple
  * implement a function to append 2 interim tuple_stores into one
    * write everything from the second interim_tuple_store into the first one
    * use copy_file_range() function, only after enabling 64 bit offset support
