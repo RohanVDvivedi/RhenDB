@@ -1,7 +1,6 @@
 PICKED TASKS
 
- * implement a function to append 2 interim tuple_stores into one
-   * write everything from the second interim_tuple_store into the first one
+ * implement a function to append 2 interim tuple_stores into the first one
    * use copy_file_range() function, only after enabling 64 bit offset support
 
  * make a tuple_processor struct that has a context and a close function, and a destory function
