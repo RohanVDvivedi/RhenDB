@@ -214,7 +214,7 @@ int unmap_for_interim_tuple_region(interim_tuple_region* itr_p)
 	return 0;
 }
 
-void append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, const tuple_size_def* tpl_sz_d)
+uint64_t append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, const tuple_size_def* tpl_sz_d)
 {
 	// get the size of the tuple
 	uint32_t tuple_size = get_tuple_size_using_tuple_size_def(tpl_sz_d, tupl);
@@ -229,9 +229,16 @@ void append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl,
 	// finalize he tuple
 	finalize_written_tuple(its_p, &tr);
 
+	// grab it's offset to return it
+	uint64_t offset = curr_tuple_offset_for_interim_tuple_region(&tr);
+
 	// finally unmap the region
 	unmap_for_interim_tuple_region(&tr);
+
+	return offset;
 }
+
+uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p, const interim_tuple_store* other_its_p);
 
 int is_empty_interim_tuple_region(const interim_tuple_region* itr_p)
 {

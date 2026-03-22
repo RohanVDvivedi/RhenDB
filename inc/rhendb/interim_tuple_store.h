@@ -108,9 +108,12 @@ int finalize_written_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 // unmaps the interim_tuple_region provided and sets all its attributes to 0s
 int unmap_for_interim_tuple_region(interim_tuple_region* itr_p);
 
-// utility function for appending a tuple directly to the interim_tuple_store
+// utility function for appending a tuple/tuples directly to the interim_tuple_store, and returns offset to the first appended tuple
 
-void append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, const tuple_size_def* tpl_sz_d);
+uint64_t append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, const tuple_size_def* tpl_sz_d);
+
+// appends all tuples from other_its_p to the end of its_p
+uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p, const interim_tuple_store* other_its_p);
 
 // utility macro to iterate over all the tuples
 
