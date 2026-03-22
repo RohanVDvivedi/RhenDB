@@ -81,6 +81,8 @@ interim_tuple_store* get_new_interim_tuple_store(const char* directory);
 
 void delete_interim_tuple_store(interim_tuple_store* its_p);
 
+uint64_t get_total_bytes_in_interim_tuple_store(const interim_tuple_store* its_p);
+
 // gets size of the tuple at a known random offset
 uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d);
 

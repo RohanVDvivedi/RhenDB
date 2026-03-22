@@ -62,6 +62,11 @@ void delete_interim_tuple_store(interim_tuple_store* its_p)
 	free(its_p);
 }
 
+uint64_t get_total_bytes_in_interim_tuple_store(const interim_tuple_store* its_p)
+{
+	return its_p->next_tuple_offset;
+}
+
 typedef struct tuple_size_getter_context tuple_size_getter_context;
 struct tuple_size_getter_context
 {
@@ -250,7 +255,7 @@ uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p,
 	uint64_t offset = its_p->next_tuple_offset;
 
 	// compute next_tuple_offset, it will be sum of both the next_tuple_offsets
-	its_p->next_tuple_offset += other_its_p->next_tuple_offset;
+	its_p->next_tuple_offset += get_total_bytes_in_interim_tuple_store(other_its_p);
 
 	// assign the new_size and align it to the next multiple of page_size
 	its_p->total_size = UINT_ALIGN_UP(its_p->next_tuple_offset, sysconf(_SC_PAGE_SIZE));
@@ -268,7 +273,7 @@ uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p,
 	{
 		off64_t off_in = 0;
 		off64_t off_out = offset;
-		size_t remaining_bytes = other_its_p->next_tuple_offset; // these many bytes are needed to be transferred
+		size_t remaining_bytes = get_total_bytes_in_interim_tuple_store(other_its_p); // these many bytes are needed to be transferred
 		while(remaining_bytes > 0)
 		{
 			ssize_t bytes_copied = copy_file_range(other_its_p->fd, &off_in, its_p->fd, &off_out, remaining_bytes, 0);

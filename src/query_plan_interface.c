@@ -304,6 +304,8 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 	return pushed;
 }
 
+#define MERGE_THRESHOLD (16 * 1024)
+
 int produce_tuples_from_operator(operator* o, interim_tuple_store* its_p)
 {
 	int pushed = 0;
@@ -315,8 +317,18 @@ int produce_tuples_from_operator(operator* o, interim_tuple_store* its_p)
 	{
 		pushed = 1;
 
-		if(!insert_tail_in_singlylist(&(o->output_buffers), its_p))
-			exit(-1);
+		interim_tuple_store* tail_its_p = (interim_tuple_store*) get_tail_of_singlylist(&(o->output_buffers));
+
+		if(tail_its_p == NULL || get_total_bytes_in_interim_tuple_store(its_p) > MERGE_THRESHOLD)
+		{
+			if(!insert_tail_in_singlylist(&(o->output_buffers), its_p))
+				exit(-1);
+		}
+		else
+		{
+			append_all_from_another_interim_tuple_store(tail_its_p, its_p);
+			delete_interim_tuple_store(its_p);
+		}
 	}
 
 	int need_to_wake_up_consumer = pushed && need_to_wake_up_consumer_UNSAFE(o);
