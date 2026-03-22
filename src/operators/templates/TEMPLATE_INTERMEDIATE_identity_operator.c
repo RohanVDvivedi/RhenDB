@@ -13,6 +13,8 @@ struct input_values
 	uint64_t consume_only_after_bytes_count;
 };
 
+void print_job(operator* o, void* param);
+
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
@@ -39,6 +41,8 @@ static void execute(operator* o)
 
 		if(its_p != NULL)
 		{
+			run_concurrent_job_for_operator(o, "Hello world, from TEMPLATE identity operator, just received data", print_job);
+
 			int produced = produce_tuples_from_operator(o, its_p);
 			if(!produced)
 			{

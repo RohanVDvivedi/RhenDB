@@ -15,6 +15,8 @@ struct input_values
 	tuple_def* input_tuple_def;
 };
 
+void print_job(operator* o, void* param);
+
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
@@ -41,6 +43,8 @@ static void execute(operator* o)
 
 		if(its_p != NULL)
 		{
+			run_concurrent_job_for_operator(o, "Hello world, from TEMPLATE sink operator, just received data", print_job);
+
 			printf("\n\nprinting interim_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", its_p->tuples_count, its_p->next_tuple_offset, its_p->total_size);
 
 			FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->input_tuple_def->size_def), its_p, 0, {

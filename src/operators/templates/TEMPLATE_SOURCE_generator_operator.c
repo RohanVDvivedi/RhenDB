@@ -15,6 +15,8 @@ struct input_values
 	tuple_def* generator_tuple_def;
 };
 
+void print_job(operator* o, void* param);
+
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
@@ -29,6 +31,8 @@ static void execute(operator* o)
 		void* curr_tuple = inputs->generator(inputs->generator_context, inputs->generator_tuple_def);
 		if(curr_tuple == NULL)
 			break;
+
+		run_concurrent_job_for_operator(o, "Hello world, from TEMPLATE source operator, just received data", print_job);
 
 		int produced = produce_tuple_from_operator(o, curr_tuple);
 		if(!produced)
