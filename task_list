@@ -1,7 +1,9 @@
 PICKED TASKS
 
+ * use mmap64, and make all syscalls use it
  * implement a function to append 2 interim tuple_stores into one
    * write everything from the second interim_tuple_store into the first one
+   * use copy_file_range() function, only after enabling 64 bit offset support
  * make a utility function to append an existing tuple, to reduce the use for tuple_region on output
  * add uint64_t[4], void* [4] and interim_tuple_region[4] in interim_tuple_store and call them embedded_(integers, pointers, regions) attributes, iniitialize them to 0 or empty, and unmap them for the tuple_regions on deletion
  * make a for_each iterator for the interim_tuple_store passing the min_bytes_to_mmap, and get tuple
