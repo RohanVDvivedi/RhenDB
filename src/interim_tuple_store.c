@@ -36,11 +36,23 @@ interim_tuple_store* get_new_interim_tuple_store(const char* directory)
 	initialize_hpnode(&(its_p->embed_node_hp));
 	initialize_phpnode(&(its_p->embed_node_php));
 
+	for(int i = 0; i < sizeof(its_p->embed_uints)/sizeof(its_p->embed_uints[0]); i++)
+		its_p->embed_uints[i] = 0;
+
+	for(int i = 0; i < sizeof(its_p->embed_ptrs)/sizeof(its_p->embed_ptrs[0]); i++)
+		its_p->embed_ptrs[i] = NULL;
+
+	for(int i = 0; i < sizeof(its_p->embed_regions)/sizeof(its_p->embed_regions[0]); i++)
+		its_p->embed_regions[i] = INIT_INTERIM_TUPLE_REGION;
+
 	return its_p;
 }
 
 void delete_interim_tuple_store(interim_tuple_store* its_p)
 {
+	for(int i = 0; i < sizeof(its_p->embed_regions)/sizeof(its_p->embed_regions[0]); i++)
+		unmap_for_interim_tuple_region(&(its_p->embed_regions[i]));
+
 	close(its_p->fd);
 	free(its_p);
 }

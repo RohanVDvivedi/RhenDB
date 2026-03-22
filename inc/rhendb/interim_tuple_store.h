@@ -34,6 +34,17 @@
 #include<cutlery/heap.h>
 #include<cutlery/pheap.h>
 
+typedef struct interim_tuple_region interim_tuple_region;
+struct interim_tuple_region
+{
+	void* region_memory;
+	uint64_t region_size; // possibly multiple of page size, covering the whole of the tupl
+	uint64_t region_offset; // possibly the offset of the region_memory in the interim_tuple_store
+
+	void* tuple; // a pointer to a complete tuple in the region_memory
+	tuple_size_def* tpl_sz_d; // this allows the interim_tuple_store get knowledge about the memory in use by this interim_tuple_region
+};
+
 typedef struct interim_tuple_store interim_tuple_store;
 struct interim_tuple_store
 {
@@ -58,17 +69,11 @@ struct interim_tuple_store
 		hpnode embed_node_hp;
 		phpnode embed_node_php;
 	};
-};
 
-typedef struct interim_tuple_region interim_tuple_region;
-struct interim_tuple_region
-{
-	void* region_memory;
-	uint64_t region_size; // possibly multiple of page size, covering the whole of the tupl
-	uint64_t region_offset; // possibly the offset of the region_memory in the interim_tuple_store
-
-	void* tuple; // a pointer to a complete tuple in the region_memory
-	tuple_size_def* tpl_sz_d; // this allows the interim_tuple_store get knowledge about the memory in use by this interim_tuple_region
+	// other embed attributes
+	uint64_t embed_uints[4];
+	void* embed_ptrs[4];
+	interim_tuple_region embed_regions[4];
 };
 
 // please be sure that page_size will be rounded to the next page_size available
