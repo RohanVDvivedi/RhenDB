@@ -105,7 +105,7 @@ int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 	uint32_t region_size = region_offset_end - region_offset_start;
 
 	// map the new interim_tuple_region and return it
-	void* region_memory = mmap(NULL, region_size, PROT_READ | PROT_WRITE, MAP_SHARED, its_p->fd, region_offset_start);
+	void* region_memory = mmap64(NULL, region_size, PROT_READ | PROT_WRITE, MAP_SHARED, its_p->fd, region_offset_start);
 	if(region_memory == MAP_FAILED)
 	{
 		printf("FAILED to create a interim_tuple_region for interim_tuple_store\n");
@@ -159,7 +159,7 @@ int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 	}
 
 	// map the new interim_tuple_region and return it
-	void* region_memory = mmap(NULL, region_size, PROT_READ | PROT_WRITE, MAP_SHARED, its_p->fd, region_offset_start);
+	void* region_memory = mmap64(NULL, region_size, PROT_READ | PROT_WRITE, MAP_SHARED, its_p->fd, region_offset_start);
 	if(region_memory == MAP_FAILED)
 	{
 		printf("FAILED to create a interim_tuple_region for interim_tuple_store\n");
