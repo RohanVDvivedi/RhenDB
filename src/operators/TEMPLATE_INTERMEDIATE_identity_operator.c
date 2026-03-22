@@ -12,6 +12,7 @@ typedef struct input_values input_values;
 struct input_values
 {
 	operator* input_operator;
+	uint64_t consume_only_after_bytes_count;
 };
 
 static void execute(operator* o)
@@ -23,7 +24,7 @@ static void execute(operator* o)
 	while(1)
 	{
 		int no_more_data = 0;
-		interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, 300, &no_more_data);
+		interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, inputs->consume_only_after_bytes_count, &no_more_data);
 		if(no_more_data)
 		{
 			if(is_killed_operator(inputs->input_operator))
@@ -55,7 +56,7 @@ static void execute(operator* o)
 	return ;
 }
 
-void setup_identity_operator(operator* o, operator* input_operator)
+void setup_identity_operator(operator* o, operator* input_operator, uint64_t consume_only_after_bytes_count)
 {
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -66,8 +67,9 @@ void setup_identity_operator(operator* o, operator* input_operator)
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
 		.input_operator = input_operator,
+		.consume_only_after_bytes_count = consume_only_after_bytes_count,
 	};
 
 	input_operator->consumer_operator = o;
-	input_operator->consumer_trigger_on_bytes_accumulated = 300;
+	input_operator->consumer_trigger_on_bytes_accumulated = consume_only_after_bytes_count;
 }
