@@ -45,18 +45,13 @@ static void execute(operator* o)
 		if(its_p != NULL)
 		{
 			printf("\n\nprinting interim_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", its_p->tuples_count, its_p->next_tuple_offset, its_p->total_size);
-			uint64_t index = 0;
-			uint64_t offset = 0;
-			interim_tuple_region tr = INIT_INTERIM_TUPLE_REGION;
-			while(mmap_for_reading_tuple(its_p, &tr, offset, &(inputs->input_tuple_def->size_def), 0))
-			{
-				printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32"\n", index, offset, curr_tuple_size_for_interim_tuple_region(&tr));
-				print_tuple(tr.tuple, inputs->input_tuple_def);
+
+			FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->input_tuple_def->size_def), its_p, 0, {
+				printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32"\n", tuple_index, tuple_offset, get_tuple_size(inputs->input_tuple_def, tuple));
+				print_tuple(tuple, inputs->input_tuple_def);
 				printf("\n\n");
-				offset = next_tuple_offset_for_interim_tuple_region(&tr);
-				index++;
-			}
-			unmap_for_interim_tuple_region(&tr);
+			});
+
 			printf("\n\n");
 
 			delete_interim_tuple_store(its_p);

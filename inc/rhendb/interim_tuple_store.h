@@ -121,11 +121,12 @@ void append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl,
 	interim_tuple_region _temp_tuple_region = INIT_INTERIM_TUPLE_REGION;                                                                             \
 	while(mmap_for_reading_tuple(its_p, &_temp_tuple_region, tuple_offset, tpl_sz_d, min_bytes_to_mmap))                                             \
 	{                                                                                                                                                \
+		tuple = _temp_tuple_region.tuple;                                                                                                            \
 		{                                                                                                                                            \
 			LOOP_BODY;                                                                                                                               \
 		}                                                                                                                                            \
-		offset = next_tuple_offset_for_interim_tuple_region(&_temp_tuple_region);                                                                    \
-		index++;                                                                                                                                     \
+		tuple_offset = next_tuple_offset_for_interim_tuple_region(&_temp_tuple_region);                                                              \
+		tuple_index++;                                                                                                                               \
 	}                                                                                                                                                \
 	unmap_for_interim_tuple_region(&_temp_tuple_region);                                                                                             \
 }while(0);
