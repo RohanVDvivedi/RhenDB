@@ -114,7 +114,7 @@ void append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl,
 
 // utility macro to iterate over all the tuples
 
-#define FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, tpl_sz_d, its_p, min_bytes_to_mmap, LOOP_BODY) do {                  \
+#define FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, tpl_sz_d, its_p, min_bytes_to_mmap, LOOP_BODY) do{                   \
 	void* tuple = NULL;                                                                                                                              \
 	uint64_t tuple_index = 0;                                                                                                                        \
 	uint64_t tuple_offset = 0;                                                                                                                       \
