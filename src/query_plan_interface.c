@@ -273,8 +273,6 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 {
 	int pushed = 0;
 
-	uint32_t tuple_size = get_tuple_size(o->output_tuple_def, tuple);
-
 	pthread_mutex_lock(&(o->output_lock));
 
 	// proceed only if the consumer is alive
@@ -293,13 +291,7 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 		}
 
 		// append the tuple in this tail interim_tuple_store
-		{
-			interim_tuple_region tr = INIT_INTERIM_TUPLE_REGION;
-			mmap_for_writing_tuple(its_p, &tr, (tuple_size_def*)(&(o->output_tuple_def->size_def)), tuple_size);
-			memory_move(tr.tuple, tuple, tuple_size);
-			finalize_written_tuple(its_p, &tr);
-			unmap_for_interim_tuple_region(&tr);
-		}
+		append_tuple_to_interim_tuple_store(its_p, tuple, &(o->output_tuple_def->size_def));
 	}
 
 	int need_to_wake_up_consumer = pushed && need_to_wake_up_consumer_UNSAFE(o);

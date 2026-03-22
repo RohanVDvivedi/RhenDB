@@ -77,14 +77,14 @@ static uint32_t tuple_size_getter_reader(void* context_p, void* data, uint32_t d
 	return bytes_read;
 }
 
-uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p, uint64_t tuple_offset, tuple_size_def* tpl_sz_d)
+uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d)
 {
 	char buffer[32];
 	uint32_t bytes_read = 0;
 	return get_tuple_size_from_stream_using_tuple_size_def(tpl_sz_d, buffer, &bytes_read, &((tuple_size_getter_context){its_p->fd, tuple_offset}), tuple_size_getter_reader);
 }
 
-int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, uint64_t offset, tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap)
+int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, uint64_t offset, const tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap)
 {
 	// offset must be withing readable file region to begin with, with enough bytes for the smallest sized tuple
 	if(offset + get_minimum_tuple_size_using_tuple_size_def(tpl_sz_d) > its_p->next_tuple_offset)
@@ -133,7 +133,7 @@ int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 	return 1;
 }
 
-int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, tuple_size_def* tpl_sz_d, uint32_t required_size)
+int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, const tuple_size_def* tpl_sz_d, uint32_t required_size)
 {
 	uint64_t tuple_offset_start = its_p->next_tuple_offset;
 	uint32_t tuple_size = required_size;
@@ -214,7 +214,7 @@ int unmap_for_interim_tuple_region(interim_tuple_region* itr_p)
 	return 0;
 }
 
-void append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, tuple_size_def* tpl_sz_d)
+void append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, const tuple_size_def* tpl_sz_d)
 {
 	// get the size of the tuple
 	uint32_t tuple_size = get_tuple_size_using_tuple_size_def(tpl_sz_d, tupl);

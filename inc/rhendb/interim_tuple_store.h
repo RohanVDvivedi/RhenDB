@@ -42,7 +42,7 @@ struct interim_tuple_region
 	uint64_t region_offset; // possibly the offset of the region_memory in the interim_tuple_store
 
 	void* tuple; // a pointer to a complete tuple in the region_memory
-	tuple_size_def* tpl_sz_d; // this allows the interim_tuple_store get knowledge about the memory in use by this interim_tuple_region
+	const tuple_size_def* tpl_sz_d; // this allows the interim_tuple_store get knowledge about the memory in use by this interim_tuple_region
 };
 
 typedef struct interim_tuple_store interim_tuple_store;
@@ -82,20 +82,20 @@ interim_tuple_store* get_new_interim_tuple_store(const char* directory);
 void delete_interim_tuple_store(interim_tuple_store* its_p);
 
 // gets size of the tuple at a known random offset
-uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p, uint64_t tuple_offset, tuple_size_def* tpl_sz_d);
+uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d);
 
 // remaps the itr_p to a new offset, if it is valid else creates a new mapping
 // it may use the same mapping, if the tuple fits in this region
 // you can have multiple reading interim_tuple_regions open
 // min_bytes_to_mmap may be 0, if you want excatly same number of bytes mmaped as the size of the tuple
-int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, uint64_t offset, tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap);
+int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, uint64_t offset, const tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap);
 
 // remaps the itr_p to the current next_tuple_offset, holding as much memory as required_size
 // it may use the same mapping, if the tuple fits in this region
 // you must have atmost 1 writing interim_tuple_regions open
 // this function may extend the interim_tuple_store if it's total_size is lesser than the next_tuple_offset + required_size
 // you may also recall this function if you have a better estimate of the size of the next tuple, before ofcourse you hit finalize
-int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, tuple_size_def* tpl_sz_d, uint32_t required_size);
+int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, const tuple_size_def* tpl_sz_d, uint32_t required_size);
 
 /*
 	both the mmap functions may pass their interim_tuple_regions to each other, it will just force the mmap_* function to remap the regions
@@ -110,7 +110,7 @@ int unmap_for_interim_tuple_region(interim_tuple_region* itr_p);
 
 // utility function for appending a tuple directly to the interim_tuple_store
 
-void append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, tuple_size_def* tpl_sz_d);
+void append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, const tuple_size_def* tpl_sz_d);
 
 // utility function for the interim_tuple_region below
 
