@@ -121,6 +121,47 @@ void trigger_execution_on_operator(operator* o)
 	}
 }
 
+typedef struct operator_job_wrapper_params operator_job_wrapper_params;
+struct operator_job_wrapper_params
+{
+	operator* o;
+	void* param;
+	void (*operator_job_function)(operator* o, void* param);
+};
+
+static void* operator_job_wrapper_function(void* ojwp_vp)
+{
+	operator_job_wrapper_params ojwp = *((operator_job_wrapper_params*)(ojwp_vp));
+	free(ojwp_vp);
+
+	// do not run the operator's job, if it is not allowed to proceed
+	// if it is killed or marked to be killed
+	if(can_not_proceed_for_execution_operator(ojwp.o))
+		return NULL;
+
+	ojwp.operator_job_function(ojwp.o, ojwp.param);
+
+	return NULL;
+}
+
+void run_concurrent_job_for_operator(operator* o, void* param, void (*operator_job_function)(operator* o, void* param))
+{
+	// allocate the parameter for the operator_job_wrapper_function
+	operator_job_wrapper_params* ojwp_p = malloc(sizeof(operator_job_wrapper_params));
+	(*ojwp_p) = (operator_job_wrapper_params){
+		.o = o,
+		.param = param,
+		.operator_job_function = operator_job_function,
+	};
+
+	// and push it to thread pool for execution in a concurrent threadpool
+	if(!submit_job_executor(o->self_query_plan->curr_tx->db->operator_thread_pool, (void* (*)(void*))(operator_job_wrapper_function), ojwp_p, NULL, NULL, BLOCKING))
+	{
+		printf("ISSUE in query_plan_interface : COULD NOT PUSH A PAUSED OPERATOR'S CURRENT JOB TO RUN IT\n");
+		exit(-1);
+	}
+}
+
 // called by the query_plan to send kill to an operator
 static void send_kill_signal_to_operator(operator* o, dstring kill_reason)
 {
