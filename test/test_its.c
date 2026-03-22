@@ -16,21 +16,13 @@ void print_mmap_pages_for_fd(int fd);
 void print_all_tuples(interim_tuple_store* its_p)
 {
 	printf("\n\nprinting interim_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", its_p->tuples_count, its_p->next_tuple_offset, its_p->total_size);
-	uint64_t index = 0;
-	uint64_t offset = 0;
-	interim_tuple_region tr = INIT_INTERIM_TUPLE_REGION;
-	while(mmap_for_reading_tuple(its_p, &tr, offset, &(tpl_d.size_def), MMAP_READ_REGION_MIN_SIZE))
-	{
-		printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32" @ %p\n", index, offset, curr_tuple_size_for_interim_tuple_region(&tr), tr.region_memory);
-		print_tuple(tr.tuple, &tpl_d);
+	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(tpl_d.size_def), its_p, 0, {
+		printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32" @ %p\n", tuple_index, tuple_offset, get_tuple_size(&tpl_d, tuple), _temp_tuple_region.region_memory);
+		print_tuple(tuple, &tpl_d);
 		printf("\n\n");
-		offset = next_tuple_offset_for_interim_tuple_region(&tr);
-		index++;
-	}
-	print_mmap_pages_for_fd(its_p->fd);
-	unmap_for_interim_tuple_region(&tr);
-	print_mmap_pages_for_fd(its_p->fd);
+	});
 	printf("\n\n");
+	print_mmap_pages_for_fd(its_p->fd);
 }
 
 void append_all_tuples(interim_tuple_store* its_p, uint32_t chunk_size, char** strings_to_insert)
