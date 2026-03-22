@@ -214,6 +214,25 @@ int unmap_for_interim_tuple_region(interim_tuple_region* itr_p)
 	return 0;
 }
 
+void append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, tuple_size_def* tpl_sz_d)
+{
+	// get the size of the tuple
+	uint32_t tuple_size = get_tuple_size_using_tuple_size_def(tpl_sz_d, tupl);
+
+	// create a region to copy this new tuple into
+	interim_tuple_region tr = INIT_INTERIM_TUPLE_REGION;
+	mmap_for_writing_tuple(its_p, &tr, tpl_sz_d, tuple_size);
+
+	// perform the copy into the tuple_region
+	memory_move(tr.tuple, tupl, tuple_size);
+
+	// finalize he tuple
+	finalize_written_tuple(its_p, &tr);
+
+	// finally unmap the region
+	unmap_for_interim_tuple_region(&tr);
+}
+
 int is_empty_interim_tuple_region(const interim_tuple_region* itr_p)
 {
 	return itr_p->region_memory == NULL;

@@ -108,6 +108,10 @@ int finalize_written_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 // unmaps the interim_tuple_region provided and sets all its attributes to 0s
 int unmap_for_interim_tuple_region(interim_tuple_region* itr_p);
 
+// utility function for appending a tuple directly to the interim_tuple_store
+
+void append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, tuple_size_def* tpl_sz_d);
+
 // utility function for the interim_tuple_region below
 
 int is_empty_interim_tuple_region(const interim_tuple_region* itr_p);
