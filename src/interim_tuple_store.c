@@ -1,3 +1,7 @@
+// below 2 macros are required for using 64-bit version of copy_file_range() function
+#define _GNU_SOURCE
+#define _FILE_OFFSET_BITS 64
+
 #include<rhendb/interim_tuple_store.h>
 
 #include<sys/mman.h>
@@ -6,6 +10,7 @@
 
 #include<fcntl.h>
 #include<unistd.h>
+#include<sys/types.h>
 
 interim_tuple_store* get_new_interim_tuple_store(const char* directory)
 {
@@ -238,7 +243,53 @@ uint64_t append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* t
 	return offset;
 }
 
-uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p, const interim_tuple_store* other_its_p);
+uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p, const interim_tuple_store* other_its_p)
+{
+	// compute the offset to be returned
+	// this will be the offset for the first tuple that will be copied in from the other_its_p
+	uint64_t offset = its_p->next_tuple_offset;
+
+	// compute next_tuple_offset, it will be sum of both the next_tuple_offsets
+	its_p->next_tuple_offset += other_its_p->next_tuple_offset;
+
+	// assign the new_size and align it to the next multiple of page_size
+	its_p->total_size = UINT_ALIGN_UP(its_p->next_tuple_offset, sysconf(_SC_PAGE_SIZE));
+
+	// and extend the file to the new size
+	if(-1 == ftruncate(its_p->fd, its_p->total_size))
+	{
+		printf("FAILED to extend the file for interim_tuple_store\n");
+		exit(-1);
+		return 0;
+	}
+
+	// now perform file descriptor copy directly in the kernel
+	// this is linux specific
+	{
+		off64_t off_in = 0;
+		off64_t off_out = offset;
+		size_t remaining_bytes = other_its_p->next_tuple_offset; // these many bytes are needed to be transferred
+		while(remaining_bytes > 0)
+		{
+			ssize_t bytes_copied = copy_file_range(other_its_p->fd, &off_in, its_p->fd, &off_out, remaining_bytes, 0);
+			if(bytes_copied == -1)
+			{
+				printf("FAILED to copy_file_range for interim_tuple_store\n");
+				exit(-1);
+				return 0;
+			}
+			if(bytes_copied == 0)
+			{
+				printf("FAILED because copy_file_range for interim_tuple_store returned an unexpected 0 bytes transferred\n");
+				exit(-1);
+				return 0;
+			}
+			remaining_bytes -= bytes_copied;
+		}
+	}
+
+	return offset;
+}
 
 int is_empty_interim_tuple_region(const interim_tuple_region* itr_p)
 {
