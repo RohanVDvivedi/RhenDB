@@ -2,8 +2,6 @@
 
 #include<rhendb/transaction.h>
 
-#include<boompar/executor.h>
-
 /*
 	TEMPLATE FOR INTERMEDIATE OPERATORS (sorting(ordering), joins(hash_joins), aggregations(groupby->aggregates))
 */

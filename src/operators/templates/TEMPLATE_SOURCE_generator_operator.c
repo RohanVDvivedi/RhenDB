@@ -2,8 +2,6 @@
 
 #include<rhendb/transaction.h>
 
-#include<boompar/executor.h>
-
 /*
 	TEMPLATE FOR SOURCE OPERATORS (scans)
 */

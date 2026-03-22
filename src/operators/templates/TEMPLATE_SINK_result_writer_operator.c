@@ -4,9 +4,6 @@
 
 #include<tuplestore/tuple.h>
 
-#include<boompar/executor.h>
-#include<cutlery/stream.h>
-
 /*
 	TEMPLATE FOR SINK OPERATORS (writers to file descriptors)
 */
