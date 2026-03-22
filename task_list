@@ -1,21 +1,27 @@
 PICKED TASKS
 
- * implement expression evaluation using the expression tree from SQLtoAST
- * call it in in the produce_tuple_from_operator call of the query plan interface, or alteast have aplace holder to store the tuple filterer
- * check if we can have a projection operator built into the operator's output
+ * implement a function to append 2 interim tuple_stores into one
+   * write everything from the second interim_tuple_store into the first one
+ * add uint64_t[4], void* [4] and interim_tuple_region[4] in interim_tuple_store and call them embedded_* attributes, iniitialize them to 0 or empty
+ * make a for_each iterator for the interim_tuple_store passing the min_bytes_to_mmap, and get tuple
+ * store tuple_def* as an unmanaged, but null initialized attribute
 
- * embed 4 uint64_t in the interim_tuple_store and 4 tuple_region pointers or values for simplifying the structure of the sorter operator and interim_hash_table
+ * make a pre_push_tuple_processor struct that has a context and a close function, and a destory function
+   * it is staetfull, and gets called if it exists on every push tuple, it is meant to do do projection and filter both
+
+ * implement expression evaluation using the expression tree from SQLtoAST
+ * and think about how to implement it in the pre_push_tuple_processor
 
  * implement sorter operator
-   * working with tuples that fit on a page and tuples that do not fit on a page
-   * for fixed sized tuples on the interim_tuple_store we can also quick_sort them, for the first run
-   * implement a function to merge the runs, and also filter tuples incomming
-   * this will help with sort-merge-join and sort-based-groupby as post sorting operators
+   * runs are interim_tuple_store themselves
+   * for fixed sized tuples on the interim_tuple_store we can also quick_sort them, inplace, for the level 0 runs
+   * implement logic to merge runs, and then push the output to the array, using a produce() call and also wake up the sleeping operator
    * keep a 64-length pointer array, forming linkedlist of the interim_tuple_store, merger picks the lowest level with enough runs to merge them, based on a fixed value of N, when ever a new N run level is received OR the source operator is killed/done
+   * this will help with sort-merge-join and sort-based-groupby as post sorting operators
 
  * implement interim_tuple_store based interim_hash_table
-   * if the tuples are small use the cutlery's hash table
-   * else make it out of the interim_tuple_store, storing the hash_value -> key_pointer, value_pointer
+   * if the tuples are small use tupleindexer's hash_table
+   * else make it out of the interim_tuple_store, storing the hash_value (as big as key-bytes OR some 256 bytes of hash value) -> tuple_offset in interim_tuple_store, and letting the user do the hashing and comparison
    * this will help with building operators for hash-join, and hash-based-groupby
 
 PRIORITY HIGH LEVEL TASKS
