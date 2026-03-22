@@ -1,8 +1,5 @@
 PICKED TASKS
 
- * implement a function to append 2 interim tuple_stores into the first one
-   * use copy_file_range() function, only after enabling 64 bit offset support
-
  * make a tuple_processor struct that has a context and a close function, and a destory function
    * it is state full, and gets called if it exists on every push tuple, it is meant to do projection and filter both, and is called outside the output_lock
    * api :
