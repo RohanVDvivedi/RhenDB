@@ -74,7 +74,7 @@ struct tuple_size_getter_context
 	uint64_t offset;
 };
 
-static uint32_t tuple_size_getter_reader(void* context_p, void* data, uint32_t data_size)
+static uint32_t read_tuple_prefix_from_file(void* context_p, void* data, uint32_t data_size)
 {
 	tuple_size_getter_context* temp = context_p;
 	ssize_t bytes_read = pread64(temp->fd, data, data_size, temp->offset);
@@ -83,15 +83,12 @@ static uint32_t tuple_size_getter_reader(void* context_p, void* data, uint32_t d
 		printf("FAILED to fetch the size of the next tuple for interim_tuple_store\n");
 		exit(-1);
 	}
-	temp->offset += bytes_read;
 	return bytes_read;
 }
 
 uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d)
 {
-	char buffer[32];
-	uint32_t bytes_read = 0;
-	return get_tuple_size_from_stream_using_tuple_size_def(tpl_sz_d, buffer, &bytes_read, &((tuple_size_getter_context){its_p->fd, tuple_offset}), tuple_size_getter_reader);
+	return get_tuple_size_using_tuple_size_def2(tpl_sz_d, &((tuple_size_getter_context){its_p->fd, tuple_offset}), read_tuple_prefix_from_file);
 }
 
 int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, uint64_t offset, const tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap)
