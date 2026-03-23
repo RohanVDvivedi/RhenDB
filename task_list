@@ -20,8 +20,20 @@ PICKED TASKS
    * this will help with sort-merge-join and sort-based-groupby as post sorting operators
 
  * implement interim_tuple_store based interim_hash_table
-   * if the tuples are small use tupleindexer's hash_table
-   * else make it out of the interim_tuple_store, storing the hash_value (as big as key-bytes OR some 256 bytes of hash value) -> tuple_offset in interim_tuple_store, and letting the user do the hashing and comparison
+   * have interface for tuple_def* key_def and tuple_def* value_def
+   * if the max_size of key and value tuples are small enough to fit on ((page_size - 64)/3) of space, then use tupleindexer's hash_table with (key, value) as an internally defined tuple_def, and key would be STATIC_POSITION(0)
+   * else first try putting the value as a whole tuple_list, while prefixing only 256 bytes, and then if even that is not enough
+   * make the hash of the key as the actual key and store it as the first attribute, and that becomes the key of the underlying hash_table, and the key from the user acts as a value, and must be compared before the iterator's tuple is returned
+   * api will be:
+      get_new(key_def, value_def)
+      destroy(root_page_id)
+      insert(key, value)
+      delete(key)
+      iterator* find(key)
+      curr_tuple(iterator*)
+      go_next(iterator*)
+      close(iterator*)
+      delete_iterator(iterator*)
    * this will help with building operators for hash-join, and hash-based-groupby
 
 PRIORITY HIGH LEVEL TASKS
