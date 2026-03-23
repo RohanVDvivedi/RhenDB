@@ -1,13 +1,18 @@
 PICKED TASKS
 
- * make a tuple_processor struct that has a context and a close function, and a destory function
-   * it is state full, and gets called if it exists on every push tuple, it is meant to do projection and filter both, and is called outside the output_lock
-   * api :
-    * void* tuple_processor_process_tuple(void* context, void* input_tuple);
-      * upon close call it with null context until it itself returns NULL
-      * all these returned tuple must be pushed
-    * void pre_output_tuple_processor_destroy_context(void* context);
- * make the produce_tuples_from_operator function into produce_bypassed_tuples_from_operator, and is bypassed from the tuple_processor
+ * output_tuple_processor
+   * to be used for complex filter and projection stage right after a tuple is processed
+   * output_tuple_processor
+    {
+      void* context; // context for filter (could be statefull) or projection
+      tuple_def* input_tuple_def;
+      tuple_def* output_tuple_def;
+      void* process_tuple(void* context, void* tuple); // process this tuple for the next stage or produce it if this is the last stage
+      void destroy_context(void* context);
+    }
+   * 0th stage will have the same input_tuple_def as the operator
+   * last stage will have the same output_tuple_def as the interim_tuple_store buffer
+   * for a filter stage input_def == output_def they are the same
 
  * implement expression evaluation using the expression tree from SQLtoAST
  * and think about how to implement it in the tuple_processor
