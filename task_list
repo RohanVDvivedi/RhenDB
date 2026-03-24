@@ -1,21 +1,11 @@
 PICKED TASKS
 
- * output_tuple_processor
-   * to be used for complex filter and projection stage right after a tuple is processed
-   * output_tuple_processor
-    {
-      void* context; // context for filter (could be statefull) or projection
-      tuple_def* input_tuple_def;
-      tuple_def* output_tuple_def;
-      void* process_tuple(void* context, void* tuple); // process this tuple for the next stage or produce it if this is the last stage
-      void destroy_context(void* context);
-    }
-   * 0th stage will have the same input_tuple_def as the operator
-   * last stage will have the same output_tuple_def as the interim_tuple_store buffer
-   * for a filter stage input_def == output_def they are the same
+ * test tuple_transformer
+   * impement test filter out odd number in the test case dops
+   * and expand by adding ABC to all multiples of 4, and the rest will truncate their string contents by 3 bytes
+ * implement a MVCC selection to read tuple_transformer as an example
 
  * implement expression evaluation using the expression tree from SQLtoAST
- * and think about how to implement it in the tuple_processor
 
  * implement sorter operator
    * runs are interim_tuple_store themselves
