@@ -2,6 +2,18 @@
 
 #include<stdlib.h>
 
+tuple_transformer* get_new_tuple_transformer(void* context, const tuple_def* input_def, const tuple_def* output_def, void* (*process)(tuple_transformer* tt_p, void* tuple), void (*destroy)(tuple_transformer* tt_p))
+{
+	tuple_transformer* tt_p = malloc(sizeof(tuple_transformer));
+	tt_p->context = context;
+	tt_p->input_def = input_def;
+	tt_p->output_def = output_def;
+	tt_p->process = process;
+	tt_p->destroy = destroy;
+	initialize_llnode(&(tt_p->embed_node));
+	return tt_p;
+}
+
 void* process_all_transformers(const linkedlist* tts_p, void* tuple, int* need_to_free_output)
 {
 	// a NULL tuple can never be processed by the tuple_transformer

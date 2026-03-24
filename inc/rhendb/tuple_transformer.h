@@ -38,6 +38,8 @@ struct tuple_transformer
 	llnode embed_node;
 };
 
+tuple_transformer* get_new_tuple_transformer(void* context, const tuple_def* input_def, const tuple_def* output_def, void* (*process)(tuple_transformer* tt_p, void* tuple), void (*destroy)(tuple_transformer* tt_p));
+
 void* process_all_transformers(const linkedlist* tts_p, void* tuple, int* need_to_free_output);
 /*
 	returns output, that may need freeing, if so need_to_free_output will be set to 1, else it will be 0
