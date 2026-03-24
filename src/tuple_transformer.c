@@ -54,6 +54,28 @@ void* process_all_transformers(tuple_transformer* tt_p, void* tuple, int* need_t
 	return tuple;
 }
 
+const tuple_def* get_input_def_all_transformers(const tuple_transformer* tt_p)
+{
+	return tt_p->input_def;
+}
+
+const tuple_def* get_output_def_all_transformers(const tuple_transformer* tt_p)
+{
+	while(1)
+	{
+		// if there is no next transformation
+		// then this is the last transformation, and all we need to do is return it's output
+		if(tt_p->next_tt_p)
+			return tt_p->output_def;
+
+		// iterate again with the next_tt_p as the new tt_p
+		tt_p = tt_p->next_tt_p;
+	}
+
+	// never reaches here
+	return NULL;
+}
+
 void destroy_all_transformers(tuple_transformer* tt_p)
 {
 	while(tt_p != NULL)

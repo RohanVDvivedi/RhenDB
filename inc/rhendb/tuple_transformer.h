@@ -12,8 +12,8 @@ struct tuple_transformer
 {
 	void* context;
 
-	tuple_def* input_def;
-	tuple_def* output_def;
+	const tuple_def* input_def;
+	const tuple_def* output_def;
 
 	void* (*process)(tuple_transformer* tt_p, void* tuple);
 	/*
@@ -42,6 +42,9 @@ void* process_all_transformers(tuple_transformer* tt_p, void* tuple, int* need_t
 
 	the input tuple will never be freed/modified by this function
 */
+
+const tuple_def* get_input_def_all_transformers(const tuple_transformer* tt_p);
+const tuple_def* get_output_def_all_transformers(const tuple_transformer* tt_p);
 
 void destroy_all_transformers(tuple_transformer* tt_p);
 
