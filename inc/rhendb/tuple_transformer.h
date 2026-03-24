@@ -3,6 +3,8 @@
 
 #include<rhendb/query_plan_interface.h>
 
+#include<cutlery/linkedlist.h>
+
 /*
 	tuple_transformer can only be either a selection or projection operation on the tuple
 */
@@ -31,21 +33,21 @@ struct tuple_transformer
 
 	void (*destroy)(tuple_transformer* tt_p);
 
-	// next tuple_transforn to perform
-	// this will be NULL, if there are no more transformations to be performed
-	tuple_transformer* next_tt_p;
+	// embed_node to link tuple_transfromer in a linkedlist
+	// the tuple_transformer is the first one to be applied to the tuple
+	llnode embed_node;
 };
 
-void* process_all_transformers(tuple_transformer* tt_p, void* tuple, int* need_to_free_output);
+void* process_all_transformers(const linkedlist* tts_p, void* tuple, int* need_to_free_output);
 /*
 	returns output, that may need freeing, if so need_to_free_output will be set to 1, else it will be 0
 
 	the input tuple will never be freed/modified by this function
 */
 
-const tuple_def* get_input_def_all_transformers(const tuple_transformer* tt_p);
-const tuple_def* get_output_def_all_transformers(const tuple_transformer* tt_p);
+const tuple_def* get_input_def_all_transformers(const linkedlist* tts_p);
+const tuple_def* get_output_def_all_transformers(const linkedlist* tts_p);
 
-void destroy_all_transformers(tuple_transformer* tt_p);
+void destroy_all_transformers(linkedlist* tts_p);
 
 #endif
