@@ -35,6 +35,11 @@ int append_tuple_transformer(tuple_transformers* tts_p, tuple_transformer* tt_p)
 	return insert_tail_in_linkedlist(&(tts_p->tuple_transformers_list), tt_p);
 }
 
+int has_no_tuple_transformers(const tuple_transformers* tts_p)
+{
+	return is_empty_linkedlist(&(tts_p->tuple_transformers_list));
+}
+
 void* process_tuple_transformers(const tuple_transformers* tts_p, void* tuple, int* need_to_free_output)
 {
 	// a NULL tuple can never be processed by the tuple_transformer
@@ -44,9 +49,9 @@ void* process_tuple_transformers(const tuple_transformers* tts_p, void* tuple, i
 		return NULL;
 	}
 
-	// ther is no transformation to be done, so return the input tuple as is
+	// there is no transformation to be done, so return the input tuple as is
 	// we mark the tuple with need_to_free_output = 0, as the caller will need to control if the input tuple needs to be freed
-	if(is_empty_linkedlist(&(tts_p->tuple_transformers_list)))
+	if(has_no_tuple_transformers(tts_p))
 	{
 		(*need_to_free_output) = 0;
 		return tuple;
@@ -104,7 +109,7 @@ const tuple_def* get_input_def_for_tuple_transformers(const tuple_transformers* 
 const tuple_def* get_output_def_for_tuple_transformers(const tuple_transformers* tts_p)
 {
 	// no transformations to be done, so it's input_def is the output_def for all the tuple_transformers
-	if(is_empty_linkedlist(&(tts_p->tuple_transformers_list)))
+	if(has_no_tuple_transformers(tts_p))
 		return tts_p->input_def;
 
 	// get it is output of the tail

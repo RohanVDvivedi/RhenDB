@@ -61,6 +61,8 @@ void init_tuple_transformers(tuple_transformers* tts_p, const tuple_def* input_d
 
 int append_tuple_transformer(tuple_transformers* tts_p, tuple_transformer* tt_p);
 
+int has_no_tuple_transformers(const tuple_transformers* tts_p);
+
 void* process_tuple_transformers(const tuple_transformers* tts_p, void* tuple, int* need_to_free_output);
 /*
 	returns output, that may need freeing, if so need_to_free_output will be set to 1, else it will be 0
