@@ -54,7 +54,8 @@ void setup_generator_operator(operator* o, void* (*generator)(void* generator_co
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
-	o->output_tuple_def = generator_tuple_def;
+	// generator's output is what we produce
+	init_tuple_transformers(&(o->output_tuple_transformers), generator_tuple_def);
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){

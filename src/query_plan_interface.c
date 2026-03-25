@@ -314,6 +314,10 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 {
 	int pushed = 0;
 
+	// perform the output transformations
+	int need_to_free_output_tuple = 0;
+	tuple = process_tuple_transformers(&(o->output_tuple_transformers), tuple, &need_to_free_output_tuple);
+
 	pthread_mutex_lock(&(o->output_lock));
 
 	// proceed only if the consumer is alive
@@ -332,12 +336,15 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 		}
 
 		// append the tuple in this tail interim_tuple_store
-		append_tuple_to_interim_tuple_store(its_p, tuple, &(o->output_tuple_def->size_def));
+		append_tuple_to_interim_tuple_store(its_p, tuple, &(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers))->size_def));
 	}
 
 	int need_to_wake_up_consumer = pushed && need_to_wake_up_consumer_UNSAFE(o);
 
 	pthread_mutex_unlock(&(o->output_lock));
+
+	if(need_to_free_output_tuple)
+		free(tuple);
 
 	if(need_to_wake_up_consumer)
 		trigger_execution_on_operator(o->consumer_operator);
@@ -413,6 +420,11 @@ interim_tuple_store* consume_from_operator(operator* producer, uint64_t min_byte
 	return its_p;
 }
 
+const tuple_def* get_tuple_def_for_tuples_to_be_consumed_from(operator* o)
+{
+	return get_output_def_for_tuple_transformers(&(o->output_tuple_transformers));
+}
+
 // query plan functions
 
 query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count)
@@ -447,9 +459,9 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 
 	pthread_mutex_init(&(o->output_lock), NULL);
 	initialize_singlylist(&(o->output_buffers), offsetof(interim_tuple_store, embed_node_sl));
+	init_tuple_transformers(&(o->output_tuple_transformers), NULL); // must initialize it again, unless it is the sink operator
 	o->consumer_operator = NULL;
 	o->consumer_trigger_on_bytes_accumulated = 8192;
-	o->output_tuple_def = NULL;
 	o->output_key_element_ids = NULL;
 	o->output_key_compare_direction = NULL;
 	o->output_key_element_count = 0;
@@ -549,10 +561,11 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 			delete_interim_tuple_store(its_p);
 		}
 
+		destroy_tuple_transformers(&(o->output_tuple_transformers));
+
 		pthread_mutex_destroy(&(o->output_lock));
 		o->consumer_operator = NULL;
 		o->consumer_trigger_on_bytes_accumulated = 8192;
-		o->output_tuple_def = NULL;
 		o->output_key_element_ids = NULL;
 		o->output_key_compare_direction = NULL;
 		o->output_key_element_count = 0;

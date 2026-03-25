@@ -4,6 +4,7 @@
 #include<pthread.h>
 
 #include<rhendb/interim_tuple_store.h>
+#include<rhendb/tuple_transformer_interface.h>
 
 #include<tuplestore/tuple_def.h>
 #include<tuplestore/tuple.h>
@@ -62,6 +63,11 @@ struct operator
 	// new tuple is always appended to last interim_tuple_store in this list else a new interim_tuple_store is created
 	singlylist output_buffers;
 
+	// this transformations will be applicable to all the tuples produced by this operator
+	// as soon as it call produce_tuple/s_from_operator
+	// remember output_lock will not be held while calling any of the transformers
+	tuple_transformers output_tuple_transformers; // [MUST BE SET DURING THE SETUP PHASE]
+
 	// the operator that is meant to consume the output of this operator must be registered here
 	// every insert to the output_buffers forces a trigger_execution() for the consumer_operator, driving the data in the pipeline forward
 	// the design permits for only 1 consumer for every 1 producer operator
@@ -73,13 +79,11 @@ struct operator
 	// this check is done after every tuple produced, and is skipped if this value is set to 0
 	uint64_t consumer_trigger_on_bytes_accumulated; // [MUST BE SET DURING THE SETUP PHASE]
 
-	// definition of the produced output tuples
+	// more optional information for the produced output tuples from the operator
 
 	// these are most likely populated and then cleaned up by the operator itself
 	// they can be used by the operators that are meant to consume the output of this operator
-
-	// to be used by the consumers of the output of this operator
-	const tuple_def* output_tuple_def; // [MUST BE SET DURING THE SETUP PHASE]
+	// these are just placeholders and optional
 
 	// if the output is sorted, then the following attributes are set by the operator itself
 	const positional_accessor* output_key_element_ids; // [MUST BE SET DURING THE SETUP PHASE]
@@ -140,6 +144,10 @@ int produce_tuples_from_operator(operator* o, interim_tuple_store* its_p);
 // no_more_data flag will be set if the producer is killed for sure
 // we also have a min_bytes_to_consume, the successfull consume happens only if there are excess of these many bytes or excess interim_tuple_stores in the output_buffers
 interim_tuple_store* consume_from_operator(operator* producer, uint64_t min_bytes_to_consume, int* no_more_data);
+
+// this is the tuple_def that the consumer of the operator should be ready to consume
+// this is the tuple_def that is required to be used to read tuples returned from consume_from_operator()
+const tuple_def* get_tuple_def_for_tuples_to_be_consumed_from(operator* o);
 
 typedef struct transaction transaction;
 

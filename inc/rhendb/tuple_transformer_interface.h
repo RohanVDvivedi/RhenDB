@@ -1,7 +1,7 @@
 #ifndef TUPLE_TRANSFORMER_INTERFACE_H
 #define TUPLE_TRANSFORMER_INTERFACE_H
 
-#include<rhendb/query_plan_interface.h>
+#include<tuplestore/tuple_def.h>
 
 #include<cutlery/linkedlist.h>
 

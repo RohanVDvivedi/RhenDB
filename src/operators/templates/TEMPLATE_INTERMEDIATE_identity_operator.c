@@ -64,7 +64,8 @@ void setup_identity_operator(operator* o, operator* input_operator, uint64_t con
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
-	o->output_tuple_def = NULL; // not necessary to know this
+	// it is an identity operator, produces the same thing as it consumes
+	init_tuple_transformers(&(o->output_tuple_transformers), get_tuple_def_for_tuples_to_be_consumed_from(input_operator));
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
