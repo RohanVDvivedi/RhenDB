@@ -100,6 +100,7 @@ struct operator
 	operator_state state;
 
 	int is_kill_signal_sent:1;
+	int is_trigger_signaled_on_running:1; // this flag ill be set, if a trigger as signalled while the operator was in running state
 
 	// this kill_reason will be set while sending a kill signal to the operator
 	// kill_reason is valid only if a kill signal was sent

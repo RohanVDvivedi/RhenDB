@@ -55,47 +55,64 @@ void mark_operator_self_killed(operator* o, dstring kill_reason)
 static void* internal_execute(void* o_vp)
 {
 	operator* o = o_vp;
-	int was_killed = 0;
 
-	pthread_mutex_lock(&(o->state_lock));
-	if(o->is_kill_signal_sent)
+	while(1)
 	{
-		o->state = OPERATOR_KILLED;
-		pthread_cond_broadcast(&(o->wait_until_killed));
-		was_killed = 1;
-	}
-	else
-		o->state = OPERATOR_RUNNING;
-	pthread_mutex_unlock(&(o->state_lock));
+		int was_killed = 0;
 
-	if(was_killed)
-	{
-		// force the consumer to read through all that has been left to be consumed, as we just kiled the operator
-		if(o->consumer_operator != NULL)
-			trigger_execution_on_operator(o->consumer_operator);
-		return NULL;
+		pthread_mutex_lock(&(o->state_lock));
+		if(o->is_kill_signal_sent)
+		{
+			o->state = OPERATOR_KILLED;
+			pthread_cond_broadcast(&(o->wait_until_killed));
+			was_killed = 1;
+		}
+		else
+			o->state = OPERATOR_RUNNING;
+		pthread_mutex_unlock(&(o->state_lock));
+
+		if(was_killed)
+			goto WAS_KILLED;
+
+		o->execute(o);
+
+		int was_triggered_while_we_were_running = 0;
+
+		pthread_mutex_lock(&(o->state_lock));
+		if(o->is_kill_signal_sent) // if the user exited while running, then mark it now to be waiting
+		{
+			o->state = OPERATOR_KILLED;
+			pthread_cond_broadcast(&(o->wait_until_killed));
+			was_killed = 1;
+		}
+		else if(o->state == OPERATOR_RUNNING)
+		{
+			if(o->is_trigger_signaled_on_running)
+			{
+				was_triggered_while_we_were_running = 1;
+				o->is_trigger_signaled_on_running = 0; // reset this flag
+				o->state = OPERATOR_QUEUED; // mark the operator to be queued, but we will just loop again
+			}
+			else
+				o->state = OPERATOR_WAITING; // else put it into waiting state
+		}
+		pthread_mutex_unlock(&(o->state_lock));
+
+		if(was_killed)
+			goto WAS_KILLED;
+
+		if(was_triggered_while_we_were_running)
+			continue;
+		else
+			break;
 	}
 
-	o->execute(o);
+	return NULL;
 
-	pthread_mutex_lock(&(o->state_lock));
-	if(o->is_kill_signal_sent) // if the user exited while running, then mark it now to be waiting
-	{
-		o->state = OPERATOR_KILLED;
-		pthread_cond_broadcast(&(o->wait_until_killed));
-		was_killed = 1;
-	}
-	else if(o->state == OPERATOR_RUNNING)
-		o->state = OPERATOR_WAITING;
-	pthread_mutex_unlock(&(o->state_lock));
-
-	if(was_killed)
-	{
-		// force the consumer to read through all that has been left to be consumed, as we just kiled the operator
-		if(o->consumer_operator != NULL)
-			trigger_execution_on_operator(o->consumer_operator);
-		return NULL;
-	}
+	WAS_KILLED:
+	// force the consumer to read through all that has been left to be consumed, as we just killed the operator
+	if(o->consumer_operator != NULL)
+		trigger_execution_on_operator(o->consumer_operator);
 	return NULL;
 }
 
@@ -104,9 +121,14 @@ void trigger_execution_on_operator(operator* o)
 	int should_queue = 0;
 
 	pthread_mutex_lock(&(o->state_lock));
-	if(o->state == OPERATOR_WAITING)
+	if(o->state == OPERATOR_RUNNING) // if the operator is already in running state, mark to let the operator know that a trigger was signalled
 	{
-		o->state = OPERATOR_QUEUED;
+		o->is_trigger_signaled_on_running = 1;
+		should_queue = 0;
+	}
+	else if(o->state == OPERATOR_WAITING) // only a WAITING operator can be queued
+	{
+		o->state = OPERATOR_QUEUED; // change the state to OPERATOR_QUEUED, right away to prevent double queuing
 		should_queue = 1;
 	}
 	pthread_mutex_unlock(&(o->state_lock));
@@ -482,6 +504,7 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	pthread_cond_init_with_monotonic_clock(&(o->wait_until_killed));
 	o->state = OPERATOR_WAITING;
 	o->is_kill_signal_sent = 0;
+	o->is_trigger_signaled_on_running = 0;
 	init_empty_dstring(&(o->kill_reason), 0);
 
 	if(is_full_arraylist(&(qp->operators)) && !expand_arraylist(&(qp->operators)))
@@ -586,6 +609,7 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		pthread_cond_destroy(&(o->wait_until_killed));
 		o->state = OPERATOR_KILLED;
 		o->is_kill_signal_sent = 0;
+		o->is_trigger_signaled_on_running = 0;
 
 		// concatenate the kill reason passed
 		{
