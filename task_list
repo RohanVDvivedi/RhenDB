@@ -4,14 +4,6 @@ PICKED TASKS
  * add a flag to operator to registered_trigger_on_running_state
  * and make it trigger itself on execute again if the trigger was registered on running, also at the same time clear this flag
 
-2.
- * tuple_transformers
- * this becomes the part of the query_plan_interface, as output_tuple_transformers attribute
- * make consumers use this attribute to get their input tuple_def
- * call this transformer before each of the produce calls
- * if empty fall back to putting whole tuples directly into the output_buffer
- * review the code
-
 3.
  * test tuple_transformer
    * identity_tuple_transformer
