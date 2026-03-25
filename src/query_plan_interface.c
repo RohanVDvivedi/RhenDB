@@ -418,6 +418,8 @@ int produce_tuples_from_operator(operator* o, interim_tuple_store* its_p)
 			if(!pushed)
 				break;
 		});
+
+		delete_interim_tuple_store(its_p);
 	}
 
 	return pushed;
