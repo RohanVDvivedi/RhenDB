@@ -57,22 +57,24 @@ struct tuple_transformers
 	linkedlist tuple_transformers_list;
 };
 
-void init_transformers(tuple_transformers* tts_p, const tuple_def* input_def);
+void init_tuple_transformers(tuple_transformers* tts_p, const tuple_def* input_def);
 
-void* process_all_transformers(const tuple_transformers* tts_p, void* tuple, int* need_to_free_output);
+int append_tuple_transformer(tuple_transformers* tts_p, tuple_transformer* tt_p);
+
+void* process_tuple_transformers(const tuple_transformers* tts_p, void* tuple, int* need_to_free_output);
 /*
 	returns output, that may need freeing, if so need_to_free_output will be set to 1, else it will be 0
 
-	the input tuple will never be freed/modified by this function
+	the input tuple will never be freed by this function
 */
 
 // same as tts_p->input_def
-const tuple_def* get_input_def_all_transformers(const tuple_transformers* tts_p);
+const tuple_def* get_input_def_for_tuple_transformers(const tuple_transformers* tts_p);
 
 // if no transformers it is tts_p->input_def
 // else it is output_def of the tail (the last of the) tuple_transformers
-const tuple_def* get_output_def_all_transformers(const tuple_transformers* tts_p);
+const tuple_def* get_output_def_for_tuple_transformers(const tuple_transformers* tts_p);
 
-void destroy_all_transformers(tuple_transformers* tts_p);
+void destroy_tuple_transformers(tuple_transformers* tts_p);
 
 #endif

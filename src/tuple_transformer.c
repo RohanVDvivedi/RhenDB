@@ -20,13 +20,22 @@ void delete_tuple_transformer(tuple_transformer* tt_p)
 	free(tt_p);
 }
 
-void init_transformers(tuple_transformers* tts_p, const tuple_def* input_def)
+void init_tuple_transformers(tuple_transformers* tts_p, const tuple_def* input_def)
 {
 	tts_p->input_def = input_def;
 	initialize_linkedlist(&(tts_p->tuple_transformers_list), offsetof(tuple_transformer, embed_node));
 }
 
-void* process_all_transformers(const tuple_transformers* tts_p, void* tuple, int* need_to_free_output)
+int append_tuple_transformer(tuple_transformers* tts_p, tuple_transformer* tt_p)
+{
+	// current output_def of tuple_transformers must match tt_p->input_def
+	if(get_output_def_for_tuple_transformers(tts_p) != tt_p->input_def)
+		return 0;
+
+	return insert_tail_in_linkedlist(&(tts_p->tuple_transformers_list), tt_p);
+}
+
+void* process_tuple_transformers(const tuple_transformers* tts_p, void* tuple, int* need_to_free_output)
 {
 	// a NULL tuple can never be processed by the tuple_transformer
 	if(tuple == NULL)
@@ -87,12 +96,12 @@ void* process_all_transformers(const tuple_transformers* tts_p, void* tuple, int
 	return tuple;
 }
 
-const tuple_def* get_input_def_all_transformers(const tuple_transformers* tts_p)
+const tuple_def* get_input_def_for_tuple_transformers(const tuple_transformers* tts_p)
 {
 	return tts_p->input_def;
 }
 
-const tuple_def* get_output_def_all_transformers(const tuple_transformers* tts_p)
+const tuple_def* get_output_def_for_tuple_transformers(const tuple_transformers* tts_p)
 {
 	// no transformations to be done, so it's input_def is the output_def for all the tuple_transformers
 	if(is_empty_linkedlist(&(tts_p->tuple_transformers_list)))
@@ -108,7 +117,7 @@ static void destroy_transformer_on_remove_all_callback(void* _NULL, const void* 
 	delete_tuple_transformer(tt_p);
 }
 
-void destroy_all_transformers(tuple_transformers* tts_p)
+void destroy_tuple_transformers(tuple_transformers* tts_p)
 {
 	remove_all_from_linkedlist(&(tts_p->tuple_transformers_list), &((notifier_interface){NULL, destroy_transformer_on_remove_all_callback}));
 }
