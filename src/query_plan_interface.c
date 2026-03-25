@@ -358,33 +358,45 @@ int produce_tuples_from_operator(operator* o, interim_tuple_store* its_p)
 {
 	int pushed = 0;
 
-	pthread_mutex_lock(&(o->output_lock));
-
-	// proceed only if the consumer_operator is alive
-	if((o->consumer_operator != NULL) && !can_not_proceed_for_execution_operator(o->consumer_operator))
+	if(has_no_tuple_transformers(&(o->output_tuple_transformers))) // if there are no output transformations, then this is optimzation path
 	{
-		pushed = 1;
+		pthread_mutex_lock(&(o->output_lock));
 
-		interim_tuple_store* tail_its_p = (interim_tuple_store*) get_tail_of_singlylist(&(o->output_buffers));
+		// proceed only if the consumer_operator is alive
+		if((o->consumer_operator != NULL) && !can_not_proceed_for_execution_operator(o->consumer_operator))
+		{
+			pushed = 1;
 
-		if(tail_its_p == NULL || get_total_bytes_in_interim_tuple_store(its_p) > MERGE_THRESHOLD)
-		{
-			if(!insert_tail_in_singlylist(&(o->output_buffers), its_p))
-				exit(-1);
+			interim_tuple_store* tail_its_p = (interim_tuple_store*) get_tail_of_singlylist(&(o->output_buffers));
+
+			if(tail_its_p == NULL || get_total_bytes_in_interim_tuple_store(its_p) > MERGE_THRESHOLD)
+			{
+				if(!insert_tail_in_singlylist(&(o->output_buffers), its_p))
+					exit(-1);
+			}
+			else
+			{
+				append_all_from_another_interim_tuple_store(tail_its_p, its_p);
+				delete_interim_tuple_store(its_p);
+			}
 		}
-		else
-		{
-			append_all_from_another_interim_tuple_store(tail_its_p, its_p);
-			delete_interim_tuple_store(its_p);
-		}
+
+		int need_to_wake_up_consumer = pushed && need_to_wake_up_consumer_UNSAFE(o);
+
+		pthread_mutex_unlock(&(o->output_lock));
+
+		if(need_to_wake_up_consumer)
+			trigger_execution_on_operator(o->consumer_operator);
 	}
-
-	int need_to_wake_up_consumer = pushed && need_to_wake_up_consumer_UNSAFE(o);
-
-	pthread_mutex_unlock(&(o->output_lock));
-
-	if(need_to_wake_up_consumer)
-		trigger_execution_on_operator(o->consumer_operator);
+	else
+	{
+		// else loop and produce 1 tuple at a time
+		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(get_input_def_for_tuple_transformers(&(o->output_tuple_transformers))->size_def), its_p, MERGE_THRESHOLD, {
+			pushed = produce_tuple_from_operator(o, tuple);
+			if(!pushed)
+				break;
+		});
+	}
 
 	return pushed;
 }
