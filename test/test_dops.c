@@ -69,10 +69,12 @@ static void* process_between(tuple_transformer* tt_p, void* tuple)
 		return NULL;
 }
 
-tuple_transformer* get_new_between_tuple_transformer(between_context* bc, uint64_t min_value, uint64_t max_value)
+tuple_transformer* get_new_between_tuple_transformer(between_context* bc)
 {
 	return get_new_tuple_transformer(bc, &record_def, &record_def, process_between, destroy_NOP);
 }
+
+between_context bc0 = {10, 45};
 
 void deinitialize_tuple_defs()
 {
@@ -230,6 +232,7 @@ int main()
 			else
 				append_tuple_transformer(&(o->output_tuple_transformers), get_new_clone_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(o)));
 		}
+		append_tuple_transformer(&(o->output_tuple_transformers), get_new_between_tuple_transformer(&bc0));
 		printf("source operator %p\n", o);
 		operator* input = o;
 

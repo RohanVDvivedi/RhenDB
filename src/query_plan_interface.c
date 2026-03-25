@@ -339,6 +339,8 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 	// perform the output transformations
 	int need_to_free_output_tuple = 0;
 	tuple = process_tuple_transformers(&(o->output_tuple_transformers), tuple, &need_to_free_output_tuple);
+	if(tuple == NULL) // this implies selection/filter failed, so just return success for the produce operation
+		return 1;
 
 	pthread_mutex_lock(&(o->output_lock));
 
