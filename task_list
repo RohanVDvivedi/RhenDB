@@ -1,11 +1,5 @@
 PICKED TASKS
 
-3.
- * test tuple_transformer
-   * mvcc_readable_tuple_selection_transformer
-   * impement test filter out odd number in the test case dops
-   * and expand by adding ABC to all multiples of 4, and the rest will truncate their string contents by 3 bytes
-
  * implement sorter operator
    * runs are interim_tuple_store themselves
    * for fixed sized tuples on the interim_tuple_store we can also quick_sort them, inplace, for the level 0 runs
@@ -30,6 +24,11 @@ PICKED TASKS
       delete_iterator(iterator*)
    * this will help with building operators for hash-join, and hash-based-groupby
 
+ * useful test cases for tuple_transformer
+   * mvcc_readable_tuple_selection_transformer
+   * impement test filter out odd number in the test case dops
+   * and expand by adding ABC to all multiples of 4, and the rest will truncate their string contents by 3 bytes
+
 PRIORITY HIGH LEVEL TASKS
   * what operators to implement
     * scan on b+tree/hash index (sort rids (per 1 or set of buckets for hash index OR about some 1000 pages for bplus tree) and then scan the table), scan on table(start and move ahead linearly)
@@ -39,7 +38,7 @@ PRIORITY HIGH LEVEL TASKS
     * group_by (based on hash or sorted input data otherwise)
     * read/write operators over simple data_structures (for full tuple indexer like access will be implemented later)
     * and a single sink operator that writes data to a file descriptor, it writes the whole temp_tuple_store or just it's pointers
-    * similarly we will have 2 different types of source operators too
+    * similarly we will have 2 different types of source operators too, one reading from database, one reading data from csv-files, one reading data from network files, and finally one generator based like the one in the templates
   * every operator will have a filter and every operator's produce of a tuple, gets filtered and only them pushed to the output_buffers
 
  * implement expression evaluation using the expression tree from SQLtoAST
