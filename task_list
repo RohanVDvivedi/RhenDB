@@ -5,25 +5,20 @@ PICKED TASKS
  * and make it trigger itself on execute again if the trigger was registered on running, also at the same time clear this flag
 
 2.
- * make tuple_transformers struct{
-    const tuple_def* input_def;
-    linkedlist tuple_transformers_list;
- }
- * add a utility function to initilialize it
- * implement get_input_def and get_output_def on this struct, if the list is empty, return input_def for both
- * implement is empty_tuple_transformers
+ * tuple_transformers
  * this becomes the part of the query_plan_interface, as output_tuple_transformers attribute
  * make consumers use this attribute to get their input tuple_def
  * call this transformer before each of the produce calls
  * if empty fall back to putting whole tuples directly into the output_buffer
- * test, this implementation up until now
+ * review the code
 
 3.
  * test tuple_transformer
-   * implement a identity_tuple_transformer and a clone_tuple_transformer, as examples in transformers directory
+   * identity_tuple_transformer
+   * clone_tuple_transformer
+   * mvcc_readable_tuple_selection_transformer
    * impement test filter out odd number in the test case dops
    * and expand by adding ABC to all multiples of 4, and the rest will truncate their string contents by 3 bytes
- * implement a MVCC selection tuple transformer to read right tuples as per the operator's snapshot
 
  * implement sorter operator
    * runs are interim_tuple_store themselves
