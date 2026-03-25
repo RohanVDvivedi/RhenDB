@@ -2,6 +2,7 @@
 
 #include<rhendb/transaction.h>
 #include<rhendb/operators.h>
+#include<rhendb/tuple_transformers.h>
 
 #include<stdlib.h>
 #include<unistd.h>
@@ -197,6 +198,13 @@ int main()
 	{
 		operator* o = get_new_registered_operator_for_query_plan(qp);
 		setup_generator_operator(o, generator, &generator_number, &record_def);
+		for(int j = 0; j < 4; j++)
+		{
+			if(j%2 == 0)
+				append_tuple_transformer(&(o->output_tuple_transformers), get_new_identity_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(o)));
+			else
+				append_tuple_transformer(&(o->output_tuple_transformers), get_new_clone_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(o)));
+		}
 		printf("source operator %p\n", o);
 		operator* input = o;
 
@@ -204,6 +212,18 @@ int main()
 		{
 			o = get_new_registered_operator_for_query_plan(qp);
 			setup_identity_operator(o, input, 300 * (i+1));
+			for(int j = 0; j < 4; j++)
+			{
+				if(i%2 == 0)
+					append_tuple_transformer(&(o->output_tuple_transformers), get_new_identity_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(o)));
+				else
+				{
+					if(j%2 == 0)
+						append_tuple_transformer(&(o->output_tuple_transformers), get_new_clone_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(o)));
+					else
+						append_tuple_transformer(&(o->output_tuple_transformers), get_new_identity_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(o)));
+				}
+			}
 			printf("identity operator %p\n", o);
 			input = o;
 		}
