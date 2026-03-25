@@ -1,13 +1,7 @@
 PICKED TASKS
 
-1.
- * add a flag to operator to registered_trigger_on_running_state
- * and make it trigger itself on execute again if the trigger was registered on running, also at the same time clear this flag
-
 3.
  * test tuple_transformer
-   * identity_tuple_transformer
-   * clone_tuple_transformer
    * mvcc_readable_tuple_selection_transformer
    * impement test filter out odd number in the test case dops
    * and expand by adding ABC to all multiples of 4, and the rest will truncate their string contents by 3 bytes
