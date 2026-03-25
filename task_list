@@ -26,7 +26,6 @@ PICKED TASKS
 
  * useful test cases for tuple_transformer
    * mvcc_readable_tuple_selection_transformer
-   * impement test filter out odd number in the test case dops
    * and expand by adding ABC to all multiples of 4, and the rest will truncate their string contents by 3 bytes
 
 PRIORITY HIGH LEVEL TASKS
