@@ -49,6 +49,31 @@ void initialize_tuple_defs()
 	printf("\n\n");
 }
 
+static void destroy_NOP(tuple_transformer* tt_p){}
+
+typedef struct between_context between_context;
+struct between_context
+{
+	uint64_t min_value;
+	uint64_t max_value;
+};
+
+static void* process_between(tuple_transformer* tt_p, void* tuple)
+{
+	between_context* bc = tt_p->context;
+	datum num;
+	get_value_from_element_from_tuple(&num, &record_def, STATIC_POSITION(0), tuple);
+	if(bc->min_value <= num.uint_value && num.uint_value <= bc->max_value)
+		return tuple;
+	else
+		return NULL;
+}
+
+tuple_transformer* get_new_between_tuple_transformer(between_context* bc, uint64_t min_value, uint64_t max_value)
+{
+	return get_new_tuple_transformer(bc, &record_def, &record_def, process_between, destroy_NOP);
+}
+
 void deinitialize_tuple_defs()
 {
 	free(record_type_info);
