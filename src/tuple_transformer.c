@@ -14,7 +14,19 @@ tuple_transformer* get_new_tuple_transformer(void* context, const tuple_def* inp
 	return tt_p;
 }
 
-void* process_all_transformers(const linkedlist* tts_p, void* tuple, int* need_to_free_output)
+void delete_tuple_transformer(tuple_transformer* tt_p)
+{
+	tt_p->destroy(tt_p);
+	free(tt_p);
+}
+
+void init_transformers(tuple_transformers* tts_p, const tuple_def* input_def)
+{
+	tts_p->input_def = input_def;
+	initialize_linkedlist(&(tts_p->tuple_transformers_list), offsetof(tuple_transformer, embed_node));
+}
+
+void* process_all_transformers(const tuple_transformers* tts_p, void* tuple, int* need_to_free_output)
 {
 	// a NULL tuple can never be processed by the tuple_transformer
 	if(tuple == NULL)
@@ -25,7 +37,7 @@ void* process_all_transformers(const linkedlist* tts_p, void* tuple, int* need_t
 
 	// ther is no transformation to be done, so return the input tuple as is
 	// we mark the tuple with need_to_free_output = 0, as the caller will need to control if the input tuple needs to be freed
-	if(is_empty_linkedlist(tts_p))
+	if(is_empty_linkedlist(&(tts_p->tuple_transformers_list)))
 	{
 		(*need_to_free_output) = 0;
 		return tuple;
@@ -34,7 +46,7 @@ void* process_all_transformers(const linkedlist* tts_p, void* tuple, int* need_t
 	// local variable that flags if the tuple for the current iteration needs to be freed
 	// input parameter tuple, will never need freeing, so it starts with a value of 0
 	int need_to_free_tuple = 0;
-	tuple_transformer* tt_p = (tuple_transformer*) get_head_of_linkedlist(tts_p);
+	tuple_transformer* tt_p = (tuple_transformer*) get_head_of_linkedlist(&(tts_p->tuple_transformers_list));
 	do
 	{
 		void* output_tuple = tt_p->process(tt_p, tuple);
@@ -45,7 +57,7 @@ void* process_all_transformers(const linkedlist* tts_p, void* tuple, int* need_t
 			// below 2 are NO-OP tasks
 			// need_to_free_tuple = need_to_free_tuple;
 			// tuple = output_tuple; // the pointers are already the same
-			tt_p = (tuple_transformer*) get_next_of_in_linkedlist(tts_p, tt_p);
+			tt_p = (tuple_transformer*) get_next_of_in_linkedlist(&(tts_p->tuple_transformers_list), tt_p);
 			continue;
 		}
 
@@ -65,40 +77,38 @@ void* process_all_transformers(const linkedlist* tts_p, void* tuple, int* need_t
 				free(tuple);
 			tuple = output_tuple; // prepare for the next iteration
 			need_to_free_tuple = 1; // the new tuple, needs freeing as it is different from the tuple
-			tt_p = (tuple_transformer*) get_next_of_in_linkedlist(tts_p, tt_p);
+			tt_p = (tuple_transformer*) get_next_of_in_linkedlist(&(tts_p->tuple_transformers_list), tt_p);
 			continue;
 		}
-	}while(tt_p != get_head_of_linkedlist(tts_p));
+	}while(tt_p != get_head_of_linkedlist(&(tts_p->tuple_transformers_list)));
 
 	// tuple is required to be returned, let the caller know if they need to free this pointer
 	(*need_to_free_output) = need_to_free_tuple;
 	return tuple;
 }
 
-const tuple_def* get_input_def_all_transformers(const linkedlist* tts_p)
+const tuple_def* get_input_def_all_transformers(const tuple_transformers* tts_p)
 {
-	if(is_empty_linkedlist(tts_p))
-		return NULL;
-
-	return ((const tuple_transformer*)(get_head_of_linkedlist(tts_p)))->input_def;
+	return tts_p->input_def;
 }
 
-const tuple_def* get_output_def_all_transformers(const linkedlist* tts_p)
+const tuple_def* get_output_def_all_transformers(const tuple_transformers* tts_p)
 {
-	if(is_empty_linkedlist(tts_p))
-		return NULL;
+	// no transformations to be done, so it's input_def is the output_def for all the tuple_transformers
+	if(is_empty_linkedlist(&(tts_p->tuple_transformers_list)))
+		return tts_p->input_def;
 
-	return ((const tuple_transformer*)(get_tail_of_linkedlist(tts_p)))->output_def;
+	// get it is output of the tail
+	return ((const tuple_transformer*)(get_tail_of_linkedlist(&(tts_p->tuple_transformers_list))))->output_def;
 }
 
 static void destroy_transformer_on_remove_all_callback(void* _NULL, const void* data)
 {
 	tuple_transformer* tt_p = (tuple_transformer*)data;
-	tt_p->destroy(tt_p);
-	free(tt_p);
+	delete_tuple_transformer(tt_p);
 }
 
-void destroy_all_transformers(linkedlist* tts_p)
+void destroy_all_transformers(tuple_transformers* tts_p)
 {
-	remove_all_from_linkedlist(tts_p, &((notifier_interface){NULL, destroy_transformer_on_remove_all_callback}));
+	remove_all_from_linkedlist(&(tts_p->tuple_transformers_list), &((notifier_interface){NULL, destroy_transformer_on_remove_all_callback}));
 }

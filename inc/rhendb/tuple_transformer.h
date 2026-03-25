@@ -14,7 +14,11 @@ struct tuple_transformer
 {
 	void* context;
 
+	// input definition for this transformer
+	// just the pointer is stored, as is given by the user
 	const tuple_def* input_def;
+
+	// output_def is actually owned by this tuple_transformer, and must be destroyed by the destory() function call
 	const tuple_def* output_def;
 
 	void* (*process)(tuple_transformer* tt_p, void* tuple);
@@ -40,16 +44,35 @@ struct tuple_transformer
 
 tuple_transformer* get_new_tuple_transformer(void* context, const tuple_def* input_def, const tuple_def* output_def, void* (*process)(tuple_transformer* tt_p, void* tuple), void (*destroy)(tuple_transformer* tt_p));
 
-void* process_all_transformers(const linkedlist* tts_p, void* tuple, int* need_to_free_output);
+// calls destroy on the tuple_transformer first, then frees it
+void delete_tuple_transformer(tuple_transformer* tt_p);
+
+typedef struct tuple_transformers tuple_transformers;
+struct tuple_transformers
+{
+	// input definition for the first transformer
+	// just the pointer is stored, as is given by the user
+	const tuple_def* input_def;
+
+	linkedlist tuple_transformers_list;
+};
+
+void init_transformers(tuple_transformers* tts_p, const tuple_def* input_def);
+
+void* process_all_transformers(const tuple_transformers* tts_p, void* tuple, int* need_to_free_output);
 /*
 	returns output, that may need freeing, if so need_to_free_output will be set to 1, else it will be 0
 
 	the input tuple will never be freed/modified by this function
 */
 
-const tuple_def* get_input_def_all_transformers(const linkedlist* tts_p);
-const tuple_def* get_output_def_all_transformers(const linkedlist* tts_p);
+// same as tts_p->input_def
+const tuple_def* get_input_def_all_transformers(const tuple_transformers* tts_p);
 
-void destroy_all_transformers(linkedlist* tts_p);
+// if no transformers it is tts_p->input_def
+// else it is output_def of the tail (the last of the) tuple_transformers
+const tuple_def* get_output_def_all_transformers(const tuple_transformers* tts_p);
+
+void destroy_all_transformers(tuple_transformers* tts_p);
 
 #endif
