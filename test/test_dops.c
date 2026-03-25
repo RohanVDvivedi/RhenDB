@@ -74,7 +74,8 @@ tuple_transformer* get_new_between_tuple_transformer(between_context* bc)
 	return get_new_tuple_transformer(bc, &record_def, &record_def, process_between, destroy_NOP);
 }
 
-between_context bc0 = {10, 45};
+between_context bc0 = {10, 145};
+between_context bc1 = {3, 45};
 
 void deinitialize_tuple_defs()
 {
@@ -252,6 +253,8 @@ int main()
 						append_tuple_transformer(&(o->output_tuple_transformers), get_new_identity_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(o)));
 				}
 			}
+			if(i == 0)
+				append_tuple_transformer(&(o->output_tuple_transformers), get_new_between_tuple_transformer(&bc1));
 			printf("identity operator %p\n", o);
 			input = o;
 		}
