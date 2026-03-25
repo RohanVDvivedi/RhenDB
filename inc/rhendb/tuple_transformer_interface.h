@@ -1,5 +1,5 @@
-#ifndef TUPLE_TRANSFORMER_H
-#define TUPLE_TRANSFORMER_H
+#ifndef TUPLE_TRANSFORMER_INTERFACE_H
+#define TUPLE_TRANSFORMER_INTERFACE_H
 
 #include<rhendb/query_plan_interface.h>
 

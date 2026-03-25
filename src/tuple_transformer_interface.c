@@ -1,4 +1,4 @@
-#include<rhendb/tuple_transformer.h>
+#include<rhendb/tuple_transformer_interface.h>
 
 #include<stdlib.h>
 
