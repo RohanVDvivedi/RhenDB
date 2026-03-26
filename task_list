@@ -1,7 +1,6 @@
 PICKED TASKS
 
  * useful test cases for tuple_transformer
-   * mvcc_readable_tuple_selection_transformer
    * simple_projection_transformer
 
  * implement sorter operator
@@ -33,6 +32,7 @@ PICKED TASKS
 PRIORITY HIGH LEVEL TASKS
   * what operators to implement
     * scan on b+tree/hash index (sort rids (per 1 or set of buckets for hash index OR about some 1000 pages for bplus tree) and then scan the table), scan on table(start and move ahead linearly)
+    * mvcc_readable_tuple_selection_transformer should be used for the outputs of scan operator on the tables
     * sort (external sorting, N-way (max 30)), another merge runs operator to merged sorted runs from 2 operators
       * sort using quicksort, tupleindexer like sort and then a temp_tuple_store style sort
     * joins (nested loop with per block, index nested loop, sort merge join, hash join)
