@@ -1,8 +1,5 @@
 PICKED TASKS
 
- * useful test cases for tuple_transformer
-   * simple_projection_transformer
-
  * implement sorter operator
    * runs are interim_tuple_store themselves
    * for fixed sized tuples on the interim_tuple_store we can also quick_sort them, inplace, for the level 0 runs
