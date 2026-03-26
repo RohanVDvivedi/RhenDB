@@ -79,7 +79,7 @@ tuple_transformer* get_new_between_tuple_transformer(between_context* bc)
 	return get_new_tuple_transformer(bc, &record_def, &record_def, process_between, destroy_NOP);
 }
 
-between_context bc0 = {10, 145};
+between_context bc0 = {8, 145};
 between_context bc1 = {3, 45};
 
 void deinitialize_tuple_defs()
