@@ -12,7 +12,7 @@ typedef struct input_values input_values;
 struct input_values
 {
 	operator* input_operator;
-	tuple_def* input_tuple_def;
+	const tuple_def* input_tuple_def;
 };
 
 void print_job(operator* o, void* param);
@@ -65,7 +65,7 @@ static void execute(operator* o)
 	return ;
 }
 
-void setup_printf_operator(operator* o, operator* input_operator, tuple_def* input_tuple_def)
+void setup_printf_operator(operator* o, operator* input_operator)
 {
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -77,7 +77,7 @@ void setup_printf_operator(operator* o, operator* input_operator, tuple_def* inp
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
 		.input_operator = input_operator,
-		.input_tuple_def = input_tuple_def,
+		.input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator),
 	};
 
 	input_operator->consumer_operator = o;

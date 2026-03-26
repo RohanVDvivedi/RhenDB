@@ -49,6 +49,11 @@ void initialize_tuple_defs()
 	printf("\n\n");
 }
 
+positional_accessor* projections[] = {
+	&STATIC_POSITION(2),
+	&STATIC_POSITION(0),
+};
+
 static void destroy_NOP(tuple_transformer* tt_p){}
 
 typedef struct between_context between_context;
@@ -255,12 +260,17 @@ int main()
 			}
 			if(i == 0)
 				append_tuple_transformer(&(o->output_tuple_transformers), get_new_between_tuple_transformer(&bc1));
+			if(i == 1)
+			{
+				tuple_transformer* projs = get_new_simple_projection_transformer("projecteds", get_tuple_def_for_tuples_to_be_consumed_from(o), 2, projections, ((char const *[]){"column1", "column0"}));
+				append_tuple_transformer(&(o->output_tuple_transformers), projs);
+			}
 			printf("identity operator %p\n", o);
 			input = o;
 		}
 
 		o = get_new_registered_operator_for_query_plan(qp);
-		setup_printf_operator(o, input, &record_def);
+		setup_printf_operator(o, input);
 		printf("sink operator %p\n", o);
 	}
 	printf("\n\n");
