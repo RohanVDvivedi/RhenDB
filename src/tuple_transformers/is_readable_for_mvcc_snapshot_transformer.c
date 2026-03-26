@@ -47,7 +47,7 @@ static void destroy(tuple_transformer* tt_p)
 	free(tt_p->context);
 }
 
-tuple_transformer* get_new_is_readable_for_mvcc_snapshot_transformer(const mvcc_snapshot* mvccsnp_p, transaction_status_getter* tsg_p, int* were_hints_updated, const void* input_def)
+tuple_transformer* get_new_is_readable_for_mvcc_snapshot_transformer(const mvcc_snapshot* mvccsnp_p, transaction_status_getter* tsg_p, int* were_hints_updated, const tuple_def* input_def)
 {
 	data_type_info* mvcchdr_dti = (data_type_info*) get_type_info_for_element_from_tuple_def(input_def, MVCC_HEADER_POSITION);
 

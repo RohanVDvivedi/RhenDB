@@ -9,7 +9,7 @@ static void destroy(tuple_transformer* tt_p)
 {
 }
 
-tuple_transformer* get_new_identity_tuple_transformer(const void* input_def)
+tuple_transformer* get_new_identity_tuple_transformer(const tuple_def* input_def)
 {
 	return get_new_tuple_transformer(NULL, input_def, input_def, process, destroy);
 }
