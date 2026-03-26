@@ -5,12 +5,7 @@
 
 #include<stdlib.h>
 
-/*
-	it is expected that mvcc_header is the first attribute in the tuple for input_def
-*/
-
-#define MVCC_HEADER_POSITION STATIC_POSITION(0)
-
+// any allocation made here will be freed by the caller
 static void* process(tuple_transformer* tt_p, void* tuple)
 {
 	void* output_tuple = malloc(get_maximum_tuple_size(tt_p->output_def));
