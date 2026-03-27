@@ -36,24 +36,39 @@ struct input_values
 	uint64_t total_sorted_runs_count;
 };
 
-static int compare_tuples(const void* o_vp, const void* tuple1, const void* tuple2)
+static int compare_tuples_for_sorter(const void* o_vp, const void* tup1, const void* tup2)
 {
 	const operator* o = o_vp;
+	input_values* inputs = o->inputs;
 
 	int abort_error = 0;
-	int result = compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_type_info* dti, engine, NULL, &abort_error);
+	int compare = 0;
+	for(uint32_t i = 0; ((i < inputs->key_element_count) && (compare == 0)); i++)
+	{
+		const data_type_info* dti = get_type_info_for_element_from_tuple_def(inputs->record_def, inputs->key_element_ids[i]);
 
-	return result;
+		datum uval1;
+		get_value_from_element_from_tuple(&uval1, inputs->record_def, inputs->key_element_ids[i], tup1);
+
+		datum uval2;
+		get_value_from_element_from_tuple(&uval2, inputs->record_def, inputs->key_element_ids[i], tup2);
+
+		compare = compare_datum2_rhendb(&uval1, &uval2, dti, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+
+		compare = compare * inputs->key_compare_direction[i];
+	}
+
+	return compare;
 }
 
-static int compare_interim_tuple_stores(const void* o_vp, const void* its1_vp, const void* its2_vp)
+static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const void* its1_vp, const void* its2_vp)
 {
 	const operator* o = o_vp;
 
 	const interim_tuple_store* its1_p = its1_vp;
 	const interim_tuple_store* its2_p = its2_vp;
 
-	return compare_tuples(o, its1_p->embed_regions[0].tuple, its2_p->embed_regions[0].tuple);
+	return compare_tuples_for_sorter(o, its1_p->embed_regions[0].tuple, its2_p->embed_regions[0].tuple);
 }
 
 static void sort_job(operator* o, void* _param)
@@ -88,7 +103,7 @@ static void merge_job(operator* o, void* _param)
 	int level = (intptr_t)(_param);
 
 	pheap mergeable_open_runs;
-	initialize_pheap(&mergeable_open_runs, MIN_HEAP, LEFTIST, &contexted_comparator(o, compare_interim_tuple_stores), offsetof(interim_tuple_store, embed_node_php));
+	initialize_pheap(&mergeable_open_runs, MIN_HEAP, LEFTIST, &contexted_comparator(o, compare_interim_tuple_stores_for_pheap_runs), offsetof(interim_tuple_store, embed_node_php));
 
 	{
 		singlylist mergeable_runs;
