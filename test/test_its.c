@@ -33,7 +33,7 @@ void append_all_tuples(interim_tuple_store* its_p, uint32_t chunk_size, char** s
 		uint32_t len = strlen((*t));
 
 		uint32_t required_size = 20;
-		mmap_for_writing_tuple(its_p, &tr, &(tpl_d.size_def), required_size);
+		mmap_for_writing_tuple(its_p, &tr, &(tpl_d.size_def), required_size, MMAP_READ_REGION_MIN_SIZE);
 
 		init_tuple(&tpl_d, tr.tuple);
 		printf("appended : ");
@@ -44,7 +44,7 @@ void append_all_tuples(interim_tuple_store* its_p, uint32_t chunk_size, char** s
 		{
 			uint32_t len_to_add = min(chunk_size, len - len_added);
 
-			mmap_for_writing_tuple(its_p, &tr, &(tpl_d.size_def), len_added + len_to_add);
+			mmap_for_writing_tuple(its_p, &tr, &(tpl_d.size_def), len_added + len_to_add, MMAP_READ_REGION_MIN_SIZE);
 
 			init_tuple(&tpl_d, tr.tuple);
 			set_element_in_tuple(&tpl_d, SELF, tr.tuple, &((datum){.string_value = (*t), .string_size = len_added + len_to_add}), len_added + len_to_add);
@@ -55,7 +55,7 @@ void append_all_tuples(interim_tuple_store* its_p, uint32_t chunk_size, char** s
 			len_added += len_to_add;
 		}
 
-		printf("finalized tuple\n\n");
+		printf("finalized tuple at region = %p\n\n", tr.region_memory);
 		finalize_written_tuple(its_p, &tr);
 	}
 	print_mmap_pages_for_fd(its_p->fd);
