@@ -97,7 +97,7 @@ int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 // you must have atmost 1 writing interim_tuple_regions open
 // this function may extend the interim_tuple_store if it's total_size is lesser than the next_tuple_offset + required_size
 // you may also recall this function if you have a better estimate of the size of the next tuple, before ofcourse you hit finalize
-int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, const tuple_size_def* tpl_sz_d, uint32_t required_size);
+int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, const tuple_size_def* tpl_sz_d, uint32_t required_size, uint32_t min_bytes_to_mmap);
 
 /*
 	both the mmap functions may pass their interim_tuple_regions to each other, it will just force the mmap_* function to remap the regions

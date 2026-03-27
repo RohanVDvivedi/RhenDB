@@ -119,7 +119,7 @@ int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 
 	// build up region offsets
 	uint64_t region_offset_start = UINT_ALIGN_DOWN(tuple_offset_start, sysconf(_SC_PAGE_SIZE));
-	// place region_offset_end right after the max of the position of tuple_offset_end OR min_bytes_to_mmap after the tuple (and ofcourse not overflowing the next_tuple_offse)t
+	// place region_offset_end right after the max of the position of tuple_offset_end OR min_bytes_to_mmap after the tuple (and ofcourse not overflowing the next_tuple_offset)
 	uint64_t region_offset_end = UINT_ALIGN_UP(min(max(tuple_offset_end, tuple_offset_start + min_bytes_to_mmap), its_p->next_tuple_offset), sysconf(_SC_PAGE_SIZE));
 	uint32_t region_size = region_offset_end - region_offset_start;
 
@@ -140,7 +140,7 @@ int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 	return 1;
 }
 
-int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, const tuple_size_def* tpl_sz_d, uint32_t required_size)
+int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, const tuple_size_def* tpl_sz_d, uint32_t required_size, uint32_t min_bytes_to_mmap)
 {
 	uint64_t tuple_offset_start = its_p->next_tuple_offset;
 	uint32_t tuple_size = required_size;
@@ -160,7 +160,8 @@ int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 
 	// build up region offsets
 	uint64_t region_offset_start = UINT_ALIGN_DOWN(tuple_offset_start, sysconf(_SC_PAGE_SIZE));
-	uint64_t region_offset_end = UINT_ALIGN_UP(tuple_offset_end, sysconf(_SC_PAGE_SIZE));
+	// place region_offset_end right after the max of the position of tuple_offset_end OR min_bytes_to_mmap after the tuple
+	uint64_t region_offset_end = UINT_ALIGN_UP(max(tuple_offset_end, tuple_offset_start + min_bytes_to_mmap), sysconf(_SC_PAGE_SIZE));
 	uint32_t region_size = region_offset_end - region_offset_start;
 
 	// ftruncate to extend the file, if the region_offset_end is greater than total_size
@@ -228,7 +229,7 @@ uint64_t append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* t
 
 	// create a region to copy this new tuple into
 	interim_tuple_region tr = INIT_INTERIM_TUPLE_REGION;
-	mmap_for_writing_tuple(its_p, &tr, tpl_sz_d, tuple_size);
+	mmap_for_writing_tuple(its_p, &tr, tpl_sz_d, tuple_size, 0);
 
 	// perform the copy into the tuple_region
 	memory_move(tr.tuple, tupl, tuple_size);
