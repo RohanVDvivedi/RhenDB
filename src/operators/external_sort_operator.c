@@ -75,6 +75,7 @@ static void sort_job(operator* o, void* _param)
 {
 	input_values* inputs = o->inputs;
 
+	// fetch the next un_sorted_run, that e could sort
 	pthread_mutex_lock(&(inputs->runs_lock));
 	interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(inputs->un_sorted_runs));
 	if(its_p != NULL)
@@ -89,6 +90,7 @@ static void sort_job(operator* o, void* _param)
 
 	// TODO : sort its_p
 
+	// insert sorted run back into the sorted_runs[0], the smallest most level
 	pthread_mutex_lock(&(inputs->runs_lock));
 	insert_tail_in_singlylist(&(inputs->sorted_runs[0]), its_p);
 	inputs->sorted_runs_count[0]++;
@@ -105,6 +107,7 @@ static void merge_job(operator* o, void* _param)
 	pheap mergeable_open_runs;
 	initialize_pheap(&mergeable_open_runs, MIN_HEAP, LEFTIST, &contexted_comparator(o, compare_interim_tuple_stores_for_pheap_runs), offsetof(interim_tuple_store, embed_node_php));
 
+	// populate runs in mergeable_open_runs
 	{
 		singlylist mergeable_runs;
 		initialize_singlylist(&mergeable_runs, offsetof(interim_tuple_store, embed_node_sl));
@@ -152,14 +155,15 @@ static void merge_job(operator* o, void* _param)
 		}
 	}
 
+	// create output run
 	interim_tuple_store* output_its_p = get_new_interim_tuple_store(".");
 
-	// merge all into output_its_p
+	// merge all one by one from the top into output_its_p
 	while(!is_empty_pheap(&mergeable_open_runs))
 	{
 		interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&mergeable_open_runs);
 
-		// merge the top tuple of its_p into output_its_p
+		// copy the top tuple of its_p into output_its_p
 		{
 			uint32_t tuple_size = get_tuple_size_using_tuple_size_def(&(inputs->record_def->size_def), its_p->embed_regions[0].tuple);
 			mmap_for_writing_tuple(output_its_p, &(output_its_p->embed_regions[0]), &(inputs->record_def->size_def), tuple_size, inputs->minimum_run_size);
@@ -180,6 +184,10 @@ static void merge_job(operator* o, void* _param)
 		}
 	}
 
+	// unmap the rite region
+	unmap_for_interim_tuple_region(&(output_its_p->embed_regions[0]));
+
+	// insert output_its_p back into the next level
 	pthread_mutex_lock(&(inputs->runs_lock));
 	insert_tail_in_singlylist(&(inputs->sorted_runs[level+1]), output_its_p);
 	inputs->sorted_runs_count[level+1]++;
