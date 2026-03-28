@@ -507,6 +507,8 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	pthread_mutex_init(&(o->state_lock), NULL);
 	pthread_cond_init_with_monotonic_clock(&(o->wait_until_killed));
 	o->state = OPERATOR_WAITING;
+	o->queued_jobs_count = 0;
+	o->running_jobs_count = 0;
 	o->is_kill_signal_sent = 0;
 	o->is_trigger_signaled_on_running = 0;
 	init_empty_dstring(&(o->kill_reason), 0);
@@ -612,6 +614,8 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		pthread_mutex_destroy(&(o->state_lock));
 		pthread_cond_destroy(&(o->wait_until_killed));
 		o->state = OPERATOR_KILLED;
+		o->queued_jobs_count = 0;
+		o->running_jobs_count = 0;
 		o->is_kill_signal_sent = 0;
 		o->is_trigger_signaled_on_running = 0;
 
