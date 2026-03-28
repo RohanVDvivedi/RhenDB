@@ -207,19 +207,14 @@ static void execute(operator* o)
 		interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, inputs->minimum_run_size, &no_more_data);
 		if(no_more_data)
 		{
-			if(is_killed_operator(inputs->input_operator))
-			{
-				pthread_mutex_lock(&(inputs->runs_lock));
-				inputs->flag_no_new_un_sorted_runs = 1;
-				pthread_mutex_unlock(&(inputs->runs_lock));
-				break;
-			}
-			else
-				break;
+			pthread_mutex_lock(&(inputs->runs_lock));
+			inputs->flag_no_new_un_sorted_runs = 1;
+			pthread_mutex_unlock(&(inputs->runs_lock));
+			return;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			mark_operator_self_killed(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 
 		if(its_p != NULL)

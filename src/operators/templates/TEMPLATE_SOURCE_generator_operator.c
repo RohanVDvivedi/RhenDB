@@ -45,7 +45,7 @@ static void execute(operator* o)
 		free(curr_tuple);
 	}
 
-	mark_operator_self_killed(o, kill_reason); return ;
+	kill_signal_for_self_operator(o, kill_reason); return ;
 }
 
 void setup_generator_operator(operator* o, void* (*generator)(void* generator_context, tuple_def* generator_tuple_def), void* generator_context, tuple_def* generator_tuple_def)

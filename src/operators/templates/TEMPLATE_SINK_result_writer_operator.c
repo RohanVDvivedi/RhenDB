@@ -29,16 +29,11 @@ static void execute(operator* o)
 		interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, 300, &no_more_data);
 		if(no_more_data)
 		{
-			if(is_killed_operator(inputs->input_operator))
-			{
-				mark_operator_self_killed(o, kill_reason); return ;
-			}
-			else
-				break;
+			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			mark_operator_self_killed(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 
 		if(its_p != NULL)

@@ -27,16 +27,11 @@ static void execute(operator* o)
 		interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, inputs->consume_only_after_bytes_count, &no_more_data);
 		if(no_more_data)
 		{
-			if(is_killed_operator(inputs->input_operator))
-			{
-				mark_operator_self_killed(o, kill_reason); return ;
-			}
-			else
-				break;
+			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			mark_operator_self_killed(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 
 		if(its_p != NULL)
@@ -48,7 +43,7 @@ static void execute(operator* o)
 			{
 				kill_reason = get_dstring_pointing_to_literal_cstring("pushed_failed_from_identity_oerator_and_so_killed");
 				delete_interim_tuple_store(its_p);
-				mark_operator_self_killed(o, kill_reason); return ;
+				kill_signal_for_self_operator(o, kill_reason); return ;
 			}
 		}
 		else

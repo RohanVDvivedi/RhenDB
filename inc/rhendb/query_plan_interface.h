@@ -120,7 +120,7 @@ int can_not_proceed_for_execution_operator(operator* o);
 // called by any one to put the operator in shutting down state
 void send_kill_signal_to_operator(operator* o, dstring kill_reason);
 
-#define kill_for_self_operator send_kill_signal_to_operator
+#define kill_signal_for_self_operator send_kill_signal_to_operator
 
 // force an OPERATOR_WAITING stated operator into OPERATOR_QUEUED state, and push a corresponding job into the thread_pool for it's execution
 void trigger_execution_on_operator(operator* o);
