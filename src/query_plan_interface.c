@@ -6,7 +6,7 @@
 
 // operator functions
 
-int is_killed_operator(operator* o)
+static int is_killed_operator(operator* o)
 {
 	pthread_mutex_lock(&(o->state_lock));
 

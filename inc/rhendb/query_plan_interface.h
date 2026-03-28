@@ -99,6 +99,11 @@ struct operator
 
 	operator_state state;
 
+	// count of the concurrent jobs currently in active state spaned by the operator
+	// using the function run_concurrent_job_for_operator()
+	uint64_t queued_jobs_count;
+	uint64_t running_jobs_count;
+
 	int is_kill_signal_sent:1;
 	int is_trigger_signaled_on_running:1; // this flag ill be set, if a trigger as signalled while the operator was in running state
 
@@ -107,8 +112,6 @@ struct operator
 	// kill_reasons only get appended here
 	dstring kill_reason;
 };
-
-int is_killed_operator(operator* o);
 
 // check if the operator is allowed to do it's execution
 // returns 1, if the operator is_killed or is_kill_signal_sent
