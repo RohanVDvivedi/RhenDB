@@ -1,15 +1,12 @@
 PICKED TASKS
 
+ * make a function to compare_tuple_rhendb and hash_tuple_rhendb in function_compare and function_hash cource files
+
+ * implement sorting tuples in the smallest run, using an array of offsets, and replacing them in the second array
+   * if the tuples are less than 32 bytes and fixed sized, then sort them in-place
+
  * implement sorter operator
-   * when to call merge and when to call sort
-   * how to handle being killed and how to handle producer being killed
-   * how to handle consumer being killed
-   * when to schedule the last merge
-   * we will also need to track queued_jobs and active_jobs in operator state, and once operator can not proceed, we just wait until all jobs are 0 count
-     * no jobs obviously can be scheduled once kill signal is sent
-   * return 1 if a job was queued and 0 otherwise, from query plan interface
-   * make a function to check if has_active_jobs_for_operator(o), returns 1, if queued_jobs_count + running_jobs_count > 0
-   * if operator has received kill signal and has not done suicide yet, then it gets triggered to execute, when this count reaches 0
+   * when to call merge and when to call sort, keeping the jobs count fixed
    * this will help with sort-merge-join and sort-based-groupby as post sorting operators
 
  * implement interim_tuple_store based interim_hash_table
