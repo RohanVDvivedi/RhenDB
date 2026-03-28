@@ -117,8 +117,10 @@ struct operator
 // returns 1, if the operator is_killed or is_kill_signal_sent
 int can_not_proceed_for_execution_operator(operator* o);
 
-// to be called from inside the operator once it is killed
-void mark_operator_self_killed(operator* o, dstring kill_reason);
+// called by any one to put the operator in shutting down state
+void send_kill_signal_to_operator(operator* o, dstring kill_reason);
+
+#define kill_for_self_operator send_kill_signal_to_operator
 
 // force an OPERATOR_WAITING stated operator into OPERATOR_QUEUED state, and push a corresponding job into the thread_pool for it's execution
 void trigger_execution_on_operator(operator* o);

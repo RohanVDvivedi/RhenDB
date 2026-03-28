@@ -21,171 +21,14 @@ int can_not_proceed_for_execution_operator(operator* o)
 {
 	pthread_mutex_lock(&(o->state_lock));
 
-	int result = (!!(o->is_kill_signal_sent)) || (o->state == OPERATOR_KILLED);
+	int result = (!!(o->is_kill_signal_sent));
 
 	pthread_mutex_unlock(&(o->state_lock));
 
 	return result;
 }
 
-void mark_operator_self_killed(operator* o, dstring kill_reason)
-{
-	pthread_mutex_lock(&(o->state_lock));
-
-	// concatenate the kill reason passed
-	if(!is_empty_dstring(&kill_reason))
-	{
-		if(!is_empty_dstring(&(o->kill_reason)))
-			if(!concatenate_char(&(o->kill_reason), '$'))
-				exit(-1);
-		if(!concatenate_dstring(&(o->kill_reason), &kill_reason))
-			exit(-1);
-	}
-
-	o->state = OPERATOR_KILLED;
-	pthread_cond_broadcast(&(o->wait_until_killed));
-
-	pthread_mutex_unlock(&(o->state_lock));
-
-	// force the consumer to read through all that has been left to be consumed
-	if(o->consumer_operator != NULL)
-		trigger_execution_on_operator(o->consumer_operator);
-}
-
-static void* internal_execute(void* o_vp)
-{
-	operator* o = o_vp;
-
-	while(1)
-	{
-		int was_killed = 0;
-
-		pthread_mutex_lock(&(o->state_lock));
-		if(o->is_kill_signal_sent)
-		{
-			o->state = OPERATOR_KILLED;
-			pthread_cond_broadcast(&(o->wait_until_killed));
-			was_killed = 1;
-		}
-		else
-			o->state = OPERATOR_RUNNING;
-		pthread_mutex_unlock(&(o->state_lock));
-
-		if(was_killed)
-			goto WAS_KILLED;
-
-		o->execute(o);
-
-		int was_triggered_while_we_were_running = 0;
-
-		pthread_mutex_lock(&(o->state_lock));
-		if(o->is_kill_signal_sent) // if the user exited while running, then mark it now to be waiting
-		{
-			o->state = OPERATOR_KILLED;
-			pthread_cond_broadcast(&(o->wait_until_killed));
-			was_killed = 1;
-		}
-		else if(o->state == OPERATOR_RUNNING)
-		{
-			if(o->is_trigger_signaled_on_running)
-			{
-				was_triggered_while_we_were_running = 1;
-				o->is_trigger_signaled_on_running = 0; // reset this flag
-				o->state = OPERATOR_QUEUED; // mark the operator to be queued, but we will just loop again
-			}
-			else
-				o->state = OPERATOR_WAITING; // else put it into waiting state
-		}
-		pthread_mutex_unlock(&(o->state_lock));
-
-		if(was_killed)
-			goto WAS_KILLED;
-
-		if(was_triggered_while_we_were_running)
-			continue;
-		else
-			break;
-	}
-
-	return NULL;
-
-	WAS_KILLED:
-	// force the consumer to read through all that has been left to be consumed, as we just killed the operator
-	if(o->consumer_operator != NULL)
-		trigger_execution_on_operator(o->consumer_operator);
-	return NULL;
-}
-
-void trigger_execution_on_operator(operator* o)
-{
-	int should_queue = 0;
-
-	pthread_mutex_lock(&(o->state_lock));
-	if(o->state == OPERATOR_RUNNING) // if the operator is already in running state, mark to let the operator know that a trigger was signalled
-	{
-		o->is_trigger_signaled_on_running = 1;
-		should_queue = 0;
-	}
-	else if(o->state == OPERATOR_WAITING) // only a WAITING operator can be queued
-	{
-		o->state = OPERATOR_QUEUED; // change the state to OPERATOR_QUEUED, right away to prevent double queuing
-		should_queue = 1;
-	}
-	pthread_mutex_unlock(&(o->state_lock));
-
-	if(should_queue)
-	{
-		if(!submit_job_executor(o->self_query_plan->curr_tx->db->operator_thread_pool, (void* (*)(void*))(internal_execute), o, NULL, NULL, BLOCKING))
-		{
-			printf("ISSUE in query_plan_interface : COULD NOT PUSH A PAUSED OPERATOR'S JOB TO QUEUE IT\n");
-			exit(-1);
-		}
-	}
-}
-
-typedef struct operator_job_wrapper_params operator_job_wrapper_params;
-struct operator_job_wrapper_params
-{
-	operator* o;
-	void* param;
-	void (*operator_job_function)(operator* o, void* param);
-};
-
-static void* operator_job_wrapper_function(void* ojwp_vp)
-{
-	operator_job_wrapper_params ojwp = *((operator_job_wrapper_params*)(ojwp_vp));
-	free(ojwp_vp);
-
-	// do not run the operator's job, if it is not allowed to proceed
-	// if it is killed or marked to be killed
-	if(can_not_proceed_for_execution_operator(ojwp.o))
-		return NULL;
-
-	ojwp.operator_job_function(ojwp.o, ojwp.param);
-
-	return NULL;
-}
-
-void run_concurrent_job_for_operator(operator* o, void* param, void (*operator_job_function)(operator* o, void* param))
-{
-	// allocate the parameter for the operator_job_wrapper_function
-	operator_job_wrapper_params* ojwp_p = malloc(sizeof(operator_job_wrapper_params));
-	(*ojwp_p) = (operator_job_wrapper_params){
-		.o = o,
-		.param = param,
-		.operator_job_function = operator_job_function,
-	};
-
-	// and push it to thread pool for execution in a concurrent threadpool
-	if(!submit_job_executor(o->self_query_plan->curr_tx->db->operator_thread_pool, (void* (*)(void*))(operator_job_wrapper_function), ojwp_p, NULL, NULL, BLOCKING))
-	{
-		printf("ISSUE in query_plan_interface : COULD NOT PUSH A PAUSED OPERATOR'S CURRENT JOB TO RUN IT\n");
-		exit(-1);
-	}
-}
-
-// called by the query_plan to send kill to an operator
-static void send_kill_signal_to_operator(operator* o, dstring kill_reason)
+void send_kill_signal_to_operator(operator* o, dstring kill_reason)
 {
 	pthread_mutex_lock(&(o->state_lock));
 
@@ -202,6 +45,243 @@ static void send_kill_signal_to_operator(operator* o, dstring kill_reason)
 	o->is_kill_signal_sent = 1;
 
 	pthread_mutex_unlock(&(o->state_lock));
+}
+
+// returns true, if the operator as killed
+// if this call succeeds please call trigger_execution_on_operator(o->consumer_operator);
+static int process_kill_signal_if_received_for_operator_UNSAFE(operator* o)
+{
+	// already killed return 1
+	if(o->state == OPERATOR_KILLED)
+		return 1;
+
+	// only condition for the operator to be placed in OPERATOR_KILLED state
+	if(o->is_kill_signal_sent && (o->state == OPERATOR_WAITING || o->state == OPERATOR_QUEUED) && o->queued_jobs_count == 0 && o->running_jobs_count == 0)
+	{
+		// mark it and put it in killed state
+		o->state = OPERATOR_KILLED;
+
+		// wake up anyone aiting for this operator to get killed
+		pthread_cond_broadcast(&(o->wait_until_killed));
+
+		return 1;
+	}
+
+	// the kill signal as not sent OR there are active jobs queued/running
+	return 0;
+}
+
+static void* internal_execute(void* o_vp)
+{
+	operator* o = o_vp;
+
+	while(1)
+	{
+		int was_killed = 0;
+		int should_run = 0;
+
+		pthread_mutex_lock(&(o->state_lock));
+		was_killed = process_kill_signal_if_received_for_operator_UNSAFE(o);
+		if(!was_killed)
+		{
+			if(!(o->is_kill_signal_sent)) // current state has to be OPERATOR_QUEUED
+			{
+				should_run = 1;
+				o->state = OPERATOR_RUNNING;
+			}
+			else
+				o->state = OPERATOR_WAITING;
+		}
+		pthread_mutex_unlock(&(o->state_lock));
+
+		if(was_killed)
+		{
+			if(o->consumer_operator != NULL)
+				trigger_execution_on_operator(o->consumer_operator);
+			return NULL;
+		}
+
+		if(!should_run)
+			return NULL;
+
+		o->execute(o);
+
+		int was_triggered_while_we_were_running = 0;
+
+		pthread_mutex_lock(&(o->state_lock));
+		if(!(o->is_kill_signal_sent)) // current state has to be OPERATOR_RUNNING
+		{
+			if(o->is_trigger_signaled_on_running)
+			{
+				was_triggered_while_we_were_running = 1;
+				o->is_trigger_signaled_on_running = 0; // reset this flag
+				o->state = OPERATOR_QUEUED; // mark the operator to be queued, but we will just loop again
+			}
+			else
+				o->state = OPERATOR_WAITING;
+		}
+		else
+			o->state = OPERATOR_WAITING;
+		was_killed = process_kill_signal_if_received_for_operator_UNSAFE(o);
+		pthread_mutex_unlock(&(o->state_lock));
+
+		if(was_killed)
+		{
+			if(o->consumer_operator != NULL)
+				trigger_execution_on_operator(o->consumer_operator);
+			return NULL;
+		}
+
+		if(!was_triggered_while_we_were_running)
+			return NULL;
+	}
+
+	return NULL;
+}
+
+void trigger_execution_on_operator(operator* o)
+{
+	int should_queue = 0;
+	int was_killed = 0;
+
+	pthread_mutex_lock(&(o->state_lock));
+	was_killed = process_kill_signal_if_received_for_operator_UNSAFE(o);
+	if(!was_killed)
+	{
+		if(!(o->is_kill_signal_sent))
+		{
+			if(o->state == OPERATOR_RUNNING)
+			{
+				o->is_trigger_signaled_on_running = 1;
+				should_queue = 0;
+			}
+			else if(o->state == OPERATOR_WAITING)
+			{
+				o->state = OPERATOR_QUEUED;
+				should_queue = 1;
+			}
+		}
+		else
+			o->state = OPERATOR_WAITING;
+	}
+	pthread_mutex_unlock(&(o->state_lock));
+
+	if(was_killed)
+	{
+		if(o->consumer_operator != NULL)
+			trigger_execution_on_operator(o->consumer_operator);
+		return;
+	}
+
+	if(!should_queue)
+		return;
+
+	if(!submit_job_executor(o->self_query_plan->curr_tx->db->operator_thread_pool, (void* (*)(void*))(internal_execute), o, NULL, NULL, BLOCKING))
+	{
+		printf("ISSUE in query_plan_interface : COULD NOT PUSH A PAUSED OPERATOR'S JOB TO QUEUE IT\n");
+		exit(-1);
+	}
+}
+
+typedef struct operator_job_wrapper_params operator_job_wrapper_params;
+struct operator_job_wrapper_params
+{
+	operator* o;
+	void* param;
+	void (*operator_job_function)(operator* o, void* param);
+};
+
+static void* operator_job_wrapper_function(void* ojwp_vp)
+{
+	operator_job_wrapper_params ojwp = *((operator_job_wrapper_params*)(ojwp_vp));
+	free(ojwp_vp);
+
+	operator* o = ojwp.o;
+
+	int was_killed = 0;
+	int should_run = 0;
+
+	pthread_mutex_lock(&(o->state_lock));
+	o->queued_jobs_count--;
+	was_killed = process_kill_signal_if_received_for_operator_UNSAFE(o);
+	if(!was_killed)
+	{
+		if(!(o->is_kill_signal_sent))
+		{
+			should_run = 1;
+			o->running_jobs_count++;
+		}
+	}
+	pthread_mutex_unlock(&(o->state_lock));
+
+	if(was_killed)
+	{
+		if(o->consumer_operator != NULL)
+			trigger_execution_on_operator(o->consumer_operator);
+		return NULL;
+	}
+
+	if(!should_run)
+		return NULL;
+
+	ojwp.operator_job_function(ojwp.o, ojwp.param);
+
+	pthread_mutex_lock(&(o->state_lock));
+	o->running_jobs_count--;
+	was_killed = process_kill_signal_if_received_for_operator_UNSAFE(o);
+	pthread_mutex_unlock(&(o->state_lock));
+
+	if(was_killed)
+	{
+		if(o->consumer_operator != NULL)
+			trigger_execution_on_operator(o->consumer_operator);
+		return NULL;
+	}
+
+	return NULL;
+}
+
+void run_concurrent_job_for_operator(operator* o, void* param, void (*operator_job_function)(operator* o, void* param))
+{
+	int was_killed = 0;
+	int should_queue = 0;
+
+	pthread_mutex_lock(&(o->state_lock));
+	was_killed = process_kill_signal_if_received_for_operator_UNSAFE(o);
+	if(!was_killed)
+	{
+		if(!o->is_kill_signal_sent)
+		{
+			should_queue = 1;
+			o->queued_jobs_count++;
+		}
+	}
+	pthread_mutex_unlock(&(o->state_lock));
+
+	if(was_killed)
+	{
+		if(o->consumer_operator != NULL)
+			trigger_execution_on_operator(o->consumer_operator);
+		return;
+	}
+
+	if(!should_queue)
+		return;
+
+	// allocate the parameter for the operator_job_wrapper_function
+	operator_job_wrapper_params* ojwp_p = malloc(sizeof(operator_job_wrapper_params));
+	(*ojwp_p) = (operator_job_wrapper_params){
+		.o = o,
+		.param = param,
+		.operator_job_function = operator_job_function,
+	};
+
+	// and push it to thread pool for execution in a concurrent threadpool
+	if(!submit_job_executor(o->self_query_plan->curr_tx->db->operator_thread_pool, (void* (*)(void*))(operator_job_wrapper_function), ojwp_p, NULL, NULL, BLOCKING))
+	{
+		printf("ISSUE in query_plan_interface : COULD NOT PUSH A PAUSED OPERATOR'S CURRENT JOB TO RUN IT\n");
+		exit(-1);
+	}
 }
 
 // wait here after you send the operators a kill signal, waiting for them to die
