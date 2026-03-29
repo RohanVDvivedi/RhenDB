@@ -270,7 +270,7 @@ int main()
 		}
 
 		o = get_new_registered_operator_for_query_plan(qp);
-		setup_printf_operator(o, input);
+		setup_printf_operator(o, input, 100);
 		printf("sink operator %p\n", o);
 	}
 	printf("\n\n");

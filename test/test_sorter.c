@@ -226,7 +226,7 @@ int main()
 
 		input = o;
 		o = get_new_registered_operator_for_query_plan(qp);
-		setup_printf_operator(o, input);
+		setup_printf_operator(o, input, 1); // print just the tuples
 		printf("sink operator %p\n", o);
 	}
 	printf("\n\n");
