@@ -16,7 +16,7 @@
 #define PARALLEL_SORTING_JOBS_COUNT    4
 #define N_WAY_SORT                     4
 
-#define TESTCASE_SIZE 10000
+#define TESTCASE_SIZE 100000
 
 uint32_t inputs[TESTCASE_SIZE];
 void generate_random_inputs()
