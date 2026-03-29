@@ -16,7 +16,7 @@
 #define PARALLEL_SORTING_JOBS_COUNT    4
 #define N_WAY_SORT                     4
 
-#define TESTCASE_SIZE 100000
+#define TESTCASE_SIZE 250000
 
 uint32_t inputs[TESTCASE_SIZE];
 void generate_random_inputs()
@@ -225,7 +225,7 @@ int main()
 
 		input = o;
 		o = get_new_registered_operator_for_query_plan(qp);
-		setup_printf_operator(o, input, 1); // print just the tuples
+		setup_printf_operator(o, input, 0); // print just the tuples
 		printf("sink operator %p\n", o);
 	}
 	printf("\n\n");
