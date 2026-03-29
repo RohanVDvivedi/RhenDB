@@ -176,11 +176,12 @@ static void merge_job(operator* o, void* _param)
 			uint64_t next_tuple_offset = next_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0]));
 			if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), next_tuple_offset, &(inputs->record_def->size_def), inputs->minimum_run_size))
 			{
+				remove_from_pheap(&mergeable_open_runs, its_p);
 				unmap_for_interim_tuple_region(&(its_p->embed_regions[0]));
 				delete_interim_tuple_store(its_p);
 			}
 			else
-				push_to_pheap(&mergeable_open_runs, its_p);
+				heapify_for_in_pheap(&mergeable_open_runs, its_p);
 		}
 	}
 
