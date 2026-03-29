@@ -61,16 +61,6 @@ static int compare_tuples_for_sorter(const void* o_vp, const void* tup1, const v
 	return compare;
 }
 
-static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const void* its1_vp, const void* its2_vp)
-{
-	const operator* o = o_vp;
-
-	const interim_tuple_store* its1_p = its1_vp;
-	const interim_tuple_store* its2_p = its2_vp;
-
-	return compare_tuples_for_sorter(o, its1_p->embed_regions[0].tuple, its2_p->embed_regions[0].tuple);
-}
-
 static void sort_job(operator* o, void* _param)
 {
 	input_values* inputs = o->inputs;
@@ -96,6 +86,16 @@ static void sort_job(operator* o, void* _param)
 	inputs->sorted_runs_count[0]++;
 	inputs->total_sorted_runs_count++;
 	pthread_mutex_unlock(&(inputs->runs_lock));
+}
+
+static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const void* its1_vp, const void* its2_vp)
+{
+	const operator* o = o_vp;
+
+	const interim_tuple_store* its1_p = its1_vp;
+	const interim_tuple_store* its2_p = its2_vp;
+
+	return compare_tuples_for_sorter(o, its1_p->embed_regions[0].tuple, its2_p->embed_regions[0].tuple);
 }
 
 static void merge_job(operator* o, void* _param)
