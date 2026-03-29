@@ -25,6 +25,7 @@ struct input_values
 
 	uint64_t minimum_run_size;
 	uint32_t N_way_sort;
+	uint32_t max_concurrent_jobs_count;
 
 	pthread_mutex_t runs_lock;
 
@@ -37,8 +38,10 @@ struct input_values
 	uint64_t sorted_runs_count[MAX_LEVELS];
 	uint64_t total_sorted_runs_count;
 
-	uint64_t runs_being_processed;
+	uint32_t total_concurrent_jobs_count;
 };
+
+static void request_to_process_some_jobs(operator* o);
 
 static void sort_job(operator* o, void* _param)
 {
@@ -51,12 +54,16 @@ static void sort_job(operator* o, void* _param)
 	{
 		remove_head_from_singlylist(&(inputs->un_sorted_runs));
 		inputs->un_sorted_runs_count--;
-		inputs->runs_being_processed++;
 	}
 	pthread_mutex_unlock(&(inputs->runs_lock));
 
 	if(its_p == NULL)
+	{
+		pthread_mutex_lock(&(inputs->runs_lock));
+		inputs->total_concurrent_jobs_count--;
+		pthread_mutex_unlock(&(inputs->runs_lock));
 		return;
+	}
 
 	// sort its_p
 	int abort_error = 0;
@@ -68,8 +75,11 @@ static void sort_job(operator* o, void* _param)
 	insert_tail_in_singlylist(&(inputs->sorted_runs[0]), ots_p);
 	inputs->sorted_runs_count[0]++;
 	inputs->total_sorted_runs_count++;
-	inputs->runs_being_processed--;
+	inputs->total_concurrent_jobs_count--;
 	pthread_mutex_unlock(&(inputs->runs_lock));
+
+	// request some new jobs to start
+	request_to_process_some_jobs(o);
 }
 
 static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const void* its1_vp, const void* its2_vp)
@@ -114,19 +124,22 @@ static void merge_job(operator* o, void* _param)
 			else
 				break;
 		}
-		if(mergeable_runs_count > 0)
-			inputs->runs_being_processed++;
 		pthread_mutex_unlock(&(inputs->runs_lock));
 
 		if(mergeable_runs_count == 0)
+		{
+			pthread_mutex_lock(&(inputs->runs_lock));
+			inputs->total_concurrent_jobs_count--;
+			pthread_mutex_unlock(&(inputs->runs_lock));
 			return;
+		}
 		else if(mergeable_runs_count == 1)
 		{
 			pthread_mutex_lock(&(inputs->runs_lock));
 			insert_all_at_tail_in_singlylist(&(inputs->sorted_runs[level+1]), &mergeable_runs);
 			inputs->sorted_runs_count[level+1] += mergeable_runs_count;
 			inputs->total_sorted_runs_count += mergeable_runs_count;
-			inputs->runs_being_processed--;
+			inputs->total_concurrent_jobs_count--;
 			pthread_mutex_unlock(&(inputs->runs_lock));
 			return;
 		}
@@ -182,65 +195,83 @@ static void merge_job(operator* o, void* _param)
 	insert_tail_in_singlylist(&(inputs->sorted_runs[level+1]), output_its_p);
 	inputs->sorted_runs_count[level+1]++;
 	inputs->total_sorted_runs_count++;
-	inputs->runs_being_processed--;
+	inputs->total_concurrent_jobs_count--;
 	pthread_mutex_unlock(&(inputs->runs_lock));
+
+	// request some new jobs to start
+	request_to_process_some_jobs(o);
 }
 
-static void request_to_process_some_job(operator* o)
+static void request_to_process_some_jobs(operator* o)
 {
-	input_values* inputs = o->inputs;
+	if(can_not_proceed_for_execution_operator(o))
+		return;
 
-	int has_job_to_process = 0;
-	intptr_t job_type;
+	input_values* inputs = o->inputs;
 
 	pthread_mutex_lock(&(inputs->runs_lock));
 
-	if(has_job_to_process == 0)
+	if(inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count)
 	{
 		if(inputs->un_sorted_runs_count > 0)
 		{
-			has_job_to_process = 1;
-			job_type = -1;
+			if(!run_concurrent_job_for_operator(o, NULL, sort_job) && can_not_proceed_for_execution_operator(o))
+				goto EXIT;
+			inputs->total_concurrent_jobs_count++;
 		}
 	}
 
-	if(has_job_to_process == 0)
+	if(inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count)
 	{
-		for(int i = 0; i < MAX_LEVELS && has_job_to_process == 0; i++)
+		for(int i = 0; i < MAX_LEVELS && (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); i++)
 		{
 			if(inputs->sorted_runs_count[i] >= inputs->N_way_sort)
 			{
-				has_job_to_process = 1;
-				job_type = i
+				if(!run_concurrent_job_for_operator(o, (void*)((intptr_t)i), merge_job) && can_not_proceed_for_execution_operator(o))
+					goto EXIT;
+				inputs->total_concurrent_jobs_count++;
 			}
 		}
 	}
 
-	if(has_job_to_process == 0)
+	if(inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count)
 	{
 		if(inputs->flag_no_new_un_sorted_runs && inputs->total_sorted_runs_count > 0)
 		{
-			for(int i = 0; i < MAX_LEVELS && has_job_to_process == 0; i++)
+			for(int i = 0; i < MAX_LEVELS && (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); i++)
 			{
 				if(inputs->sorted_runs_count[i] > 0)
 				{
-					has_job_to_process = 1;
-					job_type = i
+					if(!run_concurrent_job_for_operator(o, (void*)((intptr_t)i), merge_job) && can_not_proceed_for_execution_operator(o))
+						goto EXIT;
+					inputs->total_concurrent_jobs_count++;
 				}
 			}
 		}
 	}
 
-	pthread_mutex_unlock(&(inputs->runs_lock));
-
-	if(has_job_to_process)
+	if(inputs->flag_no_new_un_sorted_runs && inputs->total_concurrent_jobs_count == 0 && inputs->total_sorted_runs_count <= 0)
 	{
-		if(job_type == -1)
-			run_concurrent_job_for_operator(o, NULL, sort_job);
-		else
-			run_concurrent_job_for_operator(o, job_type, merge_job);
+		for(int i = 0; i < MAX_LEVELS; i++)
+		{
+			while(!is_empty_singlylist(&(inputs->sorted_runs[i])))
+			{
+				interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(inputs->sorted_runs[i]));
+				remove_head_from_singlylist(&(inputs->sorted_runs[i]));
+				if(!produce_tuples_from_operator(o, its_p))
+				{
+					delete_interim_tuple_store(its_p);
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("pushed_failed_from_identity_oerator_and_so_killed"));
+					pthread_mutex_unlock(&(inputs->runs_lock));
+					return ;
+				}
+			}
+		}
+		kill_signal_for_self_operator(0, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
 	}
-	return has_job_to_process;
+
+	EXIT:;
+	pthread_mutex_unlock(&(inputs->runs_lock));
 }
 
 static void execute(operator* o)
@@ -272,7 +303,7 @@ static void execute(operator* o)
 			inputs->un_sorted_runs_count++;
 			pthread_mutex_unlock(&(inputs->runs_lock));
 
-			run_concurrent_job_for_operator(o, NULL, sort_job);
+			request_to_process_some_jobs(o);
 		}
 		else
 			break;
@@ -312,7 +343,7 @@ static void free_resources(operator* o)
 
 #include<rhendb/tuple_transformers.h>
 
-void setup_external_sort_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t minimum_run_size, uint32_t N_way_sort)
+void setup_external_sort_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t minimum_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
 {
 	// force the input operator to produce tuples one by one
 	append_tuple_transformer(&(input_operator->output_tuple_transformers), get_new_identity_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(input_operator)));
@@ -334,11 +365,13 @@ void setup_external_sort_operator(operator* o, operator* input_operator, uint32_
 		.key_compare_direction = key_compare_direction,
 		.minimum_run_size = minimum_run_size,
 		.N_way_sort = N_way_sort,
+		.max_concurrent_jobs_count = max_concurrent_jobs_count,
 		.runs_lock = PTHREAD_MUTEX_INITIALIZER,
 		.flag_no_new_un_sorted_runs = 0,
 		.un_sorted_runs_count = 0,
 		.sorted_runs_count = {},
 		.total_sorted_runs_count = 0,
+		.total_concurrent_jobs_count = 0,
 	};
 
 	for(int i = 0; i < MAX_LEVELS; i++)
