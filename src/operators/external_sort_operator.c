@@ -4,6 +4,8 @@
 
 #include<rhendb/function_compare.h>
 
+#include<rhendb/interim_tuple_store_sort.h>
+
 /*
 	TEMPLATE FOR INTERMEDIATE OPERATORS (sorting(ordering), joins(hash_joins), aggregations(groupby->aggregates))
 */
@@ -55,7 +57,7 @@ static void sort_job(operator* o, void* _param)
 
 	// sort its_p
 	int abort_error = 0;
-	interim_tuple_store* ots_p = sort_interim_tuples(its_p, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+	interim_tuple_store* ots_p = sort_interim_tuples(its_p, inputs->minimum_run_size, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
 	delete_interim_tuple_store(its_p);
 
 	// insert sorted run back into the sorted_runs[0], the smallest most level

@@ -1,0 +1,104 @@
+#include<rhendb/interim_tuple_store_sort.h>
+
+#include<cutlery/value_arraylist.h>
+
+#include<stdlib.h>
+
+#include<rhendb/function_compare.h>
+
+typedef struct sorting_context sorting_context;
+struct sorting_context
+{
+	interim_tuple_store* its_p;
+	uint32_t min_bytes_to_mmap;
+
+	const tuple_def* tpl_d;
+	const positional_accessor* element_ids;
+	const compare_direction* cmp_dir;
+	uint32_t element_count;
+
+	rage_engine* ex_engine;
+	const void* transaction_id;
+	int* abort_error;
+};
+
+int compare_tuples_for_interim_tuple_store_offets(const void* sc_vp, const void* off1_vp, const void* off2_vp)
+{
+	uint64_t off1 = *((const uint64_t*)off1_vp);
+	uint64_t off2 = *((const uint64_t*)off2_vp);
+
+	return 0;
+	//return comare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error);
+}
+
+data_definitions_value_arraylist(offset_list, uint64_t)
+declarations_value_arraylist(offset_list, uint64_t, static inline)
+#define EXPANSION_FACTOR 1.5
+function_definitions_value_arraylist(offset_list, uint64_t, static inline)
+
+interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, uint32_t min_bytes_to_mmap, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+{
+	// create a list_of_offsets
+	offset_list list_of_offsets;
+	if(!initialize_offset_list(&list_of_offsets, its_p->tuples_count))
+		exit(-1);
+
+	// gather all the offsets
+	for(uint64_t offset = 0; offset < its_p->next_tuple_offset; offset += get_tuple_size_for_interim_tuple_store(its_p, offset, &(tpl_d->size_def)))
+		if(!pop_back_from_offset_list(&list_of_offsets))
+			exit(-1);
+
+	// build sorting context
+	sorting_context sc = {
+		its_p,
+		min_bytes_to_mmap,
+
+		tpl_d,
+		element_ids,
+		cmp_dir,
+		element_count,
+
+		ex_engine,
+		transaction_id,
+		abort_error,
+	};
+
+	// buils index accessed interface to sort it
+	index_accessed_interface iai = get_index_accessed_interface_for_front_of_offset_list(&list_of_offsets);
+
+	// sort its_p using sc and iai
+	if(!is_empty_offset_list(&list_of_offsets))
+		quick_sort_iai(&(iai), 0, get_element_count_offset_list(&list_of_offsets)-1, &contexted_comparator(&sc, compare_tuples_for_interim_tuple_store_offets));
+
+	if(*abort_error)
+	{
+		deinitialize_offset_list(&list_of_offsets);
+		return NULL;
+	}
+
+	// destroy all regions we might have used
+	unmap_for_interim_tuple_region(&(its_p->embed_regions[0]));
+	unmap_for_interim_tuple_region(&(its_p->embed_regions[1]));
+
+	// create output interim_tuple_store
+	interim_tuple_store* ots_p = get_new_interim_tuple_store(".");
+
+	for(uint32_t i = 0; i < get_element_count_offset_list(&list_of_offsets); i++)
+	{
+		uint64_t offset = *get_from_front_of_offset_list(&list_of_offsets, i);
+		mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), offset, &(tpl_d->size_def), min_bytes_to_mmap);
+		uint32_t tuple_size = get_tuple_size_using_tuple_size_def(&(tpl_d->size_def), its_p->embed_regions[0].tuple);
+		mmap_for_writing_tuple(ots_p, &(ots_p->embed_regions[0]), &(tpl_d->size_def), tuple_size, min_bytes_to_mmap);
+		memory_move(ots_p->embed_regions[0].tuple, its_p->embed_regions[0].tuple, tuple_size);
+		finalize_written_tuple(ots_p, &(ots_p->embed_regions[0]));
+	}
+
+	// destroy all regions we might have useds
+	unmap_for_interim_tuple_region(&(its_p->embed_regions[0]));
+	unmap_for_interim_tuple_region(&(ots_p->embed_regions[0]));
+
+	// destroy the offset list
+	deinitialize_offset_list(&list_of_offsets);
+
+	return ots_p;
+}
