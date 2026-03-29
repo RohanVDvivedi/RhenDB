@@ -36,6 +36,8 @@ struct input_values
 	singlylist sorted_runs[MAX_LEVELS];
 	uint64_t sorted_runs_count[MAX_LEVELS];
 	uint64_t total_sorted_runs_count;
+
+	uint64_t runs_being_processed;
 };
 
 static void sort_job(operator* o, void* _param)
@@ -49,6 +51,7 @@ static void sort_job(operator* o, void* _param)
 	{
 		remove_head_from_singlylist(&(inputs->un_sorted_runs));
 		inputs->un_sorted_runs_count--;
+		inputs->runs_being_processed++;
 	}
 	pthread_mutex_unlock(&(inputs->runs_lock));
 
@@ -65,6 +68,7 @@ static void sort_job(operator* o, void* _param)
 	insert_tail_in_singlylist(&(inputs->sorted_runs[0]), ots_p);
 	inputs->sorted_runs_count[0]++;
 	inputs->total_sorted_runs_count++;
+	inputs->runs_being_processed--;
 	pthread_mutex_unlock(&(inputs->runs_lock));
 }
 
@@ -110,6 +114,8 @@ static void merge_job(operator* o, void* _param)
 			else
 				break;
 		}
+		if(mergeable_runs_count > 0)
+			inputs->runs_being_processed++;
 		pthread_mutex_unlock(&(inputs->runs_lock));
 
 		if(mergeable_runs_count == 0)
@@ -120,6 +126,7 @@ static void merge_job(operator* o, void* _param)
 			insert_all_at_tail_in_singlylist(&(inputs->sorted_runs[level+1]), &mergeable_runs);
 			inputs->sorted_runs_count[level+1] += mergeable_runs_count;
 			inputs->total_sorted_runs_count += mergeable_runs_count;
+			inputs->runs_being_processed--;
 			pthread_mutex_unlock(&(inputs->runs_lock));
 			return;
 		}
@@ -175,7 +182,65 @@ static void merge_job(operator* o, void* _param)
 	insert_tail_in_singlylist(&(inputs->sorted_runs[level+1]), output_its_p);
 	inputs->sorted_runs_count[level+1]++;
 	inputs->total_sorted_runs_count++;
+	inputs->runs_being_processed--;
 	pthread_mutex_unlock(&(inputs->runs_lock));
+}
+
+static void request_to_process_some_job(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	int has_job_to_process = 0;
+	intptr_t job_type;
+
+	pthread_mutex_lock(&(inputs->runs_lock));
+
+	if(has_job_to_process == 0)
+	{
+		if(inputs->un_sorted_runs_count > 0)
+		{
+			has_job_to_process = 1;
+			job_type = -1;
+		}
+	}
+
+	if(has_job_to_process == 0)
+	{
+		for(int i = 0; i < MAX_LEVELS && has_job_to_process == 0; i++)
+		{
+			if(inputs->sorted_runs_count[i] >= inputs->N_way_sort)
+			{
+				has_job_to_process = 1;
+				job_type = i
+			}
+		}
+	}
+
+	if(has_job_to_process == 0)
+	{
+		if(inputs->flag_no_new_un_sorted_runs && inputs->total_sorted_runs_count > 0)
+		{
+			for(int i = 0; i < MAX_LEVELS && has_job_to_process == 0; i++)
+			{
+				if(inputs->sorted_runs_count[i] > 0)
+				{
+					has_job_to_process = 1;
+					job_type = i
+				}
+			}
+		}
+	}
+
+	pthread_mutex_unlock(&(inputs->runs_lock));
+
+	if(has_job_to_process)
+	{
+		if(job_type == -1)
+			run_concurrent_job_for_operator(o, NULL, sort_job);
+		else
+			run_concurrent_job_for_operator(o, job_type, merge_job);
+	}
+	return has_job_to_process;
 }
 
 static void execute(operator* o)
