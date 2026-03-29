@@ -53,11 +53,14 @@ static void sort_job(operator* o, void* _param)
 	if(its_p == NULL)
 		return;
 
-	// TODO : sort its_p
+	// sort its_p
+	int abort_error = 0;
+	interim_tuple_store* ots_p = sort_interim_tuples(its_p, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+	delete_interim_tuple_store(its_p);
 
 	// insert sorted run back into the sorted_runs[0], the smallest most level
 	pthread_mutex_lock(&(inputs->runs_lock));
-	insert_tail_in_singlylist(&(inputs->sorted_runs[0]), its_p);
+	insert_tail_in_singlylist(&(inputs->sorted_runs[0]), ots_p);
 	inputs->sorted_runs_count[0]++;
 	inputs->total_sorted_runs_count++;
 	pthread_mutex_unlock(&(inputs->runs_lock));
