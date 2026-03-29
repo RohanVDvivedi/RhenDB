@@ -48,7 +48,7 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, uint32_t mi
 
 	// gather all the offsets
 	for(uint64_t offset = 0; offset < its_p->next_tuple_offset; offset += get_tuple_size_for_interim_tuple_store(its_p, offset, &(tpl_d->size_def)))
-		if(!pop_back_from_offset_list(&list_of_offsets))
+		if(!push_back_to_offset_list(&list_of_offsets, &offset))
 			exit(-1);
 
 	// build sorting context
