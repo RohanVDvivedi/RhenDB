@@ -1,6 +1,9 @@
 PICKED TASKS
 
- * review sorter and test it
+ * optimize sorter
+   * make it work with more data by chunking with in the sort operator, and minimizing the number of files
+   * allow keeping the mmaps open for as long as possible
+ * make the inserts to the output_buffers keep mmaps for writing embed_regions[0], open while it is in the output_buffer of the producer
 
  * implement interim_tuple_store based interim_hash_table
    * store uint64_t hash_value -> key attributes tuple_list(dti1, dti2, dti3 ...  512 B in prefix), uint64_t value_size_in_bytes, value blob(200 B in prefix)
