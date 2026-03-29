@@ -350,6 +350,8 @@ static void free_resources(operator* o)
 	}
 
 	pthread_mutex_unlock(&(inputs->runs_lock));
+
+	free(inputs);
 }
 
 #include<rhendb/tuple_transformers.h>
