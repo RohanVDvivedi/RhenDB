@@ -127,7 +127,8 @@ void trigger_execution_on_operator(operator* o);
 
 // to be called only from the inside of the operator or an operator's concurrently running job
 // used by the operator to schedule a concurrent job from the inside of an operator, no state is maintained for this job
-void run_concurrent_job_for_operator(operator* o, void* param, void (*operator_job_function)(operator* o, void* param));
+// returns 1 only if the job gets queued, if this function fails check if the operator you are working for can proceed
+int run_concurrent_job_for_operator(operator* o, void* param, void (*operator_job_function)(operator* o, void* param));
 
 // returns 0, if lock not acquired 1 if acquired, and -1 if an abort must be performed
 int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, uint64_t timeout_in_microseconds);

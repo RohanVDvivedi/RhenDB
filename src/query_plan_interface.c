@@ -241,7 +241,7 @@ static void* operator_job_wrapper_function(void* ojwp_vp)
 	return NULL;
 }
 
-void run_concurrent_job_for_operator(operator* o, void* param, void (*operator_job_function)(operator* o, void* param))
+int run_concurrent_job_for_operator(operator* o, void* param, void (*operator_job_function)(operator* o, void* param))
 {
 	int was_killed = 0;
 	int should_queue = 0;
@@ -262,11 +262,11 @@ void run_concurrent_job_for_operator(operator* o, void* param, void (*operator_j
 	{
 		if(o->consumer_operator != NULL)
 			trigger_execution_on_operator(o->consumer_operator);
-		return;
+		return 0;
 	}
 
 	if(!should_queue)
-		return;
+		return 0;
 
 	// allocate the parameter for the operator_job_wrapper_function
 	operator_job_wrapper_params* ojwp_p = malloc(sizeof(operator_job_wrapper_params));
@@ -282,6 +282,8 @@ void run_concurrent_job_for_operator(operator* o, void* param, void (*operator_j
 		printf("ISSUE in query_plan_interface : COULD NOT PUSH A PAUSED OPERATOR'S CURRENT JOB TO RUN IT\n");
 		exit(-1);
 	}
+
+	return 1;
 }
 
 // wait here after you send the operators a kill signal, waiting for them to die
