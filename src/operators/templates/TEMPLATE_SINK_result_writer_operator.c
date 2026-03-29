@@ -42,23 +42,27 @@ static void execute(operator* o)
 		{
 			// print based on level the user wants
 
-			if(inputs->print_level >= 3)
+			if(inputs->print_level >= 4)
 				run_concurrent_job_for_operator(o, "Hello world, from TEMPLATE sink operator, just received data", print_job);
 
-			if(inputs->print_level >= 2)
+			if(inputs->print_level >= 3)
 				printf("\n\nprinting interim_tuple_store with %"PRIu64" tuples, and filled upto %"PRIu64"/%"PRIu64"\n\n", its_p->tuples_count, its_p->next_tuple_offset, its_p->total_size);
 
 			if(inputs->print_level >= 1)
 			{
 				FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->input_tuple_def->size_def), its_p, 0, {
-					printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32"\n", tuple_index, tuple_offset, get_tuple_size(inputs->input_tuple_def, tuple));
-					print_tuple(tuple, inputs->input_tuple_def);
-					printf("\n\n");
+					if(inputs->print_level >= 2)
+						printf("tuple_index = %"PRIu64", tuple_offset = %"PRIu64", tuple_size = %"PRIu32"\n", tuple_index, tuple_offset, get_tuple_size(inputs->input_tuple_def, tuple));
+					if(inputs->print_level >= 1)
+						print_tuple(tuple, inputs->input_tuple_def);
+					if(inputs->print_level >= 2)
+						printf("\n\n");
 				});
-				printf("\n\n");
+				if(inputs->print_level >= 2)
+					printf("\n\n");
 			}
 
-			if(inputs->print_level >= 1)
+			if(inputs->print_level >= 0)
 			{
 				;
 			}
