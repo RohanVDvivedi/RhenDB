@@ -36,8 +36,6 @@ static void execute(operator* o)
 
 		if(its_p != NULL)
 		{
-			run_concurrent_job_for_operator(o, "Hello world, from TEMPLATE identity operator, just received data", print_job);
-
 			int produced = produce_tuples_from_operator(o, its_p);
 			if(!produced)
 			{
