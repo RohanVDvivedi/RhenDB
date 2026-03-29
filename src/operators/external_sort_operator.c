@@ -276,7 +276,7 @@ static void request_to_process_some_jobs(operator* o)
 				}
 			}
 		}
-		kill_signal_for_self_operator(0, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
 	}
 
 	EXIT:;
