@@ -1,0 +1,256 @@
+#include<rhendb/rhendb.h>
+
+#include<rhendb/transaction.h>
+#include<rhendb/operators.h>
+#include<rhendb/tuple_transformers.h>
+
+#include<string.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<unistd.h>
+#include<signal.h>
+
+#define USERS_COUNT 10
+
+#define SMALLEST_RUN_SIZE              (4096 * 1)
+#define PARALLEL_SORTING_JOBS_COUNT    4
+#define N_WAY_SORT                     4
+
+#define TESTCASE_SIZE 1000000
+
+uint32_t inputs[TESTCASE_SIZE];
+void generate_random_inputs()
+{
+	for(uint32_t i = 0; i < TESTCASE_SIZE; i++)
+		inputs[i] = i;
+	for(uint32_t i = 0; i < TESTCASE_SIZE; i++)
+		memory_swap(inputs + (((uint32_t)rand())  % TESTCASE_SIZE), inputs + (((uint32_t)rand()) % TESTCASE_SIZE), sizeof(uint32_t));
+}
+
+data_type_info digits_type_info;
+data_type_info num_in_words_type_info;
+data_type_info value_string_type_info;
+data_type_info* record_type_info;
+tuple_def record_def;
+
+#define RECORD_S_KEY_ELEMENT_COUNT 2
+
+positional_accessor KEY_POS[2] = {STATIC_POSITION(0), STATIC_POSITION(2)};
+compare_direction CMP_DIR[2] = {ASC, ASC};
+
+void initialize_tuple_defs()
+{
+	record_type_info = malloc(sizeof_tuple_data_type_info(5));
+	initialize_tuple_data_type_info(record_type_info, "record", 0, 900, 5);
+
+	strcpy(record_type_info->containees[0].field_name, "num");
+	record_type_info->containees[0].al.type_info = UINT_NON_NULLABLE[8];
+
+	strcpy(record_type_info->containees[1].field_name, "order");
+	record_type_info->containees[1].al.type_info = INT_NON_NULLABLE[1];
+
+	num_in_words_type_info = get_variable_length_string_type("num_in_words", 70);
+	strcpy(record_type_info->containees[2].field_name, "num_in_words");
+	record_type_info->containees[2].al.type_info = &num_in_words_type_info;
+
+	digits_type_info = get_variable_element_count_array_type("digits", 16, UINT_NON_NULLABLE[1]);
+	strcpy(record_type_info->containees[3].field_name, "digits");
+	record_type_info->containees[3].al.type_info = &digits_type_info;
+
+	value_string_type_info = get_variable_length_string_type("value_in_string", 100);
+	strcpy(record_type_info->containees[4].field_name, "value_in_string");
+	record_type_info->containees[4].al.type_info = &value_string_type_info;
+
+	initialize_tuple_def(&record_def, record_type_info);
+
+	print_tuple_def(&record_def);
+	printf("\n\n");
+}
+
+void deinitialize_tuple_defs()
+{
+	free(record_type_info);
+}
+
+const char *ones[] = {
+  "zero", "one", "two", "three", "four", "five", "six", "seven",
+  "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
+  "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"
+};
+
+const char *tens[] = {
+  "", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"
+};
+
+void num_in_words(char* output, uint16_t n) {
+  if (n < 20) {
+    strcpy(output, ones[n]);
+  } else if (n < 100) {
+    strcpy(output, tens[(n / 10) % 10]);
+    if((n % 10) != 0) {
+    	strcat(output, " ");
+    	strcat(output, ones[n % 10]);
+    }
+  } else if (n < 1000) {
+  	strcpy(output, ones[(n / 100) % 10]);
+  	strcat(output, " hundred");
+  	if(n % 100 != 0) {
+  		strcat(output, " ");
+			char temp[100];
+			num_in_words(temp, n % 100);
+  		strcat(output, temp);
+  	}
+  } else {
+  	strcpy(output, "TOO00-BIG");
+  }
+}
+
+uint16_t find_order(uint64_t num, int order)
+{
+	switch(order)
+	{
+		case 0:
+			return (num / 1ULL) % 1000;
+		case 1:
+			return (num / 1000ULL) % 1000;
+		case 2:
+			return (num / 1000000ULL) % 1000;
+		case 3:
+			return (num / 1000000000ULL) % 1000;
+		case 4:
+		{
+			printf("ORDER TOO BIG\n");
+			exit(-1);
+		}
+	}
+	return 0;
+}
+
+void construct_record(void* buffer, uint64_t num, int order, char* value)
+{
+	init_tuple(&record_def, buffer);
+
+	set_element_in_tuple(&record_def, STATIC_POSITION(0), buffer, &(datum){.uint_value = num}, UINT32_MAX);
+
+	uint16_t o = find_order(num, order);
+	set_element_in_tuple(&record_def, STATIC_POSITION(1), buffer, &(datum){.int_value = order}, UINT32_MAX);
+
+	char temp[100];
+	num_in_words(temp, o);
+	set_element_in_tuple(&record_def, STATIC_POSITION(2), buffer, &(datum){.string_value = temp, .string_size = strlen(temp)}, UINT32_MAX);
+
+	{
+		set_element_in_tuple(&record_def, STATIC_POSITION(3), buffer, EMPTY_DATUM, UINT32_MAX);
+		uint32_t size = 0;
+		uint32_t digits[64];
+		while(num > 0)
+		{
+			digits[size++] = num % 10;
+			num = num / 10;
+		}
+		expand_element_count_for_element_in_tuple(&record_def, STATIC_POSITION(3), buffer, 0, size, UINT32_MAX);
+		for(uint32_t i = 0; i < size; i++)
+			set_element_in_tuple(&record_def, STATIC_POSITION(3,i), buffer, &(datum){.uint_value = digits[i]}, UINT32_MAX);
+	}
+
+	if(value == NULL)
+		set_element_in_tuple(&record_def, STATIC_POSITION(4), buffer, NULL_DATUM, UINT32_MAX);
+	else
+		set_element_in_tuple(&record_def, STATIC_POSITION(4), buffer, &(datum){.string_value = value, .string_size = strlen(value)}, UINT32_MAX);
+}
+
+#define BUFFER_SIZE 300
+
+void* generator(void* generator_context, tuple_def* generator_tuple_def)
+{
+	static int index = 0;
+
+	if(index > TESTCASE_SIZE)
+		return NULL;
+
+	void* generated = malloc(BUFFER_SIZE);
+
+	construct_record(generated, inputs[index++], 0, "Rohan Dvivedi");
+	printf("PRODUCED : ");
+	print_tuple(generated, generator_tuple_def);
+	printf("\n\n");
+
+	return generated;
+}
+
+query_plan* qp = NULL;
+
+void intHandler(int dummy)
+{
+	printf("\nCaught Ctrl+C! shuting down query plan\n");
+	shutdown_query_plan(qp, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
+}
+
+int main()
+{
+	signal(SIGINT, intHandler);
+
+	rhendb rdb;
+	initialize_rhendb(&rdb, "./test.db",
+		5,
+		512, 8, 10, 10,
+			10000ULL, 100000ULL,
+			10000000ULL,
+		4096,
+			10000000ULL,
+		USERS_COUNT);
+	printf("database initialized\n\n");
+
+	generate_random_inputs();
+
+	initialize_tuple_defs();
+
+	transaction tx = initialize_transaction(&rdb);
+
+	qp = get_new_query_plan(&tx, 3);
+
+	// make operators
+
+	printf("Building pipeline :\n");
+	{
+		operator* input = NULL;
+		operator* o = get_new_registered_operator_for_query_plan(qp);
+		setup_generator_operator(o, generator, NULL, &record_def);
+		printf("source operator %p\n", o);
+
+		input = o;
+		o = get_new_registered_operator_for_query_plan(qp);
+		setup_external_sort_operator(o, input, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		printf("sort operator %p\n", o);
+
+		input = o;
+		o = get_new_registered_operator_for_query_plan(qp);
+		setup_printf_operator(o, input);
+		printf("sink operator %p\n", o);
+	}
+	printf("\n\n");
+
+	// make operators completed
+
+	start_all_operators_for_query_plan(qp);
+
+	wait_for_shutdown_of_query_plan(qp);
+
+	dstring kill_reasons = new_dstring("", 0);
+	destroy_query_plan(qp, &kill_reasons);
+
+	printf("\n\nKILL REASONS : \n");
+	printf_dstring(&kill_reasons);
+	deinit_dstring(&kill_reasons);
+	printf("\n\nKILL REASONS END\n\n");
+
+	deinitialize_transaction(&tx);
+
+	deinitialize_tuple_defs();
+
+	deinitialize_rhendb(&rdb);
+
+	printf("TEST COMPLETED\n");
+
+	return 0;
+}
