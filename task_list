@@ -1,13 +1,11 @@
 PICKED TASKS
 
- * make a function to compare_tuple_rhendb and hash_tuple_rhendb in function_compare and function_hash cource files
-
- * implement sorting tuples in the smallest run, using an array of offsets, and replacing them in the second array
-   * if the tuples are less than 32 bytes and fixed sized, then sort them in-place
-
+ * implement sort_interim_tuples
+   * sort interim_tuple_store using a separate array of offsets, and put them in another interim_tuple_store
  * implement sorter operator
    * when to call merge and when to call sort, keeping the jobs count fixed
    * this will help with sort-merge-join and sort-based-groupby as post sorting operators
+ * review sorter and test it
 
  * implement interim_tuple_store based interim_hash_table
    * store uint64_t hash_value -> key attributes tuple_list(dti1, dti2, dti3 ...  512 B in prefix), uint64_t value_size_in_bytes, value blob(200 B in prefix)
