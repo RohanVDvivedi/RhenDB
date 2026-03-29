@@ -222,7 +222,8 @@ static void request_to_process_some_jobs(operator* o)
 
 	if(inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count)
 	{
-		if(inputs->un_sorted_runs_count > 0)
+		for(int t = 0; t < inputs->un_sorted_runs_count
+			&& (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); t++)
 		{
 			if(!run_concurrent_job_for_operator(o, NULL, sort_job) && can_not_proceed_for_execution_operator(o))
 				goto EXIT;
@@ -234,7 +235,8 @@ static void request_to_process_some_jobs(operator* o)
 	{
 		for(int i = 0; i < MAX_LEVELS && (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); i++)
 		{
-			if(inputs->sorted_runs_count[i] >= inputs->N_way_sort)
+			for(int t = 0; t < UINT_ALIGN_DOWN(inputs->sorted_runs_count[i], inputs->N_way_sort) / inputs->N_way_sort
+				&& (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); t++)
 			{
 				if(!run_concurrent_job_for_operator(o, (void*)((intptr_t)i), merge_job) && can_not_proceed_for_execution_operator(o))
 					goto EXIT;
@@ -249,7 +251,8 @@ static void request_to_process_some_jobs(operator* o)
 		{
 			for(int i = 0; i < MAX_LEVELS && (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); i++)
 			{
-				if(inputs->sorted_runs_count[i] > 0)
+				for(int t = 0; t < UINT_ALIGN_UP(inputs->sorted_runs_count[i], inputs->N_way_sort) / inputs->N_way_sort
+					&& (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); t++)
 				{
 					if(!run_concurrent_job_for_operator(o, (void*)((intptr_t)i), merge_job) && can_not_proceed_for_execution_operator(o))
 						goto EXIT;
