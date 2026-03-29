@@ -62,6 +62,9 @@ static void sort_job(operator* o, void* _param)
 		pthread_mutex_lock(&(inputs->runs_lock));
 		inputs->total_concurrent_jobs_count--;
 		pthread_mutex_unlock(&(inputs->runs_lock));
+
+		// request some new jobs to start
+		request_to_process_some_jobs(o);
 		return;
 	}
 
@@ -131,6 +134,9 @@ static void merge_job(operator* o, void* _param)
 			pthread_mutex_lock(&(inputs->runs_lock));
 			inputs->total_concurrent_jobs_count--;
 			pthread_mutex_unlock(&(inputs->runs_lock));
+
+			// request some new jobs to start
+			request_to_process_some_jobs(o);
 			return;
 		}
 		else if(mergeable_runs_count == 1)
@@ -141,6 +147,9 @@ static void merge_job(operator* o, void* _param)
 			inputs->total_sorted_runs_count += mergeable_runs_count;
 			inputs->total_concurrent_jobs_count--;
 			pthread_mutex_unlock(&(inputs->runs_lock));
+
+			// request some new jobs to start
+			request_to_process_some_jobs(o);
 			return;
 		}
 		else
@@ -236,7 +245,7 @@ static void request_to_process_some_jobs(operator* o)
 
 	if(inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count)
 	{
-		if(inputs->flag_no_new_un_sorted_runs && inputs->total_sorted_runs_count > 0)
+		if(inputs->flag_no_new_un_sorted_runs && inputs->total_sorted_runs_count > 1)
 		{
 			for(int i = 0; i < MAX_LEVELS && (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); i++)
 			{
@@ -250,7 +259,7 @@ static void request_to_process_some_jobs(operator* o)
 		}
 	}
 
-	if(inputs->flag_no_new_un_sorted_runs && inputs->total_concurrent_jobs_count == 0 && inputs->total_sorted_runs_count <= 0)
+	if(inputs->flag_no_new_un_sorted_runs && inputs->total_concurrent_jobs_count == 0 && inputs->total_sorted_runs_count <= 1)
 	{
 		for(int i = 0; i < MAX_LEVELS; i++)
 		{
@@ -289,6 +298,8 @@ static void execute(operator* o)
 			pthread_mutex_lock(&(inputs->runs_lock));
 			inputs->flag_no_new_un_sorted_runs = 1;
 			pthread_mutex_unlock(&(inputs->runs_lock));
+
+			request_to_process_some_jobs(o);
 			return;
 		}
 		if(can_not_proceed_for_execution_operator(o))

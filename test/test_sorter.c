@@ -16,7 +16,7 @@
 #define PARALLEL_SORTING_JOBS_COUNT    4
 #define N_WAY_SORT                     4
 
-#define TESTCASE_SIZE 1000000
+#define TESTCASE_SIZE 10000
 
 uint32_t inputs[TESTCASE_SIZE];
 void generate_random_inputs()
@@ -171,9 +171,10 @@ void* generator(void* generator_context, tuple_def* generator_tuple_def)
 	void* generated = malloc(BUFFER_SIZE);
 
 	construct_record(generated, inputs[index++], 0, "Rohan Dvivedi");
-	printf("PRODUCED : ");
-	print_tuple(generated, generator_tuple_def);
-	printf("\n\n");
+	//printf("PRODUCED : ");
+	//print_tuple(generated, generator_tuple_def);
+	//printf("\n\n");
+	//usleep(1000);
 
 	return generated;
 }
