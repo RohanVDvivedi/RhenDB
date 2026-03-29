@@ -175,3 +175,27 @@ int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_typ
 		return cmp;
 	}
 }
+
+int comare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+{
+	int compare = 0;
+
+	for(uint32_t i = 0; ((i < element_count) && (compare == 0)); i++)
+	{
+		const data_type_info* dti = get_type_info_for_element_from_tuple_def(tpl_d, element_ids[i]);
+
+		datum uval1;
+		get_value_from_element_from_tuple(&uval1, tpl_d, element_ids[i], tup1);
+
+		datum uval2;
+		get_value_from_element_from_tuple(&uval2, tpl_d, element_ids[i], tup2);
+
+		compare = compare_datum2_rhendb(&uval1, &uval2, dti, ex_engine, transaction_id, abort_error);
+		if(*abort_error)
+			return 0;
+
+		compare = compare * cmp_dir[i];
+	}
+
+	return compare;
+}

@@ -36,31 +36,6 @@ struct input_values
 	uint64_t total_sorted_runs_count;
 };
 
-static int compare_tuples_for_sorter(const void* o_vp, const void* tup1, const void* tup2)
-{
-	const operator* o = o_vp;
-	input_values* inputs = o->inputs;
-
-	int abort_error = 0;
-	int compare = 0;
-	for(uint32_t i = 0; ((i < inputs->key_element_count) && (compare == 0)); i++)
-	{
-		const data_type_info* dti = get_type_info_for_element_from_tuple_def(inputs->record_def, inputs->key_element_ids[i]);
-
-		datum uval1;
-		get_value_from_element_from_tuple(&uval1, inputs->record_def, inputs->key_element_ids[i], tup1);
-
-		datum uval2;
-		get_value_from_element_from_tuple(&uval2, inputs->record_def, inputs->key_element_ids[i], tup2);
-
-		compare = compare_datum2_rhendb(&uval1, &uval2, dti, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
-
-		compare = compare * inputs->key_compare_direction[i];
-	}
-
-	return compare;
-}
-
 static void sort_job(operator* o, void* _param)
 {
 	input_values* inputs = o->inputs;
@@ -91,11 +66,13 @@ static void sort_job(operator* o, void* _param)
 static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const void* its1_vp, const void* its2_vp)
 {
 	const operator* o = o_vp;
+	const input_values* inputs = o->inputs;
 
 	const interim_tuple_store* its1_p = its1_vp;
 	const interim_tuple_store* its2_p = its2_vp;
 
-	return compare_tuples_for_sorter(o, its1_p->embed_regions[0].tuple, its2_p->embed_regions[0].tuple);
+	int abort_error = 0;
+	return comare_tuples2_rhendb(its1_p->embed_regions[0].tuple, its2_p->embed_regions[0].tuple, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
 }
 
 static void merge_job(operator* o, void* _param)

@@ -17,4 +17,6 @@ int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const d
 // this function is added to skip the checks that ensure that the datums can be compared, so that such checks can be discarded
 int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_type_info* dti, rage_engine* ex_engine, const void* transaction_id, int* abort_error);
 
+int comare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error);
+
 #endif
