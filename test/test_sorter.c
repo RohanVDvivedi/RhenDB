@@ -165,11 +165,10 @@ void* generator(void* generator_context, tuple_def* generator_tuple_def)
 {
 	static int index = 0;
 
-	if(index > TESTCASE_SIZE)
+	if(index >= TESTCASE_SIZE)
 		return NULL;
 
 	void* generated = malloc(BUFFER_SIZE);
-
 	construct_record(generated, inputs[index++], 0, "Rohan Dvivedi");
 	//printf("PRODUCED : ");
 	//print_tuple(generated, generator_tuple_def);
