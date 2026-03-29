@@ -1,10 +1,5 @@
 PICKED TASKS
 
- * implement sort_interim_tuples
-   * sort interim_tuple_store using a separate array of offsets, and put them in another interim_tuple_store
- * implement sorter operator
-   * when to call merge and when to call sort, keeping the jobs count fixed
-   * this will help with sort-merge-join and sort-based-groupby as post sorting operators
  * review sorter and test it
 
  * implement interim_tuple_store based interim_hash_table
