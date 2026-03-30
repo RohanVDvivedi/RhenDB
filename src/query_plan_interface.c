@@ -560,6 +560,7 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 
 				if(cit_p->curr_store == get_tail_of_singlylist(&(cit_p->producer->output_buffers)))
 				{
+					clean_up_oldest_buffer = 0; // we are not going next, so can not clean up for sure
 					if(is_killed_operator(cit_p->producer))
 						(*no_more_data) = 1;
 				}
