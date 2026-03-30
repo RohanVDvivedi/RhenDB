@@ -1,8 +1,5 @@
 PICKED TASKS
 
- * append_tuple in interim_tuple_store to become a first class function and use write system call instead
- * append_all_tuples to have another version of the fuinction that allows uint64_t start_offset and end_offset
-
  * allow more than 1 consumers, using consumer iterator
  * consumer_iterator struch also manged by the producer iterator
  * consumer_iterator
