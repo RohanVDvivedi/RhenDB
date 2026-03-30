@@ -63,32 +63,13 @@ struct operator
 	// new tuple is always appended to last interim_tuple_store in this list else a new interim_tuple_store is created
 	singlylist output_buffers;
 
+	// list of consumption_iterator-s, pointing into tuple_regions in output_buffers
+	singlylist output_consumers;
+
 	// this transformations will be applicable to all the tuples produced by this operator
 	// as soon as it call produce_tuple/s_from_operator
 	// remember output_lock will not be held while calling any of the transformers
 	tuple_transformers output_tuple_transformers; // [MUST BE SET DURING THE SETUP PHASE]
-
-	// the operator that is meant to consume the output of this operator must be registered here
-	// every insert to the output_buffers forces a trigger_execution() for the consumer_operator, driving the data in the pipeline forward
-	// the design permits for only 1 consumer for every 1 producer operator
-	// but there may be many producer operators for any 1 consumer operator
-	operator* consumer_operator; // [MUST BE SET DURING THE SETUP PHASE]
-
-	// after these many bytes are accumulated the consumer_operator will receive a trigger_execution() call
-	// we check after every produce call and trigger_execution() on the consumer, if (consumer_trigger_on_bytes_accumulated >= next_tuple_offset)
-	// this check is done after every tuple produced, and is skipped if this value is set to 0
-	uint64_t consumer_trigger_on_bytes_accumulated; // [MUST BE SET DURING THE SETUP PHASE]
-
-	// more optional information for the produced output tuples from the operator
-
-	// these are most likely populated and then cleaned up by the operator itself
-	// they can be used by the operators that are meant to consume the output of this operator
-	// these are just placeholders and optional
-
-	// if the output is sorted, then the following attributes are set by the operator itself
-	const positional_accessor* output_key_element_ids; // [MUST BE SET DURING THE SETUP PHASE]
-	const compare_direction* output_key_compare_direction; // [MUST BE SET DURING THE SETUP PHASE]
-	uint32_t output_key_element_count; // [MUST BE SET DURING THE SETUP PHASE]
 
 	// -----------------------------------------------------------------------------------------------------
 
@@ -111,6 +92,16 @@ struct operator
 	// kill_reason is valid only if a kill signal was sent
 	// kill_reasons only get appended here
 	dstring kill_reason;
+};
+
+typedef struct consumption_iterator consumption_iterator;
+struct consumption_iterator
+{
+	operator* consumer;
+	interim_tuple_store* curr_store;
+	interim_tuple_region curr_region;
+
+	slnode embed_node_for_output_consumers;
 };
 
 // check if the operator is allowed to do it's execution
