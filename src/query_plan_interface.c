@@ -555,9 +555,6 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 			{
 				offset = 0;
 
-				// but first unmap the old mapped region
-				unmap_for_interim_tuple_region(&(cit_p->curr_region));
-
 				if(cit_p->curr_store == get_head_of_singlylist(&(cit_p->producer->output_buffers)))
 					clean_up_oldest_buffer = 1;
 
@@ -569,6 +566,9 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 				}
 				else
 				{
+					// but first unmap the old mapped region
+					unmap_for_interim_tuple_region(&(cit_p->curr_region));
+
 					cit_p->curr_store = (interim_tuple_store*) get_next_of_in_singlylist(&(cit_p->producer->output_buffers), cit_p->curr_store);
 					mmap_for_reading_tuple(cit_p->curr_store, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(cit_p->producer)->size_def), MIN_BYTES_TO_MMAP);
 					tuple = cit_p->curr_region.tuple;
