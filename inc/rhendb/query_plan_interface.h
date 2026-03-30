@@ -104,7 +104,7 @@ struct consumption_iterator
 	interim_tuple_store* curr_store;
 	interim_tuple_region curr_region;
 
-	slnode embed_node_for_output_consumers;
+	llnode embed_node_for_output_consumers;
 };
 
 // check if the operator is allowed to do it's execution
