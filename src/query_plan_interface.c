@@ -108,13 +108,13 @@ static void* internal_execute(void* o_vp)
 		}
 		pthread_mutex_unlock(&(o->state_lock));
 
-		pthread_mutex_lock(&(o->output_lock));
 		if(was_killed)
 		{
+			pthread_mutex_lock(&(o->output_lock));
 			trigger_all_consumers_for_operator_UNSAFE(o);
+			pthread_mutex_unlock(&(o->output_lock));
 			return NULL;
 		}
-		pthread_mutex_unlock(&(o->output_lock));
 
 		if(!should_run)
 			return NULL;
@@ -140,13 +140,13 @@ static void* internal_execute(void* o_vp)
 		was_killed = process_kill_signal_if_received_for_operator_UNSAFE(o);
 		pthread_mutex_unlock(&(o->state_lock));
 
-		pthread_mutex_lock(&(o->output_lock));
 		if(was_killed)
 		{
+			pthread_mutex_lock(&(o->output_lock));
 			trigger_all_consumers_for_operator_UNSAFE(o);
+			pthread_mutex_unlock(&(o->output_lock));
 			return NULL;
 		}
-		pthread_mutex_unlock(&(o->output_lock));
 
 		if(!was_triggered_while_we_were_running)
 			return NULL;
@@ -182,13 +182,13 @@ void trigger_execution_on_operator(operator* o)
 	}
 	pthread_mutex_unlock(&(o->state_lock));
 
-	pthread_mutex_lock(&(o->output_lock));
 	if(was_killed)
 	{
+		pthread_mutex_lock(&(o->output_lock));
 		trigger_all_consumers_for_operator_UNSAFE(o);
+		pthread_mutex_unlock(&(o->output_lock));
 		return ;
 	}
-	pthread_mutex_unlock(&(o->output_lock));
 
 	if(!should_queue)
 		return;
@@ -231,13 +231,13 @@ static void* operator_job_wrapper_function(void* ojwp_vp)
 	}
 	pthread_mutex_unlock(&(o->state_lock));
 
-	pthread_mutex_lock(&(o->output_lock));
 	if(was_killed)
 	{
+		pthread_mutex_lock(&(o->output_lock));
 		trigger_all_consumers_for_operator_UNSAFE(o);
+		pthread_mutex_unlock(&(o->output_lock));
 		return NULL;
 	}
-	pthread_mutex_unlock(&(o->output_lock));
 
 	if(!should_run)
 		return NULL;
@@ -249,13 +249,13 @@ static void* operator_job_wrapper_function(void* ojwp_vp)
 	was_killed = process_kill_signal_if_received_for_operator_UNSAFE(o);
 	pthread_mutex_unlock(&(o->state_lock));
 
-	pthread_mutex_lock(&(o->output_lock));
 	if(was_killed)
 	{
+		pthread_mutex_lock(&(o->output_lock));
 		trigger_all_consumers_for_operator_UNSAFE(o);
+		pthread_mutex_unlock(&(o->output_lock));
 		return NULL;
 	}
-	pthread_mutex_unlock(&(o->output_lock));
 
 	return NULL;
 }
@@ -277,13 +277,13 @@ int run_concurrent_job_for_operator(operator* o, void* param, void (*operator_jo
 	}
 	pthread_mutex_unlock(&(o->state_lock));
 
-	pthread_mutex_lock(&(o->output_lock));
 	if(was_killed)
 	{
+		pthread_mutex_lock(&(o->output_lock));
 		trigger_all_consumers_for_operator_UNSAFE(o);
+		pthread_mutex_unlock(&(o->output_lock));
 		return 0;
 	}
-	pthread_mutex_unlock(&(o->output_lock));
 
 	if(!should_queue)
 		return 0;
