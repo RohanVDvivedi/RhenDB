@@ -528,35 +528,88 @@ void destroy_consumption_iterator(consumption_iterator* cit_p)
 	free(cit_p);
 }
 
-interim_tuple_store* consume_from_operator(operator* producer, uint64_t min_bytes_to_consume, int* no_more_data)
+const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* no_more_data)
 {
-	interim_tuple_store* its_p = NULL;
+	const void* tuple = NULL;
+	(*no_more_data) = 0;
 
-	pthread_mutex_lock(&(producer->output_lock));
+	pthread_mutex_lock(&(cit_p->producer->output_lock));
 
-	// only if the operator is killed and ther is nothing in output_buffers then no_more_data will be produced
-	if(is_killed_operator(producer) && is_empty_singlylist(&(producer->output_buffers)))
+	// only if the operator is killed and there is nothing in output_buffers then no_more_data will be produced
+	if(is_killed_operator(cit_p->producer) && is_empty_singlylist(&(cit_p->producer->output_buffers)))
 		(*no_more_data) = 1;
 
-	// proceed only if the consumer_operator is alive
-	if((!(*no_more_data)) && (producer->consumer_operator != NULL) && !can_not_proceed_for_execution_operator(producer->consumer_operator))
+	int clean_up_oldest_buffer = 0;
+	if(!(*no_more_data))
 	{
-		its_p = (interim_tuple_store*) get_head_of_singlylist(&(producer->output_buffers));
-		if(its_p != NULL)
+		if(!is_empty_singlylist(&(cit_p->producer->output_buffers)))
 		{
-			if((its_p->next_tuple_offset >= min_bytes_to_consume) || (get_head_of_singlylist(&(producer->output_buffers)) != get_tail_of_singlylist(&(producer->output_buffers))) || is_killed_operator(producer))
+			if(cit_p->curr_store == NULL)
+				cit_p->curr_store = (interim_tuple_store*) get_head_of_singlylist(&(cit_p->producer->output_buffers));
+
+			uint64_t offset = 0;
+			if(!is_empty_interim_tuple_region(&(cit_p->curr_region)))
+				offset = next_tuple_offset_for_interim_tuple_region(&(cit_p->curr_region));
+
+			if(offset == cit_p->curr_store->next_tuple_offset) // change the buffer
 			{
-				if(!remove_head_from_singlylist(&(producer->output_buffers))) // remove must not fail
-					exit(-1);
+				offset = 0;
+
+				if(cit_p->curr_store == get_head_of_singlylist(&(cit_p->producer->output_buffers)))
+					clean_up_oldest_buffer = 1;
+
+				if(cit_p->curr_store == get_tail_of_singlylist(&(cit_p->producer->output_buffers)))
+				{
+					if(is_killed_operator(cit_p->producer))
+						(*no_more_data) = 1;
+				}
+				else
+				{
+					cit_p->curr_store = (interim_tuple_store*) get_next_of_in_singlylist(&(cit_p->producer->output_buffers), cit_p->curr_store);
+					mmap_for_reading_tuple(cit_p->curr_store, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(cit_p->producer)->size_def), MIN_BYTES_TO_MMAP);
+					tuple = cit_p->curr_region.tuple;
+				}
 			}
 			else
-				its_p = NULL;
+			{
+				mmap_for_reading_tuple(cit_p->curr_store, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(cit_p->producer)->size_def), MIN_BYTES_TO_MMAP);
+				tuple = cit_p->curr_region.tuple;
+			}
 		}
 	}
 
-	pthread_mutex_unlock(&(producer->output_lock));
+	if(clean_up_oldest_buffer)
+	{
+		while(cit_p->producer->output_buffers_count > 0)
+		{
+			interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(cit_p->producer->output_buffers));
+			int is_referenced = 0;
+			{
+				consumption_iterator* cit_p = (consumption_iterator*) get_head_of_linkedlist(&(cit_p->producer->output_consumers));
+				do
+				{
+					if(cit_p->curr_store == NULL || cit_p->curr_store == its_p)
+					{
+						is_referenced = 1;
+						break;
+					}
+					cit_p = (consumption_iterator*) get_next_of_in_linkedlist(&(cit_p->producer->output_consumers), cit_p);
+				}
+				while(cit_p != get_head_of_linkedlist(&(cit_p->producer->output_consumers)));
+			}
 
-	return its_p;
+			if(is_referenced)
+				break;
+
+			remove_head_from_singlylist(&(cit_p->producer->output_buffers));
+			delete_interim_tuple_store(its_p);
+			cit_p->producer->output_buffers_count--;
+		}
+	}
+
+	pthread_mutex_unlock(&(cit_p->producer->output_lock));
+
+	return tuple;
 }
 
 const tuple_def* get_tuple_def_for_tuples_to_be_consumed_from(operator* o)
