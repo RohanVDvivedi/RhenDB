@@ -1,6 +1,6 @@
 #include<rhendb/query_plan_interface.h>
 
-#include<rhendb/transaction.h>
+#include<stdlib.h>
 
 /*
 	TEMPLATE FOR INTERMEDIATE OPERATORS (sorting(ordering), joins(hash_joins), aggregations(groupby->aggregates))
@@ -9,7 +9,7 @@
 typedef struct input_values input_values;
 struct input_values
 {
-	operator* input_operator;
+	consumption_iterator* input_iterator;
 	uint64_t consume_only_after_bytes_count;
 };
 
@@ -24,7 +24,7 @@ static void execute(operator* o)
 	while(1)
 	{
 		int no_more_data = 0;
-		interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, inputs->consume_only_after_bytes_count, &no_more_data);
+		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
 		{
 			kill_signal_for_self_operator(o, kill_reason); return ;
@@ -34,13 +34,12 @@ static void execute(operator* o)
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 
-		if(its_p != NULL)
+		if(tuple != NULL)
 		{
-			int produced = produce_tuples_from_operator(o, its_p);
+			int produced = produce_tuple_from_operator(o, (void*)tuple);
 			if(!produced)
 			{
 				kill_reason = get_dstring_pointing_to_literal_cstring("pushed_failed_from_identity_oerator_and_so_killed");
-				delete_interim_tuple_store(its_p);
 				kill_signal_for_self_operator(o, kill_reason); return ;
 			}
 		}
@@ -62,10 +61,7 @@ void setup_identity_operator(operator* o, operator* input_operator, uint64_t con
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
-		.input_operator = input_operator,
+		.input_iterator = create_consumption_iterator(input_operator, o, NULL),
 		.consume_only_after_bytes_count = consume_only_after_bytes_count,
 	};
-
-	input_operator->consumer_operator = o;
-	input_operator->consumer_trigger_on_bytes_accumulated = consume_only_after_bytes_count;
 }
