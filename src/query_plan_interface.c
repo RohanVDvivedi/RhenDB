@@ -408,7 +408,7 @@ void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
 	}
 }
 
-#define MIN_OUTPUT_BUFFER_STORE_SIZE (16 * 1024)
+#define MIN_OUTPUT_BUFFER_STORE_SIZE 128//(16 * 1024)
 #define MAX_OUTPUT_BUFFER_COUNT 3
 
 int produce_tuple_from_operator(operator* o, void* tuple)
@@ -555,6 +555,9 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 			{
 				offset = 0;
 
+				// but first unmap the old mapped region
+				unmap_for_interim_tuple_region(&(cit_p->curr_region));
+
 				if(cit_p->curr_store == get_head_of_singlylist(&(cit_p->producer->output_buffers)))
 					clean_up_oldest_buffer = 1;
 
@@ -586,17 +589,17 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 			interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(cit_p->producer->output_buffers));
 			int is_referenced = 0;
 			{
-				consumption_iterator* cit_p = (consumption_iterator*) get_head_of_linkedlist(&(cit_p->producer->output_consumers));
+				const consumption_iterator* tcit_p = get_head_of_linkedlist(&(cit_p->producer->output_consumers));
 				do
 				{
-					if(cit_p->curr_store == NULL || cit_p->curr_store == its_p)
+					if(tcit_p->curr_store == NULL || tcit_p->curr_store == its_p)
 					{
 						is_referenced = 1;
 						break;
 					}
-					cit_p = (consumption_iterator*) get_next_of_in_linkedlist(&(cit_p->producer->output_consumers), cit_p);
+					tcit_p = (consumption_iterator*) get_next_of_in_linkedlist(&(cit_p->producer->output_consumers), tcit_p);
 				}
-				while(cit_p != get_head_of_linkedlist(&(cit_p->producer->output_consumers)));
+				while(tcit_p != get_head_of_linkedlist(&(cit_p->producer->output_consumers)));
 			}
 
 			if(is_referenced)
@@ -652,6 +655,7 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 
 	pthread_mutex_init(&(o->output_lock), NULL);
 	initialize_singlylist(&(o->output_buffers), offsetof(interim_tuple_store, embed_node_sl));
+	o->output_buffers_count = 0;
 	initialize_linkedlist(&(o->output_consumers), offsetof(consumption_iterator, embed_node_for_output_consumers));
 	init_tuple_transformers(&(o->output_tuple_transformers), NULL); // must initialize it again, unless it is the sink operator
 
@@ -760,6 +764,8 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 			remove_head_from_singlylist(&(o->output_buffers));
 			delete_interim_tuple_store(its_p);
 		}
+
+		o->output_buffers_count = 0;
 
 		destroy_tuple_transformers(&(o->output_tuple_transformers));
 
