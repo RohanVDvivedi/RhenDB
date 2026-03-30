@@ -1,25 +1,7 @@
 PICKED TASKS
 
- * allow more than 1 consumers, using consumer iterator
- * consumer_iterator struch also manged by the producer iterator
- * consumer_iterator
- {
-    operator* consumer;
-    interim_tuple_store* curr_store;
-    interim_tuple_region curr_region;
- }
- * consume returns a tuple, given a consumer_iterator, NULL only if it is empty
-   * unmaps and maps again for new location, or a new store if required
-   * if we are moving on from the head store, check to make sure that the head is not referened by any one any longer if so, delete this store
- * produceer always produces a tuple
-   * wakes every up on an insert
-   * inserts to the tail if the tail is less than MIN_SIZE_THRESHOLD 1 * 1024 * 1024
-   * elss if there are lesser than 2 then create a new one and append there
-   * else just append to the tail one
-
  * optimize sorter
-   * make it work with more data by chunking with in the sort operator, and minimizing the number of files
-   * allow keeping the mmaps open for as long as possible
+   * implement the new sorter that reads tuples from the input operator and chunks them only when the number of open files are lesser than 64
  * make the inserts to the output_buffers keep mmaps for writing embed_regions[0], open while it is in the output_buffer of the producer
 
  * implement interim_tuple_store based interim_hash_table
