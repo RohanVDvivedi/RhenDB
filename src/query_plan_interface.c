@@ -487,7 +487,7 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 		if(clone_cit_p->producer != producer || clone_cit_p->consumer != consumer)
 			return NULL;
 
-	consumption_iterator* cit_p = malloc(siezof(consumption_iterator));
+	consumption_iterator* cit_p = malloc(sizeof(consumption_iterator));
 	cit_p->producer = producer;
 	cit_p->consumer = consumer;
 	initialize_slnode(&(cit_p->embed_node_for_output_consumers));
@@ -500,12 +500,12 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 	if(clone_cit_p != NULL)
 		cit_p->curr_store = clone_cit_p->curr_store;
 	if(cit_p->curr_store == NULL)
-		cit_p->curr_store = get_head_of_linkedlist(&(producer->output_buffers));
+		cit_p->curr_store = (interim_tuple_store*) get_head_of_singlylist(&(producer->output_buffers));
 
 	if(cit_p->curr_store != NULL)
 	{
 		uint64_t offset = 0;
-		if(clone_cit_p != NULL && !is_empty_interim_tuple_region(clone_cit_p->curr_region))
+		if(clone_cit_p != NULL && !is_empty_interim_tuple_region(&(clone_cit_p->curr_region)))
 			offset = curr_tuple_offset_for_interim_tuple_region(&(clone_cit_p->curr_region));
 		mmap_for_reading_tuple(cit_p->curr_store, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(producer)->size_def), MIN_BYTES_TO_MMAP);
 	}
