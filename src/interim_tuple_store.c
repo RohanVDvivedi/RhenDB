@@ -224,24 +224,40 @@ int unmap_for_interim_tuple_region(interim_tuple_region* itr_p)
 
 uint64_t append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, const tuple_size_def* tpl_sz_d)
 {
+	// compute the offset to be returned
+	// this will be the offset for the first tuple that will be copied in from the other_its_p
+	uint64_t offset = its_p->next_tuple_offset;
+
+	// update tuples count
+	its_p->tuples_count++;
+
 	// get the size of the tuple
 	uint32_t tuple_size = get_tuple_size_using_tuple_size_def(tpl_sz_d, tupl);
 
-	// create a region to copy this new tuple into
-	interim_tuple_region tr = INIT_INTERIM_TUPLE_REGION;
-	mmap_for_writing_tuple(its_p, &tr, tpl_sz_d, tuple_size, 0);
+	// compute next_tuple_offset, it will be pointing to the end now, after this appended tuple
+	its_p->next_tuple_offset += tuple_size;
 
-	// perform the copy into the tuple_region
-	memory_move(tr.tuple, tupl, tuple_size);
+	// assign the new_size and align it to the next multiple of page_size
+	uint64_t new_total_size = UINT_ALIGN_UP(its_p->next_tuple_offset, sysconf(_SC_PAGE_SIZE));
+	if(its_p->total_size < new_total_size)
+	{
+		its_p->total_size = new_total_size;
+		// and extend the file to the new size
+		if(-1 == ftruncate(its_p->fd, its_p->total_size))
+		{
+			printf("FAILED to extend the file for interim_tuple_store\n");
+			exit(-1);
+			return 0;
+		}
+	}
 
-	// finalize he tuple
-	finalize_written_tuple(its_p, &tr);
-
-	// grab it's offset to return it
-	uint64_t offset = curr_tuple_offset_for_interim_tuple_region(&tr);
-
-	// finally unmap the region
-	unmap_for_interim_tuple_region(&tr);
+	// directly do a pwrite instead
+	if(tuple_size != pwrite64(its_p->fd, tupl, tuple_size, offset))
+	{
+		printf("FAILED to append a tuple to interim_tuple_store\n");
+		exit(-1);
+		return 0;
+	}
 
 	return offset;
 }
@@ -252,18 +268,24 @@ uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p,
 	// this will be the offset for the first tuple that will be copied in from the other_its_p
 	uint64_t offset = its_p->next_tuple_offset;
 
+	// update tuples_count
+	its_p->tuples_count += other_its_p->tuples_count;
+
 	// compute next_tuple_offset, it will be sum of both the next_tuple_offsets
 	its_p->next_tuple_offset += get_total_bytes_in_interim_tuple_store(other_its_p);
 
 	// assign the new_size and align it to the next multiple of page_size
-	its_p->total_size = UINT_ALIGN_UP(its_p->next_tuple_offset, sysconf(_SC_PAGE_SIZE));
-
-	// and extend the file to the new size
-	if(-1 == ftruncate(its_p->fd, its_p->total_size))
+	uint64_t new_total_size = UINT_ALIGN_UP(its_p->next_tuple_offset, sysconf(_SC_PAGE_SIZE));
+	if(its_p->total_size < new_total_size)
 	{
-		printf("FAILED to extend the file for interim_tuple_store\n");
-		exit(-1);
-		return 0;
+		its_p->total_size = new_total_size;
+		// and extend the file to the new size
+		if(-1 == ftruncate(its_p->fd, its_p->total_size))
+		{
+			printf("FAILED to extend the file for interim_tuple_store\n");
+			exit(-1);
+			return 0;
+		}
 	}
 
 	// now perform file descriptor copy directly in the kernel
