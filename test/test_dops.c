@@ -242,6 +242,10 @@ int main()
 		printf("source operator %p\n", o);
 		operator* input = o;
 
+		o = get_new_registered_operator_for_query_plan(qp);
+		setup_printf_operator(o, input, 1);
+		printf("sink operator %p\n", o);
+
 		for(int i = 0; i < IDENTITY_OPERATORS_COUNT; i++)
 		{
 			o = get_new_registered_operator_for_query_plan(qp);
