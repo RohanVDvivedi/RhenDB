@@ -2,7 +2,6 @@ PICKED TASKS
 
  * optimize sorter
    * implement the new sorter that reads tuples from the input operator and chunks them only when the number of open files are lesser than 64
- * make the inserts to the output_buffers keep mmaps for writing embed_regions[0], open while it is in the output_buffer of the producer
 
  * implement interim_tuple_store based interim_hash_table
    * store uint64_t hash_value -> key attributes tuple_list(dti1, dti2, dti3 ...  512 B in prefix), uint64_t value_size_in_bytes, value blob(200 B in prefix)
