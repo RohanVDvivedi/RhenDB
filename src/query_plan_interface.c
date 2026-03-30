@@ -408,6 +408,9 @@ void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
 	}
 }
 
+#define MIN_OUTPUT_BUFFER_STORE_SIZE (16 * 1024)
+#define MAX_OUTPUT_BUFFER_COUNT 3
+
 int produce_tuple_from_operator(operator* o, void* tuple)
 {
 	int pushed = 0;
@@ -441,12 +444,23 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 
 		// fetch tail, create one and insert if it does not exists
 		interim_tuple_store* its_p = (interim_tuple_store*) get_tail_of_singlylist(&(o->output_buffers));
-		if(its_p == NULL)
+
+		int produce_new_tuple_store = 0;
+
+		if(its_p == NULL) // no output_buffers, e surely need to make 1
+			produce_new_tuple_store = 1;
+		else if(o->output_buffers_count < MAX_OUTPUT_BUFFER_COUNT) // there are some, so make one only if the tail has more than minimum bytes
+			produce_new_tuple_store = (its_p->next_tuple_offset >= MIN_OUTPUT_BUFFER_STORE_SIZE);
+		else // else do not make one
+			produce_new_tuple_store = 0;
+
+		if(produce_new_tuple_store)
 		{
 			its_p = get_new_interim_tuple_store(".");
 
 			if(!insert_tail_in_singlylist(&(o->output_buffers), its_p))
 				exit(-1);
+			o->output_buffers_count++;
 		}
 
 		// append the tuple in this tail interim_tuple_store

@@ -62,6 +62,7 @@ struct operator
 	// singlylist of interim_tuple_store
 	// new tuple is always appended to last interim_tuple_store in this list else a new interim_tuple_store is created
 	singlylist output_buffers;
+	uint32_t output_buffers_count; // this number does never cross 3
 
 	// list of consumption_iterator-s, pointing into tuple_regions in output_buffers
 	linkedlist output_consumers;
