@@ -64,7 +64,7 @@ struct operator
 	singlylist output_buffers;
 
 	// list of consumption_iterator-s, pointing into tuple_regions in output_buffers
-	singlylist output_consumers;
+	linkedlist output_consumers;
 
 	// this transformations will be applicable to all the tuples produced by this operator
 	// as soon as it call produce_tuple/s_from_operator

@@ -71,6 +71,20 @@ static int process_kill_signal_if_received_for_operator_UNSAFE(operator* o)
 	return 0;
 }
 
+static void trigger_all_consumers_for_operator_UNSAFE(operator* o)
+{
+	if(is_empty_linkedlist(&(o->output_consumers)))
+		return ;
+
+	const consumption_iterator* cit_p = get_head_of_linkedlist(&(o->output_consumers));
+	do
+	{
+		trigger_execution_on_operator(cit_p->consumer);
+		cit_p = get_next_of_in_linkedlist(&(o->output_consumers), cit_p);
+	}
+	while(cit_p != get_head_of_linkedlist(&(o->output_consumers)));
+}
+
 static void* internal_execute(void* o_vp)
 {
 	operator* o = o_vp;
@@ -97,8 +111,7 @@ static void* internal_execute(void* o_vp)
 		pthread_mutex_lock(&(o->output_lock));
 		if(was_killed)
 		{
-			for(const consumption_iterator* cit_p = get_head_of_singlylist(&(o->output_consumers)); cit_p != NULL; cit_p = get_next_of_in_singlylist(&(o->output_consumers), cit_p))
-				trigger_execution_on_operator(cit_p->consumer);
+			trigger_all_consumers_for_operator_UNSAFE(o);
 			return NULL;
 		}
 		pthread_mutex_unlock(&(o->output_lock));
@@ -130,8 +143,7 @@ static void* internal_execute(void* o_vp)
 		pthread_mutex_lock(&(o->output_lock));
 		if(was_killed)
 		{
-			for(const consumption_iterator* cit_p = get_head_of_singlylist(&(o->output_consumers)); cit_p != NULL; cit_p = get_next_of_in_singlylist(&(o->output_consumers), cit_p))
-				trigger_execution_on_operator(cit_p->consumer);
+			trigger_all_consumers_for_operator_UNSAFE(o);
 			return NULL;
 		}
 		pthread_mutex_unlock(&(o->output_lock));
@@ -173,8 +185,7 @@ void trigger_execution_on_operator(operator* o)
 	pthread_mutex_lock(&(o->output_lock));
 	if(was_killed)
 	{
-		for(const consumption_iterator* cit_p = get_head_of_singlylist(&(o->output_consumers)); cit_p != NULL; cit_p = get_next_of_in_singlylist(&(o->output_consumers), cit_p))
-			trigger_execution_on_operator(cit_p->consumer);
+		trigger_all_consumers_for_operator_UNSAFE(o);
 		return ;
 	}
 	pthread_mutex_unlock(&(o->output_lock));
@@ -223,8 +234,7 @@ static void* operator_job_wrapper_function(void* ojwp_vp)
 	pthread_mutex_lock(&(o->output_lock));
 	if(was_killed)
 	{
-		for(const consumption_iterator* cit_p = get_head_of_singlylist(&(o->output_consumers)); cit_p != NULL; cit_p = get_next_of_in_singlylist(&(o->output_consumers), cit_p))
-			trigger_execution_on_operator(cit_p->consumer);
+		trigger_all_consumers_for_operator_UNSAFE(o);
 		return NULL;
 	}
 	pthread_mutex_unlock(&(o->output_lock));
@@ -242,8 +252,7 @@ static void* operator_job_wrapper_function(void* ojwp_vp)
 	pthread_mutex_lock(&(o->output_lock));
 	if(was_killed)
 	{
-		for(const consumption_iterator* cit_p = get_head_of_singlylist(&(o->output_consumers)); cit_p != NULL; cit_p = get_next_of_in_singlylist(&(o->output_consumers), cit_p))
-			trigger_execution_on_operator(cit_p->consumer);
+		trigger_all_consumers_for_operator_UNSAFE(o);
 		return NULL;
 	}
 	pthread_mutex_unlock(&(o->output_lock));
@@ -271,8 +280,7 @@ int run_concurrent_job_for_operator(operator* o, void* param, void (*operator_jo
 	pthread_mutex_lock(&(o->output_lock));
 	if(was_killed)
 	{
-		for(const consumption_iterator* cit_p = get_head_of_singlylist(&(o->output_consumers)); cit_p != NULL; cit_p = get_next_of_in_singlylist(&(o->output_consumers), cit_p))
-			trigger_execution_on_operator(cit_p->consumer);
+		trigger_all_consumers_for_operator_UNSAFE(o);
 		return 0;
 	}
 	pthread_mutex_unlock(&(o->output_lock));
@@ -415,8 +423,16 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 	// make sure that there is some alive consumer
 	int there_are_consumers = 0;
 	// loop while there are no consumers, we are supposed to find one
-	for(const consumption_iterator* cit_p = get_head_of_singlylist(&(o->output_consumers)); (!there_are_consumers) && (cit_p != NULL); cit_p = get_next_of_in_singlylist(&(o->output_consumers), cit_p))
-		there_are_consumers = (there_are_consumers || (!can_not_proceed_for_execution_operator(cit_p->consumer)));
+	if(!is_empty_linkedlist(&(o->output_consumers)))
+	{
+		const consumption_iterator* cit_p = get_head_of_linkedlist(&(o->output_consumers));
+		do
+		{
+			there_are_consumers = (there_are_consumers || (!can_not_proceed_for_execution_operator(cit_p->consumer)));
+			cit_p = get_next_of_in_linkedlist(&(o->output_consumers), cit_p);
+		}
+		while((!there_are_consumers) && (cit_p != get_head_of_linkedlist(&(o->output_consumers))));
+	}
 
 	// proceed only if some consumer is alive
 	if(there_are_consumers)
@@ -439,8 +455,7 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 
 	// wake up all consumers, only if we pushed
 	if(pushed)
-		for(const consumption_iterator* cit_p = get_head_of_singlylist(&(o->output_consumers)); cit_p != NULL; cit_p = get_next_of_in_singlylist(&(o->output_consumers), cit_p))
-			trigger_execution_on_operator(cit_p->consumer);
+		trigger_all_consumers_for_operator_UNSAFE(o);
 
 	pthread_mutex_unlock(&(o->output_lock));
 
@@ -520,9 +535,8 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 
 	pthread_mutex_init(&(o->output_lock), NULL);
 	initialize_singlylist(&(o->output_buffers), offsetof(interim_tuple_store, embed_node_sl));
+	initialize_linkedlist(&(o->output_consumers), offsetof(consumption_iterator, embed_node_for_output_consumers));
 	init_tuple_transformers(&(o->output_tuple_transformers), NULL); // must initialize it again, unless it is the sink operator
-	o->consumer_operator = NULL;
-	o->consumer_trigger_on_bytes_accumulated = 8192;
 
 	pthread_mutex_init(&(o->state_lock), NULL);
 	pthread_cond_init_with_monotonic_clock(&(o->wait_until_killed));
@@ -615,6 +629,14 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 
 		pthread_cond_destroy(&(o->wait_on_lock_table_for_lock));
 
+		while(NULL != get_head_of_linkedlist(&(o->output_consumers)))
+		{
+			consumption_iterator* cit_p = (consumption_iterator*) get_head_of_linkedlist(&(o->output_consumers));
+			remove_head_from_linkedlist(&(o->output_consumers));
+			unmap_for_interim_tuple_region(&(cit_p->curr_region));
+			free(cit_p);
+		}
+
 		while(NULL != get_head_of_singlylist(&(o->output_buffers)))
 		{
 			interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(o->output_buffers));
@@ -623,10 +645,6 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		}
 
 		destroy_tuple_transformers(&(o->output_tuple_transformers));
-
-		pthread_mutex_destroy(&(o->output_lock));
-		o->consumer_operator = NULL;
-		o->consumer_trigger_on_bytes_accumulated = 8192;
 
 		pthread_mutex_destroy(&(o->state_lock));
 		pthread_cond_destroy(&(o->wait_until_killed));
