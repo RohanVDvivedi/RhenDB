@@ -97,6 +97,8 @@ struct operator
 typedef struct consumption_iterator consumption_iterator;
 struct consumption_iterator
 {
+	operator* producer;
+
 	operator* consumer;
 	interim_tuple_store* curr_store;
 	interim_tuple_region curr_region;
@@ -132,16 +134,16 @@ void OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION(operator* o);
 // below is a simple flat free_resource function to be used with simple operators
 void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o);
 
-// appends tuple to the latest output_buffers
+// produce a tuple from the operator o
 int produce_tuple_from_operator(operator* o, void* tuple);
 
-// appends tuples at the end of the output_buffers
-int produce_tuples_from_operator(operator* o, interim_tuple_store* its_p);
+// clone_cti_p may be NULL
+consumption_iterator* create_consumption_iterator(operator* producer, operator* consumer, consumption_iterator* clone_cit_p);
+void destroy_consumption_iterator(consumption_iterator* cit_p);
 
-// consmes the interim_tuple_store from the procuder, the consumer is already assigned in the producer
-// no_more_data flag will be set if the producer is killed for sure
-// we also have a min_bytes_to_consume, the successfull consume happens only if there are excess of these many bytes or excess interim_tuple_stores in the output_buffers
-interim_tuple_store* consume_from_operator(operator* producer, uint64_t min_bytes_to_consume, int* no_more_data);
+// consume the tuple using the iterator provided that has the producer consumer pair
+// it presents the pointer from the tuple_region itself
+const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* no_more_data);
 
 // this is the tuple_def that the consumer of the operator should be ready to consume
 // this is the tuple_def that is required to be used to read tuples returned from consume_from_operator()

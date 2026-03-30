@@ -465,6 +465,55 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 	return pushed;
 }
 
+#define MIN_BYTES_TO_MMAP 8192
+
+consumption_iterator* create_consumption_iterator(operator* producer, operator* consumer, consumption_iterator* clone_cit_p)
+{
+	if(clone_cit_p != NULL)
+		if(clone_cit_p->producer != producer || clone_cit_p->consumer != consumer)
+			return NULL;
+
+	consumption_iterator* cit_p = malloc(siezof(consumption_iterator));
+	cit_p->producer = producer;
+	cit_p->consumer = consumer;
+	initialize_slnode(&(cit_p->embed_node_for_output_consumers));
+
+	cit_p->curr_store = NULL;
+	cit_p->curr_region = INIT_INTERIM_TUPLE_REGION;
+
+	pthread_mutex_lock(&(producer->output_lock));
+
+	if(clone_cit_p != NULL)
+		cit_p->curr_store = clone_cit_p->curr_store;
+	if(cit_p->curr_store == NULL)
+		cit_p->curr_store = get_head_of_linkedlist(&(producer->output_buffers));
+
+	if(cit_p->curr_store != NULL)
+	{
+		uint64_t offset = 0;
+		if(clone_cit_p != NULL && !is_empty_interim_tuple_region(clone_cit_p->curr_region))
+			offset = curr_tuple_offset_for_interim_tuple_region(&(clone_cit_p->curr_region));
+		mmap_for_reading_tuple(cit_p->curr_store, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(producer)->size_def), MIN_BYTES_TO_MMAP);
+	}
+	else
+		cit_p->curr_region = INIT_INTERIM_TUPLE_REGION;
+
+	insert_tail_in_linkedlist(&(producer->output_consumers), cit_p);
+
+	pthread_mutex_unlock(&(producer->output_lock));
+
+	return cit_p;
+}
+
+void destroy_consumption_iterator(consumption_iterator* cit_p)
+{
+	pthread_mutex_lock(&(cit_p->producer->output_lock));
+	remove_from_linkedlist(&(cit_p->producer->output_consumers), cit_p);
+	unmap_for_interim_tuple_region(&(cit_p->curr_region));
+	pthread_mutex_unlock(&(cit_p->producer->output_lock));
+	free(cit_p);
+}
+
 interim_tuple_store* consume_from_operator(operator* producer, uint64_t min_bytes_to_consume, int* no_more_data)
 {
 	interim_tuple_store* its_p = NULL;
