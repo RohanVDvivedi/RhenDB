@@ -12,9 +12,9 @@
 
 #define USERS_COUNT 10
 
-#define SMALLEST_RUN_SIZE              (4096 * 1)
-#define PARALLEL_SORTING_JOBS_COUNT    4
-#define N_WAY_SORT                     4
+#define SMALLEST_RUN_SIZE              (4096 * 2)
+#define PARALLEL_SORTING_JOBS_COUNT    8
+#define N_WAY_SORT                     15
 
 #define TESTCASE_SIZE 100000
 
