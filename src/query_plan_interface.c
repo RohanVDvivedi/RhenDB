@@ -490,7 +490,7 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 	consumption_iterator* cit_p = malloc(sizeof(consumption_iterator));
 	cit_p->producer = producer;
 	cit_p->consumer = consumer;
-	initialize_slnode(&(cit_p->embed_node_for_output_consumers));
+	initialize_llnode(&(cit_p->embed_node_for_output_consumers));
 
 	cit_p->curr_store = NULL;
 	cit_p->curr_region = INIT_INTERIM_TUPLE_REGION;
