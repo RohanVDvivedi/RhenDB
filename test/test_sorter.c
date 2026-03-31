@@ -14,7 +14,7 @@
 
 #define SMALLEST_RUN_SIZE              (4096 * 2)
 #define PARALLEL_SORTING_JOBS_COUNT    8
-#define N_WAY_SORT                     15
+#define N_WAY_SORT                     16
 
 #define TESTCASE_SIZE 1000000
 
