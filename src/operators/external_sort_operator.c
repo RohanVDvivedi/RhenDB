@@ -15,7 +15,8 @@
 typedef struct input_values input_values;
 struct input_values
 {
-	operator* input_operator;
+	consumption_iterator* input_iterator;
+	interim_tuple_store* input_un_sorted_run;
 
 	// extracted from input_operator
 	const tuple_def* record_def;
@@ -249,14 +250,19 @@ static void request_to_process_some_jobs(operator* o)
 	{
 		if(inputs->flag_no_new_un_sorted_runs && inputs->total_sorted_runs_count > 1)
 		{
+			uint32_t runs_seen = 0;
 			for(int i = 0; i < MAX_LEVELS && (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); i++)
 			{
-				for(int t = 0; t < UINT_ALIGN_UP(inputs->sorted_runs_count[i], inputs->N_way_sort) / inputs->N_way_sort
-					&& (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); t++)
+				runs_seen += inputs->sorted_runs_count[i];
+				if((runs_seen < inputs->total_sorted_runs_count) || (inputs->sorted_runs_count[i] > 1))
 				{
-					if(!run_concurrent_job_for_operator(o, (void*)((intptr_t)i), merge_job) && can_not_proceed_for_execution_operator(o))
-						goto EXIT;
-					inputs->total_concurrent_jobs_count++;
+					for(int t = 0; t < UINT_ALIGN_UP(inputs->sorted_runs_count[i], inputs->N_way_sort) / inputs->N_way_sort
+						&& (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); t++)
+					{
+						if(!run_concurrent_job_for_operator(o, (void*)((intptr_t)i), merge_job) && can_not_proceed_for_execution_operator(o))
+							goto EXIT;
+						inputs->total_concurrent_jobs_count++;
+					}
 				}
 			}
 		}
@@ -270,9 +276,17 @@ static void request_to_process_some_jobs(operator* o)
 			{
 				interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(inputs->sorted_runs[i]));
 				remove_head_from_singlylist(&(inputs->sorted_runs[i]));
-				if(!produce_tuples_from_operator(o, its_p))
+				int produced = 0;
 				{
-					delete_interim_tuple_store(its_p);
+					FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->record_def->size_def), its_p, inputs->minimum_run_size, {
+						produced = produce_tuple_from_operator(o, tuple);
+						if(!produced)
+							break;
+					})
+				}
+				delete_interim_tuple_store(its_p);
+				if(!produced)
+				{
 					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("pushed_failed_from_identity_oerator_and_so_killed"));
 					pthread_mutex_unlock(&(inputs->runs_lock));
 					return ;
@@ -282,8 +296,14 @@ static void request_to_process_some_jobs(operator* o)
 		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
 	}
 
+	int need_to_produce_more_runs = (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count);
+
 	EXIT:;
 	pthread_mutex_unlock(&(inputs->runs_lock));
+
+	// if so trigger your on self
+	if(need_to_produce_more_runs)
+		trigger_execution_on_operator(o);
 }
 
 static void execute(operator* o)
@@ -294,8 +314,15 @@ static void execute(operator* o)
 
 	while(1)
 	{
+		pthread_mutex_lock(&(inputs->runs_lock));
+		int need_to_produce_more_runs = (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count);
+		pthread_mutex_lock(&(inputs->runs_lock));
+
+		if(!need_to_produce_more_runs)
+			break;
+
 		int no_more_data = 0;
-		interim_tuple_store* its_p = consume_from_operator(inputs->input_operator, inputs->minimum_run_size, &no_more_data);
+		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
 		{
 			pthread_mutex_lock(&(inputs->runs_lock));
@@ -310,12 +337,21 @@ static void execute(operator* o)
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 
-		if(its_p != NULL)
+		if(tuple != NULL)
 		{
-			pthread_mutex_lock(&(inputs->runs_lock));
-			insert_tail_in_singlylist(&(inputs->un_sorted_runs), its_p);
-			inputs->un_sorted_runs_count++;
-			pthread_mutex_unlock(&(inputs->runs_lock));
+			if(inputs->input_un_sorted_run == NULL)
+				inputs->input_un_sorted_run = get_new_interim_tuple_store(".");
+
+			append_tuple_to_interim_tuple_store(inputs->input_un_sorted_run, (void*)tuple, &(inputs->record_def->size_def));
+
+			if(inputs->input_un_sorted_run->next_tuple_offset >= inputs->minimum_run_size)
+			{
+				pthread_mutex_lock(&(inputs->runs_lock));
+				insert_tail_in_singlylist(&(inputs->un_sorted_runs), inputs->input_un_sorted_run);
+				inputs->un_sorted_runs_count++;
+				pthread_mutex_unlock(&(inputs->runs_lock));
+				inputs->input_un_sorted_run = NULL;
+			}
 
 			request_to_process_some_jobs(o);
 		}
@@ -329,6 +365,9 @@ static void execute(operator* o)
 static void free_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
+
+	if(inputs->input_un_sorted_run != NULL)
+		delete_interim_tuple_store(inputs->input_un_sorted_run);
 
 	pthread_mutex_lock(&(inputs->runs_lock));
 
@@ -374,7 +413,8 @@ void setup_external_sort_operator(operator* o, operator* input_operator, uint32_
 	o->inputs = malloc(sizeof(input_values));
 	input_values* inputs = o->inputs;
 	*inputs = (input_values){
-		.input_operator = input_operator,
+		.input_iterator = create_consumption_iterator(input_operator, o, NULL),
+		.input_un_sorted_run = NULL,
 		.record_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator),
 		.key_element_count = key_element_count,
 		.key_element_ids = key_element_ids,
@@ -393,7 +433,4 @@ void setup_external_sort_operator(operator* o, operator* input_operator, uint32_
 	for(int i = 0; i < MAX_LEVELS; i++)
 		initialize_singlylist(&(inputs->sorted_runs[i]), offsetof(interim_tuple_store, embed_node_sl));
 	initialize_singlylist(&(inputs->un_sorted_runs), offsetof(interim_tuple_store, embed_node_sl));
-
-	input_operator->consumer_operator = o;
-	input_operator->consumer_trigger_on_bytes_accumulated = minimum_run_size;
 }
