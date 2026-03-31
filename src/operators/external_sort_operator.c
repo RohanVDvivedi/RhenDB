@@ -312,12 +312,12 @@ static void execute(operator* o)
 
 	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
 
-	while(1)
-	{
-		pthread_mutex_lock(&(inputs->runs_lock));
-		int need_to_produce_more_runs = (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count);
-		pthread_mutex_lock(&(inputs->runs_lock));
+	pthread_mutex_lock(&(inputs->runs_lock));
+	int need_to_produce_more_runs = (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count);
+	pthread_mutex_unlock(&(inputs->runs_lock));
 
+	while(need_to_produce_more_runs)
+	{
 		if(!need_to_produce_more_runs)
 			break;
 
@@ -354,6 +354,13 @@ static void execute(operator* o)
 			}
 
 			request_to_process_some_jobs(o);
+
+			if(inputs->input_un_sorted_run == NULL)
+			{
+				pthread_mutex_lock(&(inputs->runs_lock));
+				need_to_produce_more_runs = (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count);
+				pthread_mutex_unlock(&(inputs->runs_lock));
+			}
 		}
 		else
 			break;
