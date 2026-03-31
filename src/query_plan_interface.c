@@ -71,16 +71,20 @@ static int process_kill_signal_if_received_for_operator_UNSAFE(operator* o)
 	return 0;
 }
 
-static void trigger_all_consumers_for_operator_UNSAFE(operator* o)
+static void trigger_all_consumers_for_operator_UNSAFE(operator* o, int force_trigger)
 {
 	if(is_empty_linkedlist(&(o->output_consumers)))
 		return ;
 
-	const consumption_iterator* cit_p = get_head_of_linkedlist(&(o->output_consumers));
+	consumption_iterator* cit_p = (consumption_iterator*) get_head_of_linkedlist(&(o->output_consumers));
 	do
 	{
-		trigger_execution_on_operator(cit_p->consumer);
-		cit_p = get_next_of_in_linkedlist(&(o->output_consumers), cit_p);
+		if(force_trigger || (cit_p->was_consumer_triggered == 0)) // either on force trigger OR the consumer was not priorly triggered, only then trigger
+		{
+			trigger_execution_on_operator(cit_p->consumer);
+			cit_p->was_consumer_triggered = 1; // mark it as already triggered, so the next consecutive produce need not trigger it
+		}
+		cit_p = (consumption_iterator*) get_next_of_in_linkedlist(&(o->output_consumers), cit_p);
 	}
 	while(cit_p != get_head_of_linkedlist(&(o->output_consumers)));
 }
@@ -111,7 +115,7 @@ static void* internal_execute(void* o_vp)
 		if(was_killed)
 		{
 			pthread_mutex_lock(&(o->output_lock));
-			trigger_all_consumers_for_operator_UNSAFE(o);
+			trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers
 			pthread_mutex_unlock(&(o->output_lock));
 			return NULL;
 		}
@@ -143,7 +147,7 @@ static void* internal_execute(void* o_vp)
 		if(was_killed)
 		{
 			pthread_mutex_lock(&(o->output_lock));
-			trigger_all_consumers_for_operator_UNSAFE(o);
+			trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers
 			pthread_mutex_unlock(&(o->output_lock));
 			return NULL;
 		}
@@ -185,7 +189,7 @@ void trigger_execution_on_operator(operator* o)
 	if(was_killed)
 	{
 		pthread_mutex_lock(&(o->output_lock));
-		trigger_all_consumers_for_operator_UNSAFE(o);
+		trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers
 		pthread_mutex_unlock(&(o->output_lock));
 		return ;
 	}
@@ -234,7 +238,7 @@ static void* operator_job_wrapper_function(void* ojwp_vp)
 	if(was_killed)
 	{
 		pthread_mutex_lock(&(o->output_lock));
-		trigger_all_consumers_for_operator_UNSAFE(o);
+		trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers
 		pthread_mutex_unlock(&(o->output_lock));
 		return NULL;
 	}
@@ -252,7 +256,7 @@ static void* operator_job_wrapper_function(void* ojwp_vp)
 	if(was_killed)
 	{
 		pthread_mutex_lock(&(o->output_lock));
-		trigger_all_consumers_for_operator_UNSAFE(o);
+		trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers
 		pthread_mutex_unlock(&(o->output_lock));
 		return NULL;
 	}
@@ -280,7 +284,7 @@ int run_concurrent_job_for_operator(operator* o, void* param, void (*operator_jo
 	if(was_killed)
 	{
 		pthread_mutex_lock(&(o->output_lock));
-		trigger_all_consumers_for_operator_UNSAFE(o);
+		trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers
 		pthread_mutex_unlock(&(o->output_lock));
 		return 0;
 	}
@@ -469,7 +473,7 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 
 	// wake up all consumers, only if we pushed
 	if(pushed)
-		trigger_all_consumers_for_operator_UNSAFE(o);
+		trigger_all_consumers_for_operator_UNSAFE(o, 0); // do not force trigger all consumers, trigger only the ones that were not triggered in the past
 
 	pthread_mutex_unlock(&(o->output_lock));
 
@@ -489,6 +493,7 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 
 	consumption_iterator* cit_p = malloc(sizeof(consumption_iterator));
 	cit_p->producer = producer;
+	cit_p->was_consumer_triggered = 0;
 	cit_p->consumer = consumer;
 	initialize_llnode(&(cit_p->embed_node_for_output_consumers));
 
@@ -610,6 +615,10 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 			cit_p->producer->output_buffers_count--;
 		}
 	}
+
+	// if something was consumed by this consumer then clear its was_triggered flag, so that we would receive the next trigger
+	if(tuple != NULL)
+		cit_p->was_consumer_triggered = 0;
 
 	pthread_mutex_unlock(&(cit_p->producer->output_lock));
 

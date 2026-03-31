@@ -101,6 +101,12 @@ struct consumption_iterator
 	operator* producer;
 
 	operator* consumer;
+
+	// this flag initializes to 0
+	// once set, it is on cleared on a successfull consume_for_consumption_iterator()
+	// only if this flag is 0, is the next trgger will be done for the consumer
+	int was_consumer_triggered;
+
 	interim_tuple_store* curr_store;
 	interim_tuple_region curr_region;
 
