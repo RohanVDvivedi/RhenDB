@@ -163,7 +163,7 @@ void construct_record(void* buffer, uint64_t num, int order, char* value)
 
 void* generator(void* generator_context, tuple_def* generator_tuple_def)
 {
-	static int index = 0;
+	static uint32_t index = 0;
 
 	if(index >= TESTCASE_SIZE)
 		return NULL;
