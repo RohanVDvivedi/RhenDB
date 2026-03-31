@@ -297,6 +297,8 @@ static void request_to_process_some_jobs(operator* o)
 	}
 
 	int need_to_produce_more_runs = (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count);
+	if(inputs->flag_no_new_un_sorted_runs)
+		need_to_produce_more_runs = 0;
 
 	EXIT:;
 	pthread_mutex_unlock(&(inputs->runs_lock));
@@ -314,6 +316,8 @@ static void execute(operator* o)
 
 	pthread_mutex_lock(&(inputs->runs_lock));
 	int need_to_produce_more_runs = (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count);
+	if(inputs->flag_no_new_un_sorted_runs)
+		need_to_produce_more_runs = 0;
 	pthread_mutex_unlock(&(inputs->runs_lock));
 
 	while(need_to_produce_more_runs)
@@ -326,8 +330,15 @@ static void execute(operator* o)
 		if(no_more_data)
 		{
 			pthread_mutex_lock(&(inputs->runs_lock));
+			if(inputs->input_un_sorted_run != NULL)
+			{
+				insert_tail_in_singlylist(&(inputs->un_sorted_runs), inputs->input_un_sorted_run);
+				inputs->un_sorted_runs_count++;
+			}
 			inputs->flag_no_new_un_sorted_runs = 1;
 			pthread_mutex_unlock(&(inputs->runs_lock));
+
+			inputs->input_un_sorted_run = NULL;
 
 			request_to_process_some_jobs(o);
 			return;
