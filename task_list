@@ -1,6 +1,7 @@
 PICKED TASKS
 
  * optimize sorter
+  * 1M 65 byte tuples in 2.2 seconds (other stages of the pipeline takes 1 second) is too slow
 
  * implement interim_tuple_store based interim_hash_table
    * store uint64_t hash_value -> key attributes tuple_list(dti1, dti2, dti3 ...  512 B in prefix), uint64_t value_size_in_bytes, value blob(200 B in prefix)
