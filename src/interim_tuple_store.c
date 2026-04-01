@@ -72,11 +72,24 @@ struct tuple_size_getter_context
 {
 	int fd;
 	uint64_t offset;
+
+	// helper_itr_p may be NULL
+	const interim_tuple_region* helper_itr_p;
 };
 
 static uint32_t read_tuple_prefix_from_file(void* context_p, void* data, uint32_t data_size)
 {
 	tuple_size_getter_context* temp = context_p;
+
+	if(temp->helper_itr_p != NULL)
+	{
+		if(contains_for_interim_tuple_region(temp->helper_itr_p, temp->offset, temp->offset + data_size))
+		{
+			memory_move(data, temp->helper_itr_p->region_memory + (temp->offset - temp->helper_itr_p->region_offset), data_size);
+			return data_size;
+		}
+	}
+
 	ssize_t bytes_read = pread64(temp->fd, data, data_size, temp->offset);
 	if(bytes_read == -1)
 	{
@@ -86,9 +99,9 @@ static uint32_t read_tuple_prefix_from_file(void* context_p, void* data, uint32_
 	return bytes_read;
 }
 
-uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d)
+uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p, const interim_tuple_region* helper_itr_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d)
 {
-	return get_tuple_size_using_tuple_size_def2(tpl_sz_d, &((tuple_size_getter_context){its_p->fd, tuple_offset}), read_tuple_prefix_from_file);
+	return get_tuple_size_using_tuple_size_def2(tpl_sz_d, &((tuple_size_getter_context){its_p->fd, tuple_offset, helper_itr_p}), read_tuple_prefix_from_file);
 }
 
 int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, uint64_t offset, const tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap)
@@ -98,7 +111,7 @@ int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 		return 0;
 
 	uint64_t tuple_offset_start = offset;
-	uint32_t tuple_size = get_tuple_size_for_interim_tuple_store(its_p, tuple_offset_start, tpl_sz_d);
+	uint32_t tuple_size = get_tuple_size_for_interim_tuple_store(its_p, itr_p, tuple_offset_start, tpl_sz_d);
 	uint64_t tuple_offset_end = tuple_offset_start + tuple_size;
 
 	// tuple_offset_end <= its_p->next_tuple_offset, is a must
@@ -319,6 +332,22 @@ uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p,
 int is_empty_interim_tuple_region(const interim_tuple_region* itr_p)
 {
 	return itr_p->region_memory == NULL;
+}
+
+uint64_t start_offset_for_interim_tuple_region(const interim_tuple_region* itr_p)
+{
+	if(is_empty_interim_tuple_region(itr_p))
+		return 0;
+
+	return itr_p->region_offset;
+}
+
+uint64_t end_offset_for_interim_tuple_region(const interim_tuple_region* itr_p)
+{
+	if(is_empty_interim_tuple_region(itr_p))
+		return 0;
+
+	return itr_p->region_offset + itr_p->region_size;
 }
 
 uint64_t curr_tuple_offset_for_interim_tuple_region(const interim_tuple_region* itr_p)

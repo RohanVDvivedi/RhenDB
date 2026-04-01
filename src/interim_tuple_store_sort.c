@@ -47,9 +47,10 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, uint32_t mi
 		exit(-1);
 
 	// gather all the offsets
-	for(uint64_t offset = 0; offset < its_p->next_tuple_offset; offset += get_tuple_size_for_interim_tuple_store(its_p, offset, &(tpl_d->size_def)))
-		if(!push_back_to_offset_list(&list_of_offsets, &offset))
+	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(tpl_d->size_def), its_p, min_bytes_to_mmap, {
+		if(!push_back_to_offset_list(&list_of_offsets, &tuple_offset))
 			exit(-1);
+	});
 
 	// build sorting context
 	sorting_context sc = {

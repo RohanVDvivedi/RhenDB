@@ -84,7 +84,8 @@ void delete_interim_tuple_store(interim_tuple_store* its_p);
 uint64_t get_total_bytes_in_interim_tuple_store(const interim_tuple_store* its_p);
 
 // gets size of the tuple at a known random offset
-uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d);
+// helper_itr_p may be NULL, but providing it helps make things quick
+uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p, const interim_tuple_region* helper_itr_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d);
 
 // remaps the itr_p to a new offset, if it is valid else creates a new mapping
 // it may use the same mapping, if the tuple fits in this region
@@ -139,6 +140,9 @@ uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p,
 // utility function for the interim_tuple_region below
 
 int is_empty_interim_tuple_region(const interim_tuple_region* itr_p);
+
+uint64_t start_offset_for_interim_tuple_region(const interim_tuple_region* itr_p);
+uint64_t end_offset_for_interim_tuple_region(const interim_tuple_region* itr_p);
 
 uint64_t curr_tuple_offset_for_interim_tuple_region(const interim_tuple_region* itr_p);
 uint32_t curr_tuple_size_for_interim_tuple_region(const interim_tuple_region* itr_p);
