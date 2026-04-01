@@ -329,6 +329,10 @@ static void execute(operator* o)
 		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
 		{
+			// its ownership for inputs->input_un_sorted_run, is changing, so unmap it's embed_regions
+			if(inputs->input_un_sorted_run != NULL)
+				unmap_all_embed_regions_in_interim_tuple_store(inputs->input_un_sorted_run);
+
 			pthread_mutex_lock(&(inputs->runs_lock));
 			if(inputs->input_un_sorted_run != NULL)
 			{
@@ -356,10 +360,13 @@ static void execute(operator* o)
 				extend_interim_tuple_store(inputs->input_un_sorted_run, inputs->minimum_run_size);
 			}
 
-			append_tuple_to_interim_tuple_store(inputs->input_un_sorted_run, (void*)tuple, &(inputs->record_def->size_def));
+			append_tuple_to_interim_tuple_store2(inputs->input_un_sorted_run, &(inputs->input_un_sorted_run->embed_regions[0]), (void*)tuple, &(inputs->record_def->size_def), inputs->minimum_run_size);
 
 			if(get_total_bytes_in_interim_tuple_store(inputs->input_un_sorted_run) >= inputs->minimum_run_size)
 			{
+				// its ownership for inputs->input_un_sorted_run, is changing, so unmap it's embed_regions
+				unmap_all_embed_regions_in_interim_tuple_store(inputs->input_un_sorted_run);
+
 				pthread_mutex_lock(&(inputs->runs_lock));
 				insert_tail_in_singlylist(&(inputs->un_sorted_runs), inputs->input_un_sorted_run);
 				inputs->un_sorted_runs_count++;
