@@ -414,6 +414,7 @@ void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
 
 #define MIN_OUTPUT_BUFFER_STORE_SIZE (16 * 1024)
 #define MAX_OUTPUT_BUFFER_COUNT 3
+#define MIN_BYTES_TO_MMAP (16 * 1024)
 
 int produce_tuple_from_operator(operator* o, void* tuple)
 {
@@ -460,6 +461,9 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 
 		if(produce_new_tuple_store)
 		{
+			if(its_p != NULL)
+				unmap_for_interim_tuple_region(&(its_p->embed_regions[0]));
+
 			its_p = get_new_interim_tuple_store(".");
 			extend_interim_tuple_store(its_p, MIN_OUTPUT_BUFFER_STORE_SIZE);
 
@@ -469,7 +473,13 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 		}
 
 		// append the tuple in this tail interim_tuple_store
-		append_tuple_to_interim_tuple_store(its_p, tuple, &(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers))->size_def));
+		{
+			uint32_t tuple_size = get_tuple_size_using_tuple_size_def(&(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers))->size_def), tuple);
+			mmap_for_writing_tuple(its_p, &(its_p->embed_regions[0]), &(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers))->size_def), tuple_size, MIN_BYTES_TO_MMAP);
+			memory_move(its_p->embed_regions[0].tuple, tuple, tuple_size);
+			finalize_written_tuple(its_p, &(its_p->embed_regions[0]));
+		}
+		//append_tuple_to_interim_tuple_store(its_p, tuple, &(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers))->size_def));
 	}
 
 	// wake up all consumers, only if we pushed
@@ -483,8 +493,6 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 
 	return pushed;
 }
-
-#define MIN_BYTES_TO_MMAP 8192
 
 consumption_iterator* create_consumption_iterator(operator* producer, operator* consumer, consumption_iterator* clone_cit_p)
 {
