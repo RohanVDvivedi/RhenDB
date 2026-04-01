@@ -1,5 +1,16 @@
 PICKED TASKS
 
+ * sorter
+   * segregate sorting_jobs_count and merging_jobs_count in external sorter
+   * if it is identified that unsorted_runs_count == 0 && sorting_jobs == 0
+   * then start from the current level and choose next N_way levels and merge them into the max level + 1
+   * if the current run is also the last run merging_jobs == 1 and total_sorted_runs <= N_way, then write to the operator output directly
+
+ * implement is_sorted_sink_operator, prints true if the results are sorted
+
+ * implement cross_join_operator, produced cross product of the same table, making the passed tuples as 2 attributes adjacent tuple of the same type
+   * implement a equals filter, and make them compare
+
  * implement interim_tuple_store based interim_hash_table
    * store uint64_t hash_value -> key attributes tuple_list(dti1, dti2, dti3 ...  512 B in prefix), uint64_t value_size_in_bytes, value blob(200 B in prefix)
    * api will expect unique keys in the hash table:
