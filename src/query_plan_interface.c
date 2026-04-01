@@ -474,13 +474,7 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 		}
 
 		// append the tuple in this tail interim_tuple_store
-		{
-			uint32_t tuple_size = get_tuple_size_using_tuple_size_def(&(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers))->size_def), tuple);
-			mmap_for_writing_tuple(its_p, &(its_p->embed_regions[0]), &(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers))->size_def), tuple_size, MIN_BYTES_TO_MMAP);
-			memory_move(its_p->embed_regions[0].tuple, tuple, tuple_size);
-			finalize_written_tuple(its_p, &(its_p->embed_regions[0]));
-		}
-		//append_tuple_to_interim_tuple_store(its_p, tuple, &(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers))->size_def));
+		append_tuple_to_interim_tuple_store2(its_p, &(its_p->embed_regions[0]), tuple, &(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers))->size_def), MIN_BYTES_TO_MMAP);
 	}
 
 	// wake up all consumers, only if we pushed

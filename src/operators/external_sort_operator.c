@@ -180,13 +180,8 @@ static void merge_job(operator* o, void* _param)
 	{
 		interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&mergeable_open_runs);
 
-		// copy the top tuple of its_p into output_its_p
-		{
-			uint32_t tuple_size = get_tuple_size_using_tuple_size_def(&(inputs->record_def->size_def), its_p->embed_regions[0].tuple);
-			mmap_for_writing_tuple(output_its_p, &(output_its_p->embed_regions[0]), &(inputs->record_def->size_def), tuple_size, inputs->minimum_run_size);
-			memory_move(output_its_p->embed_regions[0].tuple, its_p->embed_regions[0].tuple, tuple_size);
-			finalize_written_tuple(output_its_p, &(output_its_p->embed_regions[0]));
-		}
+		// copy the top tuple of its_p into (append it to) output_its_p
+		append_tuple_to_interim_tuple_store2(output_its_p, &(output_its_p->embed_regions[0]), its_p->embed_regions[0].tuple, &(inputs->record_def->size_def), inputs->minimum_run_size);
 
 		// go next on its_p, and insert it back into mergeable_open_runs
 		{

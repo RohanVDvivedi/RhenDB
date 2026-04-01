@@ -89,12 +89,12 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, uint32_t mi
 
 	for(uint32_t i = 0; i < get_element_count_offset_list(&list_of_offsets); i++)
 	{
+		// fetch the tuple to be copied
 		uint64_t offset = *get_from_front_of_offset_list(&list_of_offsets, i);
 		mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), offset, &(tpl_d->size_def), min_bytes_to_mmap);
-		uint32_t tuple_size = get_tuple_size_using_tuple_size_def(&(tpl_d->size_def), its_p->embed_regions[0].tuple);
-		mmap_for_writing_tuple(ots_p, &(ots_p->embed_regions[0]), &(tpl_d->size_def), tuple_size, min_bytes_to_mmap);
-		memory_move(ots_p->embed_regions[0].tuple, its_p->embed_regions[0].tuple, tuple_size);
-		finalize_written_tuple(ots_p, &(ots_p->embed_regions[0]));
+
+		// apped it to output
+		append_tuple_to_interim_tuple_store2(ots_p, &(ots_p->embed_regions[0]), its_p->embed_regions[0].tuple, &(tpl_d->size_def), min_bytes_to_mmap);
 	}
 
 	// destroy all regions we might have useds
