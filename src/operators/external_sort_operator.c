@@ -194,7 +194,7 @@ static void merge_job(operator* o, void* _param)
 			if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), next_tuple_offset, &(inputs->record_def->size_def), inputs->minimum_run_size))
 			{
 				remove_from_pheap(&mergeable_open_runs, its_p);
-				unmap_for_interim_tuple_region(&(its_p->embed_regions[0]));
+				unmap_all_embed_regions_in_interim_tuple_store(its_p);
 				delete_interim_tuple_store(its_p);
 			}
 			else
@@ -202,8 +202,8 @@ static void merge_job(operator* o, void* _param)
 		}
 	}
 
-	// unmap the rite region
-	unmap_for_interim_tuple_region(&(output_its_p->embed_regions[0]));
+	// unmap the write-side region
+	unmap_all_embed_regions_in_interim_tuple_store(output_its_p);
 
 	// insert output_its_p back into the next level
 	pthread_mutex_lock(&(inputs->runs_lock));

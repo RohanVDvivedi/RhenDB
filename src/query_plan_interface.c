@@ -461,8 +461,9 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 
 		if(produce_new_tuple_store)
 		{
+			// we are producing a new buffer/chunk for tuples, so unmap the regions for the previous tail
 			if(its_p != NULL)
-				unmap_for_interim_tuple_region(&(its_p->embed_regions[0]));
+				unmap_all_embed_regions_in_interim_tuple_store(its_p);
 
 			its_p = get_new_interim_tuple_store(".");
 			extend_interim_tuple_store(its_p, MIN_OUTPUT_BUFFER_STORE_SIZE);

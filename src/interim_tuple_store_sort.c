@@ -81,8 +81,7 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, uint32_t mi
 	}
 
 	// destroy all regions we might have used
-	unmap_for_interim_tuple_region(&(its_p->embed_regions[0]));
-	unmap_for_interim_tuple_region(&(its_p->embed_regions[1]));
+	unmap_all_embed_regions_in_interim_tuple_store(its_p);
 
 	// create output interim_tuple_store
 	interim_tuple_store* ots_p = get_new_interim_tuple_store(".");
@@ -99,8 +98,8 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, uint32_t mi
 	}
 
 	// destroy all regions we might have useds
-	unmap_for_interim_tuple_region(&(its_p->embed_regions[0]));
-	unmap_for_interim_tuple_region(&(ots_p->embed_regions[0]));
+	unmap_all_embed_regions_in_interim_tuple_store(its_p);
+	unmap_all_embed_regions_in_interim_tuple_store(ots_p);
 
 	// destroy the offset list
 	deinitialize_offset_list(&list_of_offsets);
