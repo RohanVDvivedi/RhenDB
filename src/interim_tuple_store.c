@@ -62,6 +62,32 @@ void delete_interim_tuple_store(interim_tuple_store* its_p)
 	free(its_p);
 }
 
+void extend_interim_tuple_store(interim_tuple_store* its_p, uint64_t additional_total_size)
+{
+	if(will_unsigned_sum_overflow(uint64_t, its_p->total_size, additional_total_size))
+	{
+		printf("FAILED to increment the size of the interim_tuple_store, total_size overflowed\n");
+		exit(-1);
+		return;
+	}
+	its_p->total_size += additional_total_size;
+
+	if(will_UINT_ALIGN_UP_overflow(uint64_t, its_p->total_size, sysconf(_SC_PAGE_SIZE)))
+	{
+		printf("FAILED to increment the size of the interim_tuple_store, total_size overflowed on aligning up\n");
+		exit(-1);
+		return;
+	}
+	its_p->total_size = UINT_ALIGN_UP(its_p->total_size, sysconf(_SC_PAGE_SIZE));
+
+	if(-1 == ftruncate64(its_p->fd, its_p->total_size))
+	{
+		printf("FAILED to extend the file for interim_tuple_store\n");
+		exit(-1);
+		return;
+	}
+}
+
 uint64_t get_total_bytes_in_interim_tuple_store(const interim_tuple_store* its_p)
 {
 	return its_p->next_tuple_offset;

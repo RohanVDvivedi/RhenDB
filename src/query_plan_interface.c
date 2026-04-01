@@ -454,13 +454,14 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 		if(its_p == NULL) // no output_buffers, e surely need to make 1
 			produce_new_tuple_store = 1;
 		else if(o->output_buffers_count < MAX_OUTPUT_BUFFER_COUNT) // there are some, so make one only if the tail has more than minimum bytes
-			produce_new_tuple_store = (its_p->next_tuple_offset >= MIN_OUTPUT_BUFFER_STORE_SIZE);
+			produce_new_tuple_store = (get_total_bytes_in_interim_tuple_store(its_p) >= MIN_OUTPUT_BUFFER_STORE_SIZE);
 		else // else do not make one
 			produce_new_tuple_store = 0;
 
 		if(produce_new_tuple_store)
 		{
 			its_p = get_new_interim_tuple_store(".");
+			extend_interim_tuple_store(its_p, MIN_OUTPUT_BUFFER_STORE_SIZE);
 
 			if(!insert_tail_in_singlylist(&(o->output_buffers), its_p))
 				exit(-1);

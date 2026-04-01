@@ -86,6 +86,7 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, uint32_t mi
 
 	// create output interim_tuple_store
 	interim_tuple_store* ots_p = get_new_interim_tuple_store(".");
+	extend_interim_tuple_store(ots_p, get_total_bytes_in_interim_tuple_store(its_p));
 
 	for(uint32_t i = 0; i < get_element_count_offset_list(&list_of_offsets); i++)
 	{

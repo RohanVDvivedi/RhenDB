@@ -101,6 +101,7 @@ static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const v
 static void merge_job(operator* o, void* _param)
 {
 	input_values* inputs = o->inputs;
+	uint64_t total_output_size_in_bytes = 0;
 
 	int level = (intptr_t)(_param);
 
@@ -162,13 +163,17 @@ static void merge_job(operator* o, void* _param)
 				if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), 0, &(inputs->record_def->size_def), inputs->minimum_run_size))
 					delete_interim_tuple_store(its_p);
 				else
+				{
 					push_to_pheap(&mergeable_open_runs, its_p);
+					total_output_size_in_bytes += get_total_bytes_in_interim_tuple_store(its_p);
+				}
 			}
 		}
 	}
 
 	// create output run
 	interim_tuple_store* output_its_p = get_new_interim_tuple_store(".");
+	extend_interim_tuple_store(output_its_p, total_output_size_in_bytes);
 
 	// merge all one by one from the top into output_its_p
 	while(!is_empty_pheap(&mergeable_open_runs))
@@ -351,11 +356,14 @@ static void execute(operator* o)
 		if(tuple != NULL)
 		{
 			if(inputs->input_un_sorted_run == NULL)
+			{
 				inputs->input_un_sorted_run = get_new_interim_tuple_store(".");
+				extend_interim_tuple_store(inputs->input_un_sorted_run, inputs->minimum_run_size);
+			}
 
 			append_tuple_to_interim_tuple_store(inputs->input_un_sorted_run, (void*)tuple, &(inputs->record_def->size_def));
 
-			if(inputs->input_un_sorted_run->next_tuple_offset >= inputs->minimum_run_size)
+			if(get_total_bytes_in_interim_tuple_store(inputs->input_un_sorted_run) >= inputs->minimum_run_size)
 			{
 				pthread_mutex_lock(&(inputs->runs_lock));
 				insert_tail_in_singlylist(&(inputs->un_sorted_runs), inputs->input_un_sorted_run);
