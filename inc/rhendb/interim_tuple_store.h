@@ -80,7 +80,7 @@ struct interim_tuple_store
 interim_tuple_store* get_new_interim_tuple_store(const char* directory);
 
 // closes all embed_regions in the interim_tuple_store
-void close_all_embed_regions_in_interim_tuple_store(interim_tuple_store* its_p);
+void unmap_all_embed_regions_in_interim_tuple_store(interim_tuple_store* its_p);
 
 // close_all_embed_regions_in_interim_tuple_store() fucntions ill be called before actual deletion of the file
 // so that no mmaped regions stay open
