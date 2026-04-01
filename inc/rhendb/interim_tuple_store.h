@@ -118,6 +118,8 @@ int unmap_for_interim_tuple_region(interim_tuple_region* itr_p);
 
 uint64_t append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, const tuple_size_def* tpl_sz_d);
 
+uint64_t append_tuple_to_interim_tuple_store2(interim_tuple_store* its_p, interim_tuple_region* itr_p, void* tupl, const tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap);
+
 // appends all tuples from other_its_p to the end of its_p
 uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p, const interim_tuple_store* other_its_p);
 

@@ -301,6 +301,24 @@ uint64_t append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* t
 	return offset;
 }
 
+uint64_t append_tuple_to_interim_tuple_store2(interim_tuple_store* its_p, interim_tuple_region* itr_p, void* tupl, const tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap)
+{
+	// get size of the tuple
+	uint32_t tuple_size = get_tuple_size_using_tuple_size_def(tpl_sz_d, tupl);
+
+	// mmap the large enough region
+	mmap_for_writing_tuple(its_p, itr_p, tpl_sz_d, tuple_size, min_bytes_to_mmap);
+
+	// copy the tuple into the region
+	memory_move(itr_p->tuple, tupl, tuple_size);
+
+	// finalize the tuple appended
+	finalize_written_tuple(its_p, itr_p);
+
+	// return the offset that this tuple got inserted at
+	return curr_tuple_offset_for_interim_tuple_region(itr_p);
+}
+
 uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p, const interim_tuple_store* other_its_p)
 {
 	// compute the offset to be returned
