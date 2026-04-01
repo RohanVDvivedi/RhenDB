@@ -53,11 +53,15 @@ interim_tuple_store* get_new_interim_tuple_store(const char* directory)
 	return its_p;
 }
 
-void delete_interim_tuple_store(interim_tuple_store* its_p)
+void close_all_embed_regions_in_interim_tuple_store(interim_tuple_store* its_p)
 {
 	for(int i = 0; i < sizeof(its_p->embed_regions)/sizeof(its_p->embed_regions[0]); i++)
 		unmap_for_interim_tuple_region(&(its_p->embed_regions[i]));
+}
 
+void delete_interim_tuple_store(interim_tuple_store* its_p)
+{
+	close_all_embed_regions_in_interim_tuple_store(its_p);
 	close(its_p->fd);
 	free(its_p);
 }
