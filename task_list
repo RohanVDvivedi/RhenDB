@@ -1,8 +1,5 @@
 PICKED TASKS
 
- * optimize sorter
-  * 1M 65 byte tuples in 2.2 seconds (other stages of the pipeline takes 1 second) is too slow
-
  * implement interim_tuple_store based interim_hash_table
    * store uint64_t hash_value -> key attributes tuple_list(dti1, dti2, dti3 ...  512 B in prefix), uint64_t value_size_in_bytes, value blob(200 B in prefix)
    * api will expect unique keys in the hash table:
@@ -80,6 +77,10 @@ FUTURE TASKS
  4.* lock table remaining tasks (*future)
    * deadlock detection and resolution task job (*future, for now rely on timeouts to back off and abort)
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock (*future, do it when query optimizer and catalog tables are ready)
+
+ 5.* optimize sorter even more
+  * 1M 65 byte tuples in 2.2 seconds (other stages of the pipeline takes 1 second) is too slow
+  * 100M tuples (total 65 GB) rush through the pipeline being sorted in 6 minutes and 5 seconds
 
 DESIGN METHODOLOGY
    * we will use postgresql architecture over (mysql like) mini transactions
