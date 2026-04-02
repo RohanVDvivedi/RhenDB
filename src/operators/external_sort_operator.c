@@ -372,9 +372,10 @@ static void execute(operator* o)
 				inputs->un_sorted_runs_count++;
 				pthread_mutex_unlock(&(inputs->runs_lock));
 				inputs->input_un_sorted_run = NULL;
-			}
 
-			request_to_process_some_jobs(o);
+				// only after creation of a new unsorted run, is we will need to request for more jobs
+				request_to_process_some_jobs(o);
+			}
 
 			if(inputs->input_un_sorted_run == NULL)
 			{
