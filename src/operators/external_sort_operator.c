@@ -232,7 +232,7 @@ static void request_to_process_some_jobs(operator* o)
 				remove_from_linkedlist(&(inputs->job_param_free_list), input_param);
 				insert_tail_in_linkedlist(&(inputs->job_param_list), input_param);
 
-				input_param->level_for_merged_run = i;
+				input_param->level_for_merged_run = i+1;
 				for(int i = 0; i < inputs->N_way_sort; i++)
 				{
 					interim_tuple_store* its_p = pop_run_from_tuple_runs(&(inputs->sorted_runs[i]));
@@ -278,7 +278,7 @@ static void request_to_process_some_jobs(operator* o)
 				{
 					interim_tuple_store* its_p = pop_run_from_tuple_runs(&(inputs->sorted_runs[i]));
 					push_run_in_tuple_runs(input_param, its_p);
-					input_param->level_for_merged_run = i;
+					input_param->level_for_merged_run = i+1;
 				}
 			}
 
