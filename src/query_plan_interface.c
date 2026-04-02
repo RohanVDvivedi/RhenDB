@@ -412,7 +412,7 @@ void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
 	}
 }
 
-#define MIN_OUTPUT_BUFFER_STORE_SIZE (16 * 1024)
+#define MIN_OUTPUT_BUFFER_STORE_SIZE (128 * 1024)
 #define MAX_OUTPUT_BUFFER_COUNT 3
 #define MIN_BYTES_TO_MMAP (16 * 1024)
 
@@ -528,12 +528,62 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 	return cit_p;
 }
 
+static void destroy_all_un_referenced_output_buffers_UNSAFE(operator* o)
+{
+	// iterate while there are output_buffers
+	while(o->output_buffers_count > 0)
+	{
+		// fetch the head, the one with the oldest tuples in the list
+		interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(o->output_buffers));
+
+		// preserve a flag suggesting if its_p is referenced
+		int is_referenced = 0;
+		{
+			// iterate over all the output_consumers
+			const consumption_iterator* tcit_p = get_head_of_linkedlist(&(o->output_consumers));
+			do
+			{
+				// a consumption_iterator pointing to being NULL (referencing the oldest one) or its_p
+				// is said to be refernecing its_p
+				if(tcit_p->curr_store == NULL || tcit_p->curr_store == its_p)
+				{
+					is_referenced = 1;
+					break;
+				}
+				tcit_p = get_next_of_in_linkedlist(&(o->output_consumers), tcit_p);
+			}
+			while(tcit_p != get_head_of_linkedlist(&(o->output_consumers)));
+		}
+
+		// if its_p is referenced, then break out of the loop
+		if(is_referenced)
+			break;
+
+		// else it becomes safe to discard the its_p, the head of the output_buffers
+		remove_head_from_singlylist(&(o->output_buffers));
+		delete_interim_tuple_store(its_p);
+		o->output_buffers_count--;
+	}
+}
+
 void destroy_consumption_iterator(consumption_iterator* cit_p)
 {
 	pthread_mutex_lock(&(cit_p->producer->output_lock));
+
+	// check if cit_p points to head
+	int points_to_head = ((cit_p->curr_store == NULL) || (cit_p->curr_store == get_head_of_singlylist(&(cit_p->producer->output_buffers))));
+
+	// remove cit_p from existence
 	remove_from_linkedlist(&(cit_p->producer->output_consumers), cit_p);
 	unmap_for_interim_tuple_region(&(cit_p->curr_region));
+
+	// if the cit_p pointed to head, then it might just have become safe to delete older output_buffers
+	if(points_to_head)
+		destroy_all_un_referenced_output_buffers_UNSAFE(cit_p->producer);
+
 	pthread_mutex_unlock(&(cit_p->producer->output_lock));
+
+	// safe to free
 	free(cit_p);
 }
 
@@ -592,33 +642,7 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 	}
 
 	if(clean_up_oldest_buffer)
-	{
-		while(cit_p->producer->output_buffers_count > 0)
-		{
-			interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(cit_p->producer->output_buffers));
-			int is_referenced = 0;
-			{
-				const consumption_iterator* tcit_p = get_head_of_linkedlist(&(cit_p->producer->output_consumers));
-				do
-				{
-					if(tcit_p->curr_store == NULL || tcit_p->curr_store == its_p)
-					{
-						is_referenced = 1;
-						break;
-					}
-					tcit_p = (consumption_iterator*) get_next_of_in_linkedlist(&(cit_p->producer->output_consumers), tcit_p);
-				}
-				while(tcit_p != get_head_of_linkedlist(&(cit_p->producer->output_consumers)));
-			}
-
-			if(is_referenced)
-				break;
-
-			remove_head_from_singlylist(&(cit_p->producer->output_buffers));
-			delete_interim_tuple_store(its_p);
-			cit_p->producer->output_buffers_count--;
-		}
-	}
+		destroy_all_un_referenced_output_buffers_UNSAFE(cit_p->producer);
 
 	// if something was consumed by this consumer then clear its was_triggered flag, so that we would receive the next trigger
 	if(tuple != NULL)
