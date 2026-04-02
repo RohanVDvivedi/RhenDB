@@ -10,6 +10,50 @@
 	TEMPLATE FOR INTERMEDIATE OPERATORS (sorting(ordering), joins(hash_joins), aggregations(groupby->aggregates))
 */
 
+typedef struct tuple_runs tuple_runs;
+struct tuple_runs
+{
+	// number of runs in runs_to_process
+	// if 1, you must sort it and put it in sorted_runs at level 0
+	uint64_t runs_count;
+
+	singlylist runs;
+
+	// embed_node to link all job_params in queue
+	llnode embed_node;
+
+	// only for merge operation
+	int level_for_merged_run;
+};
+
+void initialize_tuple_runs(tuple_runs* truns_p)
+{
+	truns_p->runs_count = 0;
+	initialize_singlylist(&(truns_p->runs), offsetof(interim_tuple_store, embed_node_sl));
+	initialize_llnode(&(truns_p->embed_node));
+}
+
+void push_run_in_tuple_runs(tuple_runs* truns_p, interim_tuple_store* its_p)
+{
+	truns_p->runs_count++;
+	insert_tail_in_singlylist(&(truns_p->runs), its_p);
+}
+
+void push_all_runs_in_tuple_runs(tuple_runs* truns_p, tuple_runs* copy_from_truns_p)
+{
+	truns_p->runs_count += copy_from_truns_p->runs_count;
+	copy_from_truns_p->runs_count = 0;
+	insert_all_at_tail_in_singlylist(&(truns_p->runs), &(copy_from_truns_p->runs));
+}
+
+interim_tuple_store* pop_run_from_tuple_runs(tuple_runs* truns_p)
+{
+	truns_p->runs_count--;
+	interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(truns_p->runs));
+	remove_head_from_singlylist(&(truns_p->runs));
+	return its_p;
+}
+
 #define MAX_LEVELS 128
 
 typedef struct input_values input_values;
@@ -32,53 +76,41 @@ struct input_values
 
 	int flag_no_new_un_sorted_runs;
 
-	singlylist un_sorted_runs;
-	uint64_t un_sorted_runs_count;
+	tuple_runs un_sorted_runs;
 
-	singlylist sorted_runs[MAX_LEVELS];
-	uint64_t sorted_runs_count[MAX_LEVELS];
+	tuple_runs sorted_runs[MAX_LEVELS];
+
 	uint64_t total_sorted_runs_count;
 
 	uint32_t total_concurrent_jobs_count;
+
+	linkedlist job_param_list;
+	linkedlist job_param_free_list;
 };
 
 static void request_to_process_some_jobs(operator* o);
 
-static void sort_job(operator* o, void* _param)
+static void sort_job(operator* o, void* param)
 {
 	input_values* inputs = o->inputs;
 
-	// fetch the next un_sorted_run, that e could sort
-	pthread_mutex_lock(&(inputs->runs_lock));
-	interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(inputs->un_sorted_runs));
-	if(its_p != NULL)
+	tuple_runs* input_param = param;
+
+	for(uint64_t i = 0; i < input_param->runs_count; i++)
 	{
-		remove_head_from_singlylist(&(inputs->un_sorted_runs));
-		inputs->un_sorted_runs_count--;
+		interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param);
+		int abort_error = 0;
+		interim_tuple_store* ots_p = sort_interim_tuples(its_p, inputs->minimum_run_size, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+		delete_interim_tuple_store(its_p);
+		push_run_in_tuple_runs(input_param, ots_p);
 	}
-	pthread_mutex_unlock(&(inputs->runs_lock));
-
-	if(its_p == NULL)
-	{
-		pthread_mutex_lock(&(inputs->runs_lock));
-		inputs->total_concurrent_jobs_count--;
-		pthread_mutex_unlock(&(inputs->runs_lock));
-
-		// request some new jobs to start
-		request_to_process_some_jobs(o);
-		return;
-	}
-
-	// sort its_p
-	int abort_error = 0;
-	interim_tuple_store* ots_p = sort_interim_tuples(its_p, inputs->minimum_run_size, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
-	delete_interim_tuple_store(its_p);
 
 	// insert sorted run back into the sorted_runs[0], the smallest most level
 	pthread_mutex_lock(&(inputs->runs_lock));
-	insert_tail_in_singlylist(&(inputs->sorted_runs[0]), ots_p);
-	inputs->sorted_runs_count[0]++;
-	inputs->total_sorted_runs_count++;
+	remove_from_linkedlist(&(inputs->job_param_list), input_param);
+	inputs->total_sorted_runs_count += input_param->runs_count;
+	push_all_runs_in_tuple_runs(&(inputs->sorted_runs[0]), input_param);
+	insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
 	inputs->total_concurrent_jobs_count--;
 	pthread_mutex_unlock(&(inputs->runs_lock));
 
@@ -98,76 +130,26 @@ static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const v
 	return comare_tuples2_rhendb(its1_p->embed_regions[0].tuple, its2_p->embed_regions[0].tuple, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
 }
 
-static void merge_job(operator* o, void* _param)
+static void merge_job(operator* o, void* param)
 {
 	input_values* inputs = o->inputs;
-	uint64_t total_output_size_in_bytes = 0;
 
-	int level = (intptr_t)(_param);
+	tuple_runs* input_param = param;
 
 	pheap mergeable_open_runs;
 	initialize_pheap(&mergeable_open_runs, MIN_HEAP, LEFTIST, &contexted_comparator(o, compare_interim_tuple_stores_for_pheap_runs), offsetof(interim_tuple_store, embed_node_php));
 
+	uint64_t total_output_size_in_bytes = 0;
+
 	// populate runs in mergeable_open_runs
+	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param); its_p != NULL; its_p = pop_run_from_tuple_runs(input_param))
 	{
-		singlylist mergeable_runs;
-		initialize_singlylist(&mergeable_runs, offsetof(interim_tuple_store, embed_node_sl));
-		uint32_t mergeable_runs_count = 0;
-
-		pthread_mutex_lock(&(inputs->runs_lock));
-		while(mergeable_runs_count < inputs->N_way_sort && !is_empty_singlylist(&(inputs->sorted_runs[level])))
-		{
-			interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(inputs->sorted_runs[level]));
-			if(its_p != NULL)
-			{
-				remove_head_from_singlylist(&(inputs->sorted_runs[level]));
-				insert_tail_in_singlylist(&mergeable_runs, its_p);
-				inputs->sorted_runs_count[level]--;
-				inputs->total_sorted_runs_count--;
-				mergeable_runs_count++;
-			}
-			else
-				break;
-		}
-		pthread_mutex_unlock(&(inputs->runs_lock));
-
-		if(mergeable_runs_count == 0)
-		{
-			pthread_mutex_lock(&(inputs->runs_lock));
-			inputs->total_concurrent_jobs_count--;
-			pthread_mutex_unlock(&(inputs->runs_lock));
-
-			// request some new jobs to start
-			request_to_process_some_jobs(o);
-			return;
-		}
-		else if(mergeable_runs_count == 1)
-		{
-			pthread_mutex_lock(&(inputs->runs_lock));
-			insert_all_at_tail_in_singlylist(&(inputs->sorted_runs[level+1]), &mergeable_runs);
-			inputs->sorted_runs_count[level+1] += mergeable_runs_count;
-			inputs->total_sorted_runs_count += mergeable_runs_count;
-			inputs->total_concurrent_jobs_count--;
-			pthread_mutex_unlock(&(inputs->runs_lock));
-
-			// request some new jobs to start
-			request_to_process_some_jobs(o);
-			return;
-		}
+		if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), 0, &(inputs->record_def->size_def), inputs->minimum_run_size))
+			delete_interim_tuple_store(its_p);
 		else
 		{
-			while(!is_empty_singlylist(&mergeable_runs))
-			{
-				interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&mergeable_runs);
-				remove_head_from_singlylist(&mergeable_runs);
-				if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), 0, &(inputs->record_def->size_def), inputs->minimum_run_size))
-					delete_interim_tuple_store(its_p);
-				else
-				{
-					push_to_pheap(&mergeable_open_runs, its_p);
-					total_output_size_in_bytes += get_total_bytes_in_interim_tuple_store(its_p);
-				}
-			}
+			push_to_pheap(&mergeable_open_runs, its_p);
+			total_output_size_in_bytes += get_total_bytes_in_interim_tuple_store(its_p);
 		}
 	}
 
@@ -200,11 +182,12 @@ static void merge_job(operator* o, void* _param)
 	// unmap the write-side region
 	unmap_all_embed_regions_in_interim_tuple_store(output_its_p);
 
-	// insert output_its_p back into the next level
+	// insert sorted run back into the sorted_runs[0], the smallest most level
 	pthread_mutex_lock(&(inputs->runs_lock));
-	insert_tail_in_singlylist(&(inputs->sorted_runs[level+1]), output_its_p);
-	inputs->sorted_runs_count[level+1]++;
-	inputs->total_sorted_runs_count++;
+	remove_from_linkedlist(&(inputs->job_param_list), input_param);
+	inputs->total_sorted_runs_count += 1;
+	push_run_in_tuple_runs(&(inputs->sorted_runs[input_param->level_for_merged_run]), output_its_p);
+	insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
 	inputs->total_concurrent_jobs_count--;
 	pthread_mutex_unlock(&(inputs->runs_lock));
 
@@ -335,15 +318,12 @@ static void execute(operator* o)
 
 			pthread_mutex_lock(&(inputs->runs_lock));
 			if(inputs->input_un_sorted_run != NULL)
-			{
-				insert_tail_in_singlylist(&(inputs->un_sorted_runs), inputs->input_un_sorted_run);
-				inputs->un_sorted_runs_count++;
-			}
+				push_run_in_tuple_runs(&(inputs->un_sorted_runs), inputs->input_un_sorted_run);
 			inputs->flag_no_new_un_sorted_runs = 1;
 			pthread_mutex_unlock(&(inputs->runs_lock));
-
 			inputs->input_un_sorted_run = NULL;
 
+			// only after creation of a new unsorted run, is we will need to request for more jobs
 			request_to_process_some_jobs(o);
 			return;
 		}
@@ -368,8 +348,7 @@ static void execute(operator* o)
 				unmap_all_embed_regions_in_interim_tuple_store(inputs->input_un_sorted_run);
 
 				pthread_mutex_lock(&(inputs->runs_lock));
-				insert_tail_in_singlylist(&(inputs->un_sorted_runs), inputs->input_un_sorted_run);
-				inputs->un_sorted_runs_count++;
+				push_run_in_tuple_runs(&(inputs->un_sorted_runs), inputs->input_un_sorted_run);
 				pthread_mutex_unlock(&(inputs->runs_lock));
 				inputs->input_un_sorted_run = NULL;
 
@@ -398,29 +377,30 @@ static void free_resources(operator* o)
 	if(inputs->input_un_sorted_run != NULL)
 		delete_interim_tuple_store(inputs->input_un_sorted_run);
 
-	pthread_mutex_lock(&(inputs->runs_lock));
+	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(&(inputs->un_sorted_runs)); its_p != NULL; its_p = pop_run_from_tuple_runs(&(inputs->un_sorted_runs)))
+		delete_interim_tuple_store(its_p);
 
 	for(int i = 0; i < MAX_LEVELS; i++)
-	{
-		while(!is_empty_singlylist(&(inputs->sorted_runs[i])))
-		{
-			interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(inputs->sorted_runs[i]));
-			remove_head_from_singlylist(&(inputs->sorted_runs[i]));
+		for(interim_tuple_store* its_p = pop_run_from_tuple_runs(&(inputs->sorted_runs[i])); its_p != NULL; its_p = pop_run_from_tuple_runs(&(inputs->sorted_runs[i])))
 			delete_interim_tuple_store(its_p);
-			inputs->sorted_runs_count[i]--;
-			inputs->total_sorted_runs_count--;
-		}
-	}
-
-	while(!is_empty_singlylist(&(inputs->un_sorted_runs)))
+		
+	while(!is_empty_linkedlist(&(inputs->job_param_list)))
 	{
-		interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(inputs->un_sorted_runs));
-		remove_head_from_singlylist(&(inputs->un_sorted_runs));
-		delete_interim_tuple_store(its_p);
-		inputs->un_sorted_runs_count--;
+		tuple_runs* truns_p = (tuple_runs*) get_head_of_linkedlist(&(inputs->job_param_list));
+		remove_from_linkedlist(&(inputs->job_param_list), truns_p);
+		for(interim_tuple_store* its_p = pop_run_from_tuple_runs(truns_p); its_p != NULL; its_p = pop_run_from_tuple_runs(truns_p))
+			delete_interim_tuple_store(its_p);
+		free(truns_p);
 	}
 
-	pthread_mutex_unlock(&(inputs->runs_lock));
+	while(!is_empty_linkedlist(&(inputs->job_param_free_list)))
+	{
+		tuple_runs* truns_p = (tuple_runs*) get_head_of_linkedlist(&(inputs->job_param_free_list));
+		remove_from_linkedlist(&(inputs->job_param_free_list), truns_p);
+		free(truns_p);
+	}
+
+	pthread_mutex_destroy(&(inputs->runs_lock));
 
 	free(inputs);
 }
@@ -453,13 +433,20 @@ void setup_external_sort_operator(operator* o, operator* input_operator, uint32_
 		.max_concurrent_jobs_count = max_concurrent_jobs_count,
 		.runs_lock = PTHREAD_MUTEX_INITIALIZER,
 		.flag_no_new_un_sorted_runs = 0,
-		.un_sorted_runs_count = 0,
-		.sorted_runs_count = {},
 		.total_sorted_runs_count = 0,
 		.total_concurrent_jobs_count = 0,
 	};
 
+	initialize_tuple_runs(&(inputs->un_sorted_runs));
 	for(int i = 0; i < MAX_LEVELS; i++)
-		initialize_singlylist(&(inputs->sorted_runs[i]), offsetof(interim_tuple_store, embed_node_sl));
-	initialize_singlylist(&(inputs->un_sorted_runs), offsetof(interim_tuple_store, embed_node_sl));
+		initialize_tuple_runs(&(inputs->sorted_runs[i]));
+	initialize_linkedlist(&(inputs->job_param_list), offsetof(tuple_runs, embed_node));
+	initialize_linkedlist(&(inputs->job_param_free_list), offsetof(tuple_runs, embed_node));
+
+	for(uint32_t i = 0; i < max_concurrent_jobs_count; i++)
+	{
+		tuple_runs* truns_p = malloc(sizeof(tuple_runs));
+		initialize_tuple_runs(truns_p);
+		insert_tail_in_linkedlist(&(inputs->job_param_free_list), truns_p);
+	}
 }
