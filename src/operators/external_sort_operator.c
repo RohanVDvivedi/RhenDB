@@ -48,8 +48,10 @@ void push_all_runs_in_tuple_runs(tuple_runs* truns_p, tuple_runs* copy_from_trun
 
 interim_tuple_store* pop_run_from_tuple_runs(tuple_runs* truns_p)
 {
-	truns_p->runs_count--;
 	interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(truns_p->runs));
+	if(its_p == NULL)
+		return NULL;
+	truns_p->runs_count--;
 	remove_head_from_singlylist(&(truns_p->runs));
 	return its_p;
 }
@@ -182,7 +184,7 @@ static void merge_job(operator* o, void* param)
 	// unmap the write-side region
 	unmap_all_embed_regions_in_interim_tuple_store(output_its_p);
 
-	// insert sorted run back into the sorted_runs[0], the smallest most level
+	// insert sorted run back into the sorted_runs[level_for_merged_run]
 	pthread_mutex_lock(&(inputs->runs_lock));
 	remove_from_linkedlist(&(inputs->job_param_list), input_param);
 	inputs->total_sorted_runs_count += 1;
@@ -236,6 +238,7 @@ static void request_to_process_some_jobs(operator* o)
 				for(int r = 0; r < inputs->N_way_sort; r++)
 				{
 					interim_tuple_store* its_p = pop_run_from_tuple_runs(&(inputs->sorted_runs[i]));
+					inputs->total_sorted_runs_count--;
 					push_run_in_tuple_runs(input_param, its_p);
 				}
 				if(!run_concurrent_job_for_operator(o, input_param, merge_job) && can_not_proceed_for_execution_operator(o))
@@ -252,12 +255,10 @@ static void request_to_process_some_jobs(operator* o)
 			// current level
 			int i = 0;
 			tuple_runs* input_param = NULL;
-			while(inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count)
+			while(inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count && i < MAX_LEVELS)
 			{
 				if(inputs->sorted_runs[i].runs_count == 0)
 				{
-					if(i == MAX_LEVELS)
-						break;
 					i++;
 					continue;
 				}
@@ -277,6 +278,7 @@ static void request_to_process_some_jobs(operator* o)
 				else
 				{
 					interim_tuple_store* its_p = pop_run_from_tuple_runs(&(inputs->sorted_runs[i]));
+					inputs->total_sorted_runs_count--;
 					push_run_in_tuple_runs(input_param, its_p);
 					input_param->level_for_merged_run = i+1;
 				}
