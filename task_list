@@ -1,10 +1,7 @@
 PICKED TASKS
 
  * sorter
-   * segregate sorting_jobs_count and merging_jobs_count in external sorter
-   * if it is identified that unsorted_runs_count == 0 && sorting_jobs == 0
-   * then start from the current level and choose next N_way levels and merge them into the max level + 1
-   * if the current run is also the last run merging_jobs == 1 and total_sorted_runs <= N_way, then write to the operator output directly
+   * make the last merge stage write directly to the produce from the operator
 
  * implement is_sorted_sink_operator, prints true if the results are sorted
 
@@ -90,8 +87,8 @@ FUTURE TASKS
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock (*future, do it when query optimizer and catalog tables are ready)
 
  5.* optimize sorter even more
-  * 1M 65 byte tuples in 2.2 seconds (other stages of the pipeline takes 1 second) is too slow
-  * 100M tuples (total 65 GB) rush through the pipeline being sorted in 6 minutes and 5 seconds
+  * 1M 65 byte tuples in 1.9 seconds (other stages of the pipeline takes 1 second) is too slow
+  * 100M tuples (total 65 GB) rush through the pipeline being sorted in 4 minutes and 38 seconds
 
 DESIGN METHODOLOGY
    * we will use postgresql architecture over (mysql like) mini transactions
