@@ -206,10 +206,16 @@ static void request_to_process_some_jobs(operator* o)
 
 	if(inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count)
 	{
-		for(int t = 0; t < inputs->un_sorted_runs_count
+		for(int t = 0; t < inputs->un_sorted_runs.runs_count
 			&& (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); t++)
 		{
-			if(!run_concurrent_job_for_operator(o, NULL, sort_job) && can_not_proceed_for_execution_operator(o))
+			tuple_runs* input_param = (tuple_runs*) get_head_of_linkedlist(&(inputs->job_param_free_list));
+			remove_from_linkedlist(&(inputs->job_param_free_list), input_param);
+			insert_tail_in_linkedlist(&(inputs->job_param_list), input_param);
+
+			interim_tuple_store* its_p = pop_run_from_tuple_runs(&(inputs->un_sorted_runs));
+			push_run_in_tuple_runs(input_param, its_p);
+			if(!run_concurrent_job_for_operator(o, input_param, sort_job) && can_not_proceed_for_execution_operator(o))
 				goto EXIT;
 			inputs->total_concurrent_jobs_count++;
 		}
@@ -219,10 +225,20 @@ static void request_to_process_some_jobs(operator* o)
 	{
 		for(int i = 0; i < MAX_LEVELS && (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); i++)
 		{
-			for(int t = 0; t < UINT_ALIGN_DOWN(inputs->sorted_runs_count[i], inputs->N_way_sort) / inputs->N_way_sort
+			for(int t = 0; t < UINT_ALIGN_DOWN(inputs->sorted_runs[i].runs_count, inputs->N_way_sort) / inputs->N_way_sort
 				&& (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); t++)
 			{
-				if(!run_concurrent_job_for_operator(o, (void*)((intptr_t)i), merge_job) && can_not_proceed_for_execution_operator(o))
+				tuple_runs* input_param = (tuple_runs*) get_head_of_linkedlist(&(inputs->job_param_free_list));
+				remove_from_linkedlist(&(inputs->job_param_free_list), input_param);
+				insert_tail_in_linkedlist(&(inputs->job_param_list), input_param);
+
+				input_param->level_for_merged_run = i;
+				for(int i = 0; i < inputs->N_way_sort; i++)
+				{
+					interim_tuple_store* its_p = pop_run_from_tuple_runs(&(inputs->sorted_runs[i]));
+					push_run_in_tuple_runs(input_param, its_p);
+				}
+				if(!run_concurrent_job_for_operator(o, input_param, merge_job) && can_not_proceed_for_execution_operator(o))
 					goto EXIT;
 				inputs->total_concurrent_jobs_count++;
 			}
@@ -233,20 +249,45 @@ static void request_to_process_some_jobs(operator* o)
 	{
 		if(inputs->flag_no_new_un_sorted_runs && inputs->total_sorted_runs_count > 1)
 		{
-			uint32_t runs_seen = 0;
-			for(int i = 0; i < MAX_LEVELS && (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); i++)
+			// current level
+			int i = 0;
+			tuple_runs* input_param = NULL;
+			while(inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count)
 			{
-				runs_seen += inputs->sorted_runs_count[i];
-				if((runs_seen < inputs->total_sorted_runs_count) || (inputs->sorted_runs_count[i] > 1))
+				if(inputs->sorted_runs[i].runs_count == 0)
 				{
-					for(int t = 0; t < UINT_ALIGN_UP(inputs->sorted_runs_count[i], inputs->N_way_sort) / inputs->N_way_sort
-						&& (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count); t++)
-					{
-						if(!run_concurrent_job_for_operator(o, (void*)((intptr_t)i), merge_job) && can_not_proceed_for_execution_operator(o))
-							goto EXIT;
-						inputs->total_concurrent_jobs_count++;
-					}
+					if(i == MAX_LEVELS)
+						break;
+					i++;
+					continue;
 				}
+				if(input_param == NULL)
+				{
+					input_param = (tuple_runs*) get_head_of_linkedlist(&(inputs->job_param_free_list));
+					remove_from_linkedlist(&(inputs->job_param_free_list), input_param);
+					insert_tail_in_linkedlist(&(inputs->job_param_list), input_param);
+				}
+				if(input_param->runs_count == inputs->N_way_sort)
+				{
+					if(!run_concurrent_job_for_operator(o, input_param, merge_job) && can_not_proceed_for_execution_operator(o))
+						goto EXIT;
+					inputs->total_concurrent_jobs_count++;
+					input_param = NULL;
+				}
+				else
+				{
+					interim_tuple_store* its_p = pop_run_from_tuple_runs(&(inputs->sorted_runs[i]));
+					push_run_in_tuple_runs(input_param, its_p);
+					input_param->level_for_merged_run = i;
+				}
+			}
+
+			if(input_param != NULL)
+			{
+				if(!run_concurrent_job_for_operator(o, input_param, merge_job) && can_not_proceed_for_execution_operator(o))
+					goto EXIT;
+				inputs->total_concurrent_jobs_count++;
+				input_param = NULL;
 			}
 		}
 	}
@@ -255,10 +296,8 @@ static void request_to_process_some_jobs(operator* o)
 	{
 		for(int i = 0; i < MAX_LEVELS; i++)
 		{
-			while(!is_empty_singlylist(&(inputs->sorted_runs[i])))
+			for(interim_tuple_store* its_p = pop_run_from_tuple_runs(&(inputs->sorted_runs[i])); its_p != NULL; its_p = pop_run_from_tuple_runs(&(inputs->sorted_runs[i])))
 			{
-				interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(inputs->sorted_runs[i]));
-				remove_head_from_singlylist(&(inputs->sorted_runs[i]));
 				int produced = 0;
 				{
 					FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->record_def->size_def), its_p, inputs->minimum_run_size, {
