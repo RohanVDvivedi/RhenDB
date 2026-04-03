@@ -163,4 +163,8 @@ int contains_for_interim_tuple_region(const interim_tuple_region* itr_p, uint64_
 
 #define INIT_INTERIM_TUPLE_REGION ((interim_tuple_region){})
 
+// to be used with cutlery containers only
+void delete_on_notify_for_interim_tuple_store(void* resource_p, const void* data_p);
+#define DELETE_ON_NOTIFY_FOR_INTERIM_TUPLE_STORE (&((notifier_interface){NULL, delete_on_notify_for_interim_tuple_store}))
+
 #endif

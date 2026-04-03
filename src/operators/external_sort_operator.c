@@ -56,6 +56,12 @@ interim_tuple_store* pop_run_from_tuple_runs(tuple_runs* truns_p)
 	return its_p;
 }
 
+void delete_all_runs_in_tuple_runs(tuple_runs* truns_p)
+{
+	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(truns_p); its_p != NULL; its_p = pop_run_from_tuple_runs(truns_p))
+		delete_interim_tuple_store(its_p);
+}
+
 #define MAX_LEVELS 128
 
 typedef struct input_values input_values;
@@ -138,6 +144,10 @@ static void merge_job(operator* o, void* param)
 
 	tuple_runs* input_param = param;
 
+	pthread_mutex_lock(&(inputs->runs_lock));
+	int can_directly_produce = (inputs->total_concurrent_jobs_count == 1) && (inputs->flag_no_new_un_sorted_runs) && (inputs->un_sorted_runs.runs_count == 0) && (inputs->total_sorted_runs_count == 0);
+	pthread_mutex_unlock(&(inputs->runs_lock));
+
 	pheap mergeable_open_runs;
 	initialize_pheap(&mergeable_open_runs, MIN_HEAP, LEFTIST, &contexted_comparator(o, compare_interim_tuple_stores_for_pheap_runs), offsetof(interim_tuple_store, embed_node_php));
 
@@ -156,16 +166,34 @@ static void merge_job(operator* o, void* param)
 	}
 
 	// create output run
-	interim_tuple_store* output_its_p = get_new_interim_tuple_store(".");
-	extend_interim_tuple_store(output_its_p, total_output_size_in_bytes);
+	interim_tuple_store* output_its_p = NULL;
 
-	// merge all one by one from the top into output_its_p
+	if(!can_directly_produce)
+	{
+		output_its_p = get_new_interim_tuple_store(".");
+		extend_interim_tuple_store(output_its_p, total_output_size_in_bytes);
+	}
+
+	int produce_failed = 0;
+
+	// merge all one by one from the top into output_its_p or produce them if possible
 	while(!is_empty_pheap(&mergeable_open_runs))
 	{
 		interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&mergeable_open_runs);
 
-		// copy the top tuple of its_p into (append it to) output_its_p
-		append_tuple_to_interim_tuple_store2(output_its_p, &(output_its_p->embed_regions[0]), its_p->embed_regions[0].tuple, &(inputs->record_def->size_def), inputs->minimum_run_size);
+		if(!can_directly_produce)
+		{
+			// copy the top tuple of its_p into (append it to) output_its_p
+			append_tuple_to_interim_tuple_store2(output_its_p, &(output_its_p->embed_regions[0]), its_p->embed_regions[0].tuple, &(inputs->record_def->size_def), inputs->minimum_run_size);
+		}
+		else
+		{
+			if(!produce_tuple_from_operator(o, its_p->embed_regions[0].tuple))
+			{
+				produce_failed = 1;
+				break;
+			}
+		}
 
 		// go next on its_p, and insert it back into mergeable_open_runs
 		{
@@ -181,20 +209,53 @@ static void merge_job(operator* o, void* param)
 		}
 	}
 
-	// unmap the write-side region
-	unmap_all_embed_regions_in_interim_tuple_store(output_its_p);
+	if(!is_empty_pheap(&mergeable_open_runs))
+		remove_all_from_pheap(&mergeable_open_runs, DELETE_ON_NOTIFY_FOR_INTERIM_TUPLE_STORE);
 
-	// insert sorted run back into the sorted_runs[level_for_merged_run]
-	pthread_mutex_lock(&(inputs->runs_lock));
-	remove_from_linkedlist(&(inputs->job_param_list), input_param);
-	inputs->total_sorted_runs_count += 1;
-	push_run_in_tuple_runs(&(inputs->sorted_runs[input_param->level_for_merged_run]), output_its_p);
-	insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
-	inputs->total_concurrent_jobs_count--;
-	pthread_mutex_unlock(&(inputs->runs_lock));
+	if(!can_directly_produce)
+	{
+		// unmap the write-side region
+		unmap_all_embed_regions_in_interim_tuple_store(output_its_p);
 
-	// request some new jobs to start
-	request_to_process_some_jobs(o);
+		// insert sorted run back into the sorted_runs[level_for_merged_run]
+		pthread_mutex_lock(&(inputs->runs_lock));
+		remove_from_linkedlist(&(inputs->job_param_list), input_param);
+		inputs->total_sorted_runs_count += 1;
+		push_run_in_tuple_runs(&(inputs->sorted_runs[input_param->level_for_merged_run]), output_its_p);
+		insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
+		inputs->total_concurrent_jobs_count--;
+		pthread_mutex_unlock(&(inputs->runs_lock));
+
+		// request some new jobs to start
+		request_to_process_some_jobs(o);
+	}
+	else
+	{
+		if(produce_failed)
+		{
+			// insert sorted run back into the sorted_runs[level_for_merged_run]
+			pthread_mutex_lock(&(inputs->runs_lock));
+			remove_from_linkedlist(&(inputs->job_param_list), input_param);
+			insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
+			inputs->total_concurrent_jobs_count--;
+			pthread_mutex_unlock(&(inputs->runs_lock));
+
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+		}
+		else
+		{
+			// insert sorted run back into the sorted_runs[level_for_merged_run]
+			pthread_mutex_lock(&(inputs->runs_lock));
+			remove_from_linkedlist(&(inputs->job_param_list), input_param);
+			insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
+			inputs->total_concurrent_jobs_count--;
+			pthread_mutex_unlock(&(inputs->runs_lock));
+
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+		}
+
+		// this would always be the final job, so no need to request for any mote jobs
+	}
 }
 
 static void produce_job(operator* o, void* param)
@@ -222,6 +283,8 @@ static void produce_job(operator* o, void* param)
 			break;
 	}
 
+	delete_all_runs_in_tuple_runs(input_param);
+
 	if(!failed)
 	{
 		// mark job completed
@@ -234,7 +297,18 @@ static void produce_job(operator* o, void* param)
 		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
 	}
 	else
-		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("pushed_failed_from_sorter_operator_and_so_killed"));
+	{
+		// mark job completed
+		pthread_mutex_lock(&(inputs->runs_lock));
+		remove_from_linkedlist(&(inputs->job_param_list), input_param);
+		insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
+		inputs->total_concurrent_jobs_count--;
+		pthread_mutex_unlock(&(inputs->runs_lock));
+
+		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+	}
+
+	// this would always be the final job, so no need to request for any mote jobs
 }
 
 static void request_to_process_some_jobs(operator* o)
@@ -467,8 +541,7 @@ static void free_resources(operator* o)
 	{
 		tuple_runs* truns_p = (tuple_runs*) get_head_of_linkedlist(&(inputs->job_param_list));
 		remove_from_linkedlist(&(inputs->job_param_list), truns_p);
-		for(interim_tuple_store* its_p = pop_run_from_tuple_runs(truns_p); its_p != NULL; its_p = pop_run_from_tuple_runs(truns_p))
-			delete_interim_tuple_store(its_p);
+		delete_all_runs_in_tuple_runs(truns_p);
 		free(truns_p);
 	}
 

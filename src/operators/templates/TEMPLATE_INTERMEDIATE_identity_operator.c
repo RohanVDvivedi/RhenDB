@@ -39,7 +39,7 @@ static void execute(operator* o)
 			int produced = produce_tuple_from_operator(o, (void*)tuple);
 			if(!produced)
 			{
-				kill_reason = get_dstring_pointing_to_literal_cstring("pushed_failed_from_identity_operator_and_so_killed");
+				kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
 				kill_signal_for_self_operator(o, kill_reason); return ;
 			}
 		}

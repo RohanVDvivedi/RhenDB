@@ -436,3 +436,8 @@ int contains_for_interim_tuple_region(const interim_tuple_region* itr_p, uint64_
 
 	return (region_start <= offset_start) && (offset_end <= region_end);
 }
+
+void delete_on_notify_for_interim_tuple_store(void* resource_p, const void* data_p)
+{
+	delete_interim_tuple_store((interim_tuple_store*)data_p);
+}
