@@ -231,10 +231,10 @@ static void produce_job(operator* o, void* param)
 		inputs->total_concurrent_jobs_count--;
 		pthread_mutex_unlock(&(inputs->runs_lock));
 
-		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("pushed_failed_from_identity_oerator_and_so_killed"));
+		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
 	}
 	else
-		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("pushed_failed_from_sorter_operator_and_so_killed"));
 }
 
 static void request_to_process_some_jobs(operator* o)
