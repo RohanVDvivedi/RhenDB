@@ -538,21 +538,22 @@ static void destroy_all_un_referenced_output_buffers_UNSAFE(operator* o)
 
 		// preserve a flag suggesting if its_p is referenced
 		int is_referenced = 0;
+		if(!is_empty_linkedlist(&(o->output_consumers)))
 		{
 			// iterate over all the output_consumers
-			const consumption_iterator* tcit_p = get_head_of_linkedlist(&(o->output_consumers));
+			const consumption_iterator* cit_p = get_head_of_linkedlist(&(o->output_consumers));
 			do
 			{
 				// a consumption_iterator pointing to being NULL (referencing the oldest one) or its_p
 				// is said to be refernecing its_p
-				if(tcit_p->curr_store == NULL || tcit_p->curr_store == its_p)
+				if(cit_p->curr_store == NULL || cit_p->curr_store == its_p)
 				{
 					is_referenced = 1;
 					break;
 				}
-				tcit_p = get_next_of_in_linkedlist(&(o->output_consumers), tcit_p);
+				cit_p = get_next_of_in_linkedlist(&(o->output_consumers), cit_p);
 			}
-			while(tcit_p != get_head_of_linkedlist(&(o->output_consumers)));
+			while(cit_p != get_head_of_linkedlist(&(o->output_consumers)));
 		}
 
 		// if its_p is referenced, then break out of the loop

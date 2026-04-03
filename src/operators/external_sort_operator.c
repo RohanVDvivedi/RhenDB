@@ -353,6 +353,12 @@ static void execute(operator* o)
 		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
 		{
+			// destroy input_iterator, this is success case
+			{
+				destroy_consumption_iterator(inputs->input_iterator);
+				inputs->input_iterator = NULL;
+			}
+
 			// its ownership for inputs->input_un_sorted_run, is changing, so unmap it's embed_regions
 			if(inputs->input_un_sorted_run != NULL)
 				unmap_all_embed_regions_in_interim_tuple_store(inputs->input_un_sorted_run);
