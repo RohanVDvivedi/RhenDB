@@ -197,6 +197,46 @@ static void merge_job(operator* o, void* param)
 	request_to_process_some_jobs(o);
 }
 
+static void produce_job(operator* o, void* param)
+{
+	input_values* inputs = o->inputs;
+
+	tuple_runs* input_param = param;
+
+	int failed = 0;
+
+	// produce tuple in all the runs
+	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param); its_p != NULL; its_p = pop_run_from_tuple_runs(input_param))
+	{
+		{
+			FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->record_def->size_def), its_p, inputs->minimum_run_size, {
+				if(!produce_tuple_from_operator(o, tuple))
+				{
+					failed = 1;
+					break;
+				}
+			})
+		}
+		delete_interim_tuple_store(its_p);
+		if(failed)
+			break;
+	}
+
+	if(!failed)
+	{
+		// mark job completed
+		pthread_mutex_lock(&(inputs->runs_lock));
+		remove_from_linkedlist(&(inputs->job_param_list), input_param);
+		insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
+		inputs->total_concurrent_jobs_count--;
+		pthread_mutex_unlock(&(inputs->runs_lock));
+
+		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("pushed_failed_from_identity_oerator_and_so_killed"));
+	}
+	else
+		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+}
+
 static void request_to_process_some_jobs(operator* o)
 {
 	if(can_not_proceed_for_execution_operator(o))
@@ -296,28 +336,20 @@ static void request_to_process_some_jobs(operator* o)
 
 	if(inputs->flag_no_new_un_sorted_runs && inputs->total_concurrent_jobs_count == 0 && inputs->total_sorted_runs_count <= 1)
 	{
+		tuple_runs* input_param = (tuple_runs*) get_head_of_linkedlist(&(inputs->job_param_free_list));
+		remove_from_linkedlist(&(inputs->job_param_free_list), input_param);
+		insert_tail_in_linkedlist(&(inputs->job_param_list), input_param);
+
 		for(int i = 0; i < MAX_LEVELS; i++)
 		{
-			for(interim_tuple_store* its_p = pop_run_from_tuple_runs(&(inputs->sorted_runs[i])); its_p != NULL; its_p = pop_run_from_tuple_runs(&(inputs->sorted_runs[i])))
-			{
-				int produced = 0;
-				{
-					FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->record_def->size_def), its_p, inputs->minimum_run_size, {
-						produced = produce_tuple_from_operator(o, tuple);
-						if(!produced)
-							break;
-					})
-				}
-				delete_interim_tuple_store(its_p);
-				if(!produced)
-				{
-					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("pushed_failed_from_identity_oerator_and_so_killed"));
-					pthread_mutex_unlock(&(inputs->runs_lock));
-					return ;
-				}
-			}
+			inputs->total_sorted_runs_count -=  inputs->sorted_runs[i].runs_count;
+			push_all_runs_in_tuple_runs(input_param, &(inputs->sorted_runs[i]));
 		}
-		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+
+		if(!run_concurrent_job_for_operator(o, input_param, produce_job) && can_not_proceed_for_execution_operator(o))
+			goto EXIT;
+		inputs->total_concurrent_jobs_count++;
+		input_param = NULL;
 	}
 
 	int need_to_produce_more_runs = (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count);
