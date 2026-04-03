@@ -561,9 +561,6 @@ static void free_resources(operator* o)
 
 void setup_external_sort_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t minimum_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
 {
-	// force the input operator to produce tuples one by one
-	append_tuple_transformer(&(input_operator->output_tuple_transformers), get_new_identity_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(input_operator)));
-
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = free_resources;
