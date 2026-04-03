@@ -5,8 +5,8 @@ PICKED TASKS
  * implement cross_join_operator, produced cross product of the same table, making the passed tuples as 2 attributes adjacent tuple of the same type
    * implement a equals filter, and make them compare
 
- * implement interim_tuple_store based interim_hash_table
-   * store uint64_t hash_value -> key attributes tuple_list(dti1, dti2, dti3 ...  512 B in prefix), uint64_t value_size_in_bytes, value blob(200 B in prefix)
+ * implement rash_table
+   * store uint64_t hash_value -> key attributes tuple_list(dti1, dti2, dti3 ...  512 B in prefix), uint64_t value_size_in_bytes, value blob(256 B in prefix)
    * api will expect unique keys in the hash table:
       uint64_t get_new_hash_table(key_def, key_element_ids, keys_element_count) // returns root page_id
       destroy_hash_table(root_page_id)
@@ -15,9 +15,10 @@ PICKED TASKS
       int shrink_hash_table(root_page_id)
       hash_table_iterator* find(root_page_id, key, key_def, key_element_ids, keys_element_count)
        * selects and points to the only key that matches, even the key not just hash_value must match
-      binary_read_iterator* read(hash_table_iterator*); // read the current value, if not null
-      binary_write_iterator* insert(hash_table_iterator*); // also adds to the value_size_in_bytes, opens iterator to the currently pointing iterator, else if the key does not match, a new empy one is created and inserted, opens an interator for the user to insert something using the value iterator
-      int delete(hash_table_iterator*); // points to something else now, deletes if it points to something
+      int exists_value(hash_table_iterator*); // ensures that ther is atleast a key at the hash_table_iterator
+      binary_read_iterator* read_value(hash_table_iterator*); // read the current value, if not null
+      binary_write_iterator* insert_value(hash_table_iterator*, int clear_old_value); // inserts if the given key does not exists
+      int delete_value(hash_table_iterator*); // points to something else now, deletes if it points to something
       hash_table_iterator* find_all(root_page_id, uint64_t first_bucket_id, uint64_t last_bucket_id)
       int go_next(hash_table_iterator*)
    * 99.99% of the cases value will just be uint64_t offset pointing in to the interim_tuple_store
