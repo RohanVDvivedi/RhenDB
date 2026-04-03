@@ -1,9 +1,5 @@
 PICKED TASKS
 
- * sorter
-   * make the last merge stage write directly to the produce from the operator
-   * for the total_concurrent_jobs_count == 1 && flag_no_new_un_sorted_runs == 1 && total_sorted_runs_count == 0 && un_sorted_runs.runs_count == 0, in the merge phase
-
  * implement is_sorted_sink_operator, prints true if the results are sorted
 
  * implement cross_join_operator, produced cross product of the same table, making the passed tuples as 2 attributes adjacent tuple of the same type
