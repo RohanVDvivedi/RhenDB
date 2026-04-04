@@ -1,9 +1,5 @@
 PICKED TASKS
 
- * implement
-   uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p, const interim_tuple_store* other_its_p);
-   uint64_t append_all_from_another_interim_tuple_store2(interim_tuple_store* its_p, const interim_tuple_store* other_its_p, uint64_t from_tuple_offset, uint64_t from_tuple_index);
-
  * in sorter 
    * make different functions for merge_job, one produces from operator and another makes a run
    * the version that creates runs, is allwoed to use 2nd version of append_all_from_another_interim_tuple_store2, to copy the remaining tuples from the rest of the last run
