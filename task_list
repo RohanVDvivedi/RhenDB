@@ -1,9 +1,5 @@
 PICKED TASKS
 
- * in sorter 
-   * make different functions for merge_job, one produces from operator and another makes a run
-   * the version that creates runs, is allwoed to use 2nd version of append_all_from_another_interim_tuple_store2, to copy the remaining tuples from the rest of the last run
-
  * implement cross_join_operator, to produce cross product of  tables, left and right
    * batch 16 KB of tuples atleast on either size
    * after a batch is collected, iterate on all prior seeen tuple on the other side, and produce results
