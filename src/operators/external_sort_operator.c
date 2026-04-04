@@ -149,10 +149,12 @@ static void merge_into_run_job(operator* o, void* param)
 	initialize_pheap(&mergeable_open_runs, MIN_HEAP, LEFTIST, &contexted_comparator(o, compare_interim_tuple_stores_for_pheap_runs), offsetof(interim_tuple_store, embed_node_php));
 
 	uint64_t total_output_size_in_bytes = 0;
+	uint64_t total_input_runs_count = input_param->runs_count;
 
 	// populate runs in mergeable_open_runs
 	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param); its_p != NULL; its_p = pop_run_from_tuple_runs(input_param))
 	{
+		its_p->embed_uints[0] = 0;
 		if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), 0, &(inputs->record_def->size_def), inputs->minimum_run_size))
 			delete_interim_tuple_store(its_p);
 		else
@@ -167,7 +169,7 @@ static void merge_into_run_job(operator* o, void* param)
 	extend_interim_tuple_store(output_its_p, total_output_size_in_bytes);
 
 	// merge all one by one from the top into output_its_p or produce them if possible
-	while(!is_empty_pheap(&mergeable_open_runs))
+	while(total_input_runs_count > 1)
 	{
 		interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&mergeable_open_runs);
 
@@ -177,8 +179,10 @@ static void merge_into_run_job(operator* o, void* param)
 		// go next on its_p, and insert it back into mergeable_open_runs
 		{
 			uint64_t next_tuple_offset = next_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0]));
+			its_p->embed_uints[0]++;
 			if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), next_tuple_offset, &(inputs->record_def->size_def), inputs->minimum_run_size))
 			{
+				total_input_runs_count--;
 				remove_from_pheap(&mergeable_open_runs, its_p);
 				unmap_all_embed_regions_in_interim_tuple_store(its_p);
 				delete_interim_tuple_store(its_p);
@@ -188,8 +192,18 @@ static void merge_into_run_job(operator* o, void* param)
 		}
 	}
 
-	if(!is_empty_pheap(&mergeable_open_runs))
-		remove_all_from_pheap(&mergeable_open_runs, DELETE_ON_NOTIFY_FOR_INTERIM_TUPLE_STORE);
+	// if there is only 1 mergeable_open_runs left, then merge all of its contents into the output_its_p
+	while(!is_empty_pheap(&mergeable_open_runs))
+	{
+		interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&mergeable_open_runs);
+
+		append_all_from_another_interim_tuple_store2(output_its_p, its_p, curr_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0])), its_p->embed_uints[0]);
+
+		remove_from_pheap(&mergeable_open_runs, its_p);
+
+		unmap_all_embed_regions_in_interim_tuple_store(its_p);
+		delete_interim_tuple_store(its_p);
+	}
 
 	// unmap the write-side region
 	unmap_all_embed_regions_in_interim_tuple_store(output_its_p);
