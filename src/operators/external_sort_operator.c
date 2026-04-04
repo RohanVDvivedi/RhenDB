@@ -114,6 +114,7 @@ static void sort_job(operator* o, void* param)
 	}
 
 	// insert sorted run back into the sorted_runs[0], the smallest most level
+	// also add input_param back to free list
 	pthread_mutex_lock(&(inputs->runs_lock));
 	remove_from_linkedlist(&(inputs->job_param_list), input_param);
 	inputs->total_sorted_runs_count += input_param->runs_count;
@@ -194,6 +195,7 @@ static void merge_into_run_job(operator* o, void* param)
 	unmap_all_embed_regions_in_interim_tuple_store(output_its_p);
 
 	// insert sorted run back into the sorted_runs[level_for_merged_run]
+	// also add input_param back to free list
 	pthread_mutex_lock(&(inputs->runs_lock));
 	remove_from_linkedlist(&(inputs->job_param_list), input_param);
 	inputs->total_sorted_runs_count += 1;
@@ -254,28 +256,17 @@ static void merge_into_produce_job(operator* o, void* param)
 	if(!is_empty_pheap(&mergeable_open_runs))
 		remove_all_from_pheap(&mergeable_open_runs, DELETE_ON_NOTIFY_FOR_INTERIM_TUPLE_STORE);
 
+	// add input_param back to free list
+	pthread_mutex_lock(&(inputs->runs_lock));
+	remove_from_linkedlist(&(inputs->job_param_list), input_param);
+	insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
+	inputs->total_concurrent_jobs_count--;
+	pthread_mutex_unlock(&(inputs->runs_lock));
+
 	if(produce_failed)
-	{
-		// insert sorted run back into the sorted_runs[level_for_merged_run]
-		pthread_mutex_lock(&(inputs->runs_lock));
-		remove_from_linkedlist(&(inputs->job_param_list), input_param);
-		insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
-		inputs->total_concurrent_jobs_count--;
-		pthread_mutex_unlock(&(inputs->runs_lock));
-
 		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
-	}
 	else
-	{
-		// insert sorted run back into the sorted_runs[level_for_merged_run]
-		pthread_mutex_lock(&(inputs->runs_lock));
-		remove_from_linkedlist(&(inputs->job_param_list), input_param);
-		insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
-		inputs->total_concurrent_jobs_count--;
-		pthread_mutex_unlock(&(inputs->runs_lock));
-
 		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
-	}
 
 	// this would always be the final job, so no need to request for any mote jobs
 }
@@ -300,7 +291,7 @@ static void produce_job(operator* o, void* param)
 
 	tuple_runs* input_param = param;
 
-	int failed = 0;
+	int produce_failed = 0;
 
 	// produce tuple in all the runs
 	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param); its_p != NULL; its_p = pop_run_from_tuple_runs(input_param))
@@ -309,40 +300,30 @@ static void produce_job(operator* o, void* param)
 			FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->record_def->size_def), its_p, inputs->minimum_run_size, {
 				if(!produce_tuple_from_operator(o, tuple))
 				{
-					failed = 1;
+					produce_failed = 1;
 					break;
 				}
 			})
 		}
 		delete_interim_tuple_store(its_p);
-		if(failed)
+		if(produce_failed)
 			break;
 	}
 
 	delete_all_runs_in_tuple_runs(input_param);
 
-	if(!failed)
-	{
-		// mark job completed
-		pthread_mutex_lock(&(inputs->runs_lock));
-		remove_from_linkedlist(&(inputs->job_param_list), input_param);
-		insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
-		inputs->total_concurrent_jobs_count--;
-		pthread_mutex_unlock(&(inputs->runs_lock));
+	// mark job completed
+	// also add input_param back to free list
+	pthread_mutex_lock(&(inputs->runs_lock));
+	remove_from_linkedlist(&(inputs->job_param_list), input_param);
+	insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
+	inputs->total_concurrent_jobs_count--;
+	pthread_mutex_unlock(&(inputs->runs_lock));
 
+	if(!produce_failed)
 		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
-	}
 	else
-	{
-		// mark job completed
-		pthread_mutex_lock(&(inputs->runs_lock));
-		remove_from_linkedlist(&(inputs->job_param_list), input_param);
-		insert_tail_in_linkedlist(&(inputs->job_param_free_list), input_param);
-		inputs->total_concurrent_jobs_count--;
-		pthread_mutex_unlock(&(inputs->runs_lock));
-
 		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
-	}
 
 	// this would always be the final job, so no need to request for any mote jobs
 }
