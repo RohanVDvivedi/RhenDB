@@ -325,15 +325,26 @@ uint64_t append_tuple_to_interim_tuple_store2(interim_tuple_store* its_p, interi
 
 uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p, const interim_tuple_store* other_its_p)
 {
+	return append_all_from_another_interim_tuple_store2(its_p, other_its_p, 0, 0);
+}
+
+uint64_t append_all_from_another_interim_tuple_store2(interim_tuple_store* its_p, const interim_tuple_store* other_its_p, uint64_t from_tuple_offset, uint64_t from_tuple_index)
+{
+	if((from_tuple_offset >= other_its_p->next_tuple_offset) || (from_tuple_index >= other_its_p->tuples_count))
+	{
+		printf("FAILED to append all to interim_tuple_store, because either from_tuple_offset or from_tuple_index are outof bounds\n");
+		return 0;
+	}
+
 	// compute the offset to be returned
 	// this will be the offset for the first tuple that will be copied in from the other_its_p
 	uint64_t offset = its_p->next_tuple_offset;
 
 	// update tuples_count
-	its_p->tuples_count += other_its_p->tuples_count;
+	its_p->tuples_count += (other_its_p->tuples_count - from_tuple_index);
 
 	// compute next_tuple_offset, it will be sum of both the next_tuple_offsets
-	its_p->next_tuple_offset += get_total_bytes_in_interim_tuple_store(other_its_p);
+	its_p->next_tuple_offset += (get_total_bytes_in_interim_tuple_store(other_its_p) - from_tuple_offset);
 
 	// assign the new_size and align it to the next multiple of page_size
 	uint64_t new_total_size = UINT_ALIGN_UP(its_p->next_tuple_offset, sysconf(_SC_PAGE_SIZE));
@@ -352,9 +363,9 @@ uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p,
 	// now perform file descriptor copy directly in the kernel
 	// this is linux specific
 	{
-		off64_t off_in = 0;
+		off64_t off_in = from_tuple_offset;
 		off64_t off_out = offset;
-		size_t remaining_bytes = get_total_bytes_in_interim_tuple_store(other_its_p); // these many bytes are needed to be transferred
+		size_t remaining_bytes = (get_total_bytes_in_interim_tuple_store(other_its_p) - from_tuple_offset); // these many bytes are needed to be transferred
 		while(remaining_bytes > 0)
 		{
 			ssize_t bytes_copied = copy_file_range(other_its_p->fd, &off_in, its_p->fd, &off_out, remaining_bytes, 0);
