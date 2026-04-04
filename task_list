@@ -1,8 +1,5 @@
 PICKED TASKS
 
- * in query plan interface, use rwlock for the output_lock
-   * consume function only takes read locks and then only garbage collection do they actually take rite lock OR in deleting the consumpion interator
-
  * implement are_equal_for_consumption_iterator (do this with read lock held on output_lock), they must have the same producer operator
    * then curr_store must be same
    * if the curr_store is not NULL, then they must point to the tuple at the same offsets in their respective regions
@@ -101,6 +98,11 @@ FUTURE TASKS
  5.* optimize sorter even more
   * 1M 65 byte tuples in 1.88 seconds (other stages of the pipeline takes 1 second) is too slow
   * 100M tuples (total 65 GB) rush through the pipeline being sorted in 4 minutes and 9 seconds
+
+ 6.* in query plan interface, use rwlock for the output_lock
+   * only consume function takes only it in only read mode
+   * these would help when we might have more than 1 consumers for the same tuple
+   * If this becomes we might have to segregate it into a separate file/structure
 
 DESIGN METHODOLOGY
    * we will use postgresql architecture over (mysql like) mini transactions
