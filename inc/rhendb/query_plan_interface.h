@@ -148,6 +148,8 @@ int produce_tuple_from_operator(operator* o, void* tuple);
 consumption_iterator* create_consumption_iterator(operator* producer, operator* consumer, consumption_iterator* clone_cit_p);
 void destroy_consumption_iterator(consumption_iterator* cit_p);
 
+int points_to_same_tuple_for_consumtion_iterators(const consumption_iterator* cit1_p, const consumption_iterator* cit2_p);
+
 // consume the tuple using the iterator provided that has the producer consumer pair
 // it presents the pointer from the tuple_region itself
 const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* no_more_data);

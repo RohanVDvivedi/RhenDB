@@ -588,6 +588,31 @@ void destroy_consumption_iterator(consumption_iterator* cit_p)
 	free(cit_p);
 }
 
+int points_to_same_tuple_for_consumtion_iterators(const consumption_iterator* cit1_p, const consumption_iterator* cit2_p)
+{
+	if(cit1_p->producer != cit2_p->producer)
+		return 0;
+
+	int points_to_same_tuple = 0;
+
+	pthread_mutex_lock(&(cit1_p->producer->output_lock));
+
+	// if both are null they are point pointing to nothing, so same-same
+	if(cit1_p->curr_store == NULL && cit2_p->curr_store == NULL)
+		points_to_same_tuple = 1;
+	else if(cit1_p->curr_store != cit2_p->curr_store) // if they are not same fail
+		points_to_same_tuple = 0;
+	else
+	{
+		// in this case the curr_store are same, and not NULL
+		points_to_same_tuple = (curr_tuple_offset_for_interim_tuple_region(&(cit1_p->curr_region)) == curr_tuple_offset_for_interim_tuple_region(&(cit2_p->curr_region)));
+	}
+
+	pthread_mutex_unlock(&(cit1_p->producer->output_lock));
+
+	return points_to_same_tuple;
+}
+
 const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* no_more_data)
 {
 	const void* tuple = NULL;
