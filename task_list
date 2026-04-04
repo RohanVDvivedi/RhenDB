@@ -1,6 +1,6 @@
 PICKED TASKS
 
- * in query plan interface, use rlock for the output_lock
+ * in query plan interface, use rwlock for the output_lock
    * consume function only takes read locks and then only garbage collection do they actually take rite lock OR in deleting the consumpion interator
 
  * implement are_equal_for_consumption_iterator (do this with read lock held on output_lock), they must have the same producer operator
