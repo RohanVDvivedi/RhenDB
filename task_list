@@ -1,9 +1,5 @@
 PICKED TASKS
 
- * implement are_equal_for_consumption_iterator (do this with read lock held on output_lock), they must have the same producer operator
-   * then curr_store must be same
-   * if the curr_store is not NULL, then they must point to the tuple at the same offsets in their respective regions
-
  * implement
    uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p, const interim_tuple_store* other_its_p);
    uint64_t append_all_from_another_interim_tuple_store2(interim_tuple_store* its_p, const interim_tuple_store* other_its_p, uint64_t from_tuple_offset, uint64_t from_tuple_index);
