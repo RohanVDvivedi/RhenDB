@@ -80,8 +80,6 @@ static void execute(operator* o)
 			kill_reason = get_dstring_pointing_to_literal_cstring("resuts_match_FAILED");
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
-		else
-			printf("matched\n");
 
 		for(int i = 0; i < 2; i++)
 			inputs->tuples[i] = NULL;
