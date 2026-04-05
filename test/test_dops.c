@@ -250,7 +250,7 @@ int main()
 		for(int i = 0; i < IDENTITY_OPERATORS_COUNT; i++)
 		{
 			o = get_new_registered_operator_for_query_plan(qp);
-			setup_identity_operator(o, input, 300 * (i+1));
+			setup_identity_operator(o, input);
 			for(int j = 0; j < 4; j++)
 			{
 				if(i%2 == 0)
@@ -275,7 +275,7 @@ int main()
 		}
 
 		o = get_new_registered_operator_for_query_plan(qp);
-		setup_printf_operator(o, input, 100);
+		setup_printf_operator(o, input, 1);
 		printf("sink operator %p\n", o);
 	}
 	printf("\n\n");
