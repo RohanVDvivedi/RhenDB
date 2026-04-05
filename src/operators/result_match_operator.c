@@ -69,7 +69,7 @@ static void execute(operator* o)
 
 		int abort_error = 0;
 		int compare = compare_tuples_rhendb(inputs->tuples[0], inputs->input_defs[0], inputs->elements, inputs->tuples[1], inputs->input_defs[1], inputs->elements, NULL, inputs->element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
-		if(compare == 0)
+		if(compare != 0)
 		{
 			printf("result_match_operator says outputs do not match:\n");
 			print_tuple(inputs->tuples[0], inputs->input_defs[0]);
