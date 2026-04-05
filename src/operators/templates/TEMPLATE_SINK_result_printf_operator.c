@@ -14,7 +14,7 @@ struct input_values
 	consumption_iterator* input_iterator;
 	const tuple_def* input_tuple_def;
 
-	int print_level;
+	int do_print;
 };
 
 static void execute(operator* o)
@@ -38,15 +38,8 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
-			// print based on level the user wants
-
-			if(inputs->print_level >= 1)
+			if(do_print)
 				print_tuple(tuple, inputs->input_tuple_def);
-
-			if(inputs->print_level >= 0)
-			{
-				;
-			}
 		}
 		else
 			break;
@@ -55,7 +48,7 @@ static void execute(operator* o)
 	return ;
 }
 
-void setup_printf_operator(operator* o, operator* input_operator, int print_level)
+void setup_printf_operator(operator* o, operator* input_operator, int do_print)
 {
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -65,6 +58,6 @@ void setup_printf_operator(operator* o, operator* input_operator, int print_leve
 	*((input_values*)(o->inputs)) = (input_values){
 		.input_iterator = create_consumption_iterator(input_operator, o, NULL),
 		.input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator),
-		.print_level = print_level,
+		.do_print = do_print,
 	};
 }
