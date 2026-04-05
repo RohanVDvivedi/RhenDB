@@ -182,13 +182,13 @@ int compare_tuples_rhendb(const void* tup1, const tuple_def* tpl_d1, const posit
 
 	for(uint32_t i = 0; ((i < element_count) && (compare == 0)); i++)
 	{
-		const data_type_info* dti1 = get_type_info_for_element_from_tuple_def(tpl_d1, element_ids1[i]);
+		const data_type_info* dti1 = get_type_info_for_element_from_tuple_def(tpl_d1, (element_ids1 != NULL) ? element_ids1[i] : STATIC_POSITION(i));
 		datum uval1;
-		get_value_from_element_from_tuple(&uval1, tpl_d1, element_ids1[i], tup1);
+		get_value_from_element_from_tuple(&uval1, tpl_d1, (element_ids1 != NULL) ? element_ids1[i] : STATIC_POSITION(i), tup1);
 
-		const data_type_info* dti2 = get_type_info_for_element_from_tuple_def(tpl_d2, element_ids2[i]);
+		const data_type_info* dti2 = get_type_info_for_element_from_tuple_def(tpl_d2, (element_ids2 != NULL) ? element_ids2[i] : STATIC_POSITION(i));
 		datum uval2;
-		get_value_from_element_from_tuple(&uval2, tpl_d2, element_ids2[i], tup2);
+		get_value_from_element_from_tuple(&uval2, tpl_d2, (element_ids2 != NULL) ? element_ids2[i] : STATIC_POSITION(i), tup2);
 
 		compare = compare_datum_rhendb(&uval1, dti1, &uval2, dti2, ex_engine, transaction_id, abort_error);
 		if(*abort_error)
@@ -207,13 +207,13 @@ int compare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* 
 
 	for(uint32_t i = 0; ((i < element_count) && (compare == 0)); i++)
 	{
-		const data_type_info* dti = get_type_info_for_element_from_tuple_def(tpl_d, element_ids[i]);
+		const data_type_info* dti = get_type_info_for_element_from_tuple_def(tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i));
 
 		datum uval1;
-		get_value_from_element_from_tuple(&uval1, tpl_d, element_ids[i], tup1);
+		get_value_from_element_from_tuple(&uval1, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup1);
 
 		datum uval2;
-		get_value_from_element_from_tuple(&uval2, tpl_d, element_ids[i], tup2);
+		get_value_from_element_from_tuple(&uval2, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup2);
 
 		compare = compare_datum2_rhendb(&uval1, &uval2, dti, ex_engine, transaction_id, abort_error);
 		if(*abort_error)
