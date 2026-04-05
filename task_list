@@ -1,9 +1,5 @@
 PICKED TASKS
 
- * implement cross_join_operator, to produce cross product of  tables, left and right
-   * batch 16 KB of tuples atleast on either size
-   * after a batch is collected, iterate on all prior seeen tuple on the other side, and produce results
-
  * implement rash_table
    * store uint64_t hash_value -> key attributes tuple_list(dti1, dti2, dti3 ...  512 B in prefix), uint64_t value_size_in_bytes, value blob(256 B in prefix)
    * api will expect unique keys in the hash table:
@@ -23,6 +19,10 @@ PICKED TASKS
    * 99.99% of the cases value will just be uint64_t offset pointing in to the interim_tuple_store
     * this would be hash-join, values points to offsets in interim_tuple_store, and then probe this build table using the hash_table
     * for hash-groupby, make 2 hash tables, one for state_table and one for grouping_table, state_table stores final aggregate results, and grouping table like the hash join table stores only offset to the groupd rows
+
+ * implement cross_join_operator, to produce cross product of tables, left and right
+   * batch 16 KB of tuples atleast on either size
+   * after a batch is collected, iterate on all prior seeen tuple on the other side, and produce results
 
 PRIORITY HIGH LEVEL TASKS
   * what operators to implement
