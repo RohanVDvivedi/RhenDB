@@ -176,6 +176,31 @@ int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_typ
 	}
 }
 
+int compare_tuples_rhendb(const void* tup1, const tuple_def* tpl_d1, const positional_accessor* element_ids1, const void* tup2, const tuple_def* tpl_d2, const positional_accessor* element_ids2, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+{
+	int compare = 0;
+
+	for(uint32_t i = 0; ((i < element_count) && (compare == 0)); i++)
+	{
+		const data_type_info* dti1 = get_type_info_for_element_from_tuple_def(tpl_d1, element_ids1[i]);
+		datum uval1;
+		get_value_from_element_from_tuple(&uval1, tpl_d1, element_ids1[i], tup1);
+
+		const data_type_info* dti2 = get_type_info_for_element_from_tuple_def(tpl_d2, element_ids2[i]);
+		datum uval2;
+		get_value_from_element_from_tuple(&uval2, tpl_d2, element_ids2[i], tup2);
+
+		compare = compare_datum_rhendb(&uval1, dti1, &uval2, dti2, ex_engine, transaction_id, abort_error);
+		if(*abort_error)
+			return 0;
+
+		if(cmp_dir)
+			compare = compare * cmp_dir[i];
+	}
+
+	return compare;
+}
+
 int comare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
 {
 	int compare = 0;
@@ -194,7 +219,8 @@ int comare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* t
 		if(*abort_error)
 			return 0;
 
-		compare = compare * cmp_dir[i];
+		if(cmp_dir)
+			compare = compare * cmp_dir[i];
 	}
 
 	return compare;

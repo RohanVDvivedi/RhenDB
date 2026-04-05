@@ -136,7 +136,7 @@ static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const v
 	const interim_tuple_store* its2_p = its2_vp;
 
 	int abort_error = 0;
-	return comare_tuples2_rhendb(its1_p->embed_regions[0].tuple, its2_p->embed_regions[0].tuple, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+	return compare_tuples2_rhendb(its1_p->embed_regions[0].tuple, its2_p->embed_regions[0].tuple, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
 }
 
 static void merge_into_run_job(operator* o, void* param)

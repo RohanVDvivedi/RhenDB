@@ -17,8 +17,6 @@ struct input_values
 	int print_level;
 };
 
-void print_job(operator* o, void* param);
-
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
@@ -42,9 +40,6 @@ static void execute(operator* o)
 		{
 			// print based on level the user wants
 
-			if(inputs->print_level >= 2)
-				run_concurrent_job_for_operator(o, "Hello world, from TEMPLATE sink operator, just received data", print_job);
-
 			if(inputs->print_level >= 1)
 				print_tuple(tuple, inputs->input_tuple_def);
 
@@ -65,9 +60,6 @@ void setup_printf_operator(operator* o, operator* input_operator, int print_leve
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
-
-	// nothing is output
-	// init_tuple_transformers(&(o->output_tuple_transformers), NULL);
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){

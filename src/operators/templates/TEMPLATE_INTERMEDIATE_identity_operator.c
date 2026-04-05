@@ -10,7 +10,6 @@ typedef struct input_values input_values;
 struct input_values
 {
 	consumption_iterator* input_iterator;
-	uint64_t consume_only_after_bytes_count;
 };
 
 void print_job(operator* o, void* param);
@@ -50,7 +49,7 @@ static void execute(operator* o)
 	return ;
 }
 
-void setup_identity_operator(operator* o, operator* input_operator, uint64_t consume_only_after_bytes_count)
+void setup_identity_operator(operator* o, operator* input_operator)
 {
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -62,6 +61,5 @@ void setup_identity_operator(operator* o, operator* input_operator, uint64_t con
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
 		.input_iterator = create_consumption_iterator(input_operator, o, NULL),
-		.consume_only_after_bytes_count = consume_only_after_bytes_count,
 	};
 }

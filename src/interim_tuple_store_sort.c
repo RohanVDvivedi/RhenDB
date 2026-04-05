@@ -31,7 +31,7 @@ int compare_tuples_for_interim_tuple_store_offets(const void* sc_vp, const void*
 	mmap_for_reading_tuple(sc_p->its_p, &(sc_p->its_p->embed_regions[0]), off1, &(sc_p->tpl_d->size_def), sc_p->min_bytes_to_mmap);
 	mmap_for_reading_tuple(sc_p->its_p, &(sc_p->its_p->embed_regions[1]), off2, &(sc_p->tpl_d->size_def), sc_p->min_bytes_to_mmap);
 
-	return comare_tuples2_rhendb(sc_p->its_p->embed_regions[0].tuple, sc_p->its_p->embed_regions[1].tuple, sc_p->tpl_d, sc_p->element_ids, sc_p->cmp_dir, sc_p->element_count, sc_p->ex_engine, sc_p->transaction_id, sc_p->abort_error);
+	return compare_tuples2_rhendb(sc_p->its_p->embed_regions[0].tuple, sc_p->its_p->embed_regions[1].tuple, sc_p->tpl_d, sc_p->element_ids, sc_p->cmp_dir, sc_p->element_count, sc_p->ex_engine, sc_p->transaction_id, sc_p->abort_error);
 }
 
 data_definitions_value_arraylist(offset_list, uint64_t)
