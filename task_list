@@ -1,9 +1,5 @@
 PICKED TASKS
 
- * consumers do mmap outside the output_lock
-   * curr_store is protected by the output_lock
-   * producer and consumer are fixed values, and can not be changed, and are fixed once consumption_iterator is initialized
-
  * make result_compare_operator
  * use it to compare output from N operators and ensure that they are equal for sorter
 
