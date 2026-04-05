@@ -38,7 +38,7 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
-			if(do_print)
+			if(inputs->do_print)
 				print_tuple(tuple, inputs->input_tuple_def);
 		}
 		else
