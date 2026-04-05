@@ -681,7 +681,7 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 		destroy_all_un_referenced_output_buffers_UNSAFE(cit_p->producer);
 
 	// if something was consumed by this consumer then clear its was_triggered flag, so that we would receive the next trigger
-	if(perform_mmap_for_reading != NULL)
+	if(perform_mmap_for_reading) // this also means that it is safe to mmap, i.e. something will be returned as the tuple
 		cit_p->was_consumer_triggered = 0;
 
 	pthread_mutex_unlock(&(cit_p->producer->output_lock));
