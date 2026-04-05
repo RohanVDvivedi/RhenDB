@@ -18,6 +18,10 @@
 
 #define TESTCASE_SIZE 1000000
 
+#define MATCH_SORTED_RESULTS 1
+
+#define PRINT_SORTED_RESULTS 0
+
 uint32_t inputs[TESTCASE_SIZE];
 void generate_random_inputs()
 {
@@ -230,17 +234,20 @@ int main()
 		setup_external_sort_operator(sorter_operator, random_input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 		printf("sorter operator %p\n", sorter_operator);
 
-		operator* sorted_input_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_generator_operator(sorted_input_operator, sorted_generator, NULL, &record_def);
-		printf("sorted source operator %p\n", sorted_input_operator);
-
 		operator* printf_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_printf_operator(printf_operator, sorter_operator, 0); // print just the tuples
+		setup_printf_operator(printf_operator, sorter_operator, PRINT_SORTED_RESULTS);
 		printf("printf sink operator %p\n", printf_operator);
 
-		operator* result_match_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_result_match_operator(result_match_operator, (operator* []){sorted_input_operator, sorter_operator});
-		printf("matcher sink operator %p\n", result_match_operator);
+		if(MATCH_SORTED_RESULTS)
+		{
+			operator* sorted_input_operator = get_new_registered_operator_for_query_plan(qp);
+			setup_generator_operator(sorted_input_operator, sorted_generator, NULL, &record_def);
+			printf("sorted source operator %p\n", sorted_input_operator);
+
+			operator* result_match_operator = get_new_registered_operator_for_query_plan(qp);
+			setup_result_match_operator(result_match_operator, (operator* []){sorted_input_operator, sorter_operator});
+			printf("matcher sink operator %p\n", result_match_operator);
+		}
 	}
 	printf("\n\n");
 
