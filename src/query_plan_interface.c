@@ -504,6 +504,9 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 	cit_p->curr_store = NULL;
 	cit_p->curr_region = INIT_INTERIM_TUPLE_REGION;
 
+	uint64_t offset = 0;
+	int perform_mmap_for_reading = 0;
+
 	pthread_mutex_lock(&(producer->output_lock));
 
 	if(clone_cit_p != NULL)
@@ -513,17 +516,18 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 
 	if(cit_p->curr_store != NULL)
 	{
-		uint64_t offset = 0;
+		offset = 0;
 		if(clone_cit_p != NULL && !is_empty_interim_tuple_region(&(clone_cit_p->curr_region)))
 			offset = curr_tuple_offset_for_interim_tuple_region(&(clone_cit_p->curr_region));
-		mmap_for_reading_tuple(cit_p->curr_store, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(producer)->size_def), MIN_BYTES_TO_MMAP);
+		perform_mmap_for_reading = 1;
 	}
-	else
-		cit_p->curr_region = INIT_INTERIM_TUPLE_REGION;
 
 	insert_tail_in_linkedlist(&(producer->output_consumers), cit_p);
 
 	pthread_mutex_unlock(&(producer->output_lock));
+
+	if(perform_mmap_for_reading)
+		mmap_for_reading_tuple(cit_p->curr_store, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(producer)->size_def), MIN_BYTES_TO_MMAP);
 
 	return cit_p;
 }
@@ -569,6 +573,9 @@ static void destroy_all_un_referenced_output_buffers_UNSAFE(operator* o)
 
 void destroy_consumption_iterator(consumption_iterator* cit_p)
 {
+	// unmap it's region first, do this outside the output_lock
+	unmap_for_interim_tuple_region(&(cit_p->curr_region));
+
 	pthread_mutex_lock(&(cit_p->producer->output_lock));
 
 	// check if cit_p points to head
@@ -576,7 +583,6 @@ void destroy_consumption_iterator(consumption_iterator* cit_p)
 
 	// remove cit_p from existence
 	remove_from_linkedlist(&(cit_p->producer->output_consumers), cit_p);
-	unmap_for_interim_tuple_region(&(cit_p->curr_region));
 
 	// if the cit_p pointed to head, then it might just have become safe to delete older output_buffers
 	if(points_to_head)
@@ -615,8 +621,13 @@ int points_to_same_tuple_for_consumtion_iterators(const consumption_iterator* ci
 
 const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* no_more_data)
 {
+	// return values
 	const void* tuple = NULL;
 	(*no_more_data) = 0;
+
+	// to forcefully perform the mmap outside the output_lock
+	uint64_t offset = 0;
+	int perform_mmap_for_reading = 0;
 
 	pthread_mutex_lock(&(cit_p->producer->output_lock));
 
@@ -632,7 +643,7 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 			if(cit_p->curr_store == NULL)
 				cit_p->curr_store = (interim_tuple_store*) get_head_of_singlylist(&(cit_p->producer->output_buffers));
 
-			uint64_t offset = 0;
+			offset = 0;
 			if(!is_empty_interim_tuple_region(&(cit_p->curr_region)))
 				offset = next_tuple_offset_for_interim_tuple_region(&(cit_p->curr_region));
 
@@ -652,18 +663,17 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 				else
 				{
 					// but first unmap the old mapped region
+					// this ensure that we have a region mmaped to a curr_store, that this iterator is not pointing to
 					unmap_for_interim_tuple_region(&(cit_p->curr_region));
 
+					// update the curr_store to perform the next mmap for reading
 					cit_p->curr_store = (interim_tuple_store*) get_next_of_in_singlylist(&(cit_p->producer->output_buffers), cit_p->curr_store);
-					mmap_for_reading_tuple(cit_p->curr_store, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(cit_p->producer)->size_def), MIN_BYTES_TO_MMAP);
-					tuple = cit_p->curr_region.tuple;
+
+					perform_mmap_for_reading = 1;
 				}
 			}
 			else
-			{
-				mmap_for_reading_tuple(cit_p->curr_store, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(cit_p->producer)->size_def), MIN_BYTES_TO_MMAP);
-				tuple = cit_p->curr_region.tuple;
-			}
+				perform_mmap_for_reading = 1;
 		}
 	}
 
@@ -675,6 +685,12 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 		cit_p->was_consumer_triggered = 0;
 
 	pthread_mutex_unlock(&(cit_p->producer->output_lock));
+
+	if(perform_mmap_for_reading)
+	{
+		mmap_for_reading_tuple(cit_p->curr_store, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(cit_p->producer)->size_def), MIN_BYTES_TO_MMAP);
+		tuple = cit_p->curr_region.tuple;
+	}
 
 	return tuple;
 }

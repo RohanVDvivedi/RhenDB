@@ -107,17 +107,17 @@ struct consumption_iterator
 	// this flag initializes to 0
 	// once set, it is on cleared on a successfull consume_for_consumption_iterator()
 	// only if this flag is 0, is the next trgger will be done for the consumer
-	// it stays locked and protected by the output_lock above
+	// it is protected by the output_lock above
 	int was_consumer_triggered;
 
-	// it stays locked and protected by the output_lock above
+	// it is protected (the pointer) by the output_lock above
 	interim_tuple_store* curr_store;
 
 	// this attribute of the consumtion_iterator is not protected by the output_lock
 	// it not necessary to hold output_lock to access it
 	interim_tuple_region curr_region;
 
-	// it stays locked and protected by the output_lock above
+	// it is protected by the output_lock above
 	llnode embed_node_for_output_consumers;
 };
 
