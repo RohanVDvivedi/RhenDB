@@ -161,7 +161,7 @@ void construct_record(void* buffer, uint64_t num, int order, char* value)
 
 #define BUFFER_SIZE 300
 
-void* generator(void* generator_context, tuple_def* generator_tuple_def)
+void* random_generator(void* generator_context, tuple_def* generator_tuple_def)
 {
 	static uint32_t index = 0;
 
@@ -170,10 +170,19 @@ void* generator(void* generator_context, tuple_def* generator_tuple_def)
 
 	void* generated = malloc(BUFFER_SIZE);
 	construct_record(generated, inputs[index++], 0, "Rohan Dvivedi");
-	//printf("PRODUCED : ");
-	//print_tuple(generated, generator_tuple_def);
-	//printf("\n\n");
-	//usleep(1000);
+
+	return generated;
+}
+
+void* sorted_generator(void* generator_context, tuple_def* generator_tuple_def)
+{
+	static uint32_t index = 0;
+
+	if(index >= TESTCASE_SIZE)
+		return NULL;
+
+	void* generated = malloc(BUFFER_SIZE);
+	construct_record(generated, index++, 0, "Rohan Dvivedi");
 
 	return generated;
 }
@@ -213,20 +222,25 @@ int main()
 
 	printf("Building pipeline :\n");
 	{
-		operator* input = NULL;
-		operator* o = get_new_registered_operator_for_query_plan(qp);
-		setup_generator_operator(o, generator, NULL, &record_def);
-		printf("source operator %p\n", o);
+		operator* random_input_operator = get_new_registered_operator_for_query_plan(qp);
+		setup_generator_operator(random_input_operator, random_generator, NULL, &record_def);
+		printf("random source operator %p\n", random_input_operator);
 
-		input = o;
-		o = get_new_registered_operator_for_query_plan(qp);
-		setup_external_sort_operator(o, input, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-		printf("sort operator %p\n", o);
+		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
+		setup_external_sort_operator(sorter_operator, random_input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		printf("sorter operator %p\n", sorter_operator);
 
-		input = o;
-		o = get_new_registered_operator_for_query_plan(qp);
-		setup_printf_operator(o, input, 0); // print just the tuples
-		printf("sink operator %p\n", o);
+		operator* sorted_input_operator = get_new_registered_operator_for_query_plan(qp);
+		setup_generator_operator(sorted_input_operator, sorted_generator, NULL, &record_def);
+		printf("sorted source operator %p\n", sorted_input_operator);
+
+		operator* printf_operator = get_new_registered_operator_for_query_plan(qp);
+		setup_printf_operator(printf_operator, sorter_operator, 0); // print just the tuples
+		printf("printf sink operator %p\n", printf_operator);
+
+		operator* result_match_operator = get_new_registered_operator_for_query_plan(qp);
+		setup_result_match_operator(result_match_operator, (operator* []){sorted_input_operator, sorter_operator});
+		printf("matcher sink operator %p\n", result_match_operator);
 	}
 	printf("\n\n");
 
