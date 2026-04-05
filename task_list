@@ -1,8 +1,5 @@
 PICKED TASKS
 
- * make result_compare_operator
- * use it to compare output from N operators and ensure that they are equal for sorter
-
  * implement cross_join_operator, to produce cross product of  tables, left and right
    * batch 16 KB of tuples atleast on either size
    * after a batch is collected, iterate on all prior seeen tuple on the other side, and produce results
