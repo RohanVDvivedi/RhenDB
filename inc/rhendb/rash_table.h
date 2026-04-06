@@ -3,6 +3,11 @@
 
 #include<rhendb/rage_engine.h>
 
+#include<tupleindexer/hash_table/hash_table.h>
+
+#include<tuplelargetypes/binary_write_iterator.h>
+#include<tuplelargetypes/binary_read_iterator.h>
+
 /*
 	rash_table is an in-memory hash table built with the sole purpose of execution of queries quickly
 
@@ -26,6 +31,9 @@ fail_build_on(INLINE_RASH_RECORD_SIZE > 1024);
 #define MIN_LOAD_FACTOR_IN_BYTES   7 // shrink if crossed
 #define MAX_LOAD_FACTOR_IN_BYTES  20 // expand if crossed
 
+// call this function before calling any of the rash_table function
+void initialize_rash_table_engine(rage_engine* volatile_engine);
+
 typedef struct rash_table_handle rash_table_handle;
 struct rash_table_handle
 {
@@ -41,11 +49,8 @@ struct rash_table_handle
 		shrink if (total_inline_size / (bucket_count * PAGE_SIZE)) < MIN_LOAD_FACTOR_IN_BYTES
 	*/
 
-	tuple_defs* key_tuple_defs; // array of tuple_defs, built with the handle
+	tuple_def* key_tuple_defs; // array of tuple_defs, built with the handle
 	uint32_t key_element_count;
-
-	// to store it's own data/tuples
-	rage_engine* volatile_engine;
 
 	// to read contents of extended types, to hash and compare them
 	rage_engine* ex_engine;
@@ -68,7 +73,7 @@ struct rash_table_key
 	uint64_t hash_value;
 };
 
-void initialize_rash_table_key(rash_table_key* rkey_p, const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint3_t key_element_count);
+void initialize_rash_table_key(rash_table_key* rkey_p, const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count);
 
 // after this call is_hash_value_valid will be set to 1, for this rkey_p
 uint64_t get_hash_value_for_rash_table_key(rash_table_key* rkey_p);
