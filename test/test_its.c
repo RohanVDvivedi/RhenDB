@@ -75,7 +75,7 @@ int main()
 
 	print_tuple_def(&tpl_d);
 
-	interim_tuple_store* its_p = get_new_interim_tuple_store(".");
+	interim_tuple_store* its_p = get_new_interim_tuple_store(0);
 
 	// init complete
 
