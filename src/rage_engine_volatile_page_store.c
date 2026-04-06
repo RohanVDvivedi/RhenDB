@@ -41,6 +41,8 @@ static int free_page_vps(void* context, const void* transaction_id, uint64_t pag
 
 #include<stdlib.h>
 
+#include<rhendb/temp_file_dir_path.h>
+
 rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t page_id_width, uint64_t truncator_period_in_microseconds)
 {
 	rage_engine e = {};
@@ -59,7 +61,7 @@ rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t 
 
 	// initialize all the three components
 
-	if(!initialize_volatile_page_store(e.context, ".", page_size, page_id_width, truncator_period_in_microseconds))
+	if(!initialize_volatile_page_store(e.context, VOLATILE_PAGE_STORE_DIR_PATH, page_size, page_id_width, truncator_period_in_microseconds))
 	{
 		printf("FAILED to initialize volatile page store\n");
 		exit(-1);

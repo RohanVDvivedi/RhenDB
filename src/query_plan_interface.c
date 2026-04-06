@@ -465,8 +465,7 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 			if(its_p != NULL)
 				unmap_all_embed_regions_in_interim_tuple_store(its_p);
 
-			its_p = get_new_interim_tuple_store(".");
-			extend_interim_tuple_store(its_p, MIN_OUTPUT_BUFFER_STORE_SIZE);
+			its_p = get_new_interim_tuple_store(MIN_OUTPUT_BUFFER_STORE_SIZE);
 
 			if(!insert_tail_in_singlylist(&(o->output_buffers), its_p))
 				exit(-1);

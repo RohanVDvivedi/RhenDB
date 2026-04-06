@@ -3,6 +3,7 @@
 #define _FILE_OFFSET_BITS 64
 
 #include<rhendb/interim_tuple_store.h>
+#include<rhendb/temp_file_dir_path.h>
 
 #include<sys/mman.h>
 
@@ -12,7 +13,7 @@
 #include<unistd.h>
 #include<sys/types.h>
 
-interim_tuple_store* get_new_interim_tuple_store(const char* directory)
+interim_tuple_store* get_new_interim_tuple_store(uint64_t initial_total_size)
 {
 	interim_tuple_store* its_p = malloc(sizeof(interim_tuple_store));
 	if(its_p == NULL)
@@ -26,7 +27,7 @@ interim_tuple_store* get_new_interim_tuple_store(const char* directory)
 
 	its_p->tuples_count = 0;
 
-	its_p->fd = open64(directory, O_TMPFILE | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
+	its_p->fd = open64(INTERIM_TUPLE_STORE_DIR_PATH, O_TMPFILE | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
 	if(its_p->fd == -1)
 	{
 		printf("FAILED to open a file for interim_tuple_store\n");
@@ -49,6 +50,9 @@ interim_tuple_store* get_new_interim_tuple_store(const char* directory)
 
 	for(int i = 0; i < sizeof(its_p->embed_regions)/sizeof(its_p->embed_regions[0]); i++)
 		its_p->embed_regions[i] = INIT_INTERIM_TUPLE_REGION;
+
+	if(initial_total_size > 0)
+		extend_interim_tuple_store(its_p, initial_total_size);
 
 	return its_p;
 }

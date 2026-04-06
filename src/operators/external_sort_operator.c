@@ -165,8 +165,7 @@ static void merge_into_run_job(operator* o, void* param)
 	}
 
 	// create output run
-	interim_tuple_store* output_its_p = get_new_interim_tuple_store(".");
-	extend_interim_tuple_store(output_its_p, total_output_size_in_bytes);
+	interim_tuple_store* output_its_p = get_new_interim_tuple_store(total_output_size_in_bytes);
 
 	// merge all one by one from the top into output_its_p or produce them if possible
 	while(total_input_runs_count > 1)
@@ -519,10 +518,7 @@ static void execute(operator* o)
 		if(tuple != NULL)
 		{
 			if(inputs->input_un_sorted_run == NULL)
-			{
-				inputs->input_un_sorted_run = get_new_interim_tuple_store(".");
-				extend_interim_tuple_store(inputs->input_un_sorted_run, inputs->minimum_run_size);
-			}
+				inputs->input_un_sorted_run = get_new_interim_tuple_store(inputs->minimum_run_size);
 
 			append_tuple_to_interim_tuple_store2(inputs->input_un_sorted_run, &(inputs->input_un_sorted_run->embed_regions[0]), (void*)tuple, &(inputs->record_def->size_def), inputs->minimum_run_size);
 
