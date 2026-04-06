@@ -3,9 +3,9 @@
 #include<rhendb/function_compare.h>
 #include<rhendb/function_hash.h>
 
-rage_engine* volatile_engine;
+static rage_engine* volatile_engine;
 
-hash_table_tuple_defs httd;
+static hash_table_tuple_defs httd;
 
 void initialize_rash_table_engine(rage_engine* volatile_engine);
 
