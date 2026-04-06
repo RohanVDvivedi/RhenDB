@@ -24,7 +24,7 @@
 #define EXTENDED_TYPE_MAX_SIZE_FOR_KEY    ((4 + (4 + 8)) + (4 + PREFIX_BYTES_FOR_KEY))
 #define EXTENDED_TYPE_MAX_SIZE_FOR_VALUE  ((4 + (4 + 8)) + (4 + PREFIX_BYTES_FOR_VALUE))
 
-#define INLINE_RASH_RECORD_SIZE        ((4 + (8 + 8 + 4 + 4)) + EXTENDED_TYPE_MAX_SIZE_FOR_KEY + EXTENDED_TYPE_MAX_SIZE_FOR_VALUE)
+#define RASH_RECORD_MAX_SIZE              ((4 + (8 + 8 + 4 + 4)) + EXTENDED_TYPE_MAX_SIZE_FOR_KEY + EXTENDED_TYPE_MAX_SIZE_FOR_VALUE)
 
 fail_build_on(INLINE_RASH_RECORD_SIZE > 1024);
 
@@ -72,6 +72,9 @@ struct rash_table_key
 	int is_hash_value_valid;
 	uint64_t hash_value;
 };
+
+// returns true, if the rash_key initialization will succeed
+int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count);
 
 void initialize_rash_table_key(rash_table_key* rkey_p, const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count);
 
