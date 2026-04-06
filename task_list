@@ -1,60 +1,19 @@
 PICKED TASKS
 
- * implement rash_table
-   * store uint64_t hash_value -> key attributes tuple_list(dti1, dti2, dti3 ...  512 B in prefix), uint64_t value_size_in_bytes, value blob(256 B in prefix)
-   * there will be a global const hash_table_tuple_defs
-   * there will also be a rash_table_tuple_defs
-   * struct rash_table_handle {
-      uint64_t root_page_id;
-      uint64_t element_count; // incremented on every insert, and decremented on every remove
-      uint64_t bucket_count; // incremented on every succesfull expand, and decremented on every successfull shrink, done when inserted key-value or removed one drops below a threshold
-      // (shrink if crossed) 10 <= (total_inline_size / bucket_count) <= 30 (expand if crossed)
-      uint64_t total_inline_size;
-      tuple_defs* key_tuple_defs;
-      rage_engine* volatile_engine;
-    };
-   * struct rash_table_key {
-      const void* record;
-      const tuple_def* record_def;
-      const positional_accessor* key_element_ids;
-      uint32_t key_element_count;
+ * implement streaming_loop_join_operator (identical to nested_loop_join)
+   * start batching on both sides left and right
+   * maintain iterators on both sides: begin, batch_first, batch_start
+   * batch of tuples (batch_size) atleast on any side
+   * and then nested loop as follows:
+      for tuple1 in [batch_first, batch_last]
+        for tuple2 in [begin, batch_first)
+          produce(tuple1, tuple) OR produce(tuple2, tuple1)
+      for side1.batch_size = 0, start collecting the batch again for side1
 
-      int is_hash_value_valid;
-      uint64_t hash_value;
-    };
-     * initialize_rash_table_key(rash_table_key* rkey_p, const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint3_t key_element_count)
-     * get_hash_value_for_rash_table_key(rash_table_key* rkey_p)
-   * rash_table_iterator {
-      rash_table_handle* ;
-      hash_table_iterator* ;
-      rash_table_key* ;
-   }
-   * api will expect unique keys in the hash table, ith keys that :
-    * rash_table_handle get_new_rash_table(const data_type_info** key_dtis);
-    * void destroy_rash_table(rash_table_handle* rth_p);
-
-    * rash_table_iterator* find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p);
-
-    * int exists_in_rash_table_iterator(const rash_table_iterator* rti_p);
-
-    * int remove_from_rash_table_iterator(rash_table_iterator* rti_p);
-
-    * binary_read_iterator* read_value_in_rash_table_iterator(rash_table_iterator* rti_p);
-
-    * binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p);
-    // copies the inline content of hash table iterator OR cretes a ne one if it presently is NULL
-    * void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, binary_write_iterator* bwi_p);
-    // closes the binary_write_iterator, inserts if the current tuple is NULL, else updates it
-
-    * rash_table_iterator* find_all_in_rash_table_iterator(rash_table_handle* rth_p);
-    * void next_in_rash_table_iterator(rash_table_iterator* rti_p); // fails if rash_table_key is found in the iterator
-
-    * void delete_rash_table_iterator(rash_table_iterator* rti_p);
-   * all the above functions come with transaction_id and abort_error, just like the tuple_indexer types
-
- * implement cross_join_operator, to produce cross product of tables, left and right
-   * batch 16 KB of tuples atleast on either size
-   * after a batch is collected, iterate on all prior seeen tuple on the other side, and produce results
+ * rash_table
+   * implement rash_table
+   * review it
+   * test it
 
  * define struct for implementing aggregate functions
    struct aggregate_function {
