@@ -1,7 +1,5 @@
 PICKED TASKS
 
- * add logic to fetch the directory to create all the temp file interim_tuple_stores in rhendb, and use this every_where, also store this pointer in the interim_tuple_store
-
  * implement rash_table
    * store uint64_t hash_value -> key attributes tuple_list(dti1, dti2, dti3 ...  512 B in prefix), uint64_t value_size_in_bytes, value blob(256 B in prefix)
    * there will be a global const hash_table_tuple_defs
