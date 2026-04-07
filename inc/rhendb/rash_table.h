@@ -26,7 +26,7 @@
 
 #define RASH_RECORD_MAX_SIZE              ((4 + (8 + 8 + 4 + 4)) + EXTENDED_TYPE_MAX_SIZE_FOR_KEY + EXTENDED_TYPE_MAX_SIZE_FOR_VALUE)
 
-fail_build_on(INLINE_RASH_RECORD_SIZE > 1024);
+fail_build_on(RASH_RECORD_MAX_SIZE > 1024);
 
 #define MIN_LOAD_FACTOR_IN_BYTES   7 // shrink if crossed
 #define MAX_LOAD_FACTOR_IN_BYTES  20 // expand if crossed
