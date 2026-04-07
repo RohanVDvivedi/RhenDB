@@ -110,6 +110,11 @@ static void sort_job(operator* o, void* param)
 		int abort_error = 0;
 		interim_tuple_store* ots_p = sort_interim_tuples(its_p, inputs->minimum_run_size, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
 		delete_interim_tuple_store(its_p);
+		if(ots_p == NULL) // case for handling possibly an abort error
+		{
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_sort_possibly_abort_error_on_comparing_extended_type"));
+			return;
+		}
 		push_run_in_tuple_runs(input_param, ots_p);
 	}
 
