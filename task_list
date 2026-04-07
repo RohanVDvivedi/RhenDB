@@ -1,8 +1,5 @@
 PICKED TASKS
 
- * in interim_tuple_store_sort, return NULL if an abort_error is encountered
-   * do this using setjmp longjmp
-
  * implement streaming_loop_join_operator (identical to nested_loop_join)
    * start batching on both sides left and right
    * maintain iterators on both sides: begin, batch_first, batch_start
