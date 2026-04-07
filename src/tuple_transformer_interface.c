@@ -60,8 +60,7 @@ void* process_tuple_transformers(const tuple_transformers* tts_p, void* tuple, i
 	// local variable that flags if the tuple for the current iteration needs to be freed
 	// input parameter tuple, will never need freeing, so it starts with a value of 0
 	int need_to_free_tuple = 0;
-	tuple_transformer* tt_p = (tuple_transformer*) get_head_of_linkedlist(&(tts_p->tuple_transformers_list));
-	do
+	for(tuple_transformer* tt_p = (tuple_transformer*) get_head_of_linkedlist(&(tts_p->tuple_transformers_list)); tt_p != NULL; tt_p = (tuple_transformer*) get_next_of_in_linkedlist(&(tts_p->tuple_transformers_list), tt_p))
 	{
 		void* output_tuple = tt_p->process(tt_p, tuple);
 
@@ -71,7 +70,6 @@ void* process_tuple_transformers(const tuple_transformers* tts_p, void* tuple, i
 			// below 2 are NO-OP tasks
 			// need_to_free_tuple = need_to_free_tuple;
 			// tuple = output_tuple; // the pointers are already the same
-			tt_p = (tuple_transformer*) get_next_of_in_linkedlist(&(tts_p->tuple_transformers_list), tt_p);
 			continue;
 		}
 
@@ -91,10 +89,9 @@ void* process_tuple_transformers(const tuple_transformers* tts_p, void* tuple, i
 				free(tuple);
 			tuple = output_tuple; // prepare for the next iteration
 			need_to_free_tuple = 1; // the new tuple, needs freeing as it is different from the tuple
-			tt_p = (tuple_transformer*) get_next_of_in_linkedlist(&(tts_p->tuple_transformers_list), tt_p);
 			continue;
 		}
-	}while(tt_p != get_head_of_linkedlist(&(tts_p->tuple_transformers_list)));
+	}
 
 	// tuple is required to be returned, let the caller know if they need to free this pointer
 	(*need_to_free_output) = need_to_free_tuple;

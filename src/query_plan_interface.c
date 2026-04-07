@@ -73,20 +73,14 @@ static int process_kill_signal_if_received_for_operator_UNSAFE(operator* o)
 
 static void trigger_all_consumers_for_operator_UNSAFE(operator* o, int force_trigger)
 {
-	if(is_empty_linkedlist(&(o->output_consumers)))
-		return ;
-
-	consumption_iterator* cit_p = (consumption_iterator*) get_head_of_linkedlist(&(o->output_consumers));
-	do
+	for(consumption_iterator* cit_p = (consumption_iterator*) get_head_of_linkedlist(&(o->output_consumers)); cit_p != NULL; cit_p = (consumption_iterator*) get_next_of_in_linkedlist(&(o->output_consumers), cit_p))
 	{
 		if(force_trigger || (cit_p->was_consumer_triggered == 0)) // either on force trigger OR the consumer was not priorly triggered, only then trigger
 		{
 			trigger_execution_on_operator(cit_p->consumer);
 			cit_p->was_consumer_triggered = 1; // mark it as already triggered, so the next consecutive produce need not trigger it
 		}
-		cit_p = (consumption_iterator*) get_next_of_in_linkedlist(&(o->output_consumers), cit_p);
 	}
-	while(cit_p != get_head_of_linkedlist(&(o->output_consumers)));
 }
 
 static void* internal_execute(void* o_vp)
@@ -431,16 +425,8 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 	// make sure that there is some alive consumer
 	int there_are_consumers = 0;
 	// loop while there are no consumers, we are supposed to find one
-	if(!is_empty_linkedlist(&(o->output_consumers)))
-	{
-		const consumption_iterator* cit_p = get_head_of_linkedlist(&(o->output_consumers));
-		do
-		{
-			there_are_consumers = (there_are_consumers || (!can_not_proceed_for_execution_operator(cit_p->consumer)));
-			cit_p = get_next_of_in_linkedlist(&(o->output_consumers), cit_p);
-		}
-		while((!there_are_consumers) && (cit_p != get_head_of_linkedlist(&(o->output_consumers))));
-	}
+	for(const consumption_iterator* cit_p = get_head_of_linkedlist(&(o->output_consumers)); (!there_are_consumers) && (cit_p != NULL); cit_p = get_next_of_in_linkedlist(&(o->output_consumers), cit_p))
+		there_are_consumers = (there_are_consumers || (!can_not_proceed_for_execution_operator(cit_p->consumer)));
 
 	// proceed only if some consumer is alive
 	if(there_are_consumers)
@@ -541,22 +527,16 @@ static void destroy_all_un_referenced_output_buffers_UNSAFE(operator* o)
 
 		// preserve a flag suggesting if its_p is referenced
 		int is_referenced = 0;
-		if(!is_empty_linkedlist(&(o->output_consumers)))
+		// iterate over all the output_consumers
+		for(const consumption_iterator* cit_p = get_head_of_linkedlist(&(o->output_consumers)); cit_p != NULL; cit_p = get_next_of_in_linkedlist(&(o->output_consumers), cit_p))
 		{
-			// iterate over all the output_consumers
-			const consumption_iterator* cit_p = get_head_of_linkedlist(&(o->output_consumers));
-			do
+			// a consumption_iterator pointing to being NULL (referencing the oldest one) or its_p
+			// is said to be refernecing its_p
+			if(cit_p->curr_store == NULL || cit_p->curr_store == its_p)
 			{
-				// a consumption_iterator pointing to being NULL (referencing the oldest one) or its_p
-				// is said to be refernecing its_p
-				if(cit_p->curr_store == NULL || cit_p->curr_store == its_p)
-				{
-					is_referenced = 1;
-					break;
-				}
-				cit_p = get_next_of_in_linkedlist(&(o->output_consumers), cit_p);
+				is_referenced = 1;
+				break;
 			}
-			while(cit_p != get_head_of_linkedlist(&(o->output_consumers)));
 		}
 
 		// if its_p is referenced, then break out of the loop
