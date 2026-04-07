@@ -3,6 +3,7 @@
 #include<cutlery/value_arraylist.h>
 
 #include<stdlib.h>
+#include<setjmp.h>
 
 #include<rhendb/function_compare.h>
 
@@ -20,6 +21,8 @@ struct sorting_context
 	rage_engine* ex_engine;
 	const void* transaction_id;
 	int* abort_error;
+
+	jmp_buf long_jump_on_abort_error;
 };
 
 int compare_tuples_for_interim_tuple_store_offets(const void* sc_vp, const void* off1_vp, const void* off2_vp)
@@ -31,7 +34,13 @@ int compare_tuples_for_interim_tuple_store_offets(const void* sc_vp, const void*
 	mmap_for_reading_tuple(sc_p->its_p, &(sc_p->its_p->embed_regions[0]), off1, &(sc_p->tpl_d->size_def), sc_p->min_bytes_to_mmap);
 	mmap_for_reading_tuple(sc_p->its_p, &(sc_p->its_p->embed_regions[1]), off2, &(sc_p->tpl_d->size_def), sc_p->min_bytes_to_mmap);
 
-	return compare_tuples2_rhendb(sc_p->its_p->embed_regions[0].tuple, sc_p->its_p->embed_regions[1].tuple, sc_p->tpl_d, sc_p->element_ids, sc_p->cmp_dir, sc_p->element_count, sc_p->ex_engine, sc_p->transaction_id, sc_p->abort_error);
+	int compare = compare_tuples2_rhendb(sc_p->its_p->embed_regions[0].tuple, sc_p->its_p->embed_regions[1].tuple, sc_p->tpl_d, sc_p->element_ids, sc_p->cmp_dir, sc_p->element_count, sc_p->ex_engine, sc_p->transaction_id, sc_p->abort_error);
+
+	// on abort error perform a long jump
+	if(*(sc_p->abort_error))
+		longjmp(((sorting_context*)sc_p)->long_jump_on_abort_error, *(sc_p->abort_error));
+
+	return compare;
 }
 
 data_definitions_value_arraylist(offset_list, uint64_t)
@@ -41,6 +50,10 @@ function_definitions_value_arraylist(offset_list, uint64_t, static inline)
 
 interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, uint32_t min_bytes_to_mmap, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
 {
+	// if the its_p is empty, then return immediately
+	if(its_p->tuples_count == 0)
+		return get_new_interim_tuple_store(0);
+
 	// create a list_of_offsets
 	offset_list list_of_offsets;
 	if(!initialize_offset_list(&list_of_offsets, its_p->tuples_count))
@@ -70,9 +83,16 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, uint32_t mi
 	// buils index accessed interface to sort it
 	index_accessed_interface iai = get_index_accessed_interface_for_front_of_offset_list(&list_of_offsets);
 
-	// sort its_p using sc and iai
-	if(!is_empty_offset_list(&list_of_offsets))
+	if(setjmp(sc.long_jump_on_abort_error) == 0)
+	{
+		// sort its_p using sc and iai
 		quick_sort_iai(&(iai), 0, get_element_count_offset_list(&list_of_offsets)-1, &contexted_comparator(&sc, compare_tuples_for_interim_tuple_store_offets));
+	}
+	else // jumps to here on abort_error
+	{
+		deinitialize_offset_list(&list_of_offsets);
+		return NULL;
+	}
 
 	if(*abort_error)
 	{

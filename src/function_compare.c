@@ -86,6 +86,8 @@ int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const d
 				return -2;
 
 			cmp = compare_datum_rhendb(&child_value1, child_dti1, &child_value2, child_dti2, ex_engine, transaction_id, abort_error);
+			if(*abort_error)
+				return 0;
 		}
 		if(cmp == 0 && (element_count1 != element_count2))
 		{
