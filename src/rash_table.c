@@ -12,13 +12,13 @@ void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb)
 	initialize_tuple_data_type_info(record_type_info, "rash_record", 1, RASH_RECORD_MAX_SIZE, 3);
 
 	strcpy(record_type_info->containees[0].field_name, "hash");
-	record_type_info->containees[0].al.type_info = UINT_NULLABLE[8];
+	record_type_info->containees[0].al.type_info = UINT_NON_NULLABLE[8];
 
 	strcpy(record_type_info->containees[1].field_name, "key");
 	record_type_info->containees[1].al.type_info = get_tuple_list_extended_type_info(EXTENDED_TYPE_MAX_SIZE_FOR_KEY, PREFIX_BYTES_FOR_KEY + 4, &(rdb->volatile_rage_engine.pam_p->pas));
 
-	strcpy(record_type_info->containees[1].field_name, "value");
-	record_type_info->containees[1].al.type_info = get_blob_extended_type_info(EXTENDED_TYPE_MAX_SIZE_FOR_VALUE, get_blob_inline_type_info(PREFIX_BYTES_FOR_VALUE + 4), &(rdb->volatile_rage_engine.pam_p->pas));
+	strcpy(record_type_info->containees[2].field_name, "value");
+	record_type_info->containees[2].al.type_info = get_blob_extended_type_info(EXTENDED_TYPE_MAX_SIZE_FOR_VALUE, get_blob_inline_type_info(PREFIX_BYTES_FOR_VALUE + 4), &(rdb->volatile_rage_engine.pam_p->pas));
 
 	tuple_def* record_def = malloc(sizeof(tuple_def));
 	initialize_tuple_def(record_def, record_type_info);
