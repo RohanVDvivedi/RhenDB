@@ -3,15 +3,11 @@
 #include<rhendb/function_compare.h>
 #include<rhendb/function_hash.h>
 
-static rage_engine* volatile_engine;
+void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb);
 
-static hash_table_tuple_defs httd;
+rash_table_handle get_new_rash_table1(const data_type_info** key_dtis, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb);
 
-void initialize_rash_table_engine(rage_engine* volatile_engine);
-
-rash_table_handle get_new_rash_table1(const data_type_info** key_dtis, uint32_t key_element_count, rage_engine* volatile_engine, rage_engine* ex_engine);
-
-rash_table_handle get_new_rash_table2(const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* volatile_engine, rage_engine* ex_engine);
+rash_table_handle get_new_rash_table2(const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb);
 
 void destroy_rash_table(rash_table_handle* rth_p);
 

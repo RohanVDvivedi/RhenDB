@@ -1,7 +1,7 @@
 #ifndef RASH_TABLE_H
 #define RASH_TABLE_H
 
-#include<rhendb/rage_engine.h>
+#include<rhendb/rhendb.h>
 
 #include<tupleindexer/hash_table/hash_table.h>
 
@@ -28,11 +28,11 @@
 
 fail_build_on(RASH_RECORD_MAX_SIZE > 1024);
 
-#define MIN_LOAD_FACTOR_IN_BYTES   7 // shrink if crossed
-#define MAX_LOAD_FACTOR_IN_BYTES  20 // expand if crossed
+#define MIN_LOAD_FACTOR_IN_BYTES   7 // shrink if load-factor crosses
+#define MAX_LOAD_FACTOR_IN_BYTES  20 // expand if load-factor crosses
 
-// call this function before calling any of the rash_table function
-void initialize_rash_table_engine(rage_engine* volatile_engine);
+// must be called right after rhendb is doen initializing it's volatile_engine
+void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb);
 
 typedef struct rash_table_handle rash_table_handle;
 struct rash_table_handle
@@ -54,10 +54,13 @@ struct rash_table_handle
 
 	// to read contents of extended types, to hash and compare them
 	rage_engine* ex_engine;
+
+	// this is where we use volatile_engine and httd for storing and maintaining rash table
+	rhendb* rdb;
 };
 
-rash_table_handle get_new_rash_table1(const data_type_info** key_dtis, uint32_t key_element_count, rage_engine* volatile_engine, rage_engine* ex_engine);
-rash_table_handle get_new_rash_table2(const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* volatile_engine, rage_engine* ex_engine);
+rash_table_handle get_new_rash_table1(const data_type_info** key_dtis, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb);
+rash_table_handle get_new_rash_table2(const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb);
 
 void destroy_rash_table(rash_table_handle* rth_p);
 
