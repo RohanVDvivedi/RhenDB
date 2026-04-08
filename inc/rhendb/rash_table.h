@@ -5,15 +5,15 @@
 
 #include<tupleindexer/hash_table/hash_table.h>
 
-#include<tuplelargetypes/binary_write_iterator.h>
-#include<tuplelargetypes/binary_read_iterator.h>
+#include<tuplelargetypes/tuple_list_extended.h>
+#include<tuplelargetypes/blob_extended.h>
 
 /*
 	rash_table is an in-memory hash table built with the sole purpose of execution of queries quickly
 
 	it in reality stores the following, tuple
 
-	hash_value(uint64_t actual_key), key_size(uint64_t for_compare_only), key(tuple_list, with prefix of 200 bytes for_compare_only), value(blob with prefix of 140 bytes)
+	hash_value(uint64_t actual_key), key(tuple_list, with prefix of 200 bytes for_compare_only), value(blob with prefix of 140 bytes)
 
 	it will alays be ensured that the records ill alyas store unique values for (hash_value, key_size, key)
 */
@@ -24,7 +24,7 @@
 #define EXTENDED_TYPE_MAX_SIZE_FOR_KEY    ((4 + (4 + 8)) + (4 + PREFIX_BYTES_FOR_KEY))
 #define EXTENDED_TYPE_MAX_SIZE_FOR_VALUE  ((4 + (4 + 8)) + (4 + PREFIX_BYTES_FOR_VALUE))
 
-#define RASH_RECORD_MAX_SIZE              ((4 + (8 + 8 + 4 + 4)) + EXTENDED_TYPE_MAX_SIZE_FOR_KEY + EXTENDED_TYPE_MAX_SIZE_FOR_VALUE)
+#define RASH_RECORD_MAX_SIZE              ((4 + (8 + 4 + 4)) + EXTENDED_TYPE_MAX_SIZE_FOR_KEY + EXTENDED_TYPE_MAX_SIZE_FOR_VALUE)
 
 fail_build_on(RASH_RECORD_MAX_SIZE > 1024);
 

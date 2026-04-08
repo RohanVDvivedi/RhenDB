@@ -3,7 +3,28 @@
 #include<rhendb/function_compare.h>
 #include<rhendb/function_hash.h>
 
-void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb);
+positional_accessor actual_key_positions[] = {STATIC_POSITION(0)};
+
+void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb)
+{
+	data_type_info* record_type_info = malloc(sizeof_tuple_data_type_info(3));
+
+	initialize_tuple_data_type_info(record_type_info, "rash_record", 1, RASH_RECORD_MAX_SIZE, 3);
+
+	strcpy(record_type_info->containees[0].field_name, "hash");
+	record_type_info->containees[0].al.type_info = UINT_NULLABLE[8];
+
+	strcpy(record_type_info->containees[1].field_name, "key");
+	record_type_info->containees[1].al.type_info = get_tuple_list_extended_type_info(EXTENDED_TYPE_MAX_SIZE_FOR_KEY, PREFIX_BYTES_FOR_KEY + 4, &(rdb->volatile_rage_engine.pam_p->pas));
+
+	strcpy(record_type_info->containees[1].field_name, "value");
+	record_type_info->containees[1].al.type_info = get_blob_extended_type_info(EXTENDED_TYPE_MAX_SIZE_FOR_VALUE, get_blob_inline_type_info(PREFIX_BYTES_FOR_VALUE + 4), &(rdb->volatile_rage_engine.pam_p->pas));
+
+	tuple_def* record_def = malloc(sizeof(tuple_def));
+	initialize_tuple_def(record_def, record_type_info);
+
+	init_hash_table_tuple_definitions(&(rdb->rash_httd), &(rdb->volatile_rage_engine.pam_p->pas), record_def, actual_key_positions, sizeof(actual_key_positions)/sizeof(actual_key_positions[0]), FNV_64_TUPLE_HASHER);
+}
 
 rash_table_handle get_new_rash_table1(const data_type_info** key_dtis, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb);
 
