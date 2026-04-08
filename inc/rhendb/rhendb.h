@@ -9,6 +9,8 @@
 
 #include<rhendb/rage_engine.h>
 
+#include<tupleindexer/hash_table/hash_table.h>
+
 #include<stdint.h>
 
 typedef struct rhendb rhendb;
@@ -40,6 +42,9 @@ struct rhendb
 	// and the lck_table => stored on the volatile_rage_engine
 	pthread_mutex_t lock_manager_external_lock;
 	lock_manager lck_table;
+
+	// hash_table_tuple+defs for use internal to the rash_table
+	hash_table_tuple_defs rash_httd;
 };
 
 void initialize_rhendb(rhendb* rdb, const char* database_file_name,
