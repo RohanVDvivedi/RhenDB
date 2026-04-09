@@ -113,4 +113,9 @@ void delete_rash_table_iterator(rash_table_iterator* rti_p)
 	rti_p->hti_p = NULL;
 
 	perform_vaccum_hash_table(rti_p->rth_p->root_page_id, &htvp, 1, &(rti_p->rth_p->rdb->rash_httd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error);
+
+	if(must_expand_rash_table(rti_p->rth_p))
+		rti_p->rth_p->bucket_count += expand_hash_table(rti_p->rth_p->root_page_id, &(rti_p->rth_p->rdb->rash_httd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error);
+	else if(must_shrink_rash_table(rti_p->rth_p))
+		rti_p->rth_p->bucket_count -= shrink_hash_table(rti_p->rth_p->root_page_id, &(rti_p->rth_p->rdb->rash_httd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error);
 }
