@@ -26,9 +26,58 @@ void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb)
 	init_hash_table_tuple_definitions(&(rdb->rash_httd), &(rdb->volatile_rage_engine.pam_p->pas), record_def, actual_key_positions, sizeof(actual_key_positions)/sizeof(actual_key_positions[0]), FNV_64_TUPLE_HASHER);
 }
 
-rash_table_handle get_new_rash_table1(const data_type_info** key_dtis, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb);
+#define MIN_BUCKET_COUNT 2
 
-rash_table_handle get_new_rash_table2(const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb);
+static int must_expand_rash_table(const rash_table_handle* rth_p)
+{
+	if(rth_p->bucket_count < MIN_BUCKET_COUNT)
+		return 0;
+
+	if(rth_p->total_inline_size <= rth_p->rdb->volatile_rage_engine.pam_p->pas.page_size * MIN_BUCKET_COUNT)
+		return 0;
+
+	return (rth_p->total_inline_size / (rth_p->bucket_count * rth_p->rdb->volatile_rage_engine.pam_p->pas.page_size)) > MAX_LOAD_FACTOR_IN_BYTES;
+}
+
+static int must_shrink_rash_table(const rash_table_handle* rth_p)
+{
+	if(rth_p->bucket_count < MIN_BUCKET_COUNT)
+		return 0;
+
+	if(rth_p->total_inline_size <= rth_p->rdb->volatile_rage_engine.pam_p->pas.page_size * MIN_BUCKET_COUNT)
+		return 0;
+
+	return (rth_p->total_inline_size / (rth_p->bucket_count * rth_p->rdb->volatile_rage_engine.pam_p->pas.page_size)) < MIN_LOAD_FACTOR_IN_BYTES;
+}
+
+rash_table_handle get_new_rash_table(const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb)
+{
+	int abort_error = 0;
+
+	rash_table_handle rth = {
+		.root_page_id = get_new_hash_table(MIN_BUCKET_COUNT, &(rdb->rash_httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error),
+
+		.element_count = 0,
+		.bucket_count = 0,
+
+		.total_inline_size = 0,
+
+		.key_tuple_defs = malloc(sizeof(tuple_def) * key_element_count),
+		.key_element_count = key_element_count,
+
+		.ex_engine = ex_engine,
+
+		.rdb = rdb,
+	};
+
+	for(uint32_t i = 0; i < key_element_count; i++)
+	{
+		data_type_info* key_dti_p = (data_type_info*) get_type_info_for_element_from_tuple_def(key_def, key_element_ids[i]);
+		initialize_tuple_def(&(rth.key_tuple_defs[i]), key_dti_p);
+	}
+
+	return rth;
+}
 
 void destroy_rash_table(rash_table_handle* rth_p);
 
