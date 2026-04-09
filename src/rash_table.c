@@ -103,4 +103,14 @@ void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, bi
 
 int next_in_rash_table_iterator(rash_table_iterator* rti_p);
 
-void delete_rash_table_iterator(rash_table_iterator* rti_p);
+void delete_rash_table_iterator(rash_table_iterator* rti_p)
+{
+	int abort_error = 0;
+
+	hash_table_vaccum_params htvp;
+
+	delete_hash_table_iterator(rti_p->hti_p, &htvp, NULL, &abort_error);
+	rti_p->hti_p = NULL;
+
+	perform_vaccum_hash_table(rti_p->rth_p->root_page_id, &htvp, 1, &(rti_p->rth_p->rdb->rash_httd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error);
+}
