@@ -101,6 +101,6 @@ binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_
 
 void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, binary_write_iterator* bwi_p);
 
-void next_in_rash_table_iterator(rash_table_iterator* rti_p);
+int next_in_rash_table_iterator(rash_table_iterator* rti_p);
 
 void delete_rash_table_iterator(rash_table_iterator* rti_p);
