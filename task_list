@@ -1,7 +1,6 @@
 PICKED TASKS
 
  * rash_table
-   * make hash_table_iterator jump over non-existant buckets using the find functionality for the hash_table_iterator
    * implement rash_table
    * review it
    * test it
