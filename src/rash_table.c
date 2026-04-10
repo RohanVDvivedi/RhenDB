@@ -87,7 +87,7 @@ void initialize_rash_table_key(rash_table_key* rkey_p, const void* record, const
 
 uint64_t get_hash_value_for_rash_table_key(rash_table_key* rkey_p);
 
-rash_table_iterator* find_all_in_rash_table(rash_table_handle* rth_p, int read_only);
+rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int read_only);
 
 rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int read_only);
 
