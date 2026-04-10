@@ -101,7 +101,29 @@ binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_
 
 void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, binary_write_iterator* bwi_p);
 
-int next_in_rash_table_iterator(rash_table_iterator* rti_p);
+int next_in_rash_table_iterator(rash_table_iterator* rti_p)
+{
+	// can not go next hen key is provided
+	if(rti_p->rkey_p != NULL)
+		return 0;
+
+	int abort_error = 0;
+
+	int went_next = 1;
+	while(1)
+	{
+		went_next = next_hash_table_iterator(rti_p->hti_p, GO_NEXT_TUPLE_IN_MAY_BE_NEXT_EXISTING_BUCKET, NULL, &abort_error);
+		if(!went_next) // if going next fails break out
+			break;
+
+		if(get_tuple_hash_table_iterator(rti_p->hti_p) != NULL) // if tuple there exists, then break out of the loop
+			break;
+
+		// continue only, if we went next but the tuple is NULL
+	}
+
+	return went_next;
+}
 
 void delete_rash_table_iterator(rash_table_iterator* rti_p)
 {
