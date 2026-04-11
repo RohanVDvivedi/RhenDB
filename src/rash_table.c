@@ -108,7 +108,10 @@ int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_de
 
 void initialize_rash_table_key(rash_table_key* rkey_p, const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count);
 
-uint64_t get_hash_value_for_rash_table_key(rash_table_key* rkey_p);
+uint64_t get_hash_value_for_rash_table_key(rash_table_key* rkey_p)
+{
+	return deserialize_uint64(rkey_p->hash_value, 8);
+}
 
 rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read_only)
 {
