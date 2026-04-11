@@ -95,7 +95,7 @@ struct rash_table_iterator
 	int is_read_only;
 
 	// this rkey_p may be NULL, if you are iterating over all the keys in the rash_table
-	rash_table_key* rkey_p;
+	const rash_table_key* rkey_p;
 };
 
 rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read_only);

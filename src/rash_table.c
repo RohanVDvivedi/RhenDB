@@ -123,7 +123,27 @@ rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read
 	return rti;
 }
 
-rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int is_read_only);
+rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int is_read_only)
+{
+	rash_table_iterator rti = {.rth_p = rth_p, .hti_p = NULL, .is_read_only = is_read_only, .rkey_p = rkey_p};
+
+	int abort_error = 0;
+	rti.hti_p = get_new_hash_table_iterator(rth_p->root_page_id, (bucket_range){}, rkey_p->hash_value, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, is_read_only ? NULL : rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error);
+
+	while(1)
+	{
+		// if exists, i.e. key compares equal is found, then break out
+		if(exists_in_rash_table_iterator(&rti))
+			break;
+
+		// if we could not go next then also break
+		// going next only in the same bucket
+		if(!next_hash_table_iterator(rti.hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, NULL, &abort_error))
+			break;
+	}
+
+	return rti;
+}
 
 binary_read_iterator* read_key_in_rash_table_iterator(const rash_table_iterator* rti_p)
 {
