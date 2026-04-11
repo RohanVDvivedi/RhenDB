@@ -83,7 +83,7 @@ int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_de
 
 rash_table_key get_new_rash_table_key(const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error);
 
-uint64_t get_hash_value_for_rash_table_key(rash_table_key* rkey_p);
+uint64_t get_hash_value_for_rash_table_key(const rash_table_key* rkey_p);
 
 typedef struct rash_table_iterator rash_table_iterator;
 struct rash_table_iterator
@@ -109,7 +109,7 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* 
 
 int remove_from_rash_table_iterator(rash_table_iterator* rti_p);
 
-binary_read_iterator* read_value_in_rash_table_iterator(rash_table_iterator* rti_p);
+binary_read_iterator* read_value_in_rash_table_iterator(const rash_table_iterator* rti_p);
 
 binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p, const void* transaction_id, int* abort_error);
 void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, binary_write_iterator* bwi_p);
