@@ -152,10 +152,6 @@ void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, bi
 
 int next_in_rash_table_iterator(rash_table_iterator* rti_p)
 {
-	// can not go next hen key is provided
-	if(rti_p->rkey_p != NULL)
-		return 0;
-
 	int abort_error = 0;
 
 	int went_next = 1;

@@ -111,8 +111,6 @@ binary_read_iterator* read_value_in_rash_table_iterator(rash_table_iterator* rti
 binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p);
 void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, binary_write_iterator* bwi_p);
 
-// fails if rash_table_key is found in the iterator
-// or when it is at the end of the rash_table
 int next_in_rash_table_iterator(rash_table_iterator* rti_p);
 
 void delete_rash_table_iterator(rash_table_iterator* rti_p);
