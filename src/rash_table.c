@@ -221,6 +221,28 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* 
 		datum uval1;
 		get_value_from_element_from_tuple(&uval1, rti_p->rkey_p->record_def, rti_p->rkey_p->key_element_ids[i], rti_p->rkey_p->record);
 
+		{
+			char is_valid_byte = 0;
+			if(!read_from_binary_read_iterator(key_bri_p, &is_valid_byte, 1, NULL, &abort_error_dummy)) // if a byte could not be read fail, e have already rached the end
+			{
+				result = 0;
+				break;
+			}
+			if(!is_valid_byte) // we can not read any more bytes for this tuple in the key_bri_p
+			{
+				if(is_datum_NULL(&uval1))
+				{
+					result = 1;
+					continue;
+				}
+				else
+				{
+					result = 0;
+					break;
+				}
+			}
+		}
+
 		consume_tuple_from_tuple_list(tuple, &(rti_p->rth_p->key_tuple_defs[i]), key_bri_p, NULL, &abort_error_dummy, {
 			const data_type_info* dti2 = rti_p->rth_p->key_tuple_defs[i].type_info;
 			datum uval2 = {.tuple_value = tuple};
