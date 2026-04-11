@@ -1,9 +1,6 @@
 PICKED TASKS
 
  * rash_table
-   * key is tuple_list vith 1 byte for telling if the next tuple is NULL or not
-   * implement rash_table
-   * review it
    * test it
 
  * implement streaming_loop_join_operator (identical to nested_loop_join)
