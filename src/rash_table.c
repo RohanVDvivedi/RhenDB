@@ -286,6 +286,9 @@ int remove_from_rash_table_iterator(rash_table_iterator* rti_p)
 		delete_all_extension_worms(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def->type_info, &(rti_p->rth_p->rdb->volatile_rage_engine.wtd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 	}
 
+	rti_p->rth_p->bucket_count--;
+	rti_p->rth_p->total_inline_size -= get_tuple_size(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, record_tuple);
+
 	remove_from_hash_table_iterator(rti_p->hti_p, NULL, &abort_error_dummy);
 	return 1;
 }
@@ -387,9 +390,19 @@ void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, bi
 	delete_binary_write_iterator(bwi_p, NULL, &abort_error_dummy);
 
 	if(rti_p->perform_insert) // insert
+	{
+		rti_p->rth_p->bucket_count++;
+		rti_p->rth_p->total_inline_size += get_tuple_size(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, tuple_to_insert);
+
 		insert_in_hash_table_iterator(rti_p->hti_p, tuple_to_insert, NULL, &abort_error_dummy);
+	}
 	else // update
+	{
+		rti_p->rth_p->total_inline_size -= get_tuple_size(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, get_tuple_hash_table_iterator(rti_p->hti_p));
+		rti_p->rth_p->total_inline_size += get_tuple_size(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, tuple_to_insert);
+
 		update_at_hash_table_iterator(rti_p->hti_p, tuple_to_insert, NULL, &abort_error_dummy);
+	}
 }
 
 int next_in_rash_table_iterator(rash_table_iterator* rti_p)
