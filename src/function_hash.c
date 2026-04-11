@@ -32,3 +32,19 @@ uint64_t hash_datum_rhendb(const datum* uval, const data_type_info* dti, tuple_h
 		return th->hash;
 	}
 }
+
+uint64_t hash_tuple_rhendb(const void* tup, const tuple_def* tpl_d, const positional_accessor* element_ids, tuple_hasher* th, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+{
+	for(uint32_t i = 0; i < element_count; i++)
+	{
+		const data_type_info* dti = get_type_info_for_element_from_tuple_def(tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i));
+		datum uval;
+		get_value_from_element_from_tuple(&uval, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup);
+
+		hash_datum_rhendb(&uval, dti, th, ex_engine, transaction_id, abort_error);
+		if(*abort_error)
+			return 0;
+	}
+
+	return th->hash;
+}
