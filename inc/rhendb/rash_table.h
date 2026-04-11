@@ -96,9 +96,9 @@ struct rash_table_iterator
 	rash_table_key* rkey_p;
 };
 
-rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int read_only);
+rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read_only);
 
-rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int read_only);
+rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int is_read_only);
 
 binary_read_iterator* read_key_in_rash_table_iterator(const rash_table_iterator* rti_p);
 

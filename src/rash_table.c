@@ -111,9 +111,17 @@ void initialize_rash_table_key(rash_table_key* rkey_p, const void* record, const
 
 uint64_t get_hash_value_for_rash_table_key(rash_table_key* rkey_p);
 
-rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int read_only);
+rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read_only)
+{
+	rash_table_iterator rti = {.rth_p = rth_p, .hti_p = NULL, .is_read_only = is_read_only, .rkey_p = NULL};
 
-rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int read_only);
+	int abort_error = 0;
+	rti.hti_p = get_new_hash_table_iterator(rth_p->root_page_id, WHOLE_BUCKET_RANGE, NULL, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, is_read_only ? NULL : rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error);
+
+	return rti;
+}
+
+rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int is_read_only);
 
 binary_read_iterator* read_key_in_rash_table_iterator(const rash_table_iterator* rti_p);
 
