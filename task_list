@@ -2,6 +2,10 @@ PICKED TASKS
 
  * rash_table
    * test it
+    * PREFIX_BYTES_FOR_KEY           10
+      PREFIX_BYTES_FOR_VALUE         10
+      MIN_LOAD_FACTOR_IN_BYTES       0.01
+      MIN_LOAD_FACTOR_IN_BYTES       1
 
  * implement streaming_loop_join_operator (identical to nested_loop_join)
    * start batching on both sides left and right
