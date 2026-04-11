@@ -302,7 +302,20 @@ binary_read_iterator* read_value_in_rash_table_iterator(rash_table_iterator* rti
 
 binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p);
 
-void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, binary_write_iterator* bwi_p);
+void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, binary_write_iterator* bwi_p)
+{
+	int abort_error_dummy = 0;
+
+	// copy the tuple to be inserted or updated
+	const void* tuple_to_insert = bwi_p->tuple;
+
+	delete_binary_write_iterator(bwi_p, NULL, &abort_error_dummy);
+
+	if(NULL == get_tuple_hash_table_iterator(rti_p->hti_p)) // insert
+		insert_in_hash_table_iterator(rti_p->hti_p, tuple_to_insert, NULL, &abort_error_dummy);
+	else // update
+		update_at_hash_table_iterator(rti_p->hti_p, tuple_to_insert, NULL, &abort_error_dummy);
+}
 
 int next_in_rash_table_iterator(rash_table_iterator* rti_p)
 {
