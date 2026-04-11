@@ -90,10 +90,9 @@ void destroy_rash_table(rash_table_handle* rth_p)
 		const void* record_tuple = get_tuple_hash_table_iterator(rti.hti_p);
 		if(record_tuple != NULL)
 		{
-			const data_type_info* dti = NULL;
 			datum uval;
 			get_value_from_element_from_tuple(&uval, rth_p->rdb->rash_httd.lpltd.record_def, SELF, record_tuple);
-			delete_all_extension_worms(&uval, dti, &(rth_p->rdb->volatile_rage_engine.wtd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error);
+			delete_all_extension_worms(&uval, rth_p->rdb->rash_httd.lpltd.record_def->type_info, &(rth_p->rdb->volatile_rage_engine.wtd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error);
 		}
 
 		if(!next_in_rash_table_iterator(&rti))
@@ -127,7 +126,23 @@ binary_read_iterator* read_key_in_rash_table_iterator(const rash_table_iterator*
 
 int exists_in_rash_table_iterator(const rash_table_iterator* rti_p);
 
-int remove_from_rash_table_iterator(rash_table_iterator* rti_p);
+int remove_from_rash_table_iterator(rash_table_iterator* rti_p)
+{
+	int abort_error = 0;
+
+	const void* record_tuple = get_tuple_hash_table_iterator(rti_p->hti_p);
+	if(record_tuple == NULL)
+		return 0;
+	else
+	{
+		datum uval;
+		get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, SELF, record_tuple);
+		delete_all_extension_worms(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def->type_info, &(rti_p->rth_p->rdb->volatile_rage_engine.wtd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error);
+	}
+
+	remove_from_hash_table_iterator(rti_p->hti_p, NULL, &abort_error);
+	return 1;
+}
 
 binary_read_iterator* read_value_in_rash_table_iterator(rash_table_iterator* rti_p);
 
