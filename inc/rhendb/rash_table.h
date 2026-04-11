@@ -71,6 +71,9 @@ struct rash_table_key
 	const positional_accessor* key_element_ids;
 	uint32_t key_element_count;
 
+	// for hashing and comparing extended types in this record
+	rage_engine* ex_engine;
+
 	// to be used a key in the actual hash_table underneath rash_table
 	char hash_value[8];
 };
@@ -78,7 +81,7 @@ struct rash_table_key
 // returns true, if the rash_key initialization will succeed
 int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count);
 
-void initialize_rash_table_key(rash_table_key* rkey_p, const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count);
+void initialize_rash_table_key(rash_table_key* rkey_p, const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine);
 
 uint64_t get_hash_value_for_rash_table_key(rash_table_key* rkey_p);
 
