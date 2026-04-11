@@ -208,7 +208,7 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* 
 
 	// we can compare only if the rkey_p exists, else succeed indifferently
 	if(rti_p->rkey_p == NULL)
-		return 0;
+		return 1;
 
 	int result = 1;
 
@@ -271,6 +271,9 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* 
 
 int remove_from_rash_table_iterator(rash_table_iterator* rti_p)
 {
+	if(rti_p->is_read_only)
+		return 0;
+
 	int abort_error_dummy = 0;
 
 	const void* record_tuple = get_tuple_hash_table_iterator(rti_p->hti_p);
@@ -300,18 +303,58 @@ binary_read_iterator* read_value_in_rash_table_iterator(rash_table_iterator* rti
 	return get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.wtd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
 }
 
-binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p);
+binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p, const void* transaction_id, int* abort_error)
+{
+	if(rti_p->is_read_only)
+		return NULL;
+
+	if(rti_p->rkey_p == NULL)
+		return NULL;
+
+	int abort_error_dummy = 0;
+
+	int exists = exists_in_rash_table_iterator(rti_p, transaction_id, abort_error);
+	if(*abort_error)
+		return NULL;
+
+	if(exists) // update call
+	{
+		rti_p->perform_insert = 0;
+
+		const void* record_tuple = get_tuple_hash_table_iterator(rti_p->hti_p);
+		uint32_t record_tuple_size = get_tuple_size(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, record_tuple);
+
+		void* record_tuple_copy = malloc(RASH_RECORD_MAX_SIZE);
+		memory_move(record_tuple_copy, record_tuple, record_tuple_size);
+
+		return get_new_binary_write_iterator(record_tuple_copy, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(2), PREFIX_BYTES_FOR_VALUE, &(rti_p->rth_p->rdb->volatile_rage_engine.wtd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p);
+	}
+	else // insert call
+	{
+		rti_p->perform_insert = 1;
+
+		void* record_tuple = malloc(RASH_RECORD_MAX_SIZE);
+
+		init_tuple(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, record_tuple);
+
+		// insert hash_value
+
+		// insert key
+
+		return get_new_binary_write_iterator(record_tuple, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(2), PREFIX_BYTES_FOR_VALUE, &(rti_p->rth_p->rdb->volatile_rage_engine.wtd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p);
+	}
+}
 
 void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, binary_write_iterator* bwi_p)
 {
 	int abort_error_dummy = 0;
 
 	// copy the tuple to be inserted or updated
-	const void* tuple_to_insert = bwi_p->tuple;
+	const void* tuple_to_insert = bwi_p->tupl;
 
 	delete_binary_write_iterator(bwi_p, NULL, &abort_error_dummy);
 
-	if(NULL == get_tuple_hash_table_iterator(rti_p->hti_p)) // insert
+	if(rti_p->perform_insert) // insert
 		insert_in_hash_table_iterator(rti_p->hti_p, tuple_to_insert, NULL, &abort_error_dummy);
 	else // update
 		update_at_hash_table_iterator(rti_p->hti_p, tuple_to_insert, NULL, &abort_error_dummy);

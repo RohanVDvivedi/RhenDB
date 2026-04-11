@@ -91,6 +91,7 @@ struct rash_table_iterator
 	rash_table_handle* rth_p;
 
 	hash_table_iterator* hti_p;
+	int perform_insert; // this implies there is a open_for_writing_value_in_rash_table_iterator() called that needs an insert and not an update
 
 	int is_read_only;
 
@@ -110,7 +111,7 @@ int remove_from_rash_table_iterator(rash_table_iterator* rti_p);
 
 binary_read_iterator* read_value_in_rash_table_iterator(rash_table_iterator* rti_p);
 
-binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p);
+binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p, const void* transaction_id, int* abort_error);
 void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, binary_write_iterator* bwi_p);
 
 int next_in_rash_table_iterator(rash_table_iterator* rti_p);
