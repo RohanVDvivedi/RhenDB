@@ -232,6 +232,16 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* 
 			break;
 	}
 
+	// if ther has not been an abort_error and the result = 1
+	// then result is still 1, only if key_bri_p is at its end, (ensured by checking that no more bytes can be peeked)
+	if(!(*abort_error) && result == 1)
+	{
+		uint32_t bytes_peeked;
+		peek_in_binary_read_iterator(key_bri_p, &bytes_peeked, NULL, &abort_error_dummy);
+		if((*abort_error) || bytes_peeked > 0)
+			result = 0;
+	}
+
 	delete_binary_read_iterator(key_bri_p, NULL, &abort_error_dummy);
 
 	return result;
