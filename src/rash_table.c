@@ -121,7 +121,25 @@ int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_de
 	return 1;
 }
 
-void initialize_rash_table_key(rash_table_key* rkey_p, const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine);
+rash_table_key get_new_rash_table_key(const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+{
+	rash_table_key rkey = {
+		.record = record,
+		.record_def = record_def,
+		.key_element_ids = key_element_ids,
+		.key_element_count = key_element_count,
+
+		.ex_engine = ex_engine,
+
+		.hash_value = {},
+	};
+
+	uint64_t hash_value = hash_tuple_rhendb(record, record_def, key_element_ids, FNV_64_TUPLE_HASHER, key_element_count, ex_engine, transaction_id, abort_error);
+
+	serialize_uint64(rkey.hash_value, 8, hash_value);
+
+	return rkey;
+}
 
 uint64_t get_hash_value_for_rash_table_key(rash_table_key* rkey_p)
 {
