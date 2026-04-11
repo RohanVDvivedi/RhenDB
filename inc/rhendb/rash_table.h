@@ -63,6 +63,8 @@ rash_table_handle get_new_rash_table(const tuple_def* key_def, const positional_
 
 void destroy_rash_table(rash_table_handle* rth_p);
 
+void print_rash_table(const rash_table_handle* rth_p);
+
 typedef struct rash_table_key rash_table_key;
 struct rash_table_key
 {

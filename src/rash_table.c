@@ -104,6 +104,81 @@ void destroy_rash_table(rash_table_handle* rth_p)
 	destroy_hash_table(rth_p->root_page_id, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 }
 
+void print_rash_table(const rash_table_handle* rth_p)
+{
+	int abort_error_dummy = 0;
+
+	printf("RASH_TABLE\n\n");
+	printf("element_count = %"PRIu64"\n", rth_p->element_count);
+	printf("bucket_count = %"PRIu64"\n", rth_p->bucket_count);
+	printf("total_inline_size = %"PRIu64"\n\n", rth_p->total_inline_size);
+
+	uint64_t bucket_count = get_bucket_count_hash_table(rth_p->root_page_id, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
+
+	printf("actual_bucket_count = %"PRIu64"\n\n", bucket_count);
+
+	for(uint64_t i = 0; i < bucket_count; i++)
+	{
+		hash_table_iterator* hti_p = get_new_hash_table_iterator(rth_p->root_page_id, (bucket_range){i, i}, NULL, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, NULL, &abort_error_dummy);
+
+		printf("BUCKET : %"PRIu64"\n", i);
+		while(1)
+		{
+			const void* entry = get_tuple_hash_table_iterator(hti_p);
+			if(entry == NULL)
+				break;
+
+			{
+				datum uval;
+				get_value_from_element_from_tuple(&uval, rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(0), entry);
+				printf("HASH(%"PRIu64") : ", uval.uint_value);
+			}
+
+			printf("KEY( ");
+			{
+				const data_type_info* dti = get_type_info_for_element_from_tuple_def(rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(1));
+				datum uval;
+				get_value_from_element_from_tuple(&uval, rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(1), entry);
+
+				binary_read_iterator* key_bri_p = get_new_binary_read_iterator(&uval, dti, &(rth_p->rdb->volatile_rage_engine.wtd), rth_p->rdb->volatile_rage_engine.pam_p);
+				{
+					for(uint32_t i = 0; i < rth_p->key_element_count; i++)
+					{
+						char is_valid_byte = 0;
+						if(!read_from_binary_read_iterator(key_bri_p, &is_valid_byte, 1, NULL, &abort_error_dummy))
+						{
+							printf("CORRUPTED KEY IN RASH_TABLE\n");
+							exit(-1);
+						}
+
+						if(!is_valid_byte) // we can not read any more bytes for this tuple in the key_bri_p
+						{
+							printf("\tNULL\n");
+							continue;
+						}
+						else
+						{
+							consume_tuple_from_tuple_list(tuple, &(rth_p->key_tuple_defs[i]), key_bri_p, NULL, &abort_error_dummy, {
+								printf("\t");print_tuple(tuple, &(rth_p->key_tuple_defs[i]));
+							});
+						}
+					}
+				}
+				delete_binary_read_iterator(key_bri_p, NULL, &abort_error_dummy);
+			}
+			printf(" )\n");
+
+			if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, NULL, &abort_error_dummy))
+				break;
+		}
+
+		printf("\n\n");
+
+		hash_table_vaccum_params htvp;
+		delete_hash_table_iterator(hti_p, &htvp, NULL, &abort_error_dummy);
+	}
+}
+
 int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine)
 {
 	if(rth_p->key_element_count != key_element_count)
