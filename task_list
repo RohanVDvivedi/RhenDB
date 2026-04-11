@@ -6,7 +6,8 @@ PICKED TASKS
       PREFIX_BYTES_FOR_VALUE         10
       MIN_LOAD_FACTOR_IN_BYTES       0.01
       MAX_LOAD_FACTOR_IN_BYTES       1
-    * test key = string, string, first name, last names, some times one of them is NULL
+    * test key = string, string, some times one of them is NULL
+    * store values as appended strings
 
  * implement streaming_loop_join_operator (identical to nested_loop_join)
    * start batching on both sides left and right
