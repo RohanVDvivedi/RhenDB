@@ -79,7 +79,31 @@ rash_table_handle get_new_rash_table(const tuple_def* key_def, const positional_
 	return rth;
 }
 
-void destroy_rash_table(rash_table_handle* rth_p);
+void destroy_rash_table(rash_table_handle* rth_p)
+{
+	int abort_error = 0;
+
+	rash_table_iterator rti = find_all_in_rash_table(rth_p, 1);
+
+	while(1)
+	{
+		const void* record_tuple = get_tuple_hash_table_iterator(rti.hti_p);
+		if(record_tuple != NULL)
+		{
+			const data_type_info* dti = NULL;
+			datum uval;
+			get_value_from_element_from_tuple(&uval, rth_p->rdb->rash_httd.lpltd.record_def, SELF, record_tuple);
+			delete_all_extension_worms(&uval, dti, &(rth_p->rdb->volatile_rage_engine.wtd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error);
+		}
+
+		if(!next_in_rash_table_iterator(&rti))
+			break;
+	}
+
+	delete_rash_table_iterator(&rti);
+
+	destroy_hash_table(rth_p->root_page_id, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, &abort_error);
+}
 
 int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count);
 
