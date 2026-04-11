@@ -104,7 +104,22 @@ void destroy_rash_table(rash_table_handle* rth_p)
 	destroy_hash_table(rth_p->root_page_id, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, &abort_error);
 }
 
-int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count);
+int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine)
+{
+	if(rth_p->key_element_count != key_element_count)
+		return 0;
+
+	if(rth_p->ex_engine != ex_engine)
+		return 0;
+
+	for(uint32_t i = 0; i < key_element_count; i++)
+	{
+		if(!are_identical_type_info(rth_p->key_tuple_defs[i].type_info, get_type_info_for_element_from_tuple_def(record_def, key_element_ids[i])))
+			return 0;
+	}
+
+	return 1;
+}
 
 void initialize_rash_table_key(rash_table_key* rkey_p, const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine);
 
@@ -123,22 +138,25 @@ rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read
 	return rti;
 }
 
-rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int is_read_only)
+rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int is_read_only, const void* transaction_id, int* abort_error)
 {
 	rash_table_iterator rti = {.rth_p = rth_p, .hti_p = NULL, .is_read_only = is_read_only, .rkey_p = rkey_p};
 
-	int abort_error = 0;
-	rti.hti_p = get_new_hash_table_iterator(rth_p->root_page_id, (bucket_range){}, rkey_p->hash_value, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, is_read_only ? NULL : rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error);
+	int abort_error_dummy = 0;
+	rti.hti_p = get_new_hash_table_iterator(rth_p->root_page_id, (bucket_range){}, rkey_p->hash_value, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, is_read_only ? NULL : rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
 	while(1)
 	{
 		// if exists, i.e. key compares equal is found, then break out
-		if(exists_in_rash_table_iterator(&rti))
+		int exists = exists_in_rash_table_iterator(&rti, transaction_id, abort_error);
+		if(*abort_error)
+			break;
+		if(exists)
 			break;
 
 		// if we could not go next then also break
 		// going next only in the same bucket
-		if(!next_hash_table_iterator(rti.hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, NULL, &abort_error))
+		if(!next_hash_table_iterator(rti.hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, NULL, &abort_error_dummy))
 			break;
 	}
 
@@ -158,7 +176,46 @@ binary_read_iterator* read_key_in_rash_table_iterator(const rash_table_iterator*
 	return get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.wtd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
 }
 
-int exists_in_rash_table_iterator(const rash_table_iterator* rti_p);
+int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* transaction_id, int* abort_error)
+{
+	int abort_error_dummy = 0;
+
+	const void* record_tuple = get_tuple_hash_table_iterator(rti_p->hti_p);
+
+	// if the hash_table_iterator itself, says that the keys ould not match based on hash_value, then fail
+	if(record_tuple == NULL)
+		return 0;
+
+	// we can compare only if the rkey_p exists, else succeed indifferently
+	if(rti_p->rkey_p == NULL)
+		return 0;
+
+	int result = 1;
+
+	// key exists so compare them
+	binary_read_iterator* key_bri_p = read_key_in_rash_table_iterator(rti_p);
+
+	for(uint32_t i = 0; i < rti_p->rkey_p->key_element_count && result == 1; i++)
+	{
+		const data_type_info* dti1 = get_type_info_for_element_from_tuple_def(rti_p->rkey_p->record_def, rti_p->rkey_p->key_element_ids[i]);
+		datum uval1;
+		get_value_from_element_from_tuple(&uval1, rti_p->rkey_p->record_def, rti_p->rkey_p->key_element_ids[i], rti_p->rkey_p->record);
+
+		consume_tuple_from_tuple_list(tuple, &(rti_p->rth_p->key_tuple_defs[i]), key_bri_p, NULL, &abort_error_dummy, {
+			const data_type_info* dti2 = rti_p->rth_p->key_tuple_defs[i].type_info;
+			datum uval2 = {.tuple_value = tuple};
+
+			result = (0 == compare_datum_rhendb(&uval1, dti1, &uval2, dti2, rti_p->rth_p->ex_engine, transaction_id, abort_error));
+		});
+
+		if(*abort_error)
+			break;
+	}
+
+	delete_binary_read_iterator(key_bri_p, NULL, &abort_error_dummy);
+
+	return result;
+}
 
 int remove_from_rash_table_iterator(rash_table_iterator* rti_p)
 {
