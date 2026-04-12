@@ -161,7 +161,9 @@ void print_value(binary_read_iterator* value_bri_p)
 			if(tuple == NULL)
 				finish = 1;
 			else
-				print_tuple(&record_def, tuple);
+			{
+				printf("\t\t\t");print_tuple(tuple, &record_def);
+			}
 		});
 		if(finish)
 			break;
