@@ -95,7 +95,7 @@ void destroy_rash_table(rash_table_handle* rth_p)
 	destroy_hash_table(rth_p->root_page_id, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 }
 
-void print_rash_table(const rash_table_handle* rth_p)
+void print_rash_table(const rash_table_handle* rth_p, void (*print_value)(binary_read_iterator* value_bri_p))
 {
 	int abort_error_dummy = 0;
 
@@ -158,6 +158,22 @@ void print_rash_table(const rash_table_handle* rth_p)
 				delete_binary_read_iterator(key_bri_p, NULL, &abort_error_dummy);
 			}
 			printf(" )\n");
+
+			printf("VALUE( ");
+			{
+				const data_type_info* dti = get_type_info_for_element_from_tuple_def(rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(2));
+				datum uval;
+				get_value_from_element_from_tuple(&uval, rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(2), entry);
+
+				binary_read_iterator* value_bri_p = get_new_binary_read_iterator(&uval, dti, &(rth_p->rdb->volatile_rage_engine.wtd), rth_p->rdb->volatile_rage_engine.pam_p);
+				
+				print_value(value_bri_p);
+
+				delete_binary_read_iterator(value_bri_p, NULL, &abort_error_dummy);
+			}
+			printf(" )\n");
+
+			printf("\n");
 
 			if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, NULL, &abort_error_dummy))
 				break;
