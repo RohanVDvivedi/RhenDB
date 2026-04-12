@@ -49,7 +49,7 @@ rash_table_handle get_new_rash_table(const tuple_def* key_def, const positional_
 		.root_page_id = get_new_hash_table(MIN_BUCKET_COUNT, &(rdb->rash_httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy),
 
 		.element_count = 0,
-		.bucket_count = 0,
+		.bucket_count = MIN_BUCKET_COUNT,
 
 		.total_inline_size = 0,
 
