@@ -238,6 +238,12 @@ int main()
 		insert_rth(&rth, inputs[i]);
 	printf("INSERTIONS ENDED\n");
 
+	// insert all again, duplicating the values
+	printf("INSERTIONS STARTED\n");
+	for(uint32_t i = 0; i < TESTCASE_SIZE; i++)
+		insert_rth(&rth, i);
+	printf("INSERTIONS ENDED\n");
+
 	// print all
 	print_rash_table(&rth, print_value);
 
