@@ -170,14 +170,16 @@ void print_value(binary_read_iterator* value_bri_p)
 
 void insert(rash_table_handle* rth_p, uint32_t v)
 {
+	int abort_error_dummy = 0;
+
 	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, NULL, NULL, NULL);
+	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, NULL, NULL, &abort_error_dummy);
 
-	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 0, NULL, NULL);
+	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 0, NULL, &abort_error_dummy);
 
-	binary_write_iterator* bwi_p = open_for_writing_value_in_rash_table_iterator(&rti, NULL, NULL);
+	binary_write_iterator* bwi_p = open_for_writing_value_in_rash_table_iterator(&rti, NULL, &abort_error_dummy);
 
 	int abort_error_dummy = 0;
 	append_to_binary_write_iterator(bwi_p, record, get_tuple_size(&record_def, record), NULL, &abort_error_dummy);
