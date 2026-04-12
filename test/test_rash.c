@@ -189,6 +189,7 @@ int main()
 	rash_table_handle rth = get_new_rash_table(&record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, NULL, &rdb);
 
 	// print all
+	print_rash_table(&rth, print_value);
 
 	// insert all
 
