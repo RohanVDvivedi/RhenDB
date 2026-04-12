@@ -28,8 +28,8 @@
 
 fail_build_on(RASH_RECORD_MAX_SIZE > 1024);
 
-#define MIN_LOAD_FACTOR_IN_BYTES   2.0 // shrink if load-factor crosses
-#define MAX_LOAD_FACTOR_IN_BYTES   5.0 // expand if load-factor crosses
+#define MIN_LOAD_FACTOR_IN_BYTES   1.75 // shrink if load-factor crosses
+#define MAX_LOAD_FACTOR_IN_BYTES   6.0 // expand if load-factor crosses
 
 // must be called right after rhendb is doen initializing it's volatile_engine
 void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb);
