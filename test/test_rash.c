@@ -175,14 +175,14 @@ void insert(rash_table_handle* rth_p, uint32_t v)
 	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, NULL, NULL, &abort_error);
+	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rth_p->rdb->persistent_acid_rage_engine), NULL, &abort_error);
 
 	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 0, NULL, &abort_error);
 
 	binary_write_iterator* bwi_p = open_for_writing_value_in_rash_table_iterator(&rti, NULL, &abort_error);
 
 	int abort_error_dummy = 0;
-	append_to_binary_write_iterator(bwi_p, record, get_tuple_size(&record_def, record), NULL, &abort_error_dummy);
+	append_to_binary_write_iterator(bwi_p, record, get_tuple_size(&record_def, record), &(rth_p->rdb->volatile_rage_engine), &abort_error_dummy);
 
 	close_and_write_value_in_hash_table_iterator(&rti, bwi_p);
 
@@ -207,7 +207,7 @@ int main()
 	initialize_tuple_defs();
 
 	// create rash table
-	rash_table_handle rth = get_new_rash_table(&record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, NULL, &rdb);
+	rash_table_handle rth = get_new_rash_table(&record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rdb.persistent_acid_rage_engine), &rdb);
 
 	// print all
 	print_rash_table(&rth, print_value);
