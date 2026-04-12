@@ -334,7 +334,8 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* 
 			else
 			{
 				const data_type_info* dti2 = rti_p->rth_p->key_tuple_defs[i].type_info;
-				datum uval2 = {.tuple_value = tuple};
+				datum uval2;
+				get_value_from_element_from_tuple(&uval2, &(rti_p->rth_p->key_tuple_defs[i]), SELF, tuple);
 
 				result = (0 == compare_datum_rhendb(&uval1, dti1, &uval2, dti2, rti_p->rth_p->ex_engine, transaction_id, abort_error));
 			}
