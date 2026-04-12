@@ -234,8 +234,8 @@ int main()
 
 	// insert all
 	printf("INSERTIONS STARTED\n");
-	for(uint32_t i = 0; i < 100; i++)
-		insert_rth(&rth, i);
+	for(uint32_t i = 0; i < TESTCASE_SIZE; i++)
+		insert_rth(&rth, inputs[i]);
 	printf("INSERTIONS ENDED\n");
 
 	// print all
@@ -246,7 +246,17 @@ int main()
 	// remove all
 	printf("REMOVES STARTED\n");
 	uint32_t removes_success = 0;
-	for(uint32_t i = 0; i < 100; i++)
+	for(uint32_t i = 0; i < TESTCASE_SIZE; i+=2)
+		removes_success += remove_rth(&rth, i);
+	printf("REMOVES ENDED (%u)\n", removes_success);
+
+	// print all
+	print_rash_table(&rth, print_value);
+
+	// remove all
+	printf("REMOVES STARTED\n");
+	removes_success = 0;
+	for(uint32_t i = 1; i < TESTCASE_SIZE; i+=2)
 		removes_success += remove_rth(&rth, i);
 	printf("REMOVES ENDED (%u)\n", removes_success);
 
