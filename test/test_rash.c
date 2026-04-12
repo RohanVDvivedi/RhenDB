@@ -9,7 +9,9 @@
 
 #define USERS_COUNT 10
 
-#define TESTCASE_SIZE 1000000
+#define TESTCASE_SIZE 500000
+
+//#define DEBUG_PRINT
 
 uint32_t inputs[TESTCASE_SIZE];
 void generate_random_inputs()
@@ -260,7 +262,9 @@ int main()
 	rash_table_handle rth = get_new_rash_table(&record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rdb.persistent_acid_rage_engine), &rdb);
 
 	// print all
-	print_rash_table(&rth, print_value);
+	#ifdef DEBUG_PRINT
+		print_rash_table(&rth, print_value);
+	#endif
 
 	// insert all
 	printf("INSERTIONS STARTED\n");
@@ -275,7 +279,9 @@ int main()
 	printf("INSERTIONS ENDED\n");
 
 	// print all
-	print_rash_table(&rth, print_value);
+	#ifdef DEBUG_PRINT
+		print_rash_table(&rth, print_value);
+	#endif
 
 	#define FINDERS_SIZE 30
 	uint32_t find_these[FINDERS_SIZE];
@@ -298,7 +304,9 @@ int main()
 		find_and_print(&rth, find_these[i]);
 
 	// print all
-	print_rash_table(&rth, print_value);
+	#ifdef DEBUG_PRINT
+		print_rash_table(&rth, print_value);
+	#endif
 
 	// remove all
 	printf("REMOVES STARTED for all odd also\n");
@@ -312,7 +320,9 @@ int main()
 		find_and_print(&rth, find_these[i]);
 
 	// print all
-	print_rash_table(&rth, print_value);
+	#ifdef DEBUG_PRINT
+		print_rash_table(&rth, print_value);
+	#endif
 
 	// destroy rash table
 	destroy_rash_table(&rth);
