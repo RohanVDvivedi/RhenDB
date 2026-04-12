@@ -209,6 +209,36 @@ int remove_rth(rash_table_handle* rth_p, uint32_t v)
 	return removed;
 }
 
+void find_and_print(rash_table_handle* rth_p, uint32_t v)
+{
+	int abort_error = 0;
+
+	char record[300];
+	construct_record(record, v, 0, "Rohan Dvivedi");
+
+	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rth_p->rdb->persistent_acid_rage_engine), NULL, &abort_error);
+
+	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 1, NULL, &abort_error);
+
+	if(!exists_in_rash_table_iterator(&rti, NULL, &abort_error))
+	{
+		printf("%"PRIu32" -> (\n\tNULL\n)\n", v);
+		delete_rash_table_iterator(&rti);
+		return;
+	}
+
+	binary_read_iterator* value_bri_p = read_value_in_rash_table_iterator(&rti);
+
+	printf("%"PRIu32" -> (\n", v);
+	print_value(value_bri_p);
+	printf(")\n");
+
+	int abort_error_dummy = 0;
+	delete_binary_read_iterator(value_bri_p, NULL, &abort_error_dummy);
+
+	delete_rash_table_iterator(&rti);
+}
+
 int main()
 {
 	rhendb rdb;
@@ -238,33 +268,48 @@ int main()
 		insert_rth(&rth, inputs[i]);
 	printf("INSERTIONS ENDED\n");
 
-	// insert all again, duplicating the values
+	// insert all again, duplicating the even values
 	printf("INSERTIONS STARTED\n");
-	for(uint32_t i = 0; i < TESTCASE_SIZE; i++)
+	for(uint32_t i = 0; i < TESTCASE_SIZE; i+=2)
 		insert_rth(&rth, i);
 	printf("INSERTIONS ENDED\n");
 
 	// print all
 	print_rash_table(&rth, print_value);
 
-	// find all
+	#define FINDERS_SIZE 30
+	uint32_t find_these[FINDERS_SIZE];
+	for(uint32_t i = 0; i < FINDERS_SIZE; i++)
+		find_these[i] = ((((uint32_t)rand()) % TESTCASE_SIZE) & (UINT32_MAX << 1)) | (i & 1);
+
+	// find some of them
+	for(uint32_t i = 0; i < FINDERS_SIZE; i++)
+		find_and_print(&rth, find_these[i]);
 
 	// remove all
-	printf("REMOVES STARTED\n");
+	printf("REMOVES STARTED for all even\n");
 	uint32_t removes_success = 0;
 	for(uint32_t i = 0; i < TESTCASE_SIZE; i+=2)
 		removes_success += remove_rth(&rth, i);
 	printf("REMOVES ENDED (%u)\n", removes_success);
 
+	// find some of them
+	for(uint32_t i = 0; i < FINDERS_SIZE; i++)
+		find_and_print(&rth, find_these[i]);
+
 	// print all
 	print_rash_table(&rth, print_value);
 
 	// remove all
-	printf("REMOVES STARTED\n");
+	printf("REMOVES STARTED for all odd also\n");
 	removes_success = 0;
 	for(uint32_t i = 1; i < TESTCASE_SIZE; i+=2)
 		removes_success += remove_rth(&rth, i);
 	printf("REMOVES ENDED (%u)\n", removes_success);
+
+	// find some of them
+	for(uint32_t i = 0; i < FINDERS_SIZE; i++)
+		find_and_print(&rth, find_these[i]);
 
 	// print all
 	print_rash_table(&rth, print_value);
