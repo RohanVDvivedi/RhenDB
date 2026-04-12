@@ -325,12 +325,22 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* 
 			}
 		}
 
+		int finish = 0;
 		consume_tuple_from_tuple_list(tuple, &(rti_p->rth_p->key_tuple_defs[i]), key_bri_p, NULL, &abort_error_dummy, {
-			const data_type_info* dti2 = rti_p->rth_p->key_tuple_defs[i].type_info;
-			datum uval2 = {.tuple_value = tuple};
+			if(tuple == NULL)
+				finish = 1;
+			else
+			{
+				finish = 0;
 
-			result = (0 == compare_datum_rhendb(&uval1, dti1, &uval2, dti2, rti_p->rth_p->ex_engine, transaction_id, abort_error));
+				const data_type_info* dti2 = rti_p->rth_p->key_tuple_defs[i].type_info;
+				datum uval2 = {.tuple_value = tuple};
+
+				result = (0 == compare_datum_rhendb(&uval1, dti1, &uval2, dti2, rti_p->rth_p->ex_engine, transaction_id, abort_error));
+			}
 		});
+		if(finish)
+			break;
 
 		if(*abort_error)
 			break;

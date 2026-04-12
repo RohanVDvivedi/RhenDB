@@ -151,6 +151,23 @@ void construct_record(void* buffer, uint64_t num, int order, char* value)
 		set_element_in_tuple(&record_def, STATIC_POSITION(4), buffer, &(datum){.string_value = value, .string_size = strlen(value)}, UINT32_MAX);
 }
 
+void print_value(binary_read_iterator* value_bri_p)
+{
+	int abort_error_dummy = 0;
+	int finish = 0;
+	while(1)
+	{
+		consume_tuple_from_tuple_list(tuple, &record_def, value_bri_p, NULL, &abort_error_dummy, {
+			if(tuple == NULL)
+				finish = 1;
+			else
+				print_tuple(&record_def, tuple);
+		});
+		if(finish)
+			break;
+	}
+}
+
 int main()
 {
 	rhendb rdb;
