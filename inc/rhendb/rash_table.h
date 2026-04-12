@@ -18,7 +18,7 @@
 	it will alays be ensured that the records ill alyas store unique values for (hash_value, key_size, key)
 */
 
-#define PREFIX_BYTES_FOR_KEY           240
+#define PREFIX_BYTES_FOR_KEY           120
 #define PREFIX_BYTES_FOR_VALUE          90
 
 #define EXTENDED_TYPE_MAX_SIZE_FOR_KEY    ((4 + (4 + 8)) + (4 + PREFIX_BYTES_FOR_KEY))
@@ -28,7 +28,7 @@
 
 fail_build_on(RASH_RECORD_MAX_SIZE > 1024);
 
-#define MIN_LOAD_FACTOR_IN_BYTES   1.75 // shrink if load-factor crosses
+#define MIN_LOAD_FACTOR_IN_BYTES   0.9 // shrink if load-factor crosses
 #define MAX_LOAD_FACTOR_IN_BYTES   4.0 // expand if load-factor crosses
 
 // must be called right after rhendb is doen initializing it's volatile_engine

@@ -250,7 +250,7 @@ int main()
 			10000ULL, 100000ULL,
 			10000000ULL,
 		4096,
-			10000000ULL,
+			60000000ULL,
 		USERS_COUNT);
 	printf("database initialized\n\n");
 
