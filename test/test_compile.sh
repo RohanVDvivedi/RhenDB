@@ -4,3 +4,4 @@ gcc -Wall -O3 -flto ./test_lckmgr.c -o test_lckmgr.out -lrhendb -lmintxengine -l
 gcc -Wall -O3 -flto ./test_its.c -o test_its.out -lrhendb -lmintxengine -ltuplelargetypes -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz
 gcc -Wall -O3 -flto ./test_dops.c -o test_dops.out -lrhendb -lmintxengine -ltuplelargetypes -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz
 gcc -Wall -O3 -flto ./test_sorter.c -o test_sorter.out -lrhendb -lmintxengine -ltuplelargetypes -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz
+gcc -Wall -O3 -flto ./test_rash.c -o test_rash.out -lrhendb -lmintxengine -ltuplelargetypes -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz
