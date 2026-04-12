@@ -170,7 +170,7 @@ void print_value(binary_read_iterator* value_bri_p)
 	}
 }
 
-void insert(rash_table_handle* rth_p, uint32_t v)
+void insert_rth(rash_table_handle* rth_p, uint32_t v)
 {
 	int abort_error = 0;
 
@@ -189,6 +189,24 @@ void insert(rash_table_handle* rth_p, uint32_t v)
 	close_and_write_value_in_hash_table_iterator(&rti, bwi_p);
 
 	delete_rash_table_iterator(&rti);
+}
+
+int remove_rth(rash_table_handle* rth_p, uint32_t v)
+{
+	int abort_error = 0;
+
+	char record[300];
+	construct_record(record, v, 0, "Rohan Dvivedi");
+
+	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rth_p->rdb->persistent_acid_rage_engine), NULL, &abort_error);
+
+	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 0, NULL, &abort_error);
+
+	int removed = remove_from_rash_table_iterator(&rti);
+
+	delete_rash_table_iterator(&rti);
+
+	return removed;
 }
 
 int main()
@@ -217,7 +235,7 @@ int main()
 	// insert all
 	printf("INSERTIONS STARTED\n");
 	for(uint32_t i = 0; i < 100; i++)
-		insert(&rth, i);
+		insert_rth(&rth, i);
 	printf("INSERTIONS ENDED\n");
 
 	// print all
@@ -226,8 +244,14 @@ int main()
 	// find all
 
 	// remove all
+	printf("REMOVES STARTED\n");
+	uint32_t removes_success = 0;
+	for(uint32_t i = 0; i < 100; i++)
+		removes_success += remove_rth(&rth, i);
+	printf("REMOVES ENDED (%u)\n", removes_success);
 
 	// print all
+	print_rash_table(&rth, print_value);
 
 	// destroy rash table
 	destroy_rash_table(&rth);
