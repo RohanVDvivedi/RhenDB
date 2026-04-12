@@ -169,6 +169,7 @@ int main()
 	initialize_tuple_defs();
 
 	// create rash table
+	rash_table_handle rth = get_new_rash_table(&record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, NULL, &rdb);
 
 	// print all
 
@@ -183,6 +184,7 @@ int main()
 	// print all
 
 	// destroy rash table
+	destroy_rash_table(&rth);
 
 	deinitialize_tuple_defs();
 
