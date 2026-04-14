@@ -59,7 +59,11 @@ struct rash_table_handle
 	rhendb* rdb;
 };
 
-rash_table_handle get_new_rash_table(const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb);
+rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb);
+
+int expand_rash_table(rash_table_handle* rth_p);
+
+int shrink_rash_table(rash_table_handle* rth_p);
 
 void destroy_rash_table(rash_table_handle* rth_p);
 

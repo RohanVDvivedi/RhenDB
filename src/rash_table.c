@@ -26,30 +26,15 @@ void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb)
 	init_hash_table_tuple_definitions(&(rdb->rash_httd), &(rdb->volatile_rage_engine.pam_p->pas), record_def, actual_key_positions, sizeof(actual_key_positions)/sizeof(actual_key_positions[0]), FNV_64_TUPLE_HASHER);
 }
 
-#define MIN_BUCKET_COUNT 2
-
-static int must_expand_rash_table(const rash_table_handle* rth_p)
-{
-	return (((double)rth_p->total_inline_size) / (rth_p->bucket_count * rth_p->rdb->volatile_rage_engine.pam_p->pas.page_size)) > MAX_LOAD_FACTOR_IN_BYTES;
-}
-
-static int must_shrink_rash_table(const rash_table_handle* rth_p)
-{
-	if(rth_p->bucket_count <= MIN_BUCKET_COUNT)
-		return 0;
-
-	return (((double)rth_p->total_inline_size) / (rth_p->bucket_count * rth_p->rdb->volatile_rage_engine.pam_p->pas.page_size)) < MIN_LOAD_FACTOR_IN_BYTES;
-}
-
-rash_table_handle get_new_rash_table(const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb)
+rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb)
 {
 	int abort_error_dummy = 0;
 
 	rash_table_handle rth = {
-		.root_page_id = get_new_hash_table(MIN_BUCKET_COUNT, &(rdb->rash_httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy),
+		.root_page_id = get_new_hash_table(initial_bucket_count, &(rdb->rash_httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy),
 
 		.element_count = 0,
-		.bucket_count = MIN_BUCKET_COUNT,
+		.bucket_count = initial_bucket_count,
 
 		.total_inline_size = 0,
 
@@ -68,6 +53,22 @@ rash_table_handle get_new_rash_table(const tuple_def* key_def, const positional_
 	}
 
 	return rth;
+}
+
+int expand_rash_table(rash_table_handle* rth_p)
+{
+	int abort_error_dummy = 0;
+	int expanded = expand_hash_table(rth_p->root_page_id, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+	rth_p->bucket_count += expanded;
+	return expanded;
+}
+
+int shrink_rash_table(rash_table_handle* rth_p)
+{
+	int abort_error_dummy = 0;
+	int shrunk = shrink_hash_table(rth_p->root_page_id, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+	rth_p->bucket_count -= shrunk;
+	return shrunk;
 }
 
 void destroy_rash_table(rash_table_handle* rth_p)
@@ -528,14 +529,4 @@ void delete_rash_table_iterator(rash_table_iterator* rti_p)
 	rti_p->hti_p = NULL;
 
 	perform_vaccum_hash_table(rti_p->rth_p->root_page_id, &htvp, 1, &(rti_p->rth_p->rdb->rash_httd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
-
-	while(1)
-	{
-		if(must_expand_rash_table(rti_p->rth_p))
-			rti_p->rth_p->bucket_count += expand_hash_table(rti_p->rth_p->root_page_id, &(rti_p->rth_p->rdb->rash_httd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
-		else if(must_shrink_rash_table(rti_p->rth_p))
-			rti_p->rth_p->bucket_count -= shrink_hash_table(rti_p->rth_p->root_page_id, &(rti_p->rth_p->rdb->rash_httd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
-		else
-			break;
-	}
 }
