@@ -11,6 +11,8 @@
 
 #define TESTCASE_SIZE 500000
 
+#define BUCKET_COUNT 100000
+
 //#define DEBUG_PRINT
 
 uint32_t inputs[TESTCASE_SIZE];
@@ -259,7 +261,7 @@ int main()
 	initialize_tuple_defs();
 
 	// create rash table
-	rash_table_handle rth = get_new_rash_table(&record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rdb.persistent_acid_rage_engine), &rdb);
+	rash_table_handle rth = get_new_rash_table(BUCKET_COUNT, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rdb.persistent_acid_rage_engine), &rdb);
 
 	// print all
 	#ifdef DEBUG_PRINT
