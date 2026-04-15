@@ -16,6 +16,9 @@ PICKED TASKS
  * merge_sorted_runs operator
    * merge multiple sorted_input_operators ith identical output_defs into one
 
+ * top K operator, K being uint64_t sort operator
+   * limiting the compute hen only top K elements are needed
+
  * define struct for implementing aggregate functions
    struct aggregate_function {
       void* context;
