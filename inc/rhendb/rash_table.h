@@ -37,7 +37,7 @@ void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb);
 typedef struct rash_table_handle rash_table_handle;
 struct rash_table_handle
 {
-	uint64_t root_page_id;
+	hash_table_handle hth;
 
 	uint64_t element_count; // total number of elements
 	uint64_t bucket_count; // total number of buckets
@@ -67,7 +67,7 @@ int shrink_rash_table(rash_table_handle* rth_p);
 
 void destroy_rash_table(rash_table_handle* rth_p);
 
-void print_rash_table(const rash_table_handle* rth_p, void (*print_value)(binary_read_iterator* value_bri_p));
+void print_rash_table(rash_table_handle* rth_p, void (*print_value)(binary_read_iterator* value_bri_p));
 
 typedef struct rash_table_key rash_table_key;
 struct rash_table_key

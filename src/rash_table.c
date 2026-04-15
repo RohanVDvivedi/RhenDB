@@ -31,7 +31,7 @@ rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_
 	int abort_error_dummy = 0;
 
 	rash_table_handle rth = {
-		.root_page_id = get_new_hash_table(initial_bucket_count, &(rdb->rash_httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy),
+		.hth = get_new_hash_table(initial_bucket_count, &(rdb->rash_httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy),
 
 		.element_count = 0,
 		.bucket_count = initial_bucket_count,
@@ -58,7 +58,7 @@ rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_
 int expand_rash_table(rash_table_handle* rth_p)
 {
 	int abort_error_dummy = 0;
-	int expanded = expand_hash_table(rth_p->root_page_id, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+	int expanded = expand_hash_table(&(rth_p->hth), &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 	rth_p->bucket_count += expanded;
 	return expanded;
 }
@@ -66,7 +66,7 @@ int expand_rash_table(rash_table_handle* rth_p)
 int shrink_rash_table(rash_table_handle* rth_p)
 {
 	int abort_error_dummy = 0;
-	int shrunk = shrink_hash_table(rth_p->root_page_id, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+	int shrunk = shrink_hash_table(&(rth_p->hth), &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 	rth_p->bucket_count -= shrunk;
 	return shrunk;
 }
@@ -93,10 +93,10 @@ void destroy_rash_table(rash_table_handle* rth_p)
 
 	delete_rash_table_iterator(&rti);
 
-	destroy_hash_table(rth_p->root_page_id, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
+	destroy_hash_table(&(rth_p->hth), &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 }
 
-void print_rash_table(const rash_table_handle* rth_p, void (*print_value)(binary_read_iterator* value_bri_p))
+void print_rash_table(rash_table_handle* rth_p, void (*print_value)(binary_read_iterator* value_bri_p))
 {
 	int abort_error_dummy = 0;
 
@@ -105,13 +105,13 @@ void print_rash_table(const rash_table_handle* rth_p, void (*print_value)(binary
 	printf("bucket_count = %"PRIu64"\n", rth_p->bucket_count);
 	printf("total_inline_size = %"PRIu64"\n\n", rth_p->total_inline_size);
 
-	uint64_t bucket_count = get_bucket_count_hash_table(rth_p->root_page_id, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
+	uint64_t bucket_count = get_bucket_count_hash_table(&(rth_p->hth), &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 
 	printf("actual_bucket_count = %"PRIu64"\n\n", bucket_count);
 
 	for(uint64_t i = 0; i < bucket_count; i++)
 	{
-		hash_table_iterator* hti_p = get_new_hash_table_iterator(rth_p->root_page_id, (bucket_range){i, i}, NULL, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, NULL, &abort_error_dummy);
+		hash_table_iterator* hti_p = get_new_hash_table_iterator(&(rth_p->hth), (bucket_range){i, i}, NULL, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, NULL, &abort_error_dummy);
 
 		printf("BUCKET : %"PRIu64"\n\n", i);
 		while(1)
@@ -235,7 +235,7 @@ rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read
 
 	rash_table_iterator rti = {.rth_p = rth_p, .hti_p = NULL, .is_read_only = is_read_only, .rkey_p = NULL};
 
-	rti.hti_p = get_new_hash_table_iterator(rth_p->root_page_id, WHOLE_BUCKET_RANGE, NULL, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, is_read_only ? NULL : rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+	rti.hti_p = get_new_hash_table_iterator(&(rth_p->hth), WHOLE_BUCKET_RANGE, NULL, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, is_read_only ? NULL : rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
 	return rti;
 }
@@ -246,7 +246,7 @@ rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const ra
 
 	rash_table_iterator rti = {.rth_p = rth_p, .hti_p = NULL, .is_read_only = is_read_only, .rkey_p = rkey_p};
 
-	rti.hti_p = get_new_hash_table_iterator(rth_p->root_page_id, (bucket_range){}, rkey_p->hash_value, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, is_read_only ? NULL : rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+	rti.hti_p = get_new_hash_table_iterator(&(rth_p->hth), (bucket_range){}, rkey_p->hash_value, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, is_read_only ? NULL : rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
 	while(1)
 	{
@@ -528,5 +528,5 @@ void delete_rash_table_iterator(rash_table_iterator* rti_p)
 	delete_hash_table_iterator(rti_p->hti_p, &htvp, NULL, &abort_error_dummy);
 	rti_p->hti_p = NULL;
 
-	perform_vaccum_hash_table(rti_p->rth_p->root_page_id, &htvp, 1, &(rti_p->rth_p->rdb->rash_httd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+	perform_vaccum_hash_table(&(rti_p->rth_p->hth), &htvp, 1, &(rti_p->rth_p->rdb->rash_httd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 }
