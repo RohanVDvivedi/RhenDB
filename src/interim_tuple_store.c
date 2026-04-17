@@ -64,12 +64,15 @@ void reinitialize_interim_tuple_store(interim_tuple_store* its_p, uint64_t initi
 	its_p->next_tuple_offset = 0;
 	its_p->tuples_count = 0;
 
-	its_p->total_size = UINT_ALIGN_UP(initial_total_size, sysconf(_SC_PAGE_SIZE));
-	if(-1 == ftruncate64(its_p->fd, its_p->total_size))
+	if(initial_total_size != UINT64_MAX)
 	{
-		printf("FAILED to extend the file for interim_tuple_store\n");
-		exit(-1);
-		return;
+		its_p->total_size = UINT_ALIGN_UP(initial_total_size, sysconf(_SC_PAGE_SIZE));
+		if(-1 == ftruncate64(its_p->fd, its_p->total_size))
+		{
+			printf("FAILED to extend the file for interim_tuple_store\n");
+			exit(-1);
+			return;
+		}
 	}
 }
 

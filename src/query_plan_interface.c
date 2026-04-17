@@ -549,7 +549,7 @@ static void destroy_all_un_referenced_output_buffers_UNSAFE(operator* o)
 
 		// else it becomes safe to discard the its_p, the head of the output_buffers
 		remove_head_from_singlylist(&(o->output_buffers));
-		reinitialize_interim_tuple_store(its_p, MIN_OUTPUT_BUFFER_STORE_SIZE);
+		reinitialize_interim_tuple_store(its_p, UINT64_MAX);
 		insert_tail_in_singlylist(&(o->free_output_buffers), its_p);
 		o->output_buffers_count--;
 	}
