@@ -64,6 +64,9 @@ struct operator
 	singlylist output_buffers;
 	uint32_t output_buffers_count; // this number does never cross 3
 
+	// freelist for the above output_buffers
+	singlylist free_output_buffers;
+
 	// list of consumption_iterator-s, pointing into tuple_regions in output_buffers
 	linkedlist output_consumers;
 

@@ -451,7 +451,11 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 			if(its_p != NULL)
 				unmap_all_embed_regions_in_interim_tuple_store(its_p);
 
-			its_p = get_new_interim_tuple_store(MIN_OUTPUT_BUFFER_STORE_SIZE);
+			its_p = (interim_tuple_store*) get_head_of_singlylist(&(o->free_output_buffers));
+			if(its_p != NULL)
+				remove_head_from_singlylist(&(o->free_output_buffers));
+			else
+				its_p = get_new_interim_tuple_store(MIN_OUTPUT_BUFFER_STORE_SIZE);
 
 			if(!insert_tail_in_singlylist(&(o->output_buffers), its_p))
 				exit(-1);
@@ -545,7 +549,8 @@ static void destroy_all_un_referenced_output_buffers_UNSAFE(operator* o)
 
 		// else it becomes safe to discard the its_p, the head of the output_buffers
 		remove_head_from_singlylist(&(o->output_buffers));
-		delete_interim_tuple_store(its_p);
+		reinitialize_interim_tuple_store(its_p, MIN_OUTPUT_BUFFER_STORE_SIZE);
+		insert_tail_in_singlylist(&(o->free_output_buffers), its_p);
 		o->output_buffers_count--;
 	}
 }
@@ -714,6 +719,7 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	pthread_mutex_init(&(o->output_lock), NULL);
 	initialize_singlylist(&(o->output_buffers), offsetof(interim_tuple_store, embed_node_sl));
 	o->output_buffers_count = 0;
+	initialize_singlylist(&(o->free_output_buffers), offsetof(interim_tuple_store, embed_node_sl));
 	initialize_linkedlist(&(o->output_consumers), offsetof(consumption_iterator, embed_node_for_output_consumers));
 	init_tuple_transformers(&(o->output_tuple_transformers), NULL); // must initialize it again, unless it is the sink operator
 
@@ -824,6 +830,13 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		}
 
 		o->output_buffers_count = 0;
+
+		while(NULL != get_head_of_singlylist(&(o->free_output_buffers)))
+		{
+			interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(o->free_output_buffers));
+			remove_head_from_singlylist(&(o->free_output_buffers));
+			delete_interim_tuple_store(its_p);
+		}
 
 		destroy_tuple_transformers(&(o->output_tuple_transformers));
 

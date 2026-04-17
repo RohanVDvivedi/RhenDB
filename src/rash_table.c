@@ -94,6 +94,8 @@ void destroy_rash_table(rash_table_handle* rth_p)
 	delete_rash_table_iterator(&rti);
 
 	destroy_hash_table(&(rth_p->hth), &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
+
+	free(rth_p->key_tuple_defs);
 }
 
 void print_rash_table(rash_table_handle* rth_p, void (*print_value)(binary_read_iterator* value_bri_p))
