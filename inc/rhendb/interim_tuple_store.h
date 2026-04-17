@@ -79,6 +79,10 @@ struct interim_tuple_store
 // please be sure that initial_total_size will be rounded to the next page_size available
 interim_tuple_store* get_new_interim_tuple_store(uint64_t initial_total_size);
 
+// make the next_tuple_offset and tuple_count = 0,
+// and them ftruncated to a new initial_total_size
+void reinitialize_interim_tuple_store(interim_tuple_store* its_p, uint64_t initial_total_size);
+
 // closes all embed_regions in the interim_tuple_store
 void unmap_all_embed_regions_in_interim_tuple_store(interim_tuple_store* its_p);
 

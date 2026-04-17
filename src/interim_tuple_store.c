@@ -57,6 +57,22 @@ interim_tuple_store* get_new_interim_tuple_store(uint64_t initial_total_size)
 	return its_p;
 }
 
+void reinitialize_interim_tuple_store(interim_tuple_store* its_p, uint64_t initial_total_size)
+{
+	unmap_all_embed_regions_in_interim_tuple_store(its_p);
+
+	its_p->next_tuple_offset = 0;
+	its_p->tuples_count = 0;
+
+	its_p->total_size = UINT_ALIGN_UP(initial_total_size, sysconf(_SC_PAGE_SIZE));
+	if(-1 == ftruncate64(its_p->fd, its_p->total_size))
+	{
+		printf("FAILED to extend the file for interim_tuple_store\n");
+		exit(-1);
+		return;
+	}
+}
+
 void unmap_all_embed_regions_in_interim_tuple_store(interim_tuple_store* its_p)
 {
 	for(int i = 0; i < sizeof(its_p->embed_regions)/sizeof(its_p->embed_regions[0]); i++)
