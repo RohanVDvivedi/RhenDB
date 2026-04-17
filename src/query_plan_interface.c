@@ -406,9 +406,9 @@ void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
 	}
 }
 
-#define MIN_OUTPUT_BUFFER_STORE_SIZE (128 * 1024)
+#define MIN_OUTPUT_BUFFER_STORE_SIZE (40 * 1024 * 1024)
 #define MAX_OUTPUT_BUFFER_COUNT 3
-#define MIN_BYTES_TO_MMAP (16 * 1024)
+#define MIN_BYTES_TO_MMAP (1024 * 1024)
 
 int produce_tuple_from_operator(operator* o, void* tuple)
 {
