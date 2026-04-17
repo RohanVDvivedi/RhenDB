@@ -193,6 +193,8 @@ void insert_rth(rash_table_handle* rth_p, uint32_t v)
 	close_and_write_value_in_hash_table_iterator(&rti, bwi_p);
 
 	delete_rash_table_iterator(&rti);
+
+	destroy_rash_table_key(&rtk);
 }
 
 int remove_rth(rash_table_handle* rth_p, uint32_t v)
@@ -209,6 +211,8 @@ int remove_rth(rash_table_handle* rth_p, uint32_t v)
 	int removed = remove_from_rash_table_iterator(&rti);
 
 	delete_rash_table_iterator(&rti);
+
+	destroy_rash_table_key(&rtk);
 
 	return removed;
 }
@@ -241,6 +245,8 @@ void find_and_print(rash_table_handle* rth_p, uint32_t v)
 	delete_binary_read_iterator(value_bri_p, NULL, &abort_error_dummy);
 
 	delete_rash_table_iterator(&rti);
+
+	destroy_rash_table_key(&rtk);
 }
 
 int main()

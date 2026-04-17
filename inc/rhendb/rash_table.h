@@ -4,6 +4,7 @@
 #include<rhendb/rhendb.h>
 
 #include<tupleindexer/hash_table/hash_table.h>
+#include<tupleindexer/common/materialized_key.h>
 
 #include<tuplelargetypes/tuple_list_extended.h>
 #include<tuplelargetypes/blob_extended.h>
@@ -82,6 +83,9 @@ struct rash_table_key
 
 	// to be used a key in the actual hash_table underneath rash_table
 	char hash_value[8];
+
+	// materialized key
+	materialized_key mat_key;
 };
 
 // returns true, if the rash_key initialization will succeed
@@ -90,6 +94,8 @@ int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_de
 rash_table_key get_new_rash_table_key(const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error);
 
 uint64_t get_hash_value_for_rash_table_key(const rash_table_key* rkey_p);
+
+void destroy_rash_table_key(rash_table_key* rkey_p);
 
 typedef struct rash_table_iterator rash_table_iterator;
 struct rash_table_iterator

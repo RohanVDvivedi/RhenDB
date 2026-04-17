@@ -217,11 +217,27 @@ rash_table_key get_new_rash_table_key(const void* record, const tuple_def* recor
 		.ex_engine = ex_engine,
 
 		.hash_value = {},
+
+		.mat_key = materialize_key_from_tuple(record, record_def, key_element_ids, key_element_count),
 	};
 
-	uint64_t hash_value = hash_tuple_rhendb(record, record_def, key_element_ids, FNV_64_TUPLE_HASHER, key_element_count, ex_engine, transaction_id, abort_error);
+	//uint64_t hash_value = hash_tuple_rhendb(record, record_def, key_element_ids, FNV_64_TUPLE_HASHER, key_element_count, ex_engine, transaction_id, abort_error);
 
-	serialize_uint64(rkey.hash_value, 8, hash_value);
+	tuple_hasher th = *FNV_64_TUPLE_HASHER;
+	for(uint32_t i = 0; i < key_element_count; i++)
+	{
+		hash_datum_rhendb(&(rkey.mat_key.keys[i]), rkey.mat_key.key_dtis[i], &th, ex_engine, transaction_id, abort_error);
+		if(*abort_error)
+			break;
+	}
+
+	if(*abort_error)
+	{
+		destroy_materialized_key(&(rkey.mat_key));
+		return (rash_table_key){};
+	}
+
+	serialize_uint64(rkey.hash_value, 8, th.hash);
 
 	return rkey;
 }
@@ -229,6 +245,11 @@ rash_table_key get_new_rash_table_key(const void* record, const tuple_def* recor
 uint64_t get_hash_value_for_rash_table_key(const rash_table_key* rkey_p)
 {
 	return deserialize_uint64(rkey_p->hash_value, 8);
+}
+
+void destroy_rash_table_key(rash_table_key* rkey_p)
+{
+	destroy_materialized_key(&(rkey_p->mat_key));
 }
 
 rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read_only)
@@ -302,10 +323,6 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* 
 
 	for(uint32_t i = 0; i < rti_p->rkey_p->key_element_count && result == 1; i++)
 	{
-		const data_type_info* dti1 = get_type_info_for_element_from_tuple_def(rti_p->rkey_p->record_def, rti_p->rkey_p->key_element_ids[i]);
-		datum uval1;
-		get_value_from_element_from_tuple(&uval1, rti_p->rkey_p->record_def, rti_p->rkey_p->key_element_ids[i], rti_p->rkey_p->record);
-
 		{
 			char is_valid_byte = 0;
 			if(!read_from_binary_read_iterator(key_bri_p, &is_valid_byte, 1, NULL, &abort_error_dummy)) // if a byte could not be read fail, e have already rached the end
@@ -315,7 +332,7 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* 
 			}
 			if(!is_valid_byte) // we can not read any more bytes for this tuple in the key_bri_p
 			{
-				if(is_datum_NULL(&uval1))
+				if(is_datum_NULL(&(rti_p->rkey_p->mat_key.keys[i])))
 				{
 					result = 1;
 					continue;
@@ -340,7 +357,7 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* 
 				datum uval2;
 				get_value_from_element_from_tuple(&uval2, &(rti_p->rth_p->key_tuple_defs[i]), SELF, tuple);
 
-				result = (0 == compare_datum_rhendb(&uval1, dti1, &uval2, dti2, rti_p->rth_p->ex_engine, transaction_id, abort_error));
+				result = (0 == compare_datum_rhendb(&(rti_p->rkey_p->mat_key.keys[i]), rti_p->rkey_p->mat_key.key_dtis[i], &uval2, dti2, rti_p->rth_p->ex_engine, transaction_id, abort_error));
 			}
 		});
 
