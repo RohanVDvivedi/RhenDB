@@ -99,7 +99,7 @@ FUTURE TASKS
 
  5.* optimize sorter even more
   * 1M 65 byte tuples in 1.7 seconds is too slow
-  * 100M tuples (total 6.5 GB) rush through the pipeline being sorted in 4 minutes and 9 seconds
+  * 100M tuples (total 6.5 GB) rush through the pipeline being sorted in 3 minutes and 40 seconds
 
 DESIGN METHODOLOGY
    * we will use postgresql architecture over (mysql like) mini transactions
