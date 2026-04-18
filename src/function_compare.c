@@ -26,6 +26,13 @@ int can_compare_datum_rhendb(const data_type_info* dti1, const data_type_info* d
 
 int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const datum* uval2, const data_type_info* dti2, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
 {
+	if(is_datum_NULL(uval1) && is_datum_NULL(uval2))
+		return 0;
+	else if(is_datum_NULL(uval1) && !is_datum_NULL(uval2))
+		return -1;
+	else if(!is_datum_NULL(uval1) && is_datum_NULL(uval2))
+		return 1;
+
 	if(!is_container_type_info(dti1) && !is_container_type_info(dti2)) // non container types, primitive numbers: bit_field, uint, int, large_uint, large_int, float
 		return compare_datum(uval1, dti1, uval2, dti2);
 	else if((is_text_type_info(dti1) || is_blob_type_info(dti1)) && (is_text_type_info(dti2) || is_blob_type_info(dti2))) // both are text or blob
@@ -102,6 +109,13 @@ int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const d
 
 int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_type_info* dti, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
 {
+	if(is_datum_NULL(uval1) && is_datum_NULL(uval2))
+		return 0;
+	else if(is_datum_NULL(uval1) && !is_datum_NULL(uval2))
+		return -1;
+	else if(!is_datum_NULL(uval1) && is_datum_NULL(uval2))
+		return 1;
+
 	if(!is_container_type_info(dti)) // non container types, primitive numbers: bit_field, uint, int, large_uint, large_int, float
 		return compare_datum2(uval1, uval2, dti);
 	else if(is_text_type_info(dti) || is_blob_type_info(dti))
@@ -186,11 +200,13 @@ int compare_tuples_rhendb(const void* tup1, const tuple_def* tpl_d1, const posit
 	{
 		const data_type_info* dti1 = get_type_info_for_element_from_tuple_def(tpl_d1, (element_ids1 != NULL) ? element_ids1[i] : STATIC_POSITION(i));
 		datum uval1;
-		get_value_from_element_from_tuple(&uval1, tpl_d1, (element_ids1 != NULL) ? element_ids1[i] : STATIC_POSITION(i), tup1);
+		if(!get_value_from_element_from_tuple(&uval1, tpl_d1, (element_ids1 != NULL) ? element_ids1[i] : STATIC_POSITION(i), tup1))
+			uval1 = (*NULL_DATUM);
 
 		const data_type_info* dti2 = get_type_info_for_element_from_tuple_def(tpl_d2, (element_ids2 != NULL) ? element_ids2[i] : STATIC_POSITION(i));
 		datum uval2;
-		get_value_from_element_from_tuple(&uval2, tpl_d2, (element_ids2 != NULL) ? element_ids2[i] : STATIC_POSITION(i), tup2);
+		if(!get_value_from_element_from_tuple(&uval2, tpl_d2, (element_ids2 != NULL) ? element_ids2[i] : STATIC_POSITION(i), tup2))
+			uval2 = (*NULL_DATUM);
 
 		compare = compare_datum_rhendb(&uval1, dti1, &uval2, dti2, ex_engine, transaction_id, abort_error);
 		if(*abort_error)
@@ -212,10 +228,12 @@ int compare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* 
 		const data_type_info* dti = get_type_info_for_element_from_tuple_def(tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i));
 
 		datum uval1;
-		get_value_from_element_from_tuple(&uval1, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup1);
+		if(!get_value_from_element_from_tuple(&uval1, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup1))
+			uval1 = (*NULL_DATUM);
 
 		datum uval2;
-		get_value_from_element_from_tuple(&uval2, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup2);
+		if(!get_value_from_element_from_tuple(&uval2, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup2))
+			uval2 = (*NULL_DATUM);
 
 		compare = compare_datum2_rhendb(&uval1, &uval2, dti, ex_engine, transaction_id, abort_error);
 		if(*abort_error)

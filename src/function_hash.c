@@ -6,7 +6,9 @@
 
 uint64_t hash_datum_rhendb(const datum* uval, const data_type_info* dti, tuple_hasher* th, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
 {
-	if(!is_container_type_info(dti)) // non container types, primitive numbers: bit_field, uint, int, large_uint, large_int, float
+	if(is_datum_NULL(uval))
+		return th->hash;
+	else if(!is_container_type_info(dti)) // non container types, primitive numbers: bit_field, uint, int, large_uint, large_int, float
 		return hash_datum(uval, dti, th);
 	else if(is_text_type_info(dti) || is_blob_type_info(dti) || is_numeric_type_info(dti)) // all string/blob and numeric types
 	{
@@ -39,7 +41,8 @@ uint64_t hash_tuple_rhendb(const void* tup, const tuple_def* tpl_d, const positi
 	{
 		const data_type_info* dti = get_type_info_for_element_from_tuple_def(tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i));
 		datum uval;
-		get_value_from_element_from_tuple(&uval, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup);
+		if(!get_value_from_element_from_tuple(&uval, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup))
+			uval = (*NULL_DATUM);
 
 		hash_datum_rhendb(&uval, dti, th, ex_engine, transaction_id, abort_error);
 		if(*abort_error)
