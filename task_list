@@ -1,9 +1,5 @@
 PICKED TASKS
 
- * use materialized_key from tuple_indexer
-   * for sorting the interim_tuple_store_sort
-   * for pheap in sorter operator
-
  * implement streaming_loop_join_operator (identical to nested_loop_join)
    * start batching on both sides left and right
    * maintain iterators on both sides: begin, batch_first, batch_start
