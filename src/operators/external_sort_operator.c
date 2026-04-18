@@ -26,27 +26,27 @@ struct tuple_runs
 	int level_for_merged_run;
 };
 
-void initialize_tuple_runs(tuple_runs* truns_p)
+static void initialize_tuple_runs(tuple_runs* truns_p)
 {
 	truns_p->runs_count = 0;
 	initialize_singlylist(&(truns_p->runs), offsetof(interim_tuple_store, embed_node_sl));
 	initialize_llnode(&(truns_p->embed_node));
 }
 
-void push_run_in_tuple_runs(tuple_runs* truns_p, interim_tuple_store* its_p)
+static void push_run_in_tuple_runs(tuple_runs* truns_p, interim_tuple_store* its_p)
 {
 	truns_p->runs_count++;
 	insert_tail_in_singlylist(&(truns_p->runs), its_p);
 }
 
-void push_all_runs_in_tuple_runs(tuple_runs* truns_p, tuple_runs* copy_from_truns_p)
+static void push_all_runs_in_tuple_runs(tuple_runs* truns_p, tuple_runs* copy_from_truns_p)
 {
 	truns_p->runs_count += copy_from_truns_p->runs_count;
 	copy_from_truns_p->runs_count = 0;
 	insert_all_at_tail_in_singlylist(&(truns_p->runs), &(copy_from_truns_p->runs));
 }
 
-interim_tuple_store* pop_run_from_tuple_runs(tuple_runs* truns_p)
+static interim_tuple_store* pop_run_from_tuple_runs(tuple_runs* truns_p)
 {
 	interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_singlylist(&(truns_p->runs));
 	if(its_p == NULL)
@@ -56,7 +56,7 @@ interim_tuple_store* pop_run_from_tuple_runs(tuple_runs* truns_p)
 	return its_p;
 }
 
-void delete_all_runs_in_tuple_runs(tuple_runs* truns_p)
+static void delete_all_runs_in_tuple_runs(tuple_runs* truns_p)
 {
 	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(truns_p); its_p != NULL; its_p = pop_run_from_tuple_runs(truns_p))
 		delete_interim_tuple_store(its_p);
@@ -76,10 +76,15 @@ struct input_values
 	const positional_accessor* key_element_ids;
 	const compare_direction* key_compare_direction;
 
+	// derieved information
+	const data_type_info** key_dtis;
+
+	// below are the properties of this operator
 	uint64_t minimum_run_size;
 	uint32_t N_way_sort;
 	uint32_t max_concurrent_jobs_count;
 
+	// potects everything underneath
 	pthread_mutex_t runs_lock;
 
 	int flag_no_new_un_sorted_runs;
@@ -104,17 +109,27 @@ static void sort_job(operator* o, void* param)
 
 	tuple_runs* input_param = param;
 
-	for(uint64_t i = 0; i < input_param->runs_count; i++)
+	uint32_t total_runs_to_process = input_param->runs_count;
+	for(uint64_t i = 0; i < total_runs_to_process; i++)
 	{
+		// pop one from the front
 		interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param);
+
+		// sort it into a ne run
 		int abort_error = 0;
 		interim_tuple_store* ots_p = sort_interim_tuples(its_p, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+
+		// delete the input run
 		delete_interim_tuple_store(its_p);
+
+		// handling abort_error
 		if(ots_p == NULL) // case for handling possibly an abort error
 		{
 			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_sort_possibly_abort_error_on_comparing_extended_type"));
 			return;
 		}
+
+		// push ots_p at the back
 		push_run_in_tuple_runs(input_param, ots_p);
 	}
 
@@ -132,6 +147,17 @@ static void sort_job(operator* o, void* param)
 	request_to_process_some_jobs(o);
 }
 
+// we materialize, the keys in its_p->embed_ptrs[0], using it as datum[] having inputs->key_element_count elements long
+static void revise_materialized_keys_on_interim_tuple_stores(operator* o, interim_tuple_store* its_p)
+{
+	input_values* inputs = o->inputs;
+
+	for(uint32_t j = 0; j < inputs->key_element_count; j++)
+		if(!get_value_from_element_from_tuple(&(((datum*)(its_p->embed_ptrs[0]))[j]), inputs->record_def, inputs->key_element_ids[j], its_p->embed_regions[0].tuple))
+			((datum*)(its_p->embed_ptrs[0]))[j] = (*NULL_DATUM);
+}
+
+// comparator to compare materialized tuples at its_p->embed_ptrs[0]
 static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const void* its1_vp, const void* its2_vp)
 {
 	const operator* o = o_vp;
@@ -141,7 +167,7 @@ static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const v
 	const interim_tuple_store* its2_p = its2_vp;
 
 	int abort_error = 0;
-	return compare_tuples2_rhendb(its1_p->embed_regions[0].tuple, its2_p->embed_regions[0].tuple, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+	return compare_datums3_rhendb(its1_p->embed_ptrs[0], its2_p->embed_ptrs[0], inputs->key_dtis, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
 }
 
 static void merge_into_run_job(operator* o, void* param)
@@ -150,20 +176,33 @@ static void merge_into_run_job(operator* o, void* param)
 
 	tuple_runs* input_param = param;
 
+	// malloc keys a datum[], to be used by all the runs existing in pheap until they are all merged and destroyed
+	datum* keys = malloc(inputs->N_way_sort * inputs->key_element_count * sizeof(datum));
+
+	// open runs
 	pheap mergeable_open_runs;
 	initialize_pheap(&mergeable_open_runs, MIN_HEAP, LEFTIST, &contexted_comparator(o, compare_interim_tuple_stores_for_pheap_runs), offsetof(interim_tuple_store, embed_node_php));
 
 	uint64_t total_output_size_in_bytes = 0;
-	uint64_t total_input_runs_count = input_param->runs_count;
+	uint64_t total_input_runs_count = 0;
 
 	// populate runs in mergeable_open_runs
 	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param); its_p != NULL; its_p = pop_run_from_tuple_runs(input_param))
 	{
-		its_p->embed_uints[0] = 0;
 		if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), 0, &(inputs->record_def->size_def), inputs->minimum_run_size))
 			delete_interim_tuple_store(its_p);
 		else
 		{
+			// comes here only if mmap succeeds, will happen always, unless the run is empty
+
+			// embed_uints[0] is used to store tuple processed up until now
+			// embed_ptrs[0] is used to store the materialized keys
+			its_p->embed_uints[0] = 0;
+			its_p->embed_ptrs[0] = &(keys[(total_input_runs_count++) * (inputs->key_element_count)]);
+
+			// revise materialized keys before pushing it to mergeable_open_runs
+			revise_materialized_keys_on_interim_tuple_stores(o, its_p);
+
 			push_to_pheap(&mergeable_open_runs, its_p);
 			total_output_size_in_bytes += get_total_bytes_in_interim_tuple_store(its_p);
 		}
@@ -186,13 +225,21 @@ static void merge_into_run_job(operator* o, void* param)
 			its_p->embed_uints[0]++;
 			if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), next_tuple_offset, &(inputs->record_def->size_def), inputs->minimum_run_size))
 			{
+				// implies there are no more tuples
+
 				total_input_runs_count--;
 				remove_from_pheap(&mergeable_open_runs, its_p);
+
 				unmap_all_embed_regions_in_interim_tuple_store(its_p);
 				delete_interim_tuple_store(its_p);
 			}
 			else
+			{
+				// revise materialized keys before heapify-ing it in mergeable_open_runs
+				revise_materialized_keys_on_interim_tuple_stores(o, its_p);
+
 				heapify_for_in_pheap(&mergeable_open_runs, its_p);
+			}
 		}
 	}
 
@@ -208,6 +255,13 @@ static void merge_into_run_job(operator* o, void* param)
 		unmap_all_embed_regions_in_interim_tuple_store(its_p);
 		delete_interim_tuple_store(its_p);
 	}
+
+	// destroy if any is still remaining
+	if(!is_empty_pheap(&mergeable_open_runs))
+		remove_all_from_pheap(&mergeable_open_runs, DELETE_ON_NOTIFY_FOR_INTERIM_TUPLE_STORE);
+
+	// free the keys
+	free(keys);
 
 	// unmap the write-side region
 	unmap_all_embed_regions_in_interim_tuple_store(output_its_p);
@@ -232,8 +286,14 @@ static void merge_into_produce_job(operator* o, void* param)
 
 	tuple_runs* input_param = param;
 
+	// malloc keys a datum[], to be used by all the runs existing in pheap until they are all merged and destroyed
+	datum* keys = malloc(inputs->N_way_sort * inputs->key_element_count * sizeof(datum));
+
+	// open runs
 	pheap mergeable_open_runs;
 	initialize_pheap(&mergeable_open_runs, MIN_HEAP, LEFTIST, &contexted_comparator(o, compare_interim_tuple_stores_for_pheap_runs), offsetof(interim_tuple_store, embed_node_php));
+
+	uint64_t total_input_runs_count = 0;
 
 	// populate runs in mergeable_open_runs
 	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param); its_p != NULL; its_p = pop_run_from_tuple_runs(input_param))
@@ -241,7 +301,17 @@ static void merge_into_produce_job(operator* o, void* param)
 		if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), 0, &(inputs->record_def->size_def), inputs->minimum_run_size))
 			delete_interim_tuple_store(its_p);
 		else
+		{
+			// comes here only if mmap succeeds, will happen always, unless the run is empty
+
+			// embed_ptrs[0] is used to store the materialized keys
+			its_p->embed_ptrs[0] = &(keys[(total_input_runs_count++) * (inputs->key_element_count)]);
+
+			// revise materialized keys before pushing it to mergeable_open_runs
+			revise_materialized_keys_on_interim_tuple_stores(o, its_p);
+
 			push_to_pheap(&mergeable_open_runs, its_p);
+		}
 	}
 
 	int produce_failed = 0;
@@ -262,17 +332,30 @@ static void merge_into_produce_job(operator* o, void* param)
 			uint64_t next_tuple_offset = next_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0]));
 			if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), next_tuple_offset, &(inputs->record_def->size_def), inputs->minimum_run_size))
 			{
+				// implies there are no more tuples
+
+				total_input_runs_count--;
 				remove_from_pheap(&mergeable_open_runs, its_p);
+
 				unmap_all_embed_regions_in_interim_tuple_store(its_p);
 				delete_interim_tuple_store(its_p);
 			}
 			else
+			{
+				// revise materialized keys before heapify-ing it in mergeable_open_runs
+				revise_materialized_keys_on_interim_tuple_stores(o, its_p);
+
 				heapify_for_in_pheap(&mergeable_open_runs, its_p);
+			}
 		}
 	}
 
+	// destroy if any is still remaining
 	if(!is_empty_pheap(&mergeable_open_runs))
 		remove_all_from_pheap(&mergeable_open_runs, DELETE_ON_NOTIFY_FOR_INTERIM_TUPLE_STORE);
+
+	// free the keys
+	free(keys);
 
 	// add input_param back to free list
 	pthread_mutex_lock(&(inputs->runs_lock));
@@ -586,6 +669,7 @@ static void free_resources(operator* o)
 
 	pthread_mutex_destroy(&(inputs->runs_lock));
 
+	free(inputs->key_dtis);
 	free(inputs);
 }
 
@@ -609,6 +693,7 @@ void setup_external_sort_operator(operator* o, operator* input_operator, uint32_
 		.key_element_count = key_element_count,
 		.key_element_ids = key_element_ids,
 		.key_compare_direction = key_compare_direction,
+		.key_dtis = malloc(sizeof(data_type_info*) * key_element_count),
 		.minimum_run_size = minimum_run_size,
 		.N_way_sort = N_way_sort,
 		.max_concurrent_jobs_count = max_concurrent_jobs_count,
@@ -617,6 +702,9 @@ void setup_external_sort_operator(operator* o, operator* input_operator, uint32_
 		.total_sorted_runs_count = 0,
 		.total_concurrent_jobs_count = 0,
 	};
+
+	for(uint32_t j = 0; j < key_element_count; j++)
+		inputs->key_dtis[j] = get_type_info_for_element_from_tuple_def(inputs->record_def, key_element_ids[j]);
 
 	initialize_tuple_runs(&(inputs->un_sorted_runs));
 	for(int i = 0; i < MAX_LEVELS; i++)
