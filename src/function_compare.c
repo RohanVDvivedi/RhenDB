@@ -245,3 +245,20 @@ int compare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* 
 
 	return compare;
 }
+
+int compare_datums3_rhendb(const datum* uvals1, const datum* uvals2, data_type_info const * const * dtis, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+{
+	int compare = 0;
+
+	for(uint32_t i = 0; ((i < element_count) && (compare == 0)); i++)
+	{
+		compare = compare_datum2_rhendb(uvals1 + i, uvals2 + i, dtis[i], ex_engine, transaction_id, abort_error);
+		if(*abort_error)
+			return 0;
+
+		if(cmp_dir)
+			compare = compare * cmp_dir[i];
+	}
+
+	return compare;
+}

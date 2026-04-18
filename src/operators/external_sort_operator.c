@@ -108,7 +108,7 @@ static void sort_job(operator* o, void* param)
 	{
 		interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param);
 		int abort_error = 0;
-		interim_tuple_store* ots_p = sort_interim_tuples(its_p, inputs->minimum_run_size, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+		interim_tuple_store* ots_p = sort_interim_tuples(its_p, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
 		delete_interim_tuple_store(its_p);
 		if(ots_p == NULL) // case for handling possibly an abort error
 		{
