@@ -94,8 +94,8 @@ FUTURE TASKS
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock (*future, do it when query optimizer and catalog tables are ready)
 
  5.* optimize sorter even more
-  * 1M 65 byte tuples in 1.5 seconds is too slow
-  * 100M tuples (total 6.5 GB) rush through the pipeline being sorted in 3 minutes and 2 seconds
+  * 1M 65 byte tuples in 1.45 seconds is too slow
+  * 100M tuples (total 6.5 GB) rush through the pipeline being sorted in 3 minutes and 20 seconds
 
 DESIGN METHODOLOGY
    * we will use postgresql architecture over (mysql like) mini transactions
