@@ -6,15 +6,10 @@
 
 #include<rhendb/interim_tuple_store_sort.h>
 
-/*
-	TEMPLATE FOR INTERMEDIATE OPERATORS (sorting(ordering), joins(hash_joins), aggregations(groupby->aggregates))
-*/
-
 typedef struct tuple_runs tuple_runs;
 struct tuple_runs
 {
-	// number of runs in runs_to_process
-	// if 1, you must sort it and put it in sorted_runs at level 0
+	// number of runs in runs singlylist
 	uint64_t runs_count;
 
 	singlylist runs;
@@ -148,7 +143,7 @@ static void sort_job(operator* o, void* param)
 }
 
 // we materialize, the keys in its_p->embed_ptrs[0], using it as datum[] having inputs->key_element_count elements long
-static void revise_materialized_keys_on_interim_tuple_stores(operator* o, interim_tuple_store* its_p)
+static void revise_materialized_keys_in_interim_tuple_store(operator* o, interim_tuple_store* its_p)
 {
 	input_values* inputs = o->inputs;
 
@@ -201,7 +196,7 @@ static void merge_into_run_job(operator* o, void* param)
 			its_p->embed_ptrs[0] = &(keys[(total_input_runs_count++) * (inputs->key_element_count)]);
 
 			// revise materialized keys before pushing it to mergeable_open_runs
-			revise_materialized_keys_on_interim_tuple_stores(o, its_p);
+			revise_materialized_keys_in_interim_tuple_store(o, its_p);
 
 			push_to_pheap(&mergeable_open_runs, its_p);
 			total_output_size_in_bytes += get_total_bytes_in_interim_tuple_store(its_p);
@@ -236,7 +231,7 @@ static void merge_into_run_job(operator* o, void* param)
 			else
 			{
 				// revise materialized keys before heapify-ing it in mergeable_open_runs
-				revise_materialized_keys_on_interim_tuple_stores(o, its_p);
+				revise_materialized_keys_in_interim_tuple_store(o, its_p);
 
 				heapify_for_in_pheap(&mergeable_open_runs, its_p);
 			}
@@ -308,7 +303,7 @@ static void merge_into_produce_job(operator* o, void* param)
 			its_p->embed_ptrs[0] = &(keys[(total_input_runs_count++) * (inputs->key_element_count)]);
 
 			// revise materialized keys before pushing it to mergeable_open_runs
-			revise_materialized_keys_on_interim_tuple_stores(o, its_p);
+			revise_materialized_keys_in_interim_tuple_store(o, its_p);
 
 			push_to_pheap(&mergeable_open_runs, its_p);
 		}
@@ -343,7 +338,7 @@ static void merge_into_produce_job(operator* o, void* param)
 			else
 			{
 				// revise materialized keys before heapify-ing it in mergeable_open_runs
-				revise_materialized_keys_on_interim_tuple_stores(o, its_p);
+				revise_materialized_keys_in_interim_tuple_store(o, its_p);
 
 				heapify_for_in_pheap(&mergeable_open_runs, its_p);
 			}
