@@ -1,4 +1,4 @@
-#include<rhendb/query_plan_interface.h>
+#include<rhendb/query_plan.h>
 
 void print_job(operator* o, void* param)
 {

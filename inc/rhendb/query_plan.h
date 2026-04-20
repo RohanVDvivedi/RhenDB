@@ -1,5 +1,5 @@
-#ifndef OPERATOR_INTERFACE_H
-#define OPERATOR_INTERFACE_H
+#ifndef QUERY_PLAN_H
+#define QUERY_PLAN_H
 
 #include<pthread.h>
 

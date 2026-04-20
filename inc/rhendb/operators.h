@@ -1,7 +1,7 @@
 #ifndef OPERATORS_H
 #define OPERATORS_H
 
-#include<rhendb/query_plan_interface.h>
+#include<rhendb/query_plan.h>
 
 void setup_generator_operator(operator* o, void* (*generator)(void* generator_context, tuple_def* generator_tuple_def), void* generator_context, tuple_def* generator_tuple_def);
 

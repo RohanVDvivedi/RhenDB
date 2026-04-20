@@ -3,7 +3,7 @@
 
 #include<rhendb/rhendb.h>
 #include<rhendb/mvcc_snapshot.h>
-#include<rhendb/query_plan_interface.h>
+#include<rhendb/query_plan.h>
 
 typedef struct query_plan query_plan;
 

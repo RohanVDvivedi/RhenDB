@@ -1,4 +1,4 @@
-#include<rhendb/query_plan_interface.h>
+#include<rhendb/query_plan.h>
 
 #include<rhendb/transaction.h>
 
@@ -193,7 +193,7 @@ void trigger_execution_on_operator(operator* o)
 
 	if(!submit_job_executor(o->self_query_plan->curr_tx->db->operator_thread_pool, (void* (*)(void*))(internal_execute), o, NULL, NULL, BLOCKING))
 	{
-		printf("ISSUE in query_plan_interface : COULD NOT PUSH A PAUSED OPERATOR'S JOB TO QUEUE IT\n");
+		printf("ISSUE in query_plan : COULD NOT PUSH A OPERATOR'S JOB TO QUEUE IT\n");
 		exit(-1);
 	}
 }
@@ -297,7 +297,7 @@ int run_concurrent_job_for_operator(operator* o, void* param, void (*operator_jo
 	// and push it to thread pool for execution in a concurrent threadpool
 	if(!submit_job_executor(o->self_query_plan->curr_tx->db->operator_thread_pool, (void* (*)(void*))(operator_job_wrapper_function), ojwp_p, NULL, NULL, BLOCKING))
 	{
-		printf("ISSUE in query_plan_interface : COULD NOT PUSH A PAUSED OPERATOR'S CURRENT JOB TO RUN IT\n");
+		printf("ISSUE in query_plan : COULD NOT PUSH A PAUSED OPERATOR TO RUN IT\n");
 		exit(-1);
 	}
 
@@ -348,7 +348,7 @@ int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, 
 		{
 			if(timeout_in_microseconds == NON_BLOCKING)
 			{
-				printf("BUG: in operator for query_plan_interface, lock manager asked us to wait for lock when requesting for a lock non-blockingly\n");
+				printf("BUG: in operator for query_plan, lock manager asked us to wait for lock when requesting for a lock non-blockingly\n");
 				exit(-1);
 			}
 
