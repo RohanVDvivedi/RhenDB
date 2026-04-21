@@ -165,7 +165,7 @@ void construct_record(void* buffer, uint64_t num, int order, char* value)
 
 #define BUFFER_SIZE 300
 
-void* random_generator(void* generator_context, tuple_def* generator_tuple_def)
+void* random_generator(void* generator_context, const tuple_def* generator_tuple_def)
 {
 	static uint32_t index = 0;
 
@@ -178,7 +178,7 @@ void* random_generator(void* generator_context, tuple_def* generator_tuple_def)
 	return generated;
 }
 
-void* sorted_generator(void* generator_context, tuple_def* generator_tuple_def)
+void* sorted_generator(void* generator_context, const tuple_def* generator_tuple_def)
 {
 	static uint32_t index = 0;
 

@@ -176,7 +176,7 @@ void construct_record(void* buffer, uint64_t num, int order, char* value)
 
 #define BUFFER_SIZE 300
 
-void* generator(void* generator_context, tuple_def* generator_tuple_def)
+void* generator(void* generator_context, const tuple_def* generator_tuple_def)
 {
 	int* generator_number = generator_context;
 
