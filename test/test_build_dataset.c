@@ -17,11 +17,11 @@
 
 #define USERS_COUNT 10
 
-#define TESTCASE_SIZE 1000000
+#define TESTCASE_SIZE 1000
 
 #define RANDOMIZE_DATA
 
-//#define PRINT_DATA
+#define PRINT_DATA 1
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
 #define PARALLEL_SORTING_JOBS_COUNT    8
@@ -125,16 +125,19 @@ int main(int argc, char** argv)
 
 		#ifdef PRINT_DATA
 			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_printf_operator(print_operator, input_operator, 1);
+			setup_printf_operator(print_operator, input_operator, PRINT_DATA);
 			printf("output print operator %p\n", print_operator);
 		#endif
 
-		int out_fd = open(argv[1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-		initialize_stream_for_fd(&out_file_stream, out_fd);
+		if(argc >= 2)
+		{
+			int out_fd = open(argv[1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+			initialize_stream_for_fd(&out_file_stream, out_fd);
 
-		operator* output_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_stream_output_operator(output_operator, input_operator, &out_file_stream);
-		printf("output stream operator %p\n", output_operator);
+			operator* output_operator = get_new_registered_operator_for_query_plan(qp);
+			setup_stream_output_operator(output_operator, input_operator, &out_file_stream);
+			printf("output stream operator %p\n", output_operator);
+		}
 	}
 	printf("\n\n");
 
