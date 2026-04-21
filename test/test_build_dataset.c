@@ -16,13 +16,15 @@
 
 #define USERS_COUNT 10
 
-#define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
-#define PARALLEL_SORTING_JOBS_COUNT    8
-#define N_WAY_SORT                     16
-
 #define TESTCASE_SIZE 1000000
 
 #define RANDOMIZE_DATA
+
+#define PRINT_DATA
+
+#define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
+#define PARALLEL_SORTING_JOBS_COUNT    8
+#define N_WAY_SORT                     16
 
 uint32_t inputs[TESTCASE_SIZE];
 void generate_random_inputs()
@@ -88,7 +90,9 @@ int main()
 		USERS_COUNT);
 	printf("database initialized\n\n");
 
+#ifdef RANDOMIZE_DATA
 	generate_random_inputs();
+#endif
 
 	initialize_tuple_defs();
 
@@ -116,9 +120,15 @@ int main()
 		#endif
 		, input_operator);
 
-		operator* output_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_stream_output_operator(output_operator, input_operator, &ws);
-		printf("output stream operator %p\n", output_operator);
+		#ifdef PRINT_DATA
+			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
+			setup_printf_operator(print_operator, input_operator, 1);
+			printf("output print operator %p\n", print_operator);
+		#else
+			operator* output_operator = get_new_registered_operator_for_query_plan(qp);
+			setup_stream_output_operator(output_operator, input_operator, &ws);
+			printf("output stream operator %p\n", output_operator);
+		#endif
 	}
 	printf("\n\n");
 
