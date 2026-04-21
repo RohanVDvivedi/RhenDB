@@ -17,13 +17,7 @@ PICKED TASKS
    * merge multiple sorted_input_operators ith identical output_defs into one
 
  * top K operator, K being uint64_t sort operator
-   * limiting the compute hen only top K elements are needed
-
- * implement operator to write output into a stream
-
- * implement operator to read input from a stream until it is closed
-
- * implement .vu file to store the data into raw interim_tuple_store file data, then use it to pipe it into test cases
+   * limiting the compute when only top K elements are needed
 
  * define struct for implementing aggregate functions
    struct aggregate_function {
