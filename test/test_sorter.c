@@ -18,7 +18,7 @@
 
 #define TESTCASE_SIZE 1000000
 
-#define PRINT_DATA
+//#define PRINT_DATA
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
 #define PARALLEL_SORTING_JOBS_COUNT    8
@@ -76,11 +76,11 @@ int main()
 
 		#ifdef PRINT_DATA
 			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_printf_operator(print_operator, input_operator, 1);
+			setup_printf_operator(print_operator, sorter_operator, 1);
 			printf("output print operator %p\n", print_operator);
 		#else
 			operator* output_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_stream_output_operator(output_operator, input_operator, &ws);
+			setup_stream_output_operator(output_operator, sorter_operator, &ws);
 			printf("output stream operator %p\n", output_operator);
 		#endif
 	}

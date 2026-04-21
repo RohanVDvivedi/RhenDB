@@ -4,6 +4,7 @@
 *.db
 *.db_logs
 *.DS_Store
+*_processed.vu
 
 obj
 lib

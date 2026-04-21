@@ -20,7 +20,7 @@
 
 #define RANDOMIZE_DATA
 
-#define PRINT_DATA
+//#define PRINT_DATA
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
 #define PARALLEL_SORTING_JOBS_COUNT    8
