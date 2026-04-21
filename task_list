@@ -36,7 +36,6 @@ PRIORITY HIGH LEVEL TASKS
     * joins (nested loop with per block, index nested loop, sort merge join, hash join)
     * group_by (based on hash or sorted input data)
     * read/write operators over simple data_structures (for full tuple indexer like access will be implemented later)
-    * and a single sink operator that reads/writes data to a Cutlery stream tuple-by-tuple
     * similarly we will have 2 different types of source operators too, one reading from database, one reading data from csv-files, one reading data from network files, and finally one generator based like the one in the templates
   * every operator's output will/can have a filter/projection stage as it's output_tuple_transformers
 
