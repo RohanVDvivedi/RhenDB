@@ -100,12 +100,17 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, const tuple
 		sc.key_dtis[j] = get_type_info_for_element_from_tuple_def(tpl_d, element_ids[j]);
 
 	// build index accessed interface to sort it
-	index_accessed_interface iai = get_index_accessed_interface_for_front_of_sortable_tuple_references(&list_of_sortable_tuple_references);
+	//index_accessed_interface iai = get_index_accessed_interface_for_front_of_sortable_tuple_references(&list_of_sortable_tuple_references);
 
 	if(setjmp(sc.long_jump_on_abort_error) == 0)
 	{
 		// sort its_p using sc and iai
-		quick_sort_iai(&(iai), 0, get_element_count_sortable_tuple_references(&list_of_sortable_tuple_references)-1, &contexted_comparator(&sc, compare_tuples_for_interim_tuple_store_sort));
+		//quick_sort_iai(&(iai), 0, get_element_count_sortable_tuple_references(&list_of_sortable_tuple_references)-1, &contexted_comparator(&sc, compare_tuples_for_interim_tuple_store_sort));
+		if(!merge_sort_sortable_tuple_references(&list_of_sortable_tuple_references, 0, get_element_count_sortable_tuple_references(&list_of_sortable_tuple_references)-1, &contexted_comparator(&sc, compare_tuples_for_interim_tuple_store_sort), STD_C_mem_allocator))
+		{
+			printf("sorting the run failed\n");
+			exit(-1);
+		}
 	}
 	else // jumps to here on abort_error
 	{
