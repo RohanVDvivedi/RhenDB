@@ -13,4 +13,8 @@ void setup_external_sort_operator(operator* o, operator* input_operator, uint32_
 
 void setup_result_match_operator(operator* o, operator* input_operators[2]);
 
+void setup_stream_input_operator(operator* o, stream* in_strm, const tuple_def* input_tuple_def);
+
+void setup_stream_output_operator(operator* o, operator* input_operator, stream* out_strm);
+
 #endif

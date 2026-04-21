@@ -113,7 +113,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-void setup_generator_operator(operator* o, stream* in_strm, const tuple_def* input_tuple_def)
+void setup_stream_input_operator(operator* o, stream* in_strm, const tuple_def* input_tuple_def)
 {
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
