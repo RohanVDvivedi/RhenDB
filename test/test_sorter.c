@@ -13,6 +13,7 @@
 #include<stdlib.h>
 #include<unistd.h>
 #include<signal.h>
+#include<fcntl.h>
 
 #define USERS_COUNT 10
 
@@ -37,11 +38,13 @@ void intHandler(int dummy)
 	shutdown_query_plan(qp, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
 }
 
-int main()
+int main(int argc, char** argv)
 {
 	stream rs, ws;
 	initialize_stream_for_fd(&rs, 0);
 	initialize_stream_for_fd(&ws, 1);
+
+	stream out_file_stream;
 
 	signal(SIGINT, intHandler);
 
@@ -79,8 +82,11 @@ int main()
 			setup_printf_operator(print_operator, sorter_operator, PRINT_DATA);
 			printf("output print operator %p\n", print_operator);
 		#else
+			int out_fd = open(argv[1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+			initialize_stream_for_fd(&out_file_stream, out_fd);
+
 			operator* output_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_stream_output_operator(output_operator, sorter_operator, &ws);
+			setup_stream_output_operator(output_operator, sorter_operator, &out_file_stream);
 			printf("output stream operator %p\n", output_operator);
 		#endif
 	}
