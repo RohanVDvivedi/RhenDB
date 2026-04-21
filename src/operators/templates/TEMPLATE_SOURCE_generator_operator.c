@@ -9,13 +9,10 @@
 typedef struct input_values input_values;
 struct input_values
 {
-	int triggered_once;
-	void* (*generator)(void* generator_context, tuple_def* generator_tuple_def);
+	void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def);
 	void* generator_context;
-	tuple_def* generator_tuple_def;
+	const tuple_def* generator_tuple_def;
 };
-
-void print_job(operator* o, void* param);
 
 static void execute(operator* o)
 {
@@ -46,7 +43,7 @@ static void execute(operator* o)
 	kill_signal_for_self_operator(o, kill_reason); return ;
 }
 
-void setup_generator_operator(operator* o, void* (*generator)(void* generator_context, tuple_def* generator_tuple_def), void* generator_context, tuple_def* generator_tuple_def)
+void setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def)
 {
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -57,7 +54,6 @@ void setup_generator_operator(operator* o, void* (*generator)(void* generator_co
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
-		.triggered_once = 0,
 		.generator = generator,
 		.generator_context = generator_context,
 		.generator_tuple_def = generator_tuple_def,

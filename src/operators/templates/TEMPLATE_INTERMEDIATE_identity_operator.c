@@ -12,8 +12,6 @@ struct input_values
 	consumption_iterator* input_iterator;
 };
 
-void print_job(operator* o, void* param);
-
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
