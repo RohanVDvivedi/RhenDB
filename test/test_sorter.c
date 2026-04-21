@@ -17,8 +17,6 @@
 
 #define USERS_COUNT 10
 
-#define TESTCASE_SIZE 1000000
-
 #define PRINT_DATA 0
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
