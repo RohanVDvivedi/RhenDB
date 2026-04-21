@@ -6,6 +6,8 @@
 
 #include<test_dataset_tuple_def.h>
 
+#include<cutlery/stream_for_file_descriptor.h>
+
 #include<string.h>
 #include<stdio.h>
 #include<stdlib.h>
@@ -20,9 +22,7 @@
 
 #define TESTCASE_SIZE 1000000
 
-#define MATCH_SORTED_RESULTS 1
-
-#define PRINT_SORTED_RESULTS 0
+#define RANDOMIZE_DATA
 
 uint32_t inputs[TESTCASE_SIZE];
 void generate_random_inputs()
@@ -32,11 +32,6 @@ void generate_random_inputs()
 	for(uint32_t i = 0; i < TESTCASE_SIZE; i++)
 		memory_swap(inputs + (((uint32_t)rand())  % TESTCASE_SIZE), inputs + (((uint32_t)rand()) % TESTCASE_SIZE), sizeof(uint32_t));
 }
-
-#define RECORD_S_KEY_ELEMENT_COUNT 2
-
-positional_accessor KEY_POS[2] = {STATIC_POSITION(0), STATIC_POSITION(2)};
-compare_direction CMP_DIR[2] = {ASC, ASC};
 
 #define BUFFER_SIZE 300
 
@@ -76,6 +71,10 @@ void intHandler(int dummy)
 
 int main()
 {
+	stream rs, ws;
+	initialize_stream_for_fd(&rs, 0);
+	initialize_stream_for_fd(&ws, 1);
+
 	signal(SIGINT, intHandler);
 
 	rhendb rdb;
@@ -101,28 +100,25 @@ int main()
 
 	printf("Building pipeline :\n");
 	{
-		operator* random_input_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_generator_operator(random_input_operator, random_generator, NULL, &record_def);
-		printf("random source operator %p\n", random_input_operator);
+		operator* input_operator = get_new_registered_operator_for_query_plan(qp);
+		setup_generator_operator(input_operator,
+		#ifdef RANDOMIZE_DATA
+			random_generator
+		#else
+			sorted_generator
+		#endif
+		, NULL, &record_def);
+		printf("source operator %s %p\n",
+		#ifdef RANDOMIZE_DATA
+			"random_generator"
+		#else
+			"sorted_generator"
+		#endif
+		, input_operator);
 
-		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_external_sort_operator(sorter_operator, random_input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-		printf("sorter operator %p\n", sorter_operator);
-
-		operator* printf_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_printf_operator(printf_operator, sorter_operator, PRINT_SORTED_RESULTS);
-		printf("printf sink operator %p\n", printf_operator);
-
-		if(MATCH_SORTED_RESULTS)
-		{
-			operator* sorted_input_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_generator_operator(sorted_input_operator, sorted_generator, NULL, &record_def);
-			printf("sorted source operator %p\n", sorted_input_operator);
-
-			operator* result_match_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_result_match_operator(result_match_operator, (operator* []){sorted_input_operator, sorter_operator});
-			printf("matcher sink operator %p\n", result_match_operator);
-		}
+		operator* output_operator = get_new_registered_operator_for_query_plan(qp);
+		setup_stream_output_operator(output_operator, input_operator, &ws);
+		printf("output stream operator %p\n", output_operator);
 	}
 	printf("\n\n");
 
