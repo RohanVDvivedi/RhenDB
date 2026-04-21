@@ -17,9 +17,9 @@
 
 #define USERS_COUNT 10
 
-#define TESTCASE_SIZE 1000
+#define TESTCASE_SIZE 1000000
 
-#define PRINT_DATA 1
+//#define PRINT_DATA 1
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
 #define PARALLEL_SORTING_JOBS_COUNT    8
