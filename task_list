@@ -2,7 +2,7 @@ PICKED TASKS
 
  * implement streaming_loop_join_operator (identical to nested_loop_join)
    * start batching on both sides left and right
-   * maintain iterators on both sides: begin, batch_first, batch_start
+   * maintain iterators on both sides: begin, batch_first, batch_last
    * batch of tuples (batch_size) atleast on any side
    * and then nested loop as follows:
       for tuple1 in [batch_first, batch_last]
