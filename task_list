@@ -7,8 +7,8 @@ PICKED TASKS
    * maintain iterators on both sides: begin, batch_first, batch_last
    * batch of tuples (batch_size) atleast on any side
    * and then nested loop as follows:
-      for tuple1 in [batch_first, batch_last]
-        for tuple2 in [begin, batch_first)
+      for tuple1 in [begin, batch_first)
+        for tuple2 in [batch_first, batch_last]
           produce(tuple1, tuple) OR produce(tuple2, tuple1)
       for side1.batch_size = 0, start collecting the batch again for side1
 
