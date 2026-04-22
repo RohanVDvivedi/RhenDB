@@ -19,8 +19,8 @@
 
 #define PRINT_DATA 0
 
-#define OFFSET_CLAUSE  UINT64_C(0)
-#define LIMIT_CLAUSE   UINT64_MAX
+#define OFFSET_CLAUSE  UINT64_C(55)//UINT64_C(0)
+#define LIMIT_CLAUSE   UINT64_C(155)//UINT64_MAX
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
 #define PARALLEL_SORTING_JOBS_COUNT    8
@@ -78,20 +78,20 @@ int main(int argc, char** argv)
 		setup_external_sort_operator(sorter_operator, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 		printf("sorter operator %p\n", sorter_operator);
 
-		operator* result_operator = NULL;
+		operator* result_operator = sorter_operator;
 
-		if(OFFSET_CLAUSE == 0 && LIMIT_CLAUSE == UINT64_MAX)
-			result_operator = sorter_operator;
-		else
-		{
-			result_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_offset_limit_operator(result_operator, sorter_operator, TUPLES_DOWN_COUNTER_FIN(OFFSET_CLAUSE), TUPLES_DOWN_COUNTER_FIN(LIMIT_CLAUSE));
-			printf("offset_limit operator %p (offset = %"PRIu64", limit = %"PRIu64")\n", result_operator, OFFSET_CLAUSE, LIMIT_CLAUSE);
-		}
+		#if defined(OFFSET_CLAUSE) && defined(LIMIT_CLAUSE)
+			if(OFFSET_CLAUSE != 0 || LIMIT_CLAUSE != UINT64_MAX)
+			{
+				result_operator = get_new_registered_operator_for_query_plan(qp);
+				setup_offset_limit_operator(result_operator, sorter_operator, TUPLES_DOWN_COUNTER_FIN(OFFSET_CLAUSE), TUPLES_DOWN_COUNTER_FIN(LIMIT_CLAUSE));
+				printf("offset_limit operator %p (offset = %"PRIu64", limit = %"PRIu64")\n", result_operator, OFFSET_CLAUSE, LIMIT_CLAUSE);
+			}
+		#endif
 
 		#ifdef PRINT_DATA
 			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_printf_operator(print_operator, sorter_operator, PRINT_DATA);
+			setup_printf_operator(print_operator, result_operator, PRINT_DATA);
 			printf("output print operator %p\n", print_operator);
 		#endif
 
@@ -101,7 +101,7 @@ int main(int argc, char** argv)
 			initialize_stream_for_fd(&out_file_stream, out_fd);
 
 			operator* output_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_stream_output_operator(output_operator, sorter_operator, &out_file_stream);
+			setup_stream_output_operator(output_operator, result_operator, &out_file_stream);
 			printf("output stream operator %p\n", output_operator);
 		}
 	}
