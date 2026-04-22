@@ -1,6 +1,11 @@
 PICKED TASKS
 
- * use tuples_down_counter and add it as limit clause for external_sort_operator
+ * tuples_down_counter limit_counter for external_sort_operator
+   * shallow copy it in all the jobs and call also the interim_tuple_store_sort with it
+
+ * merge_sorted_runs operator
+   * merge multiple sorted_input_operators with identical output_defs into one
+   * store a singlylist of the unseen tuples consumption_iterator, and only poll them hen triggerred
 
  * implement streaming_loop_join_operator (identical to nested_loop_join)
    * start batching on both sides left and right
@@ -14,16 +19,18 @@ PICKED TASKS
 
  * union operator
    * merges multiple input_iterators with identical output_defs into one
-
- * merge_sorted_runs operator
-   * merge multiple sorted_input_operators ith identical output_defs into one
+   * all output_defs must be identical
 
  * define struct for implementing aggregate functions
    struct aggregate_function {
       void* context;
+      tuple_def* input_def; // tuple input into update call
+      tuple_def* output_def; // tuple returned by finalize
+      // state has no definition and is just a blob
       dstring create_state(void* context);
-      void* update(void* context, dstring state, void* input_tuple);
-      void merge(void* context, dstring state1, const dstring state2);
+      void* update(void* context, dstring state, void* input_tuple); // state is modified in-plance
+      void merge(void* context, dstring state1, const dstring state2); // state1 is modified in-place
+      void* finalize(void* context, const dstring state);
       void destroy_state(void* context, dstring state);
    }
 
