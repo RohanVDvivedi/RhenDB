@@ -19,6 +19,9 @@
 
 #define PRINT_DATA 0
 
+#define OFFSET_CLAUSE 0
+#define LIMIT_CLAUSE UINT64_MAX
+
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
 #define PARALLEL_SORTING_JOBS_COUNT    8
 #define N_WAY_SORT                     16
@@ -74,6 +77,17 @@ int main(int argc, char** argv)
 		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
 		setup_external_sort_operator(sorter_operator, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 		printf("sorter operator %p\n", sorter_operator);
+
+		operator* result_operator = NULL;
+
+		if(OFFSET_CLAUSE == 0 && LIMIT_CLAUSE == UINT64_MAX)
+			result_operator = sorter_operator;
+		else
+		{
+			result_operator = get_new_registered_operator_for_query_plan(qp);
+			setup_offset_limit_operator(result_operator, sorter_operator, TUPLES_DOWN_COUNTER_FIN(OFFSET_CLAUSE), TUPLES_DOWN_COUNTER_FIN(LIMIT_CLAUSE));
+			printf("offset_limit operator %p (offset = %"PRIu64", limit = %"PRIu64")\n", result_operator, OFFSET_CLAUSE, LIMIT_CLAUSE);
+		}
 
 		#ifdef PRINT_DATA
 			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
