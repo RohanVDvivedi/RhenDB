@@ -1,13 +1,5 @@
 PICKED TASKS
 
- * tuples_down_counter
-   * is_zero
-   * is_infinity
-   * can_decrement
-   * decrement
-
- * use tuples_down_counter for implementing offset_limit_operator
-
  * use tuples_down_counter and add it as limit clause for external_sort_operator
 
  * implement streaming_loop_join_operator (identical to nested_loop_join)
