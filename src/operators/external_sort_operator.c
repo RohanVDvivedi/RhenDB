@@ -6,6 +6,8 @@
 
 #include<rhendb/interim_tuple_store_sort.h>
 
+#include<rhendb/tuples_down_counter.h>
+
 typedef struct tuple_runs tuple_runs;
 struct tuple_runs
 {
@@ -79,6 +81,11 @@ struct input_values
 	uint32_t N_way_sort;
 	uint32_t max_concurrent_jobs_count;
 
+	// numbers of results to be produced
+	// if infinity this operator sorts everything
+	// else if finite, only these many outputs will be produced
+	tuples_down_counter result_counter;
+
 	// potects everything underneath
 	pthread_mutex_t runs_lock;
 
@@ -101,6 +108,7 @@ static void request_to_process_some_jobs(operator* o);
 static void sort_job(operator* o, void* param)
 {
 	input_values* inputs = o->inputs;
+	tuples_down_counter result_counter = inputs->result_counter;
 
 	tuple_runs* input_param = param;
 
@@ -112,7 +120,7 @@ static void sort_job(operator* o, void* param)
 
 		// sort it into a ne run
 		int abort_error = 0;
-		interim_tuple_store* ots_p = sort_interim_tuples(its_p, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+		interim_tuple_store* ots_p = sort_interim_tuples(its_p, result_counter, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
 
 		// delete the input run
 		delete_interim_tuple_store(its_p);
@@ -168,6 +176,7 @@ static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const v
 static void merge_into_run_job(operator* o, void* param)
 {
 	input_values* inputs = o->inputs;
+	tuples_down_counter result_counter = inputs->result_counter;
 
 	tuple_runs* input_param = param;
 
@@ -207,11 +216,13 @@ static void merge_into_run_job(operator* o, void* param)
 	interim_tuple_store* output_its_p = get_new_interim_tuple_store(total_output_size_in_bytes);
 
 	// merge all one by one from the top into output_its_p or produce them if possible
-	while(total_input_runs_count > 1)
+	while((is_inf_tuples_down_counter(&result_counter) && total_input_runs_count > 1) ||
+		(!is_inf_tuples_down_counter(&result_counter) && can_decrement_tuples_down_counter(&result_counter) && total_input_runs_count > 0))
 	{
 		interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&mergeable_open_runs);
 
 		// copy the top tuple of its_p into (append it to) output_its_p
+		decrement_tuples_down_counter(&result_counter);
 		append_tuple_to_interim_tuple_store2(output_its_p, &(output_its_p->embed_regions[0]), its_p->embed_regions[0].tuple, &(inputs->record_def->size_def), inputs->minimum_run_size);
 
 		// go next on its_p, and insert it back into mergeable_open_runs
@@ -239,10 +250,12 @@ static void merge_into_run_job(operator* o, void* param)
 	}
 
 	// if there is only 1 mergeable_open_runs left, then merge all of its contents into the output_its_p
-	while(!is_empty_pheap(&mergeable_open_runs))
+	// we will enter this loop with only its_p remaining in mergeable_open_runs and when we want infinite(/all) tuples to be produced
+	while(!is_empty_pheap(&mergeable_open_runs) && can_decrement_tuples_down_counter(&result_counter))
 	{
 		interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&mergeable_open_runs);
 
+		decrement_tuples_down_counter(&result_counter);
 		append_all_from_another_interim_tuple_store2(output_its_p, its_p, curr_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0])), its_p->embed_uints[0]);
 
 		remove_from_pheap(&mergeable_open_runs, its_p);
@@ -278,6 +291,7 @@ static void merge_into_run_job(operator* o, void* param)
 static void merge_into_produce_job(operator* o, void* param)
 {
 	input_values* inputs = o->inputs;
+	tuples_down_counter result_counter = inputs->result_counter;
 
 	tuple_runs* input_param = param;
 
@@ -312,10 +326,11 @@ static void merge_into_produce_job(operator* o, void* param)
 	int produce_failed = 0;
 
 	// merge all one by one from the top into output_its_p or produce them if possible
-	while(!is_empty_pheap(&mergeable_open_runs))
+	while(!is_empty_pheap(&mergeable_open_runs) && can_decrement_tuples_down_counter(&result_counter))
 	{
 		interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&mergeable_open_runs);
 
+		decrement_tuples_down_counter(&result_counter);
 		if(!produce_tuple_from_operator(o, its_p->embed_regions[0].tuple))
 		{
 			produce_failed = 1;
@@ -384,16 +399,19 @@ static void merge_job(operator* o, void* param)
 static void produce_job(operator* o, void* param)
 {
 	input_values* inputs = o->inputs;
+	tuples_down_counter result_counter = inputs->result_counter;
 
 	tuple_runs* input_param = param;
 
 	int produce_failed = 0;
 
 	// produce tuple in all the runs
-	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param); its_p != NULL; its_p = pop_run_from_tuple_runs(input_param))
+	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param); its_p != NULL && can_decrement_tuples_down_counter(&result_counter); its_p = pop_run_from_tuple_runs(input_param))
 	{
 		{
 			FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->record_def->size_def), its_p, inputs->minimum_run_size, {
+				if(!decrement_tuples_down_counter(&result_counter)) // try and decrement, if it fail nothing to be produced any further
+					break;
 				if(!produce_tuple_from_operator(o, tuple))
 				{
 					produce_failed = 1;
@@ -670,8 +688,14 @@ static void free_resources(operator* o)
 
 #include<rhendb/tuple_transformers.h>
 
-void setup_external_sort_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t minimum_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
+void setup_external_sort_operator(operator* o, tuples_down_counter result_counter, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t minimum_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
 {
+	if(is_zero_tuples_down_counter(&result_counter))
+	{
+		printf("result_counter can not be zero for external sort operator\n");
+		exit(-1);
+	}
+
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = free_resources;
@@ -692,6 +716,7 @@ void setup_external_sort_operator(operator* o, operator* input_operator, uint32_
 		.minimum_run_size = minimum_run_size,
 		.N_way_sort = N_way_sort,
 		.max_concurrent_jobs_count = max_concurrent_jobs_count,
+		.result_counter = result_counter,
 		.runs_lock = PTHREAD_MUTEX_INITIALIZER,
 		.flag_no_new_un_sorted_runs = 0,
 		.total_sorted_runs_count = 0,
