@@ -1,8 +1,5 @@
 PICKED TASKS
 
- * tuples_down_counter limit_counter for external_sort_operator
-   * shallow copy it in all the jobs and call also the interim_tuple_store_sort with it
-
  * merge_sorted_runs operator
    * merge multiple sorted_input_operators with identical output_defs into one
    * store a singlylist of the unseen tuples consumption_iterator, and only poll them hen triggerred
