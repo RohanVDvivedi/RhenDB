@@ -251,17 +251,19 @@ static void merge_into_run_job(operator* o, void* param)
 
 	// if there is only 1 mergeable_open_runs left, then merge all of its contents into the output_its_p
 	// we will enter this loop with only its_p remaining in mergeable_open_runs and when we want infinite(/all) tuples to be produced
-	while(!is_empty_pheap(&mergeable_open_runs) && can_decrement_tuples_down_counter(&result_counter))
+	if(is_inf_tuples_down_counter(&result_counter))
 	{
-		interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&mergeable_open_runs);
+		while(!is_empty_pheap(&mergeable_open_runs))
+		{
+			interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&mergeable_open_runs);
 
-		decrement_tuples_down_counter(&result_counter);
-		append_all_from_another_interim_tuple_store2(output_its_p, its_p, curr_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0])), its_p->embed_uints[0]);
+			append_all_from_another_interim_tuple_store2(output_its_p, its_p, curr_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0])), its_p->embed_uints[0]);
 
-		remove_from_pheap(&mergeable_open_runs, its_p);
+			remove_from_pheap(&mergeable_open_runs, its_p);
 
-		unmap_all_embed_regions_in_interim_tuple_store(its_p);
-		delete_interim_tuple_store(its_p);
+			unmap_all_embed_regions_in_interim_tuple_store(its_p);
+			delete_interim_tuple_store(its_p);
+		}
 	}
 
 	// destroy if any is still remaining
@@ -410,7 +412,7 @@ static void produce_job(operator* o, void* param)
 	{
 		{
 			FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->record_def->size_def), its_p, inputs->minimum_run_size, {
-				if(!decrement_tuples_down_counter(&result_counter)) // try and decrement, if it fail nothing to be produced any further
+				if(!decrement_tuples_down_counter(&result_counter)) // try and decrement, if it fails nothing to be produced any further
 					break;
 				if(!produce_tuple_from_operator(o, tuple))
 				{
