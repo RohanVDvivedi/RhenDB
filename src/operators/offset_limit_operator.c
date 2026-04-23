@@ -71,7 +71,7 @@ static void execute(operator* o)
 
 void setup_offset_limit_operator(operator* o, operator* input_operator, tuples_down_counter offset_counter, tuples_down_counter limit_counter)
 {
-	if(is_inf_tuples_down_counter(&limit_counter))
+	if(is_inf_tuples_down_counter(&offset_counter))
 	{
 		printf("offset_limit_operator, must not have offset = infinity\n");
 		exit(-1);
