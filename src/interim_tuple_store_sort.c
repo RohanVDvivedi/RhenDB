@@ -52,10 +52,10 @@ declarations_value_arraylist(sortable_tuple_references, sortable_tuple_reference
 #define EXPANSION_FACTOR 1.5
 function_definitions_value_arraylist(sortable_tuple_references, sortable_tuple_reference, static inline)
 
-interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, tuples_down_counter result_counter, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
 {
-	// if the its_p is empty, then return immediately
-	if(its_p->tuples_count == 0)
+	// if the its_p is empty, OR if no result is expected, then return immediately
+	if(its_p->tuples_count == 0 || is_zero_tuples_down_counter(&result_counter))
 		return get_new_interim_tuple_store(0);
 
 	// create a list_of_sortable_tuple_references
@@ -131,7 +131,7 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, const tuple
 	// create output interim_tuple_store
 	interim_tuple_store* ots_p = get_new_interim_tuple_store(get_total_bytes_in_interim_tuple_store(its_p));
 
-	for(uint32_t i = 0; i < get_element_count_sortable_tuple_references(&list_of_sortable_tuple_references); i++)
+	for(uint32_t i = 0; i < get_element_count_sortable_tuple_references(&list_of_sortable_tuple_references) && can_decrement_tuples_down_counter(&result_counter); i++, decrement_tuples_down_counter(&result_counter))
 	{
 		// fetch the tuple to be copied
 		const sortable_tuple_reference* ref = get_from_front_of_sortable_tuple_references(&list_of_sortable_tuple_references, i);

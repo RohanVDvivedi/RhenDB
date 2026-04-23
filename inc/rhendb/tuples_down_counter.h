@@ -17,23 +17,23 @@ struct tuples_down_counter
 #define TUPLES_DOWN_COUNTER_FIN(c)    ((tuples_down_counter){.counter = c})
 #define TUPLES_DOWN_COUNTER_INF       ((tuples_down_counter){.counter = UINT64_MAX})
 
-static int is_zero_tuples_down_counter(const tuples_down_counter* tdc_p)
+static inline int is_zero_tuples_down_counter(const tuples_down_counter* tdc_p)
 {
 	return tdc_p->counter == 0;
 }
 
-static int is_inf_tuples_down_counter(const tuples_down_counter* tdc_p)
+static inline int is_inf_tuples_down_counter(const tuples_down_counter* tdc_p)
 {
 	return tdc_p->counter == UINT64_MAX;
 }
 
-static int can_decrement_tuples_down_counter(const tuples_down_counter* tdc_p)
+static inline int can_decrement_tuples_down_counter(const tuples_down_counter* tdc_p)
 {
 	// only at 0, it can not further be decremented
 	return tdc_p->counter != 0;
 }
 
-static int decrement_tuples_down_counter(tuples_down_counter* tdc_p)
+static inline int decrement_tuples_down_counter(tuples_down_counter* tdc_p)
 {
 	switch(tdc_p->counter)
 	{
