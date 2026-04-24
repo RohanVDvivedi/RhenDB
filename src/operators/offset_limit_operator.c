@@ -91,7 +91,7 @@ void setup_offset_limit_operator(operator* o, operator* input_operator, tuples_d
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
-		.input_iterator = create_consumption_iterator(input_operator, o, NULL),
+		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
 		.offset_counter = offset_counter,
 		.limit_counter = limit_counter,
 	};

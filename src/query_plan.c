@@ -77,7 +77,13 @@ static void trigger_all_consumers_for_operator_UNSAFE(operator* o, int force_tri
 	{
 		if(force_trigger || (cit_p->was_consumer_triggered == 0)) // either on force trigger OR the consumer was not priorly triggered, only then trigger
 		{
-			trigger_execution_on_operator(cit_p->consumer);
+			// if a callback job of the consumer was provided, call it asynchronously
+			// else just trigger the consumer operator
+			if(cit_p->consumer_callback_job == NULL)
+				trigger_execution_on_operator(cit_p->consumer);
+			else
+				run_concurrent_job_for_operator(cit_p->consumer, cit_p, (void (*)(operator* o, void* param))(cit_p->consumer_callback_job));
+
 			cit_p->was_consumer_triggered = 1; // mark it as already triggered, so the next consecutive produce need not trigger it
 		}
 	}
@@ -478,7 +484,7 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 	return pushed;
 }
 
-consumption_iterator* create_consumption_iterator(operator* producer, operator* consumer, consumption_iterator* clone_cit_p)
+consumption_iterator* create_consumption_iterator(operator* producer, operator* consumer, void (*consumer_callback_job)(operator* consumer, consumption_iterator* cit_p), consumption_iterator* clone_cit_p)
 {
 	if(clone_cit_p != NULL)
 		if(clone_cit_p->producer != producer || clone_cit_p->consumer != consumer)
@@ -488,6 +494,7 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 	cit_p->producer = producer;
 	cit_p->was_consumer_triggered = 0;
 	cit_p->consumer = consumer;
+	cit_p->consumer_callback_job = consumer_callback_job;
 	initialize_llnode(&(cit_p->embed_node_for_output_consumers));
 
 	cit_p->curr_store = NULL;

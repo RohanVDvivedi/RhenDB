@@ -89,7 +89,7 @@ void setup_stream_output_operator(operator* o, operator* input_operator, stream*
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
-		.input_iterator = create_consumption_iterator(input_operator, o, NULL),
+		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
 		.input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator),
 		.out_strm = out_strm,
 		.is_out_strm_closed = 0,

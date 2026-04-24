@@ -113,6 +113,12 @@ struct consumption_iterator
 	// it is protected by the output_lock above
 	int was_consumer_triggered;
 
+	// if a trigger was performed on this operator
+	// we will run_concurrent_job_for_operator(consumer_callback_job)
+	// if this attribute is NULL, we will instead trigger_execution_on_operator(consumer)
+	// this is static attribute and remains same throughout the lifetime of this consumption_iterator
+	void (*consumer_callback_job)(operator* consumer, consumption_iterator* cit_p);
+
 	// it is protected (the pointer) by the output_lock above
 	interim_tuple_store* curr_store;
 
@@ -156,7 +162,8 @@ void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o);
 int produce_tuple_from_operator(operator* o, void* tuple);
 
 // clone_cti_p may be NULL
-consumption_iterator* create_consumption_iterator(operator* producer, operator* consumer, consumption_iterator* clone_cit_p);
+// consumer_callback_job can be NULL, if so, the consumer operator is instead just triggered using trigger_execution_on_operator(consumer)
+consumption_iterator* create_consumption_iterator(operator* producer, operator* consumer, void (*consumer_callback_job)(operator* consumer, consumption_iterator* cit_p), consumption_iterator* clone_cit_p);
 void destroy_consumption_iterator(consumption_iterator* cit_p);
 
 int points_to_same_tuple_for_consumtion_iterators(const consumption_iterator* cit1_p, const consumption_iterator* cit2_p);

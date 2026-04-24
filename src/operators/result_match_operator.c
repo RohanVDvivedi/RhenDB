@@ -126,8 +126,8 @@ void setup_result_match_operator(operator* o, operator* input_operators[2])
 	*((input_values*)(o->inputs)) = (input_values){
 		.input_defs = {input_defs[0], input_defs[1]},
 		.input_iterators = {
-			create_consumption_iterator(input_operators[0], o, NULL),
-			create_consumption_iterator(input_operators[1], o, NULL),
+			create_consumption_iterator(input_operators[0], o, NULL, NULL),
+			create_consumption_iterator(input_operators[1], o, NULL, NULL),
 		},
 		.tuples = {NULL, NULL},
 		.no_more_data = {0, 0},

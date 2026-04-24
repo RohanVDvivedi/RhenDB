@@ -58,6 +58,6 @@ void setup_identity_operator(operator* o, operator* input_operator)
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
-		.input_iterator = create_consumption_iterator(input_operator, o, NULL),
+		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
 	};
 }

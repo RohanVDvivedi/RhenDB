@@ -708,7 +708,7 @@ void setup_external_sort_operator(operator* o, tuples_down_counter result_counte
 	o->inputs = malloc(sizeof(input_values));
 	input_values* inputs = o->inputs;
 	*inputs = (input_values){
-		.input_iterator = create_consumption_iterator(input_operator, o, NULL),
+		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
 		.input_un_sorted_run = NULL,
 		.record_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator),
 		.key_element_count = key_element_count,
