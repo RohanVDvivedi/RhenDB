@@ -495,6 +495,19 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 	cit_p->notify_callback = notify_callback;
 	initialize_llnode(&(cit_p->embed_node_for_output_consumers));
 
+	initialize_llnode(&(cit_p->embed_node_ll));
+	initialize_slnode(&(cit_p->embed_node_sl));
+	initialize_bstnode(&(cit_p->embed_node_bst));
+	initialize_rbhnode(&(cit_p->embed_node_rbh));
+	initialize_hpnode(&(cit_p->embed_node_hp));
+	initialize_phpnode(&(cit_p->embed_node_php));
+
+	for(int i = 0; i < sizeof(cit_p->embed_uints)/sizeof(cit_p->embed_uints[0]); i++)
+		cit_p->embed_uints[i] = 0;
+
+	for(int i = 0; i < sizeof(cit_p->embed_ptrs)/sizeof(cit_p->embed_ptrs[0]); i++)
+		cit_p->embed_ptrs[i] = NULL;
+
 	cit_p->curr_store = NULL;
 	cit_p->curr_region = INIT_INTERIM_TUPLE_REGION;
 

@@ -127,6 +127,19 @@ struct consumption_iterator
 
 	// it is protected by the output_lock above
 	llnode embed_node_for_output_consumers;
+
+	// for use outside the query_plan only
+	union
+	{
+		llnode embed_node_ll;
+		slnode embed_node_sl;
+		bstnode embed_node_bst;
+		rbhnode embed_node_rbh;
+		hpnode embed_node_hp;
+		phpnode embed_node_php;
+	};
+	uint64_t embed_uints[4];
+	void* embed_ptrs[4];
 };
 
 // check if the operator is allowed to do it's execution

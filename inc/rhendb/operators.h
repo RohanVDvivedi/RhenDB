@@ -11,6 +11,8 @@ void setup_printf_operator(operator* o, operator* input_operator, int do_print);
 
 void setup_result_match_operator(operator* o, operator* input_operators[2]);
 
+void setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count);
+
 #include<rhendb/tuples_down_counter.h>
 
 void setup_external_sort_operator(operator* o, tuples_down_counter result_counter, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t minimum_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count);
