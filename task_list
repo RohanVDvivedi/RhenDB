@@ -14,10 +14,6 @@ PICKED TASKS
           produce(tuple1, tuple2) OR produce(tuple2, tuple1)
       for side1.batch_size = 0, start collecting the batch again for side1
 
- * union operator
-   * merges multiple input_iterators with identical output_defs into one
-   * all output_defs must be identical
-
  * define struct for implementing aggregate functions
    struct aggregate_function {
       void* context;
