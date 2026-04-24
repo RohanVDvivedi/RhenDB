@@ -4,6 +4,7 @@
 
 #define IS_READY 0
 #define IS_WAITING 1
+#define IS_DELETED 2
 
 typedef struct input_values input_values;
 struct input_values
@@ -56,6 +57,8 @@ static void execute(operator* o)
 					remove_from_linkedlist(&(inputs->waiting_input_iterators), cit_p);
 				else if(cit_p->embed_uints[0] == IS_READY)
 					remove_from_linkedlist(&(inputs->ready_input_iterators), cit_p);
+
+				cit_p->embed_uints[0] = IS_DELETED;
 
 				pthread_mutex_unlock(&(inputs->input_iterators_list_lock));
 
@@ -119,7 +122,7 @@ void setup_union_operator(operator* o, operator** input_operators, uint32_t inpu
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operators[0]);
 	for(uint32_t i = 1; i < input_operators_count; i++)
 	{
-		if(are_identical_type_info(input_tuple_def->type_info, get_tuple_def_for_tuples_to_be_consumed_from(input_operators[i])->type_info))
+		if(!are_identical_type_info(input_tuple_def->type_info, get_tuple_def_for_tuples_to_be_consumed_from(input_operators[i])->type_info))
 		{
 			printf("union operator created with non-identical input_operators\n");
 			exit(-1);
@@ -144,7 +147,7 @@ void setup_union_operator(operator* o, operator** input_operators, uint32_t inpu
 	initialize_linkedlist(&(inputs->ready_input_iterators), offsetof(consumption_iterator, embed_node_ll));
 	initialize_linkedlist(&(inputs->waiting_input_iterators), offsetof(consumption_iterator, embed_node_ll));
 
-	for(uint32_t i = 1; i < input_operators_count; i++)
+	for(uint32_t i = 0; i < input_operators_count; i++)
 	{
 		consumption_iterator* cit_p = create_consumption_iterator(input_operators[i], o, notify_callback, NULL);
 		cit_p->embed_uints[0] = IS_READY;

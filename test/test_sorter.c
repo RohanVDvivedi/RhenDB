@@ -66,7 +66,7 @@ int main(int argc, char** argv)
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, 3);
+	qp = get_new_query_plan(&tx, 30);
 
 	// make operators
 
