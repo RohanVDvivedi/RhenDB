@@ -57,101 +57,93 @@ static void execute(operator* o)
 
 	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
 
-	while(1)
+	// iterate over all waiting_input_iterators and fetch their next tuples and stor it in embed_ptrs[0]
+	// and also move it friom waiting_input_iterators to ready_input_iterators
+	while(!is_empty_singlylist(&(inputs->waiting_input_iterators)))
 	{
-		// iterate over all waiting_input_iterators and fetch their next tuples and stor it in embed_ptrs[0]
-		// and also move it friom waiting_input_iterators to ready_input_iterators
-		while(!is_empty_singlylist(&(inputs->waiting_input_iterators)))
+		consumption_iterator* cit_p = (consumption_iterator*) get_head_of_singlylist(&(inputs->waiting_input_iterators));
+
+		int no_more_data = 0;
+		cit_p->embed_ptrs[0] = (void*) consume_for_consumption_iterator(cit_p, &no_more_data);
+		if(no_more_data)
 		{
-			consumption_iterator* cit_p = (consumption_iterator*) get_head_of_singlylist(&(inputs->waiting_input_iterators));
-
-			int no_more_data = 0;
-			cit_p->embed_ptrs[0] = (void*) consume_for_consumption_iterator(cit_p, &no_more_data);
-			if(no_more_data)
-			{
-				remove_head_from_singlylist(&(inputs->waiting_input_iterators));
-				destroy_consumption_iterator(cit_p);
-				continue;
-			}
-			if(can_not_proceed_for_execution_operator(o))
-			{
-				kill_signal_for_self_operator(o, kill_reason); return ;
-			}
-
-			if(cit_p->embed_ptrs[0] != NULL)
-			{
-				remove_head_from_singlylist(&(inputs->waiting_input_iterators));
-				revise_materialized_keys_in_consumption_iterator(o, cit_p);
-				push_to_pheap(&(inputs->ready_input_iterators), cit_p);
-				continue;
-			}
-			else
-			{
-				return;
-			}
+			remove_head_from_singlylist(&(inputs->waiting_input_iterators));
+			destroy_consumption_iterator(cit_p);
+			continue;
 		}
-
-		// now we know for sure that we are not waiting for input tuples from any input_operators
-
-		// so iterate over the ready_input_iterators and pick the smallest and produce it, as long as the waiting_input_iteratros is empty
-		while(!is_empty_pheap(&(inputs->ready_input_iterators)))
-		{
-			// fetch the top of the min pheap
-			consumption_iterator* cit_p = (consumption_iterator*) get_top_of_pheap(&(inputs->ready_input_iterators));
-
-			const void* tuple = cit_p->embed_ptrs[0];
-			cit_p->embed_ptrs[0] = NULL;
-
-			// produce the top tuple
-			{
-				int produced = produce_tuple_from_operator(o, (void*)tuple);
-				if(!produced)
-				{
-					kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-					kill_signal_for_self_operator(o, kill_reason); return ;
-				}
-			}
-
-			// fetch the next tuple, if it is successfully fetch then heapify and continue
-			// else move it into waiting_input_iterators
-			int no_more_data = 0;
-			cit_p->embed_ptrs[0] = (void*) consume_for_consumption_iterator(cit_p, &no_more_data);
-
-			if(no_more_data)
-			{
-				remove_from_pheap(&(inputs->ready_input_iterators), cit_p);
-				destroy_consumption_iterator(cit_p);
-				continue;
-			}
-			if(can_not_proceed_for_execution_operator(o))
-			{
-				kill_signal_for_self_operator(o, kill_reason); return ;
-			}
-
-			if(cit_p->embed_ptrs[0] != NULL)
-			{
-				revise_materialized_keys_in_consumption_iterator(o, cit_p);
-				heapify_for_in_pheap(&(inputs->ready_input_iterators), cit_p);
-				continue;
-			}
-			else
-			{
-				remove_from_pheap(&(inputs->ready_input_iterators), cit_p);
-				insert_tail_in_singlylist(&(inputs->waiting_input_iterators), cit_p);
-
-				// waiting_input_iterators now has something so we can no longer proceed with this loop
-				return;
-			}
-		}
-
-		// if there is nothing ready (there already is nothing in waiting), we are done, we quit with success
-		if(is_empty_pheap(&(inputs->ready_input_iterators)))
+		if(can_not_proceed_for_execution_operator(o))
 		{
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
+
+		if(cit_p->embed_ptrs[0] != NULL)
+		{
+			remove_head_from_singlylist(&(inputs->waiting_input_iterators));
+			revise_materialized_keys_in_consumption_iterator(o, cit_p);
+			push_to_pheap(&(inputs->ready_input_iterators), cit_p);
+			continue;
+		}
+		else
+		{
+			return;
+		}
 	}
 
-	return ;
+	// now we know for sure that we are not waiting for input tuples from any input_operators
+
+	// so iterate over the ready_input_iterators and pick the smallest and produce it, as long as the waiting_input_iteratros is empty
+	while(!is_empty_pheap(&(inputs->ready_input_iterators)))
+	{
+		// fetch the top of the min pheap
+		consumption_iterator* cit_p = (consumption_iterator*) get_top_of_pheap(&(inputs->ready_input_iterators));
+
+		const void* tuple = cit_p->embed_ptrs[0];
+		cit_p->embed_ptrs[0] = NULL;
+
+		// produce the top tuple
+		{
+			int produced = produce_tuple_from_operator(o, (void*)tuple);
+			if(!produced)
+			{
+				kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
+				kill_signal_for_self_operator(o, kill_reason); return ;
+			}
+		}
+
+		// fetch the next tuple, if it is successfully fetch then heapify and continue
+		// else move it into waiting_input_iterators
+		int no_more_data = 0;
+		cit_p->embed_ptrs[0] = (void*) consume_for_consumption_iterator(cit_p, &no_more_data);
+
+		if(no_more_data)
+		{
+			remove_from_pheap(&(inputs->ready_input_iterators), cit_p);
+			destroy_consumption_iterator(cit_p);
+			continue;
+		}
+		if(can_not_proceed_for_execution_operator(o))
+		{
+			kill_signal_for_self_operator(o, kill_reason); return ;
+		}
+
+		if(cit_p->embed_ptrs[0] != NULL)
+		{
+			revise_materialized_keys_in_consumption_iterator(o, cit_p);
+			heapify_for_in_pheap(&(inputs->ready_input_iterators), cit_p);
+			continue;
+		}
+		else
+		{
+			remove_from_pheap(&(inputs->ready_input_iterators), cit_p);
+			insert_tail_in_singlylist(&(inputs->waiting_input_iterators), cit_p);
+
+			// waiting_input_iterators now has something so we can no longer proceed with this loop
+			return;
+		}
+	}
+
+	// if there is nothing ready (there already is nothing in waiting also), we are done, we quit with success
+	kill_signal_for_self_operator(o, kill_reason); return ;
 }
 
 static void free_resources(operator* o)
