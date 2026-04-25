@@ -1,5 +1,7 @@
 #include<rhendb/query_plan.h>
 
+#include<cutlery/linkedlist.h>
+
 #include<stdlib.h>
 
 #define IS_READY 0
