@@ -93,7 +93,7 @@ int main(int argc, char** argv)
 			generator_contexts[i] = i;
 			input_operators[i] = get_new_registered_operator_for_query_plan(qp);
 			setup_generator_operator(input_operators[i], generator, &(generator_contexts[i]), &record_def);
-			printf("source operator %p\n", input_operators[i]);
+			printf("source operator - %d %p\n", i, input_operators[i]);
 		}
 
 		// first pipeline first union then sort
@@ -111,7 +111,7 @@ int main(int argc, char** argv)
 		{
 			sorted_input_operators[i] = get_new_registered_operator_for_query_plan(qp);
 			setup_external_sort_operator(sorted_input_operators[i], TUPLES_DOWN_COUNTER_INF, input_operators[i], RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-			printf("sorted operator - %d %p\n", i, sorted_input_operators[i]);
+			printf("sorter operator - %d %p\n", i, sorted_input_operators[i]);
 		}
 
 		operator* m  = get_new_registered_operator_for_query_plan(qp);
