@@ -14,7 +14,7 @@
 #include<signal.h>
 #include<fcntl.h>
 
-#define USERS_COUNT 10
+#define USERS_COUNT 100
 
 #define PRINT_DATA 0
 

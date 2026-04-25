@@ -98,7 +98,7 @@ static void execute(operator* o)
 				kill_signal_for_self_operator(o, kill_reason); return ;
 			}
 
-			while(1)
+			while(!is_empty_pheap(&(inputs->ready_input_iterators)))
 			{
 				consumption_iterator* cit_p = (consumption_iterator*) get_top_of_pheap(&(inputs->ready_input_iterators));
 
@@ -116,6 +116,7 @@ static void execute(operator* o)
 
 				int no_more_data = 0;
 				cit_p->embed_ptrs[0] = (void*) consume_for_consumption_iterator(cit_p, &no_more_data);
+
 				if(no_more_data)
 				{
 					remove_from_pheap(&(inputs->ready_input_iterators), cit_p);
