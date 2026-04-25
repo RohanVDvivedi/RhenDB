@@ -32,6 +32,7 @@ int generator_contexts[INPUT_OPERATORS_COUNT];
 
 #define BUFFER_SIZE 300
 
+// generates sorted tuples with incremental values of % INPUT_OPERATORS_COUNT
 void* generator(void* generator_context, const tuple_def* generator_tuple_def)
 {
 	int* generator_number = generator_context;
@@ -87,18 +88,18 @@ int main(int argc, char** argv)
 	printf("Building pipeline :\n");
 	{
 		// source operators
-		operator* input_operators[INPUT_OPERATORS_COUNT];
+		operator* sorted_input_operators[INPUT_OPERATORS_COUNT];
 		for(int i = 0; i < INPUT_OPERATORS_COUNT; i++)
 		{
 			generator_contexts[i] = i;
-			input_operators[i] = get_new_registered_operator_for_query_plan(qp);
-			setup_generator_operator(input_operators[i], generator, &(generator_contexts[i]), &record_def);
-			printf("source sorted operator - %d %p\n", i, input_operators[i]);
+			sorted_input_operators[i] = get_new_registered_operator_for_query_plan(qp);
+			setup_generator_operator(sorted_input_operators[i], generator, &(generator_contexts[i]), &record_def);
+			printf("source sorted operator - %d %p\n", i, sorted_input_operators[i]);
 		}
 
 		// first pipeline first union then sort
 		operator* u = get_new_registered_operator_for_query_plan(qp);
-		setup_union_operator(u, input_operators, INPUT_OPERATORS_COUNT);
+		setup_union_operator(u, sorted_input_operators, INPUT_OPERATORS_COUNT);
 		printf("union operator %p\n", u);
 
 		operator* s = get_new_registered_operator_for_query_plan(qp);
@@ -107,7 +108,7 @@ int main(int argc, char** argv)
 
 		// second pipeline just merged the sorted source into a single sorted output
 		operator* m  = get_new_registered_operator_for_query_plan(qp);
-		setup_sorted_inputs_operator(m, input_operators, INPUT_OPERATORS_COUNT, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR);
+		setup_sorted_inputs_operator(m, sorted_input_operators, INPUT_OPERATORS_COUNT, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR);
 		printf("merge sorted operator %p\n", m);
 
 		// finally match both the output of the pipelines
