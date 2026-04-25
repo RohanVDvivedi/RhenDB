@@ -32,6 +32,7 @@ static void execute(operator* o)
 	{
 		consumption_iterator* cit_p = NULL;
 
+		// pick any run that is ready, and move it to waiting ones
 		pthread_mutex_lock(&(inputs->input_iterators_list_lock));
 
 		cit_p = (consumption_iterator*) get_head_of_linkedlist(&(inputs->ready_input_iterators));
@@ -44,15 +45,19 @@ static void execute(operator* o)
 
 		pthread_mutex_unlock(&(inputs->input_iterators_list_lock));
 
+		// fail if there ie nothing left to consume from, i.e. nothing is ready
 		if(cit_p == NULL)
 			break;
 
+		// consume from this selected cit_p until there is nothing more produced
 		while(1)
 		{
 			int no_more_data = 0;
 			const void* tuple = consume_for_consumption_iterator(cit_p, &no_more_data);
 			if(no_more_data)
 			{
+				// this imples that this cit_p will not produce anything more, and must be destroyed
+
 				pthread_mutex_lock(&(inputs->input_iterators_list_lock));
 
 				if(cit_p->embed_uints[0] == IS_WAITING)
@@ -80,7 +85,7 @@ static void execute(operator* o)
 				kill_signal_for_self_operator(o, kill_reason); return ;
 			}
 
-			if(tuple != NULL)
+			if(tuple != NULL) // if there was a tuple, produce it
 			{
 				int produced = produce_tuple_from_operator(o, (void*)tuple);
 				if(!produced)
@@ -89,7 +94,7 @@ static void execute(operator* o)
 					kill_signal_for_self_operator(o, kill_reason); return ;
 				}
 			}
-			else
+			else // else we break out of this loop and return, and pick the next ready_input_iterator
 				break;
 		}
 	}
@@ -97,6 +102,7 @@ static void execute(operator* o)
 	return ;
 }
 
+// this call back ensures that on a trigger, we move the respective cit_p from waiting to ready
 static void notify_callback(operator* o, consumption_iterator* cit_p)
 {
 	input_values* inputs = o->inputs;
