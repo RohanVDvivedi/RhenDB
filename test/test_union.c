@@ -16,8 +16,6 @@
 
 #define USERS_COUNT 100
 
-#define PRINT_DATA 0
-
 #define TESTCASE_SIZE 1000000
 #define INPUT_OPERATORS_COUNT 30
 
