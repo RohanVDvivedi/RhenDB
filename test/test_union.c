@@ -80,7 +80,7 @@ int main(int argc, char** argv)
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, (INPUT_OPERATORS_COUNT) * 2 + 30);
+	qp = get_new_query_plan(&tx, (INPUT_OPERATORS_COUNT) + 30);
 
 	// make operators
 
@@ -93,7 +93,7 @@ int main(int argc, char** argv)
 			generator_contexts[i] = i;
 			input_operators[i] = get_new_registered_operator_for_query_plan(qp);
 			setup_generator_operator(input_operators[i], generator, &(generator_contexts[i]), &record_def);
-			printf("source operator - %d %p\n", i, input_operators[i]);
+			printf("source sorted operator - %d %p\n", i, input_operators[i]);
 		}
 
 		// first pipeline first union then sort
@@ -105,17 +105,9 @@ int main(int argc, char** argv)
 		setup_external_sort_operator(s, TUPLES_DOWN_COUNTER_INF, u, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 		printf("sorter operator %p\n", s);
 
-		// second pipeline first sort then merge
-		operator* sorted_input_operators[INPUT_OPERATORS_COUNT];
-		for(int i = 0; i < INPUT_OPERATORS_COUNT; i++)
-		{
-			sorted_input_operators[i] = get_new_registered_operator_for_query_plan(qp);
-			setup_external_sort_operator(sorted_input_operators[i], TUPLES_DOWN_COUNTER_INF, input_operators[i], RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-			printf("sorter operator - %d %p\n", i, sorted_input_operators[i]);
-		}
-
+		// second pipeline just merged the sorted source into a single sorted output
 		operator* m  = get_new_registered_operator_for_query_plan(qp);
-		setup_sorted_inputs_operator(m, sorted_input_operators, INPUT_OPERATORS_COUNT, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR);
+		setup_sorted_inputs_operator(m, input_operators, INPUT_OPERATORS_COUNT, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR);
 		printf("merge sorted operator %p\n", m);
 
 		// finally match both the output of the pipelines
