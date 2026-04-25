@@ -194,7 +194,7 @@ void setup_sorted_inputs_operator(operator* o, operator** input_operators, uint3
 	for(uint32_t j = 0; j < key_element_count; j++)
 		inputs->key_dtis[j] = get_type_info_for_element_from_tuple_def(inputs->record_def, key_element_ids[j]);
 
-	initialize_pheap(&(inputs->ready_input_iterators), MIN_HEAP, LEFTIST, &contexted_comparator(inputs, compare_consumption_iterators), offsetof(consumption_iterator, embed_node_php));
+	initialize_pheap(&(inputs->ready_input_iterators), MIN_HEAP, LEFTIST, &contexted_comparator(o, compare_consumption_iterators), offsetof(consumption_iterator, embed_node_php));
 	initialize_singlylist(&(inputs->waiting_input_iterators), offsetof(consumption_iterator, embed_node_sl));
 
 	for(uint32_t i = 0; i < input_operators_count; i++)
