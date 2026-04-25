@@ -1,9 +1,5 @@
 PICKED TASKS
 
- * merge_sorted_runs operator
-   * merge multiple sorted_input_operators with identical output_defs into one
-   * store a singlylist of the unseen tuples consumption_iterator, and only poll them hen triggerred
-
  * implement streaming_loop_join_operator (identical to nested_loop_join)
    * start batching on both sides left and right
    * maintain iterators on both sides: begin, unseen_batch_first, unseen_batch_last
@@ -31,7 +27,6 @@ PRIORITY HIGH LEVEL TASKS
   * what operators to implement
     * scan on b+tree/hash index (sort rids (per 1 or set of buckets for hash index OR about some 1000 pages for bplus tree) and then scan the table), scan on table(start and move ahead linearly)
     * mvcc_readable_tuple_selection_transformer should be used for the outputs of scan operator on the tables
-    * merge_sorted_inputs_operator to merged sorted runs from N different operators
     * joins (nested loop with per block, index nested loop, sort merge join, hash join)
     * group_by (based on hash or sorted input data)
     * read/write operators over simple data_structures (for full tuple indexer like access will be implemented later)
