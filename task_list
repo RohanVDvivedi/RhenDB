@@ -23,6 +23,15 @@ PICKED TASKS
       void destroy_state(void* context, dstring state);
    }
 
+ * sorting based aggregation operator
+   * just like external sort operator takes, key_element_ids and key_element_count
+   * also takes in list of aggregate functions to compute aggregates
+   * iterate over tuples and compute aggregate column, until the key compares equal
+   * find ways to parallelize all these computation
+     * operations to update on different aggregate columns (in same or different output rows) can be done in parallel
+     * key1 -> agg1_col1, agg2_col2 and key2 -> agg3_col1, agg4_col2, here all 4 agg*_col* can be computed in parallel
+     * find mechanism to do this
+
 PRIORITY HIGH LEVEL TASKS
   * what operators to implement
     * scan on b+tree/hash index (sort rids (per 1 or set of buckets for hash index OR about some 1000 pages for bplus tree) and then scan the table), scan on table(start and move ahead linearly)
