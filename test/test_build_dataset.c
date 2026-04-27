@@ -21,11 +21,7 @@
 
 #define RANDOMIZE_DATA
 
-#define PRINT_DATA 1
-
-#define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
-#define PARALLEL_SORTING_JOBS_COUNT    8
-#define N_WAY_SORT                     16
+#define PRINT_DATA 0
 
 uint32_t inputs[TESTCASE_SIZE];
 void generate_random_inputs()

@@ -113,7 +113,7 @@ static void sort_job(operator* o, void* param)
 	tuple_runs* input_param = param;
 
 	uint32_t total_runs_to_process = input_param->runs_count;
-	for(uint64_t i = 0; i < total_runs_to_process; i++)
+	for(uint64_t i = 0; i < total_runs_to_process && !can_not_proceed_for_execution_operator(o); i++)
 	{
 		// pop one from the front
 		interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param);
@@ -199,9 +199,7 @@ static void merge_into_run_job(operator* o, void* param)
 		{
 			// comes here only if mmap succeeds, will happen always, unless the run is empty
 
-			// embed_uints[0] is used to store tuple processed up until now
 			// embed_ptrs[0] is used to store the materialized keys
-			its_p->embed_uints[0] = 0;
 			its_p->embed_ptrs[0] = &(keys[(total_input_runs_count++) * (inputs->key_element_count)]);
 
 			// revise materialized keys before pushing it to mergeable_open_runs
@@ -216,9 +214,12 @@ static void merge_into_run_job(operator* o, void* param)
 	interim_tuple_store* output_its_p = get_new_interim_tuple_store(total_output_size_in_bytes);
 
 	// merge all one by one from the top into output_its_p or produce them if possible
-	while((is_inf_tuples_down_counter(&result_counter) && total_input_runs_count > 1) ||
-		(!is_inf_tuples_down_counter(&result_counter) && can_decrement_tuples_down_counter(&result_counter) && total_input_runs_count > 0))
+	while(!is_empty_pheap(&mergeable_open_runs) && can_decrement_tuples_down_counter(&result_counter))
 	{
+		// every 1000 tuples, make sue that the operator is not killed
+		if(((output_its_p->tuples_count % 1000) == 0) && can_not_proceed_for_execution_operator(o))
+			break;
+
 		interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&mergeable_open_runs);
 
 		// copy the top tuple of its_p into (append it to) output_its_p
@@ -228,7 +229,6 @@ static void merge_into_run_job(operator* o, void* param)
 		// go next on its_p, and insert it back into mergeable_open_runs
 		{
 			uint64_t next_tuple_offset = next_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0]));
-			its_p->embed_uints[0]++;
 			if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), next_tuple_offset, &(inputs->record_def->size_def), inputs->minimum_run_size))
 			{
 				// implies there are no more tuples
@@ -246,23 +246,6 @@ static void merge_into_run_job(operator* o, void* param)
 
 				heapify_for_in_pheap(&mergeable_open_runs, its_p);
 			}
-		}
-	}
-
-	// if there is only 1 mergeable_open_runs left, then merge all of its contents into the output_its_p
-	// we will enter this loop with only its_p remaining in mergeable_open_runs and when we want infinite(/all) tuples to be produced
-	if(is_inf_tuples_down_counter(&result_counter))
-	{
-		while(!is_empty_pheap(&mergeable_open_runs))
-		{
-			interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&mergeable_open_runs);
-
-			append_all_from_another_interim_tuple_store2(output_its_p, its_p, curr_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0])), its_p->embed_uints[0]);
-
-			remove_from_pheap(&mergeable_open_runs, its_p);
-
-			unmap_all_embed_regions_in_interim_tuple_store(its_p);
-			delete_interim_tuple_store(its_p);
 		}
 	}
 
