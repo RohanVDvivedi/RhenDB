@@ -3,7 +3,7 @@
 #include<stdlib.h>
 
 /*
-	TEMPLATE FOR INTERMEDIATE OPERATORS (sorting(ordering), joins(hash_joins), aggregations(groupby->aggregates))
+	TEMPLATE FOR INTERMEDIATE OPERATORS (sorting(ordering), joins(hash_join, sort_merge_join, streaming_nested_loop_join, index_nested_loop_join), aggregations(sorted_aggregator and hash_aggregator))
 */
 
 typedef struct input_values input_values;
