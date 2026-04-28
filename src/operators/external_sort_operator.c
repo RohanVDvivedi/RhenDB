@@ -364,7 +364,9 @@ static void merge_into_produce_job(operator* o, void* param)
 	else
 		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
 
-	// this would always be the final job, so no need to request for any mote jobs
+	// this would always be the final job, so no need to request for any more jobs
+
+	destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
 }
 
 static void merge_job(operator* o, void* param)
@@ -424,7 +426,9 @@ static void produce_job(operator* o, void* param)
 	else
 		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
 
-	// this would always be the final job, so no need to request for any mote jobs
+	// this would always be the final job, so no need to request for any more jobs
+
+	destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
 }
 
 static void request_to_process_some_jobs(operator* o)
@@ -598,6 +602,8 @@ static void execute(operator* o)
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
+			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 

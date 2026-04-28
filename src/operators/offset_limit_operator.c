@@ -26,10 +26,14 @@ static void execute(operator* o)
 		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
 		{
+			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
+			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 
@@ -50,6 +54,8 @@ static void execute(operator* o)
 					int produced = produce_tuple_from_operator(o, (void*)tuple);
 					if(!produced)
 					{
+						destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 						kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
 						kill_signal_for_self_operator(o, kill_reason); return ;
 					}
@@ -58,6 +64,8 @@ static void execute(operator* o)
 				// after every produce if this counter reached 0, then kill your self
 				if(is_zero_tuples_down_counter(&(inputs->limit_counter)))
 				{
+					destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 					kill_signal_for_self_operator(o, kill_reason); return ;
 				}
 			}

@@ -73,6 +73,9 @@ static void execute(operator* o)
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
+			remove_all_from_pheap(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+			remove_all_from_singlylist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 
@@ -105,6 +108,9 @@ static void execute(operator* o)
 			int produced = produce_tuple_from_operator(o, (void*)tuple);
 			if(!produced)
 			{
+				remove_all_from_pheap(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+				remove_all_from_singlylist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+
 				kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
 				kill_signal_for_self_operator(o, kill_reason); return ;
 			}
@@ -123,6 +129,9 @@ static void execute(operator* o)
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
+			remove_all_from_pheap(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+			remove_all_from_singlylist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 
@@ -143,6 +152,8 @@ static void execute(operator* o)
 	}
 
 	// if there is nothing ready (there already is nothing in waiting also), we are done, we quit with success
+	remove_all_from_pheap(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+	remove_all_from_singlylist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
 	kill_signal_for_self_operator(o, kill_reason); return ;
 }
 

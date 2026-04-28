@@ -34,6 +34,8 @@ static void execute(operator* o)
 			inputs->is_out_strm_closed = 1;
 			close_stream(inputs->out_strm, &strm_error);
 
+			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
@@ -41,6 +43,8 @@ static void execute(operator* o)
 			int strm_error = 0;
 			inputs->is_out_strm_closed = 1;
 			close_stream(inputs->out_strm, &strm_error);
+
+			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
 
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
@@ -54,6 +58,8 @@ static void execute(operator* o)
 				int strm_error = 0;
 				inputs->is_out_strm_closed = 1;
 				close_stream(inputs->out_strm, &strm_error);
+
+				destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
 
 				kill_reason = get_dstring_pointing_to_literal_cstring("error_output_stream_operator");
 				kill_signal_for_self_operator(o, kill_reason); return ;

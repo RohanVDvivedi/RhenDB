@@ -46,6 +46,9 @@ static void execute(operator* o)
 		// we reach here only if they are all non-NULL or have no more data
 		if(inputs->no_more_data[0] != inputs->no_more_data[1])
 		{
+			destroy_consumption_iterator(inputs->input_iterators[0]); inputs->input_iterators[0] = NULL;
+			destroy_consumption_iterator(inputs->input_iterators[1]); inputs->input_iterators[1] = NULL;
+
 			if(inputs->no_more_data[0])
 			{
 				kill_reason = get_dstring_pointing_to_literal_cstring("resuts_not_match_more_data_in_input_0");
@@ -60,6 +63,9 @@ static void execute(operator* o)
 
 		if(inputs->no_more_data[0] == 1)
 		{
+			destroy_consumption_iterator(inputs->input_iterators[0]); inputs->input_iterators[0] = NULL;
+			destroy_consumption_iterator(inputs->input_iterators[1]); inputs->input_iterators[1] = NULL;
+
 			kill_reason = get_dstring_pointing_to_literal_cstring("resuts_match_successfully");
 			printf("matched %"PRIu64" tuples\n", inputs->tuple_processed);
 			kill_signal_for_self_operator(o, kill_reason); return ;
@@ -70,6 +76,9 @@ static void execute(operator* o)
 		inputs->tuple_processed++;
 		if(compare != 0)
 		{
+			destroy_consumption_iterator(inputs->input_iterators[0]); inputs->input_iterators[0] = NULL;
+			destroy_consumption_iterator(inputs->input_iterators[1]); inputs->input_iterators[1] = NULL;
+
 			printf("result_match_operator says outputs do not match for %"PRIu64"-th tuple:\n", inputs->tuple_processed);
 			print_tuple(inputs->tuples[0], inputs->input_defs[0]);
 			print_tuple(inputs->tuples[1], inputs->input_defs[1]);

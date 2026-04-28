@@ -596,6 +596,11 @@ void destroy_consumption_iterator(consumption_iterator* cit_p)
 	free(cit_p);
 }
 
+void delete_on_notify_for_consumption_iterator(void* resource_p, const void* data_p)
+{
+	destroy_consumption_iterator((consumption_iterator*)data_p);
+}
+
 int points_to_same_tuple_for_consumtion_iterators(const consumption_iterator* cit1_p, const consumption_iterator* cit2_p)
 {
 	if(cit1_p->producer != cit2_p->producer)

@@ -178,6 +178,10 @@ int produce_tuple_from_operator(operator* o, void* tuple);
 consumption_iterator* create_consumption_iterator(operator* producer, operator* consumer, void (*notify_callback)(operator* consumer, consumption_iterator* cit_p), consumption_iterator* clone_cit_p);
 void destroy_consumption_iterator(consumption_iterator* cit_p);
 
+// to be used with cutlery containers only
+void delete_on_notify_for_consumption_iterator(void* resource_p, const void* data_p);
+#define DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR (&((notifier_interface){NULL, delete_on_notify_for_consumption_iterator}))
+
 int points_to_same_tuple_for_consumtion_iterators(const consumption_iterator* cit1_p, const consumption_iterator* cit2_p);
 
 // consume the tuple using the iterator provided that has the producer consumer pair

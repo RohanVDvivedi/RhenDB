@@ -29,10 +29,14 @@ static void execute(operator* o)
 		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
 		{
+			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
+			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 
