@@ -32,6 +32,11 @@ PICKED TASKS
      * key1 -> agg1_col1, agg2_col2 and key2 -> agg3_col1, agg4_col2, here all 4 agg*_col* can be computed in parallel
      * find mechanism to do this
 
+ * sort_merge_join
+   * iterate further the lesser side until it becomes greater than or equal to the other side
+   * if both are equal consume all the equal tuples from both the sides and generate and produce their cross produce
+   * need an interface to produce outputs combining tuples into one
+
 PRIORITY HIGH LEVEL TASKS
   * what operators to implement
     * scan on b+tree/hash index (sort rids on interim_tuple_store_sort and then scan the table), scan on heap_table(start and move ahead linearly)
