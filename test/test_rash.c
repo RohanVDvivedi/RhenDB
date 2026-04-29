@@ -174,6 +174,18 @@ void print_value(binary_read_iterator* value_bri_p)
 	}
 }
 
+void print_value_at_rash_table_iterator(rash_table_iterator* rti_p)
+{
+	binary_read_iterator* value_bri_p = read_value_in_rash_table_iterator(rti_p);
+
+	printf("(\n");
+	print_value(value_bri_p);
+	printf(")\n");
+
+	int abort_error_dummy = 0;
+	delete_binary_read_iterator(value_bri_p, NULL, &abort_error_dummy);
+}
+
 void insert_rth(rash_table_handle* rth_p, uint32_t v)
 {
 	int abort_error = 0;
