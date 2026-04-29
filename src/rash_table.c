@@ -508,6 +508,11 @@ void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, bi
 		rti_p->rth_p->total_inline_size += get_tuple_size(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, tuple_to_insert);
 
 		insert_in_hash_table_iterator(rti_p->hti_p, tuple_to_insert, NULL, &abort_error_dummy);
+
+		// by default the hash_table_iterator inserts prior to the tuple being pointed to
+		// so we go previous, so that we still point to the presently inserted tuple
+
+		prev_hash_table_iterator(rti_p->hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, NULL, &abort_error_dummy);
 	}
 	else // update
 	{
