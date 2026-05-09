@@ -259,6 +259,12 @@ rage_engine get_rage_engine_for_min_tx_engine(const char* database_file_name, ui
 
 	e.mark_sub_transaction_aborted = (int (*)(void*, void*, int))mark_aborted_for_mini_tx;
 
+	if(!init_blob_store_tuple_definitions(&(e.bstd), &(e.pam_p->pas)))
+	{
+		printf("FAILED to initialize persistent store's bstd\n");
+		exit(-1);
+	}
+
 	if(!init_worm_tuple_definitions(&(e.wtd), &(e.pam_p->pas)))
 	{
 		printf("FAILED to initialize persistent store's wtd\n");

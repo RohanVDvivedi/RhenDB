@@ -19,6 +19,7 @@
 #include<tupleindexer/interface/opaque_page_access_methods.h>
 #include<tupleindexer/interface/opaque_page_modification_methods.h>
 
+#include<tupleindexer/blob_store/blob_store.h>
 #include<tupleindexer/worm/worm.h>
 
 #include<stdint.h>
@@ -41,6 +42,9 @@ struct rage_engine
 	page_access_methods* pam_p;
 
 	page_modification_methods* pmm_p;
+
+	// required for accessing extended types
+	blob_store_tuple_defs bstd;
 
 	// required for accessing extended types
 	worm_tuple_defs wtd;
