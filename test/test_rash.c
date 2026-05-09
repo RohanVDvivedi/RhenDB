@@ -344,8 +344,20 @@ int main()
 		print_rash_table(&rth, print_value);
 	#endif
 
+/*
+	printf("%lu/%lu\n", ((volatile_page_store*)(rdb.volatile_rage_engine.context))->active_page_count, ((volatile_page_store*)(rdb.volatile_rage_engine.context))->total_page_count);
+	sleep(10);
+	printf("%lu/%lu\n", ((volatile_page_store*)(rdb.volatile_rage_engine.context))->active_page_count, ((volatile_page_store*)(rdb.volatile_rage_engine.context))->total_page_count);
+*/
+
 	// destroy rash table
 	destroy_rash_table(&rth);
+
+/*
+	printf("%lu/%lu\n", ((volatile_page_store*)(rdb.volatile_rage_engine.context))->active_page_count, ((volatile_page_store*)(rdb.volatile_rage_engine.context))->total_page_count);
+	sleep(10);
+	printf("%lu/%lu\n", ((volatile_page_store*)(rdb.volatile_rage_engine.context))->active_page_count, ((volatile_page_store*)(rdb.volatile_rage_engine.context))->total_page_count);
+*/
 
 	deinitialize_tuple_defs();
 
