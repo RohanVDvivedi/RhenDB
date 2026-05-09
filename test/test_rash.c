@@ -200,7 +200,7 @@ void insert_rth(rash_table_handle* rth_p, uint32_t v)
 	binary_write_iterator* bwi_p = open_for_writing_value_in_rash_table_iterator(&rti, NULL, &abort_error);
 
 	int abort_error_dummy = 0;
-	append_to_binary_write_iterator(bwi_p, record, get_tuple_size(&record_def, record), &(rth_p->rdb->volatile_rage_engine), &abort_error_dummy);
+	append_to_binary_write_iterator(bwi_p, record, get_tuple_size(&record_def, record), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(rth_p->htan)), NULL, &abort_error_dummy);
 
 	close_and_write_value_in_hash_table_iterator(&rti, bwi_p);
 
