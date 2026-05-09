@@ -29,6 +29,9 @@ void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb)
 	init_hash_table_tuple_definitions(&(rdb->rash_httd), &(rdb->volatile_rage_engine.pam_p->pas), record_def, actual_key_positions, sizeof(actual_key_positions)/sizeof(actual_key_positions[0]), FNV_64_TUPLE_HASHER);
 }
 
+#define MAX_BLOB_STORE_INVALID_ENTRIES 64
+#define THRESHOLD_BLOB_STORE_INVALID_ENTRIES 28
+
 rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb)
 {
 	int abort_error_dummy = 0;
@@ -51,7 +54,7 @@ rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_
 		.rdb = rdb,
 	};
 
-	initialize_heap_table_accumulative_notifier(&(rth.htan), 64);
+	initialize_heap_table_accumulative_notifier(&(rth.htan), MAX_BLOB_STORE_INVALID_ENTRIES);
 
 	for(uint32_t i = 0; i < key_element_count; i++)
 	{
@@ -78,9 +81,16 @@ int shrink_rash_table(rash_table_handle* rth_p)
 	return shrunk;
 }
 
-void fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rash_table_handle* rth_p)
+void fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rash_table_handle* rth_p, int force_fix_invalid_entries)
 {
 	int abort_error_dummy = 0;
+
+	if(get_notification_count_for_heap_table_accumulative_notifier(&(rth_p->htan)) == 0)
+		return;
+
+	// if not-forced-to-fix and threshold-not-crossed, then no need to fix
+	if((!force_fix_invalid_entries) && (get_notification_count_for_heap_table_accumulative_notifier(&(rth_p->htan)) < THRESHOLD_BLOB_STORE_INVALID_ENTRIES))
+		return;
 
 	uint64_t root_page_id;
 	uint32_t unused_space;
@@ -390,6 +400,10 @@ static void delete_all_chunks_in_blobs_of_blob_stores(rash_table_handle* rth_p, 
 {
 	int abort_error_dummy = 0;
 
+	// if blob_head is NULL, return immediately
+	if(is_tuple_pointer_NULL(blob_head, &(rth_p->rdb->volatile_rage_engine.pam_p->pas)))
+		return;
+
 	blob_store_write_iterator* bswi_p = get_new_blob_store_write_iterator(rth_p->blob_store_root_page_id, blob_head, get_NULL_tuple_pointer(&(rth_p->rdb->volatile_rage_engine.pam_p->pas)), &(rth_p->rdb->volatile_rage_engine.bstd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
 	while(0 < discard_from_head_in_blob(bswi_p, 32 * 1024 * 1024, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(rth_p->htan)), NULL, &abort_error_dummy));
@@ -424,7 +438,7 @@ int remove_from_rash_table_iterator(rash_table_iterator* rti_p)
 		}
 
 		// it might have invalidated entries in heap table of the blob_store so fix them next
-		fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rti_p->rth_p);
+		fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rti_p->rth_p, 0);
 	}
 
 	rti_p->rth_p->element_count--;
@@ -523,7 +537,7 @@ binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_
 				}
 
 				// it might have invalidated entries in heap table of the blob_store so fix them next
-				fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rti_p->rth_p);
+				fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rti_p->rth_p, 0);
 			}
 			delete_binary_write_iterator(bwi_p, NULL, &abort_error_dummy);
 		}
@@ -538,7 +552,7 @@ void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, bi
 	int abort_error_dummy = 0;
 
 	// it might have invalidated entries in heap table of the blob_store so fix them next
-	fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rti_p->rth_p);
+	fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rti_p->rth_p, 0);
 
 	// copy the tuple to be inserted or updated
 	void* tuple_to_insert = bwi_p->tupl;

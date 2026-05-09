@@ -261,6 +261,8 @@ void find_and_print(rash_table_handle* rth_p, uint32_t v)
 	destroy_rash_table_key(&rtk);
 }
 
+//#include<volatilepagestore/volatile_page_store.h>
+
 int main()
 {
 	rhendb rdb;
@@ -344,9 +346,11 @@ int main()
 		print_rash_table(&rth, print_value);
 	#endif
 
+fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(&rth, 1);
+
 /*
 	printf("%lu/%lu\n", ((volatile_page_store*)(rdb.volatile_rage_engine.context))->active_page_count, ((volatile_page_store*)(rdb.volatile_rage_engine.context))->total_page_count);
-	sleep(10);
+	sleep(11);
 	printf("%lu/%lu\n", ((volatile_page_store*)(rdb.volatile_rage_engine.context))->active_page_count, ((volatile_page_store*)(rdb.volatile_rage_engine.context))->total_page_count);
 */
 
@@ -355,7 +359,7 @@ int main()
 
 /*
 	printf("%lu/%lu\n", ((volatile_page_store*)(rdb.volatile_rage_engine.context))->active_page_count, ((volatile_page_store*)(rdb.volatile_rage_engine.context))->total_page_count);
-	sleep(10);
+	sleep(11);
 	printf("%lu/%lu\n", ((volatile_page_store*)(rdb.volatile_rage_engine.context))->active_page_count, ((volatile_page_store*)(rdb.volatile_rage_engine.context))->total_page_count);
 */
 

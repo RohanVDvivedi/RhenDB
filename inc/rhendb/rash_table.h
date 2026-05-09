@@ -71,7 +71,7 @@ int expand_rash_table(rash_table_handle* rth_p);
 
 int shrink_rash_table(rash_table_handle* rth_p);
 
-void fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rash_table_handle* rth_p);
+void fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rash_table_handle* rth_p, int force_fix_invalid_entries);
 
 void destroy_rash_table(rash_table_handle* rth_p);
 
