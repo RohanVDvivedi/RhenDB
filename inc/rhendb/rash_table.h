@@ -4,6 +4,8 @@
 #include<rhendb/rhendb.h>
 
 #include<tupleindexer/hash_table/hash_table.h>
+#include<tupleindexer/blob_store/blob_store.h>
+#include<tupleindexer/utils/heap_table_accumulative_notifier.h>
 #include<tupleindexer/common/materialized_key.h>
 
 #include<tuplelargetypes/tuple_list_extended.h>
@@ -22,15 +24,12 @@
 #define PREFIX_BYTES_FOR_KEY           120
 #define PREFIX_BYTES_FOR_VALUE          90
 
-#define EXTENDED_TYPE_MAX_SIZE_FOR_KEY    ((4 + (4 + 8)) + (4 + PREFIX_BYTES_FOR_KEY))
-#define EXTENDED_TYPE_MAX_SIZE_FOR_VALUE  ((4 + (4 + 8)) + (4 + PREFIX_BYTES_FOR_VALUE))
+#define EXTENDED_TYPE_MAX_SIZE_FOR_KEY    ((4 + (4 + 12)) + (4 + PREFIX_BYTES_FOR_KEY))
+#define EXTENDED_TYPE_MAX_SIZE_FOR_VALUE  ((4 + (4 + 12)) + (4 + PREFIX_BYTES_FOR_VALUE))
 
-#define RASH_RECORD_MAX_SIZE              ((4 + (8 + 4 + 4)) + EXTENDED_TYPE_MAX_SIZE_FOR_KEY + EXTENDED_TYPE_MAX_SIZE_FOR_VALUE)
+#define RASH_RECORD_MAX_SIZE              ((4 + (8 + 4 + 4 + 12)) + EXTENDED_TYPE_MAX_SIZE_FOR_KEY + EXTENDED_TYPE_MAX_SIZE_FOR_VALUE)
 
 fail_build_on(RASH_RECORD_MAX_SIZE > 1024);
-
-#define MIN_LOAD_FACTOR_IN_BYTES   0.9 // shrink if load-factor crosses
-#define MAX_LOAD_FACTOR_IN_BYTES   4.0 // expand if load-factor crosses
 
 // must be called right after rhendb is doen initializing it's volatile_engine
 void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb);
@@ -53,6 +52,12 @@ struct rash_table_handle
 	tuple_def* key_tuple_defs; // array of tuple_defs, built with the handle
 	uint32_t key_element_count;
 
+	// extended keys and values will be stored in blob_store at this root_page_id
+	uint64_t blob_store_root_page_id;
+
+	// heap table notifier to notifier for the unused_space fixing in the blob_store
+	heap_table_accumulative_notifier htan;
+
 	// to read contents of extended types, to hash and compare them
 	rage_engine* ex_engine;
 
@@ -65,6 +70,8 @@ rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_
 int expand_rash_table(rash_table_handle* rth_p);
 
 int shrink_rash_table(rash_table_handle* rth_p);
+
+void fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rash_table_handle* rth_p);
 
 void destroy_rash_table(rash_table_handle* rth_p);
 
