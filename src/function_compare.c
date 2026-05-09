@@ -37,8 +37,8 @@ int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const d
 		return compare_datum(uval1, dti1, uval2, dti2);
 	else if((is_text_type_info(dti1) || is_blob_type_info(dti1)) && (is_text_type_info(dti2) || is_blob_type_info(dti2))) // both are text or blob
 	{
-		binary_read_iterator* bri1_p = get_new_binary_read_iterator(uval1, dti1, &(ex_engine->wtd), ex_engine->pam_p);
-		binary_read_iterator* bri2_p = get_new_binary_read_iterator(uval2, dti2, &(ex_engine->wtd), ex_engine->pam_p);
+		binary_read_iterator* bri1_p = get_new_binary_read_iterator(uval1, dti1, &(ex_engine->bstd), ex_engine->pam_p);
+		binary_read_iterator* bri2_p = get_new_binary_read_iterator(uval2, dti2, &(ex_engine->bstd), ex_engine->pam_p);
 		int is_prefix = 0;
 
 		int cmp = compare_tb(bri1_p, bri2_p, &is_prefix, transaction_id, abort_error);
@@ -54,8 +54,8 @@ int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const d
 	}
 	else if(is_numeric_type_info(dti1) && is_numeric_type_info(dti2)) // both are numeric
 	{
-		numeric_reader_interface nri1 = init_intuple_numeric_reader_interface((*uval1), dti1, &(ex_engine->wtd), ex_engine->pam_p, transaction_id, abort_error);
-		numeric_reader_interface nri2 = init_intuple_numeric_reader_interface((*uval2), dti2, &(ex_engine->wtd), ex_engine->pam_p, transaction_id, abort_error);
+		numeric_reader_interface nri1 = init_intuple_numeric_reader_interface((*uval1), dti1, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, abort_error);
+		numeric_reader_interface nri2 = init_intuple_numeric_reader_interface((*uval2), dti2, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, abort_error);
 		int is_prefix = 0;
 		int error = 0;
 
@@ -120,8 +120,8 @@ int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_typ
 		return compare_datum2(uval1, uval2, dti);
 	else if(is_text_type_info(dti) || is_blob_type_info(dti))
 	{
-		binary_read_iterator* bri1_p = get_new_binary_read_iterator(uval1, dti, &(ex_engine->wtd), ex_engine->pam_p);
-		binary_read_iterator* bri2_p = get_new_binary_read_iterator(uval2, dti, &(ex_engine->wtd), ex_engine->pam_p);
+		binary_read_iterator* bri1_p = get_new_binary_read_iterator(uval1, dti, &(ex_engine->bstd), ex_engine->pam_p);
+		binary_read_iterator* bri2_p = get_new_binary_read_iterator(uval2, dti, &(ex_engine->bstd), ex_engine->pam_p);
 		int is_prefix = 0;
 
 		int cmp = compare_tb(bri1_p, bri2_p, &is_prefix, transaction_id, abort_error);
@@ -137,8 +137,8 @@ int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_typ
 	}
 	else if(is_numeric_type_info(dti))
 	{
-		numeric_reader_interface nri1 = init_intuple_numeric_reader_interface((*uval1), dti, &(ex_engine->wtd), ex_engine->pam_p, transaction_id, abort_error);
-		numeric_reader_interface nri2 = init_intuple_numeric_reader_interface((*uval2), dti, &(ex_engine->wtd), ex_engine->pam_p, transaction_id, abort_error);
+		numeric_reader_interface nri1 = init_intuple_numeric_reader_interface((*uval1), dti, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, abort_error);
+		numeric_reader_interface nri2 = init_intuple_numeric_reader_interface((*uval2), dti, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, abort_error);
 		int is_prefix = 0;
 		int error = 0;
 

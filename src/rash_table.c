@@ -7,9 +7,9 @@ positional_accessor actual_key_positions[] = {STATIC_POSITION(0)};
 
 void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb)
 {
-	data_type_info* record_type_info = malloc(sizeof_tuple_data_type_info(3));
+	data_type_info* record_type_info = malloc(sizeof_tuple_data_type_info(4));
 
-	initialize_tuple_data_type_info(record_type_info, "rash_record", 1, RASH_RECORD_MAX_SIZE, 3);
+	initialize_tuple_data_type_info(record_type_info, "rash_record", 1, RASH_RECORD_MAX_SIZE, 4);
 
 	strcpy(record_type_info->containees[0].field_name, "hash");
 	record_type_info->containees[0].al.type_info = UINT_NON_NULLABLE[8];
@@ -19,6 +19,9 @@ void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb)
 
 	strcpy(record_type_info->containees[2].field_name, "value");
 	record_type_info->containees[2].al.type_info = get_blob_extended_type_info(EXTENDED_TYPE_MAX_SIZE_FOR_VALUE, get_blob_inline_type_info(PREFIX_BYTES_FOR_VALUE + 4), &(rdb->volatile_rage_engine.pam_p->pas));
+
+	strcpy(record_type_info->containees[3].field_name, "tail_of_value");
+	record_type_info->containees[3].al.type_info = &(rdb->volatile_rage_engine.pam_p->pas.tuple_pointer_type_info);
 
 	tuple_def* record_def = malloc(sizeof(tuple_def));
 	initialize_tuple_def(record_def, record_type_info);
@@ -41,10 +44,14 @@ rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_
 		.key_tuple_defs = malloc(sizeof(tuple_def) * key_element_count),
 		.key_element_count = key_element_count,
 
+		.blob_store_root_page_id = get_new_blob_store(&(rdb->volatile_rage_engine.bstd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy),
+
 		.ex_engine = ex_engine,
 
 		.rdb = rdb,
 	};
+
+	initialize_heap_table_accumulative_notifier(&(rth.htan), 64);
 
 	for(uint32_t i = 0; i < key_element_count; i++)
 	{
@@ -71,29 +78,28 @@ int shrink_rash_table(rash_table_handle* rth_p)
 	return shrunk;
 }
 
+void fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rash_table_handle* rth_p)
+{
+	int abort_error_dummy = 0;
+
+	uint64_t root_page_id;
+	uint32_t unused_space;
+	uint64_t page_id;
+	while(pop_from_heap_table_accumulative_notifier(&(rth_p->htan), &root_page_id, &unused_space, &page_id))
+	{
+		fix_unused_space_in_heap_table(root_page_id, unused_space, page_id, &(rth_p->rdb->volatile_rage_engine.bstd.httd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+	}
+}
+
 void destroy_rash_table(rash_table_handle* rth_p)
 {
 	int abort_error_dummy = 0;
 
-	rash_table_iterator rti = find_all_in_rash_table(rth_p, 1);
-
-	while(1)
-	{
-		const void* record_tuple = get_tuple_hash_table_iterator(rti.hti_p);
-		if(record_tuple != NULL)
-		{
-			datum uval;
-			get_value_from_element_from_tuple(&uval, rth_p->rdb->rash_httd.lpltd.record_def, SELF, record_tuple);
-			delete_all_extension_worms(&uval, rth_p->rdb->rash_httd.lpltd.record_def->type_info, &(rth_p->rdb->volatile_rage_engine.wtd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
-		}
-
-		if(!next_in_rash_table_iterator(&rti))
-			break;
-	}
-
-	delete_rash_table_iterator(&rti);
+	deinitialize_heap_table_accumulative_notifier(&(rth_p->htan));
 
 	destroy_hash_table(&(rth_p->hth), &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
+
+	destroy_blob_store(rth_p->blob_store_root_page_id, &(rth_p->rdb->volatile_rage_engine.bstd), rth_p->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 
 	free(rth_p->key_tuple_defs);
 }
@@ -134,7 +140,7 @@ void print_rash_table(rash_table_handle* rth_p, void (*print_value)(binary_read_
 				datum uval;
 				get_value_from_element_from_tuple(&uval, rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(1), entry);
 
-				binary_read_iterator* key_bri_p = get_new_binary_read_iterator(&uval, dti, &(rth_p->rdb->volatile_rage_engine.wtd), rth_p->rdb->volatile_rage_engine.pam_p);
+				binary_read_iterator* key_bri_p = get_new_binary_read_iterator(&uval, dti, &(rth_p->rdb->volatile_rage_engine.bstd), rth_p->rdb->volatile_rage_engine.pam_p);
 				{
 					for(uint32_t i = 0; i < rth_p->key_element_count; i++)
 					{
@@ -168,7 +174,7 @@ void print_rash_table(rash_table_handle* rth_p, void (*print_value)(binary_read_
 				datum uval;
 				get_value_from_element_from_tuple(&uval, rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(2), entry);
 
-				binary_read_iterator* value_bri_p = get_new_binary_read_iterator(&uval, dti, &(rth_p->rdb->volatile_rage_engine.wtd), rth_p->rdb->volatile_rage_engine.pam_p);
+				binary_read_iterator* value_bri_p = get_new_binary_read_iterator(&uval, dti, &(rth_p->rdb->volatile_rage_engine.bstd), rth_p->rdb->volatile_rage_engine.pam_p);
 				
 				print_value(value_bri_p);
 
@@ -299,7 +305,7 @@ binary_read_iterator* read_key_in_rash_table_iterator(const rash_table_iterator*
 	datum uval;
 	get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(1), record_tuple);
 
-	return get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.wtd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
+	return get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
 }
 
 int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* transaction_id, int* abort_error)
@@ -380,6 +386,17 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* 
 	return result;
 }
 
+static void delete_all_chunks_in_blobs_of_blob_stores(rash_table_handle* rth_p, tuple_pointer blob_head)
+{
+	int abort_error_dummy = 0;
+
+	blob_store_write_iterator* bswi_p = get_new_blob_store_write_iterator(rth_p->blob_store_root_page_id, blob_head, get_NULL_tuple_pointer(&(rth_p->rdb->volatile_rage_engine.pam_p->pas)), &(rth_p->rdb->volatile_rage_engine.bstd), rth_p->rdb->volatile_rage_engine.pam_p, rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+
+	while(0 < discard_from_head_in_blob(bswi_p, 32 * 1024 * 1024, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(rth_p->htan)), NULL, &abort_error_dummy));
+
+	delete_blob_store_write_iterator(bswi_p, NULL, &abort_error_dummy);
+}
+
 int remove_from_rash_table_iterator(rash_table_iterator* rti_p)
 {
 	if(rti_p->is_read_only)
@@ -392,9 +409,22 @@ int remove_from_rash_table_iterator(rash_table_iterator* rti_p)
 		return 0;
 	else
 	{
-		datum uval;
-		get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, SELF, record_tuple);
-		delete_all_extension_worms(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def->type_info, &(rti_p->rth_p->rdb->volatile_rage_engine.wtd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+		{
+			datum uval;
+			get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(1, 1), record_tuple);
+			tuple_pointer blob_head = get_tuple_pointer(uval.tuple_value, &(rti_p->rth_p->rdb->volatile_rage_engine.pam_p->pas));
+			delete_all_chunks_in_blobs_of_blob_stores(rti_p->rth_p, blob_head);
+		}
+
+		{
+			datum uval;
+			get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(2, 1), record_tuple);
+			tuple_pointer blob_head = get_tuple_pointer(uval.tuple_value, &(rti_p->rth_p->rdb->volatile_rage_engine.pam_p->pas));
+			delete_all_chunks_in_blobs_of_blob_stores(rti_p->rth_p, blob_head);
+		}
+
+		// it might have invalidated entries in heap table of the blob_store so fix them next
+		fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rti_p->rth_p);
 	}
 
 	rti_p->rth_p->element_count--;
@@ -414,7 +444,7 @@ binary_read_iterator* read_value_in_rash_table_iterator(const rash_table_iterato
 	datum uval;
 	get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(2), record_tuple);
 
-	return get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.wtd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
+	return get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
 }
 
 binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p, const void* transaction_id, int* abort_error)
@@ -441,7 +471,14 @@ binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_
 		void* record_tuple_copy = malloc(RASH_RECORD_MAX_SIZE);
 		memory_move(record_tuple_copy, record_tuple, record_tuple_size);
 
-		return get_new_binary_write_iterator(record_tuple_copy, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(2), PREFIX_BYTES_FOR_VALUE, &(rti_p->rth_p->rdb->volatile_rage_engine.wtd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p);
+		tuple_pointer tail_of_value;
+		{
+			datum uval;
+			get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(3), record_tuple_copy);
+			tail_of_value = get_tuple_pointer(uval.tuple_value, &(rti_p->rth_p->rdb->volatile_rage_engine.pam_p->pas));
+		}
+
+		return get_new_binary_write_iterator(record_tuple_copy, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(2), rti_p->rth_p->blob_store_root_page_id, tail_of_value, PREFIX_BYTES_FOR_VALUE, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p);
 	}
 	else // insert call
 	{
@@ -457,7 +494,7 @@ binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_
 		// insert key
 		set_element_in_tuple(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(1), record_tuple, EMPTY_DATUM, UINT32_MAX);
 		{
-			binary_write_iterator* bwi_p = get_new_binary_write_iterator(record_tuple, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(1), PREFIX_BYTES_FOR_KEY, &(rti_p->rth_p->rdb->volatile_rage_engine.wtd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p);
+			binary_write_iterator* bwi_p = get_new_binary_write_iterator(record_tuple, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(1), rti_p->rth_p->blob_store_root_page_id, get_NULL_tuple_pointer(&(rti_p->rth_p->rdb->volatile_rage_engine.pam_p->pas)), PREFIX_BYTES_FOR_KEY, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p);
 			for(uint32_t i = 0; i < rti_p->rkey_p->key_element_count; i++)
 			{
 				datum uval;
@@ -466,12 +503,12 @@ binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_
 				if(is_datum_NULL(&uval))
 				{
 					char is_valid_byte = 0;
-					append_to_binary_write_iterator(bwi_p, &is_valid_byte, 1, NULL, &abort_error_dummy);
+					append_to_binary_write_iterator(bwi_p, &is_valid_byte, 1, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(rti_p->rth_p->htan)), NULL, &abort_error_dummy);
 				}
 				else
 				{
 					char is_valid_byte = 1;
-					append_to_binary_write_iterator(bwi_p, &is_valid_byte, 1, NULL, &abort_error_dummy);
+					append_to_binary_write_iterator(bwi_p, &is_valid_byte, 1, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(rti_p->rth_p->htan)), NULL, &abort_error_dummy);
 
 					{
 						void* key_element = malloc(get_maximum_tuple_size(&(rti_p->rth_p->key_tuple_defs[i])));
@@ -479,17 +516,20 @@ binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_
 						init_tuple(&(rti_p->rth_p->key_tuple_defs[i]), key_element);
 						set_element_in_tuple(&(rti_p->rth_p->key_tuple_defs[i]), SELF, key_element, &uval, UINT32_MAX);
 
-						append_to_binary_write_iterator(bwi_p, key_element, get_tuple_size(&(rti_p->rth_p->key_tuple_defs[i]), key_element), NULL, &abort_error_dummy);
+						append_to_binary_write_iterator(bwi_p, key_element, get_tuple_size(&(rti_p->rth_p->key_tuple_defs[i]), key_element), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(rti_p->rth_p->htan)), NULL, &abort_error_dummy);
 
 						free(key_element);
 					}
 				}
+
+				// it might have invalidated entries in heap table of the blob_store so fix them next
+				fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rti_p->rth_p);
 			}
 			delete_binary_write_iterator(bwi_p, NULL, &abort_error_dummy);
 		}
 
 		set_element_in_tuple(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(2), record_tuple, EMPTY_DATUM, UINT32_MAX);
-		return get_new_binary_write_iterator(record_tuple, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(2), PREFIX_BYTES_FOR_VALUE, &(rti_p->rth_p->rdb->volatile_rage_engine.wtd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p);
+		return get_new_binary_write_iterator(record_tuple, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(2), rti_p->rth_p->blob_store_root_page_id, get_NULL_tuple_pointer(&(rti_p->rth_p->rdb->volatile_rage_engine.pam_p->pas)), PREFIX_BYTES_FOR_VALUE, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, rti_p->rth_p->rdb->volatile_rage_engine.pmm_p);
 	}
 }
 
@@ -497,8 +537,18 @@ void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, bi
 {
 	int abort_error_dummy = 0;
 
+	// it might have invalidated entries in heap table of the blob_store so fix them next
+	fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(rti_p->rth_p);
+
 	// copy the tuple to be inserted or updated
-	const void* tuple_to_insert = bwi_p->tupl;
+	void* tuple_to_insert = bwi_p->tupl;
+
+	// set the tail of the bwi_p in the tuple to be inserted, this allows us to append more valuees to it
+	{
+		char tail_of_value_tuple[sizeof(tuple_pointer)];
+		set_tuple_pointer(tail_of_value_tuple, bwi_p->extension_tail, &(rti_p->rth_p->rdb->volatile_rage_engine.pam_p->pas));
+		set_element_in_tuple(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, STATIC_POSITION(3), tuple_to_insert, &((const datum){.tuple_value = tail_of_value_tuple}), 0);
+	}
 
 	delete_binary_write_iterator(bwi_p, NULL, &abort_error_dummy);
 

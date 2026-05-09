@@ -12,7 +12,7 @@ uint64_t hash_datum_rhendb(const datum* uval, const data_type_info* dti, tuple_h
 		return hash_datum(uval, dti, th);
 	else if(is_text_type_info(dti) || is_blob_type_info(dti) || is_numeric_type_info(dti)) // all string/blob and numeric types
 	{
-		uint64_t hash_value = hash_tbn(uval, dti, th, &(ex_engine->wtd), ex_engine->pam_p, transaction_id, abort_error);
+		uint64_t hash_value = hash_tbn(uval, dti, th, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, abort_error);
 		if(*abort_error)
 			return 0;
 		return hash_value;
