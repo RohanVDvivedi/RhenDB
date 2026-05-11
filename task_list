@@ -1,24 +1,19 @@
 PICKED TASKS
 
  * define struct for implementing aggregate functions
-   struct aggregate_function {
-      void* context;
+struct aggregate_function
+{
+void* context;
 
-      const data_type_info* input_type_info;
-      const data_type_info* output_type_info;
+uint32_t input_type_infos_count;
+const data_type_info** input_type_info;
 
-      dstring create_state(const void* context); // rightly aligned empty state object to be created, allowed to be malloced, could hold a struct in it
+const data_type_info* output_type_info;
 
-      int update(const void* context, dstring state, const datum input); // 0 implies failed, so stop the pipeline
-      int merge(const void* context, dstring state1, const dstring state2); // 0 implies failed, so stop the pipeline
+int (*process)(const void* context, dstring* state, const datum input[]);
 
-      // state and state1, here are mutable and have in memory representation with correct alignment
-      // they both will be freshly crerated by create_state and will not have been copied anywhere else, just yet, so they will/must have right in-memory alignment
-      // input and state2, here will be pointing to the possibly unaligned immutable state
-
-      datum finalize(const void* context, const dstring state); // NULL implies failed, so stop the pipeline
-      // here return value, will be freed for a tuple, array, string or blob type_infos
-   }
+datum (*produce)(const void* context, const dstring* state);
+}
 
  * aggregate_all_operator
    * over all tuples as a single group, single state object
