@@ -1,20 +1,5 @@
 PICKED TASKS
 
- * define struct for implementing aggregate functions
-struct aggregate_function
-{
-void* context;
-
-uint32_t input_type_infos_count;
-const data_type_info** input_type_info;
-
-const data_type_info* output_type_info;
-
-int (*process)(const void* context, dstring* state, const datum input[]);
-
-datum (*produce)(const void* context, const dstring* state);
-}
-
  * aggregate_all_operator
    * over all tuples as a single group, single state object
 
@@ -46,6 +31,12 @@ datum (*produce)(const void* context, const dstring* state);
    * make rash tables with partition_count, bucket_count_per_partition, max_worker_count
    * read tuple, make copy and push in queue, trigger an insert job if less than max_worker_count
    * once done iterate over all keys in parallel probe jobs into partitions and buckets, compute aggregate per key and produce the result
+
+
+  * implement min and max aggregate functions, input_type_info = output_type_info
+   * compare them with function_compare.h and clone the smaller or greater one
+   * state will be tuple{input/output_type_info}
+   * context will be this output tuple_def
 
 PRIORITY HIGH LEVEL TASKS
   * what operators to implement
@@ -108,6 +99,9 @@ FUTURE TASKS
  4.* lock table remaining tasks (*future)
    * deadlock detection and resolution task job (*future, for now rely on timeouts to back off and abort)
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock (*future, do it when query optimizer and catalog tables are ready)
+
+ 5.* implement sum and avg aggregate functions (*future)
+   * many more aggregate functions to be implemented
 
 DESIGN METHODOLOGY
    * we will use postgresql architecture over (mysql like) mini transactions
