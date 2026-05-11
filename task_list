@@ -32,7 +32,6 @@ PICKED TASKS
    * read tuple, make copy and push in queue, trigger an insert job if less than max_worker_count
    * once done iterate over all keys in parallel probe jobs into partitions and buckets, compute aggregate per key and produce the result
 
-
   * implement min and max aggregate functions, input_type_info = output_type_info
    * compare them with function_compare.h and clone the smaller or greater one
    * state will be tuple{input/output_type_info}
