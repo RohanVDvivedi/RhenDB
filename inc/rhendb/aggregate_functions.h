@@ -60,4 +60,6 @@ struct aggregate_function
 	af_p->destroy_output(af_p, output);
 */
 
+aggregate_function* get_count_aggregate_function(const data_type_info* input_type_info);
+
 #endif
