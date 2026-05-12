@@ -15,15 +15,18 @@ struct aggregate_function
 	int (*process_input)(const aggregate_function* af_p, void** state_p, const datum* inputs[]);
 
 	// destroys state object, must be NO-OP if NULL
-	void (*destroy_state)(const aggregate_function* af_p, void* state);
+	// this function will set the state to NULL, so this function stays idempotent
+	void (*destroy_state)(const aggregate_function* af_p, void** state);
 
 	// returns 0 on failure
 	int (*produce_output)(const aggregate_function* af_p, datum* output, const void* state);
 
 	// use this function to destroy the output produced, NO-OP on NULL_DATUM
-	void (*destroy_output)(const aggregate_function* af_p, datum output);
+	// this function will set the output to NULL_DATUM, so this function stays idempotent
+	void (*destroy_output)(const aggregate_function* af_p, datum* output);
 
 	// destroys this object
+	// must not be called again
 	void (*destroy_aggregate_function)(aggregate_function* af_p);
 
 	// single value storing the type_info for the aggregate_function's output

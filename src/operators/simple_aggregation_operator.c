@@ -73,7 +73,7 @@ static void free_resources(operator* o)
 	input_values* inputs = o->inputs;
 
 	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
-		inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], inputs->states[i]);
+		inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(inputs->states[i]));
 
 	free(inputs->states);
 

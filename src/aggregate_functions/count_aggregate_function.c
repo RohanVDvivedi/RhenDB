@@ -16,9 +16,10 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 	return 1;
 }
 
-static void destroy_state(const aggregate_function* af_p, void* state)
+static void destroy_state(const aggregate_function* af_p, void** state)
 {
-	free(state);
+	free(*state);
+	(*state) = NULL;
 }
 
 static int produce_output(const aggregate_function* af_p, datum* output, const void* state)
@@ -31,9 +32,10 @@ static int produce_output(const aggregate_function* af_p, datum* output, const v
 	return 1;
 }
 
-static void destroy_output(const aggregate_function* af_p, datum output)
+static void destroy_output(const aggregate_function* af_p, datum* output)
 {
 	// it is storing just a .uint_value
+	(*output) = (*NULL_DATUM);
 }
 
 static void destroy_aggregate_function(aggregate_function* af_p)
