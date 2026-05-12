@@ -18,6 +18,11 @@ struct input_values
 	// array of datums of size = max(aggregate_functions->input_type_infos_count)
 	datum* input_datums;
 
+	// 2D array of positonal_accessors
+	// aggregate_input_element_ids[i][j]; -> gives the position of the j-th input_param of the i-th aggregate functions
+	// its size is [aggregate_functions_count] and [i][aggregate_functions[i]->input_type_infos_count]
+	const positional_accessor** aggregate_input_element_ids;
+
 	// consists of all the output_type_infos of all aggregate_functions
 	tuple_def* output_tuple_def;
 };
@@ -79,13 +84,15 @@ static void free_resources(operator* o)
 
 	free(inputs->input_datums);
 
+	free(inputs->aggregate_input_element_ids);
+
 	free(inputs->output_tuple_def->type_info);
 	free(inputs->output_tuple_def);
 
 	free(inputs);
 }
 
-void setup_simple_aggregation_operator(operator* o, operator* input_operator, uint32_t aggregate_functions_count, aggregate_function** aggregate_functions)
+void setup_simple_aggregation_operator(operator* o, operator* input_operator, uint32_t aggregate_functions_count, aggregate_function** aggregate_functions, const positional_accessor** aggregate_input_element_ids)
 {
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -124,8 +131,11 @@ void setup_simple_aggregation_operator(operator* o, operator* input_operator, ui
 		.aggregate_functions = malloc(sizeof(aggregate_function*) * aggregate_functions_count),
 		.states = calloc(sizeof(void*), aggregate_functions_count),
 		.input_datums = malloc(sizeof(datum) * input_datums_count),
+		.aggregate_input_element_ids = malloc(sizeof(aggregate_function*) * aggregate_functions_count),
 		.output_tuple_def = output_tuple_def,
 	};
 
 	memory_move(inputs->aggregate_functions, aggregate_functions, sizeof(aggregate_function*) * aggregate_functions_count);
+
+	memory_move(inputs->aggregate_input_element_ids, aggregate_input_element_ids, sizeof(aggregate_function*) * aggregate_functions_count);
 }

@@ -13,7 +13,7 @@ void setup_result_match_operator(operator* o, operator* input_operators[2]);
 
 void setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count);
 
-void setup_simple_aggregation_operator(operator* o, operator* input_operator, uint32_t aggregate_functions_count, aggregate_function** aggregate_functions);
+void setup_simple_aggregation_operator(operator* o, operator* input_operator, uint32_t aggregate_functions_count, aggregate_function** aggregate_functions, const positional_accessor** aggregate_input_element_ids);
 
 #include<rhendb/tuples_down_counter.h>
 
