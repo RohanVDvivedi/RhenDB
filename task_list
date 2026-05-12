@@ -14,22 +14,24 @@ PRIORITY 1
 
 
 
-PRIORITY 2
+
+
+PRIORITY 2 AGGREGATION
 
  * sorted_aggregation_operator -> also takes in key_element_ids and key_element_count
-   * just like external sort operator takes, key_element_ids and key_element_count
-   * also takes in list of aggregate functions to compute aggregates
-   * first implementation will not use worker jobs
+   * consumes tuples one by one until they have equal keys and then produced the final output when it finishes OR the unequal key tuple is found
 
  * hash_aggregation_operator -> also takes in key_element_ids and key_element_count
-   * key_element_count and key_element_ids are inputs
-   * make rash tables with partition_count, bucket_count_per_partition, max_worker_count
-   * read tuple, make copy and push in queue, trigger an insert job if less than max_worker_count
-   * once done iterate over all keys in parallel probe jobs into partitions and buckets, compute aggregate per key and produce the result
+   * make rash tables with partition_count, bucket_count_per_partition, and max_worker_count
+   * read tuple, clone the iterator and give it to one of the worker
+   * worker reads the tuple, hashes it find out the right partition write locks it and inserts into it
+   * in probe phase each worker iterates over some partitions and produces the output of the aggregation per tuple
 
 
 
-PRIORITY 3
+
+
+PRIORITY 3 JOINS
 
  * implement streaming_loop_join_operator (identical to nested_loop_join)
    * start batching on both sides left and right
@@ -48,6 +50,13 @@ PRIORITY 3
      * then iterate forward until they end
      * outer scan on the larger side and inner scan on the smaller side
    * first implementation will not use worker jobs
+
+
+
+
+
+
+
 
 PRIORITY HIGH LEVEL TASKS
   * what operators to implement
