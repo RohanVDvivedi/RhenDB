@@ -708,7 +708,7 @@ void setup_external_sort_operator(operator* o, tuples_down_counter result_counte
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = free_resources;
 
-	// it is an identity operator, produces the same thing as it consumes
+	// it produces the same thing as it consumes
 	init_tuple_transformers(&(o->output_tuple_transformers), get_tuple_def_for_tuples_to_be_consumed_from(input_operator));
 
 	o->inputs = malloc(sizeof(input_values));

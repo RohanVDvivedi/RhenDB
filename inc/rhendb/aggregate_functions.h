@@ -12,7 +12,7 @@ struct aggregate_function
 	const void* context_p;
 
 	// returns 0 on failure
-	int (*process_input)(const aggregate_function* af_p, void** state_p, const datum* inputs[]);
+	int (*process_input)(const aggregate_function* af_p, void** state_p, const datum inputs[]);
 
 	// destroys state object, must be NO-OP if NULL
 	// this function will set the state to NULL, so this function stays idempotent

@@ -5,12 +5,12 @@
 
 #include<stdlib.h>
 
-static int process_input(const aggregate_function* af_p, void** state_p, const datum* inputs[])
+static int process_input(const aggregate_function* af_p, void** state_p, const datum inputs[])
 {
 	if((*state_p) == NULL)
 		(*state_p) = calloc(sizeof(uint64_t), 1);
 
-	if(!is_datum_NULL(inputs[0]))
+	if(!is_datum_NULL(&(inputs[0])))
 		(**((uint64_t**)state_p))++;
 
 	return 1;
