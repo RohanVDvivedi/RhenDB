@@ -1,20 +1,35 @@
 PICKED TASKS
 
- * aggregate_all_operator
-   * over all tuples as a single group, single state object
+PRIORITY 1
+ * review simple_aggregate_operator throughly
 
- * sorting based aggregation operator
+ * implement min and max aggregate functions, input_type_info = output_type_info
+   * compare them with function_compare.h and clone the smaller or greater one
+   * state will be tuple{input/output_type_info}
+   * context will be this output tuple_def
+
+ * test further simple aggregate operator with min and max aggregate functions
+ * introduce the last column to become NULL on every number % 3 == 0
+ * count non nuklls on this number in the test case too
+
+
+
+PRIORITY 2
+
+ * sorted_aggregation_operator -> also takes in key_element_ids and key_element_count
    * just like external sort operator takes, key_element_ids and key_element_count
    * also takes in list of aggregate functions to compute aggregates
    * first implementation will not use worker jobs
 
- * sort_merge_join
-   * iterate further the lesser side until it becomes greater than or equal to the other side
-   * if both are equal consume all the equal tuples from both the sides and generate and produce their cross product
-     * maintain start position of their first equal tuples
-     * then iterate forward until they end
-     * outer scan on the larger side and inner scan on the smaller side
-   * first implementation will not use worker jobs
+ * hash_aggregation_operator -> also takes in key_element_ids and key_element_count
+   * key_element_count and key_element_ids are inputs
+   * make rash tables with partition_count, bucket_count_per_partition, max_worker_count
+   * read tuple, make copy and push in queue, trigger an insert job if less than max_worker_count
+   * once done iterate over all keys in parallel probe jobs into partitions and buckets, compute aggregate per key and produce the result
+
+
+
+PRIORITY 3
 
  * implement streaming_loop_join_operator (identical to nested_loop_join)
    * start batching on both sides left and right
@@ -26,16 +41,13 @@ PICKED TASKS
           produce(tuple1, tuple2) OR produce(tuple2, tuple1)
       for side1.batch_size = 0, start collecting the batch again for side1
 
-  * hash_aggregation
-   * key_element_count and key_element_ids are inputs
-   * make rash tables with partition_count, bucket_count_per_partition, max_worker_count
-   * read tuple, make copy and push in queue, trigger an insert job if less than max_worker_count
-   * once done iterate over all keys in parallel probe jobs into partitions and buckets, compute aggregate per key and produce the result
-
-  * implement min and max aggregate functions, input_type_info = output_type_info
-   * compare them with function_compare.h and clone the smaller or greater one
-   * state will be tuple{input/output_type_info}
-   * context will be this output tuple_def
+ * sort_merge_join
+   * iterate further the lesser side until it becomes greater than or equal to the other side
+   * if both are equal consume all the equal tuples from both the sides and generate and produce their cross product
+     * maintain start position of their first equal tuples
+     * then iterate forward until they end
+     * outer scan on the larger side and inner scan on the smaller side
+   * first implementation will not use worker jobs
 
 PRIORITY HIGH LEVEL TASKS
   * what operators to implement
