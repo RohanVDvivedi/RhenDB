@@ -434,6 +434,8 @@ static void request_to_process_some_jobs(operator* o)
 
 	input_values* inputs = o->inputs;
 
+	int need_to_produce_more_runs = 0;
+
 	pthread_mutex_lock(&(inputs->runs_lock));
 
 	if(inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count)
@@ -542,7 +544,7 @@ static void request_to_process_some_jobs(operator* o)
 		input_param = NULL;
 	}
 
-	int need_to_produce_more_runs = (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count);
+	need_to_produce_more_runs = (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count);
 	if(inputs->flag_no_new_un_sorted_runs)
 		need_to_produce_more_runs = 0;
 
