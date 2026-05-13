@@ -53,13 +53,16 @@ int main(int argc, char** argv)
 	// make operators
 
 	aggregate_function* const AGGREGATES[] = {
-		get_count_aggregate_function(record_def.type_info)
+		get_count_aggregate_function(record_def.type_info),
+		get_count_aggregate_function(record_def.type_info->containees[4].al.type_info)
 	};
 
 	const positional_accessor aggregate_input_positions_0[] = {SELF};
+	const positional_accessor aggregate_input_positions_1[] = {STATIC_POSITION(4)};
 
 	const positional_accessor* AGGREGATE_INPUTS[] = {
 		aggregate_input_positions_0,
+		aggregate_input_positions_1
 	};
 
 	printf("Building pipeline :\n");
