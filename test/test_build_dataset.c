@@ -42,7 +42,8 @@ void* random_generator(void* generator_context, const tuple_def* generator_tuple
 		return NULL;
 
 	void* generated = malloc(BUFFER_SIZE);
-	construct_record(generated, inputs[index++], 0, (index % 3 == 0) ? NULL : "Rohan Dvivedi"); // every 3rd tuple has NULL instead of my name
+	construct_record(generated, inputs[index], 0, (index % 3 == 0) ? NULL : "Rohan Dvivedi"); // every 3rd tuple has NULL instead of my name
+	index++;
 
 	return generated;
 }
@@ -55,7 +56,8 @@ void* sorted_generator(void* generator_context, const tuple_def* generator_tuple
 		return NULL;
 
 	void* generated = malloc(BUFFER_SIZE);
-	construct_record(generated, index++, 0, (index % 3 == 0) ? NULL : "Rohan Dvivedi"); // every 3rd tuple has NULL instead of my name
+	construct_record(generated, index, 0, (index % 3 == 0) ? NULL : "Rohan Dvivedi"); // every 3rd tuple has NULL instead of my name
+	index++;
 
 	return generated;
 }
