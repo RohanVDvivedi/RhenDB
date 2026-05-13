@@ -55,11 +55,11 @@ aggregate_function* get_count_aggregate_function(const data_type_info* input_typ
 
 	af_p->process_input = process_input;
 
-	af_p->destroy_state = destroy_state;
-
 	af_p->produce_output = produce_output;
 
 	af_p->destroy_output = destroy_output;
+
+	af_p->destroy_state = destroy_state;
 
 	af_p->destroy_aggregate_function = destroy_aggregate_function;
 
