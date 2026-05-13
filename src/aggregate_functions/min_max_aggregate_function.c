@@ -7,28 +7,28 @@
 
 #include<stdlib.h>
 
-typedef struct min_state min_state;
-struct min_state
+typedef struct min_max_state min_max_state;
+struct min_max_state
 {
-	datum min_value;
+	datum min_max_value;
 	void* memory;
 	uint32_t capacity;
 };
 
-static min_state create_min_state()
+static min_max_state create_min_max_state()
 {
-	return (min_state) {
-		.min_value = (*NULL_DATUM),
+	return (min_max_state) {
+		.min_max_value = (*NULL_DATUM),
 		.memory = NULL,
 		.capacity = 0,
 	};
 }
 
-static void replace_min_state(min_state* ms, const datum* val, const data_type_info* dti)
+static void replace_min_max_state(min_max_state* ms, const datum* val, const data_type_info* dti)
 {
 	if(is_datum_NULL(val))
 	{
-		ms->min_value = (*NULL_DATUM);
+		ms->min_max_value = (*NULL_DATUM);
 		return;
 	}
 
@@ -36,7 +36,7 @@ static void replace_min_state(min_state* ms, const datum* val, const data_type_i
 	{
 		default :
 		{
-			ms->min_value = (*val);
+			ms->min_max_value = (*val);
 			break;
 		}
 		case STRING :
@@ -50,7 +50,7 @@ static void replace_min_state(min_state* ms, const datum* val, const data_type_i
 
 			memory_move(ms->memory, val->string_or_binary_value, val->string_or_binary_size);
 
-			ms->min_value = (datum){.string_or_binary_value = ms->memory, .string_or_binary_size = val->string_or_binary_size};
+			ms->min_max_value = (datum){.string_or_binary_value = ms->memory, .string_or_binary_size = val->string_or_binary_size};
 
 			break;
 		}
@@ -67,39 +67,51 @@ static void replace_min_state(min_state* ms, const datum* val, const data_type_i
 
 			memory_move(ms->memory, val->tuple_value, tuple_size);
 
-			ms->min_value = (datum){.tuple_value = ms->memory};
+			ms->min_max_value = (datum){.tuple_value = ms->memory};
 			break;
 		}
 	}
 }
 
-static void destroy_min_state(min_state* ms)
+static void destroy_min_max_state(min_max_state* ms)
 {
-	free(ms->memory);
-	ms->min_value = (*NULL_DATUM);
+	if(ms->memory)
+		free(ms->memory);
+	ms->min_max_value = (*NULL_DATUM);
 	ms->memory = NULL;
 	ms->capacity = 0;
 }
+
+typedef struct min_max_context min_max_context;
+struct min_max_context
+{
+	rage_engine* persistent_acid_rage_engine;
+	int is_min;
+};
 
 static int process_input(const aggregate_function* af_p, void** state_p, const datum inputs[])
 {
 	if((*state_p) == NULL)
 	{
-		(*state_p) = malloc(sizeof(min_state));
-		**((min_state**)state_p) = create_min_state();
+		(*state_p) = malloc(sizeof(min_max_state));
+		**((min_max_state**)state_p) = create_min_max_state();
 	}
 
 	// process only if input is not NULL_DATUM
 	if(!is_datum_NULL(&(inputs[0])))
 	{
 		int abort_error = 0;
-		int must_replace = is_datum_NULL(&((*((min_state**)state_p))->min_value)) || (compare_datum2_rhendb(&((*((min_state**)state_p))->min_value), &(inputs[0]), af_p->input_type_infos[0], (rage_engine*)(af_p->context_p), NULL, &abort_error) > 0);
+		int must_replace = is_datum_NULL(&((*((min_max_state**)state_p))->min_max_value)) || (
+			((((min_max_context*)(af_p->context_p))->is_min) && compare_datum2_rhendb(&((*((min_max_state**)state_p))->min_max_value), &(inputs[0]), af_p->input_type_infos[0], ((min_max_context*)(af_p->context_p))->persistent_acid_rage_engine, NULL, &abort_error) > 0)
+				||
+			((!(((min_max_context*)(af_p->context_p))->is_min)) && compare_datum2_rhendb(&((*((min_max_state**)state_p))->min_max_value), &(inputs[0]), af_p->input_type_infos[0], ((min_max_context*)(af_p->context_p))->persistent_acid_rage_engine, NULL, &abort_error) < 0)
+		);
 
 		if(abort_error)
 			return 0;
 
 		if(must_replace)
-			replace_min_state(*((min_state**)state_p), &(inputs[0]), af_p->input_type_infos[0]);
+			replace_min_max_state(*((min_max_state**)state_p), &(inputs[0]), af_p->input_type_infos[0]);
 	}
 
 	return 1;
@@ -110,7 +122,7 @@ static int produce_output(const aggregate_function* af_p, datum* output, void** 
 	(*output) = (*NULL_DATUM);
 
 	if((*state_p) != NULL)
-		(*output) = (*((min_state**)state_p))->min_value;
+		(*output) = (*((min_max_state**)state_p))->min_max_value;
 
 	return 1;
 }
@@ -127,7 +139,7 @@ static void destroy_state(const aggregate_function* af_p, void** state_p)
 	if((*state_p) == NULL)
 		return;
 
-	destroy_min_state(*((min_state**)state_p));
+	destroy_min_max_state(*((min_max_state**)state_p));
 
 	free(*state_p);
 	(*state_p) = NULL;
@@ -135,15 +147,18 @@ static void destroy_state(const aggregate_function* af_p, void** state_p)
 
 static void destroy_aggregate_function(aggregate_function* af_p)
 {
+	free((void*)af_p->context_p);
 	free(af_p);
 }
 
-aggregate_function* get_min_aggregate_function(rhendb* rdb, const data_type_info* input_type_info)
+aggregate_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_info* input_type_info, int is_min)
 {
 	aggregate_function* af_p = malloc(size_of_aggregate_function(1));
 
 	// context stores rdb here, for this aggregate function
-	af_p->context_p = &(rdb->persistent_acid_rage_engine);
+	af_p->context_p = malloc(sizeof(min_max_context));
+	((min_max_context*)(af_p->context_p))->persistent_acid_rage_engine = &(rdb->persistent_acid_rage_engine);
+	((min_max_context*)(af_p->context_p))->is_min = is_min;
 
 	af_p->process_input = process_input;
 

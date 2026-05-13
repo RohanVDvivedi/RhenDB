@@ -69,6 +69,6 @@ struct aggregate_function
 
 aggregate_function* get_count_aggregate_function(const data_type_info* input_type_info);
 
-aggregate_function* get_min_aggregate_function(rhendb* rdb, const data_type_info* input_type_info);
+aggregate_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_info* input_type_info, int is_min);
 
 #endif
