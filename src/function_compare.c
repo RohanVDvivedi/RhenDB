@@ -85,12 +85,12 @@ int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const d
 			const data_type_info* child_dti1;
 			datum child_value1;
 			if(!get_containee_from_datum(&child_value1, &child_dti1, uval1, dti1, i))
-				return -2;
+				child_value1 = (*NULL_DATUM);
 
 			const data_type_info* child_dti2;
 			datum child_value2;
 			if(!get_containee_from_datum(&child_value2, &child_dti2, uval2, dti2, i))
-				return -2;
+				child_value2 = (*NULL_DATUM);
 
 			cmp = compare_datum_rhendb(&child_value1, child_dti1, &child_value2, child_dti2, ex_engine, transaction_id, abort_error);
 			if(*abort_error)
@@ -171,11 +171,11 @@ int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_typ
 
 			datum child_value1;
 			if(!get_containee_from_datum(&child_value1, &temp, uval1, dti, i))
-				return -2;
+				child_value1 = (*NULL_DATUM);
 
 			datum child_value2;
 			if(!get_containee_from_datum(&child_value2, &temp, uval2, dti, i))
-				return -2;
+				child_value2 = (*NULL_DATUM);
 
 			cmp = compare_datum2_rhendb(&child_value1, &child_value2, child_dti, ex_engine, transaction_id, abort_error);
 			if(*abort_error)

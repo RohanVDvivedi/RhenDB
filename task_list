@@ -1,12 +1,11 @@
 PICKED TASKS
 
 PRIORITY 1
- * review simple_aggregate_operator throughly
-
  * implement min and max aggregate functions, input_type_info = output_type_info
    * compare them with function_compare.h and clone the smaller or greater one
    * state will be tuple{input/output_type_info}
    * context will be this output tuple_def
+   * if input datum is NULL skip it
 
  * test further simple aggregate operator with min and max aggregate functions
  * introduce the last column to become NULL on every number % 3 == 0

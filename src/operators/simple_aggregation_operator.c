@@ -106,10 +106,10 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
-			// iterate for proces_input of each udaf
+			// iterate for process_input of each udaf
 			for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
 			{
-				// generate input params to the ith udaf
+				// generate input params to the i-th udaf
 				for(uint32_t j = 0; j < inputs->aggregate_functions[i]->input_type_infos_count; j++)
 				{
 					if(!get_value_from_element_from_tuple(&(inputs->input_datums[j]), inputs->input_tuple_def, inputs->aggregate_input_element_ids[i][j], tuple))
@@ -157,6 +157,12 @@ static void free_resources(operator* o)
 
 void setup_simple_aggregation_operator(operator* o, operator* input_operator, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
 {
+	if(aggregate_functions_count == 0)
+	{
+		printf("aggregate_functions_count can not be 0 for simple aggregation operator\n");
+		exit(-1);
+	}
+
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = free_resources;
