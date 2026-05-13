@@ -54,15 +54,18 @@ int main(int argc, char** argv)
 
 	aggregate_function* const AGGREGATES[] = {
 		get_count_aggregate_function(record_def.type_info),
-		get_count_aggregate_function(record_def.type_info->containees[4].al.type_info)
+		get_count_aggregate_function(record_def.type_info->containees[4].al.type_info),
+		get_min_aggregate_function(&rdb, record_def.type_info->containees[0].al.type_info),
 	};
 
 	const positional_accessor aggregate_input_positions_0[] = {SELF};
 	const positional_accessor aggregate_input_positions_1[] = {STATIC_POSITION(4)};
+	const positional_accessor aggregate_input_positions_2[] = {STATIC_POSITION(0)};
 
 	const positional_accessor* AGGREGATE_INPUTS[] = {
 		aggregate_input_positions_0,
-		aggregate_input_positions_1
+		aggregate_input_positions_1,
+		aggregate_input_positions_2,
 	};
 
 	printf("Building pipeline :\n");
