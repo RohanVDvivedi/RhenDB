@@ -114,15 +114,23 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 	// process only if input is not NULL_DATUM
 	if(!is_datum_NULL(&(inputs[0])))
 	{
-		int abort_error = 0;
-		int must_replace = is_datum_NULL(&((*((min_max_state**)state_p))->min_max_value)) || (
-			((((min_max_context*)(af_p->context_p))->is_min) && compare_datum2_rhendb(&((*((min_max_state**)state_p))->min_max_value), &(inputs[0]), af_p->input_type_infos[0], ((min_max_context*)(af_p->context_p))->persistent_acid_rage_engine, NULL, &abort_error) > 0)
-				||
-			((!(((min_max_context*)(af_p->context_p))->is_min)) && compare_datum2_rhendb(&((*((min_max_state**)state_p))->min_max_value), &(inputs[0]), af_p->input_type_infos[0], ((min_max_context*)(af_p->context_p))->persistent_acid_rage_engine, NULL, &abort_error) < 0)
-		);
+		int must_replace = 0;
 
-		if(abort_error)
-			return 0;
+		if(is_datum_NULL(&((*((min_max_state**)state_p))->min_max_value)))
+			must_replace = 1;
+		else
+		{
+			int abort_error = 0;
+
+			int compare = compare_datum2_rhendb(&((*((min_max_state**)state_p))->min_max_value), &(inputs[0]), af_p->input_type_infos[0], ((min_max_context*)(af_p->context_p))->persistent_acid_rage_engine, NULL, &abort_error);
+			if(abort_error)
+				return 0;
+
+			if(((min_max_context*)(af_p->context_p))->is_min)
+				must_replace = (compare > 0);
+			else
+				must_replace = (compare < 0);
+		}
 
 		if(must_replace)
 			replace_min_max_state(*((min_max_state**)state_p), &(inputs[0]), af_p->input_type_infos[0]);
