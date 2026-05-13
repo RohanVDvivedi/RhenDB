@@ -1,19 +1,6 @@
 PICKED TASKS
 
-PRIORITY 1
- * implement min and max aggregate functions, input_type_info = output_type_info
-   * compare them with function_compare.h and clone the smaller or greater one
-   * state will be tuple{input/output_type_info}
-   * context will be this output tuple_def
-   * if input datum is NULL skip it
-
- * test further simple aggregate operator with min and max aggregate functions
-
-
-
-
-
-PRIORITY 2 AGGREGATION
+PRIORITY 1 AGGREGATION
 
  * sorted_aggregation_operator -> also takes in key_element_ids and key_element_count
    * consumes tuples one by one until they have equal keys and then produced the final output when it finishes OR the unequal key tuple is found
@@ -28,7 +15,7 @@ PRIORITY 2 AGGREGATION
 
 
 
-PRIORITY 3 JOINS
+PRIORITY 2 JOINS
 
  * implement streaming_loop_join_operator (identical to nested_loop_join)
    * start batching on both sides left and right
