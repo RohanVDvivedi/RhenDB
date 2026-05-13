@@ -33,7 +33,7 @@ PRIORITY 2 JOINS
      * maintain start position of their first equal tuples
      * then iterate forward until they end
      * outer scan on the larger side and inner scan on the smaller side
-   * first implementation will not use worker jobs
+   * will support only equality joins
 
  * hash_join
    * make rash tables with partition_count, bucket_count_per_partition, and max_worker_count
