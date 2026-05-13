@@ -8,8 +8,6 @@ PRIORITY 1
    * if input datum is NULL skip it
 
  * test further simple aggregate operator with min and max aggregate functions
- * introduce the last column to become NULL on every number % 3 == 0
- * count non nuklls on this number in the test case too
 
 
 
