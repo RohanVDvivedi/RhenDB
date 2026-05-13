@@ -35,7 +35,11 @@ PRIORITY 2 JOINS
      * outer scan on the larger side and inner scan on the smaller side
    * first implementation will not use worker jobs
 
-
+ * hash_join
+   * make rash tables with partition_count, bucket_count_per_partition, and max_worker_count
+   * read tuple, clone the iterator and give it to one of the worker
+   * worker reads the tuple, hashes it find out the right partition write locks it and inserts into it
+   * in probe phase each worker is given tuple from another size and is made to match with tuples on the built hash table
 
 
 
