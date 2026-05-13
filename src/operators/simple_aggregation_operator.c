@@ -89,7 +89,7 @@ static void execute(operator* o)
 				}
 			}
 
-			// destroy aggregate states
+			// destroy aggregate states, right before we quit
 			{
 				for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
 					inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(inputs->states[i]));

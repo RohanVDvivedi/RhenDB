@@ -58,9 +58,11 @@ struct aggregate_function
 	// then when all input tuples are finished
 
 	af_p->produce_output(af_p, &output, state);
-	af_p->destroy_state(af_p, state);
+
 	// give output to the expecting user
+
 	af_p->destroy_output(af_p, output);
+	af_p->destroy_state(af_p, state); // destroy state always at the last
 */
 
 aggregate_function* get_count_aggregate_function(const data_type_info* input_type_info);
