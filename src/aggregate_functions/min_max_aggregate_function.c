@@ -55,6 +55,20 @@ static void replace_min_max_state(min_max_state* ms, const datum* val, const dat
 			break;
 		}
 		case ARRAY :
+		{
+			uint32_t array_memory_size = get_size_for_type_info(dti, val->array_value);
+
+			if(ms->capacity < array_memory_size)
+			{
+				ms->capacity = array_memory_size;
+				ms->memory = realloc(ms->memory, array_memory_size);
+			}
+
+			memory_move(ms->memory, val->array_value, array_memory_size);
+
+			ms->min_max_value = (datum){.array_value = ms->memory};
+			break;
+		}
 		case TUPLE :
 		{
 			uint32_t tuple_size = get_size_for_type_info(dti, val->tuple_value);
