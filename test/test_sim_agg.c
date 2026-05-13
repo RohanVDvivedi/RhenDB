@@ -55,17 +55,48 @@ int main(int argc, char** argv)
 	aggregate_function* const AGGREGATES[] = {
 		get_count_aggregate_function(record_def.type_info),
 		get_count_aggregate_function(record_def.type_info->containees[4].al.type_info),
-		get_min_aggregate_function(&rdb, record_def.type_info->containees[0].al.type_info),
+
+		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[0].al.type_info, 1), // 1 is min
+		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[0].al.type_info, 0), // 0 as last param means max
+
+		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[1].al.type_info, 1),
+		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[1].al.type_info, 0),
+
+		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[2].al.type_info, 1),
+		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[2].al.type_info, 0),
+
+		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[3].al.type_info, 1),
+		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[3].al.type_info, 0),
+
+		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[4].al.type_info, 1),
+		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[4].al.type_info, 0),
 	};
 
-	const positional_accessor aggregate_input_positions_0[] = {SELF};
-	const positional_accessor aggregate_input_positions_1[] = {STATIC_POSITION(4)};
-	const positional_accessor aggregate_input_positions_2[] = {STATIC_POSITION(0)};
+	const positional_accessor aggregate_input_positions_SELF[] = {SELF};
+	const positional_accessor aggregate_input_positions_0[] = {STATIC_POSITION(0)};
+	const positional_accessor aggregate_input_positions_1[] = {STATIC_POSITION(1)};
+	const positional_accessor aggregate_input_positions_2[] = {STATIC_POSITION(2)};
+	const positional_accessor aggregate_input_positions_3[] = {STATIC_POSITION(3)};
+	const positional_accessor aggregate_input_positions_4[] = {STATIC_POSITION(4)};
 
 	const positional_accessor* AGGREGATE_INPUTS[] = {
+		aggregate_input_positions_SELF,
+		aggregate_input_positions_4,
+
 		aggregate_input_positions_0,
+		aggregate_input_positions_0,
+
 		aggregate_input_positions_1,
+		aggregate_input_positions_1,
+
 		aggregate_input_positions_2,
+		aggregate_input_positions_2,
+
+		aggregate_input_positions_3,
+		aggregate_input_positions_3,
+
+		aggregate_input_positions_4,
+		aggregate_input_positions_4,
 	};
 
 	printf("Building pipeline :\n");
