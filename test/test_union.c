@@ -42,14 +42,8 @@ void* generator(void* generator_context, const tuple_def* generator_tuple_def)
 
 	void* generated = malloc(BUFFER_SIZE);
 
-	construct_record(generated, (*generator_number), 0, "Rohan Dvivedi");
+	construct_record(generated, (*generator_number), 0, ((*generator_number) % 3 == 0) ? NULL : "Rohan Dvivedi");
 	(*generator_number) += INPUT_OPERATORS_COUNT;
-
-// delay output production to limit output from source, see system progress a bit slow
-/*
-	if((((uint32_t)rand()) % 1000) <= 150)
-		usleep(((uint32_t)rand()) % 5000);
-*/
 
 	return generated;
 }
