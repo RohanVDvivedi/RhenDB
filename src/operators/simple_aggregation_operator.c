@@ -57,7 +57,7 @@ static void execute(operator* o)
 				{
 					// produce the output_uval the output of the i-th aggregate function
 					datum output_uval;
-					if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, inputs->states[i]))
+					if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, &(inputs->states[i])))
 					{
 						inputs->aggregate_functions[i]->destroy_output(inputs->aggregate_functions[i], &output_uval);
 						free(output_tuple);

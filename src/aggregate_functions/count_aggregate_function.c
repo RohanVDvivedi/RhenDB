@@ -16,18 +16,12 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 	return 1;
 }
 
-static void destroy_state(const aggregate_function* af_p, void** state)
-{
-	free(*state);
-	(*state) = NULL;
-}
-
-static int produce_output(const aggregate_function* af_p, datum* output, const void* state)
+static int produce_output(const aggregate_function* af_p, datum* output, void** state_p)
 {
 	(*output) = (datum){.uint_value = 0};
 
-	if(state != NULL)
-		output->uint_value = (*((const uint64_t*)state));
+	if((*state_p) != NULL)
+		output->uint_value = (**((uint64_t**)state_p));
 
 	return 1;
 }
@@ -36,6 +30,16 @@ static void destroy_output(const aggregate_function* af_p, datum* output)
 {
 	// it is storing just a .uint_value
 	(*output) = (*NULL_DATUM);
+}
+
+static void destroy_state(const aggregate_function* af_p, void** state_p)
+{
+	// NOP if the state_p is already NULL
+	if((*state_p) == NULL)
+		return;
+
+	free(*state_p);
+	(*state_p) = NULL;
 }
 
 static void destroy_aggregate_function(aggregate_function* af_p)
