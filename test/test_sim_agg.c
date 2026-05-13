@@ -70,6 +70,9 @@ int main(int argc, char** argv)
 
 		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[4].al.type_info, 1),
 		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[4].al.type_info, 0),
+
+		get_min_max_aggregate_function(&rdb, record_def.type_info, 1),
+		get_min_max_aggregate_function(&rdb, record_def.type_info, 0),
 	};
 
 	const positional_accessor aggregate_input_positions_SELF[] = {SELF};
@@ -97,6 +100,9 @@ int main(int argc, char** argv)
 
 		aggregate_input_positions_4,
 		aggregate_input_positions_4,
+
+		aggregate_input_positions_SELF,
+		aggregate_input_positions_SELF,
 	};
 
 	printf("Building pipeline :\n");
