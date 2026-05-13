@@ -4,6 +4,8 @@
 #include<tuplestore/data_type_info.h>
 #include<tuplestore/datum.h>
 
+#include<rhendb/rhendb.h>
+
 #define AGGREGATE_FUNCTION_PARAM_TYPE_INFO_HOLDER_CAPACITY 4
 
 typedef struct aggregate_function aggregate_function;
@@ -66,5 +68,7 @@ struct aggregate_function
 */
 
 aggregate_function* get_count_aggregate_function(const data_type_info* input_type_info);
+
+aggregate_function* get_min_aggregate_function(rhendb* rdb, const data_type_info* input_type_info);
 
 #endif
