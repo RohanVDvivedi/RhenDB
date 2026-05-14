@@ -32,6 +32,11 @@ struct input_values
 
 	// consists of all the output_type_infos of all aggregate_functions
 	const tuple_def* output_tuple_def;
+
+	// partially prepared output_tuple
+	void* output_tuple;
+	uint32_t output_tuple_size;
+	uint32_t output_tuple_capacity;
 };
 
 static void execute(operator* o)
@@ -142,6 +147,9 @@ static void free_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
+	if(inputs->output_tuple != NULL)
+		free(inputs->output_tuple);
+
 	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
 		inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(inputs->states[i]));
 
@@ -230,6 +238,9 @@ void setup_sorted_aggregation_operator(operator* o, operator* input_operator, ui
 		.input_datums = malloc(sizeof(datum) * input_datums_count),
 		.aggregate_input_element_ids = malloc(sizeof(aggregate_function*) * aggregate_functions_count),
 		.output_tuple_def = output_tuple_def,
+		.output_tuple = NULL,
+		.output_tuple_size = 0,
+		.output_tuple_capacity = 0,
 	};
 
 	memory_move(inputs->aggregate_functions, aggregate_functions, sizeof(aggregate_function*) * aggregate_functions_count);
