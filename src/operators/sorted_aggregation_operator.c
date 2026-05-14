@@ -124,6 +124,8 @@ static void execute(operator* o)
 				int same_group = (0 == compare_tuples_rhendb(inputs->output_tuple, inputs->output_tuple_def, NULL, tuple, inputs->input_tuple_def, inputs->key_element_ids, NULL, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error));
 				if(abort_error)
 				{
+					destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 					kill_reason = get_dstring_pointing_to_literal_cstring("could_not_compare");
 					kill_signal_for_self_operator(o, kill_reason); return ;
 				}
@@ -137,6 +139,8 @@ static void execute(operator* o)
 						datum output_uval;
 						if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, &(inputs->states[i])))
 						{
+							destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 							kill_reason = get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed");
 							kill_signal_for_self_operator(o, kill_reason); return ;
 						}
@@ -159,6 +163,8 @@ static void execute(operator* o)
 					int produced = produce_tuple_from_operator(o, inputs->output_tuple);
 					if(!produced)
 					{
+						destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 						kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
 						kill_signal_for_self_operator(o, kill_reason); return ;
 					}
@@ -188,8 +194,12 @@ static void execute(operator* o)
 
 				for(uint32_t i = 0; i < inputs->key_element_count; i++)
 				{
+					datum key_val;
+					if(!get_value_from_element_from_tuple(&key_val, inputs->input_tuple_def, inputs->key_element_ids[i], tuple))
+						key_val = (*NULL_DATUM);
+
 					// ensure there are enopugh bytes in the output_tuple
-					while(!set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(i), inputs->output_tuple, inputs->input_tuple_def, inputs->key_element_ids[i], tuple, inputs->output_tuple_capacity - inputs->output_tuple_size))
+					while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), inputs->output_tuple, &key_val, inputs->output_tuple_capacity - inputs->output_tuple_size))
 					{
 						inputs->output_tuple_capacity = min(inputs->output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
 						inputs->output_tuple = realloc(inputs->output_tuple, inputs->output_tuple_capacity);
@@ -213,6 +223,8 @@ static void execute(operator* o)
 				// process_input for the udaf, if it fails kill the operator
 				if(!inputs->aggregate_functions[i]->process_input(inputs->aggregate_functions[i], &(inputs->states[i]), inputs->input_datums))
 				{
+					destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 					kill_reason = get_dstring_pointing_to_literal_cstring("process_input_of_udaf_failed");
 					kill_signal_for_self_operator(o, kill_reason); return ;
 				}
