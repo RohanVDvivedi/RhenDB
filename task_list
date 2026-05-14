@@ -1,9 +1,13 @@
 PICKED TASKS
 
-PRIORITY 1 AGGREGATION
+(*FOREVER TASK)
+ * for all current operators kill/shutdown the complete query plan if the error is abort error on comparison or hashing an extended type
 
- * sorted_aggregation_operator -> also takes in key_element_ids and key_element_count
-   * consumes tuples one by one until they have equal keys and then produced the final output when it finishes OR the unequal key tuple is found
+ * code review simple aggregation operator (make sure to delete parent consumtion iterators before suicide)
+ * code review sorted aggregation operator (make sure to delete parent consumtion iterators before suicide)
+
+
+PRIORITY 1 AGGREGATION
 
  * hash_aggregation_operator -> also takes in key_element_ids and key_element_count
    * make rash tables with partition_count, bucket_count_per_partition, and max_worker_count
