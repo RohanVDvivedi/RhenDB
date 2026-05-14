@@ -8,3 +8,4 @@ gcc -Wall -O3 -flto -I. ./test_build_dataset.c -o test_build_dataset.out -lrhend
 gcc -Wall -O3 -flto -I. ./test_sorter.c -o test_sorter.out -lrhendb -lmintxengine -ltuplelargetypes -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz
 gcc -Wall -O3 -flto -I. ./test_rash.c -o test_rash.out -lrhendb -lmintxengine -ltuplelargetypes -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz
 gcc -Wall -O3 -flto -I. ./test_sim_agg.c -o test_sim_agg.out -lrhendb -lmintxengine -ltuplelargetypes -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz
+gcc -Wall -O3 -flto -I. ./test_sort_agg.c -o test_sort_agg.out -lrhendb -lmintxengine -ltuplelargetypes -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz
