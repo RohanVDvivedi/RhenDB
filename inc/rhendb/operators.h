@@ -32,4 +32,8 @@ void setup_stream_input_operator(operator* o, stream* in_strm, const tuple_def* 
 
 void setup_stream_output_operator(operator* o, operator* input_operator, stream* out_strm);
 
+// keyed aggregation operators
+
+void setup_sorted_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids);
+
 #endif
