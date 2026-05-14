@@ -59,7 +59,6 @@ static void execute(operator* o)
 					datum output_uval;
 					if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, &(inputs->states[i])))
 					{
-						inputs->aggregate_functions[i]->destroy_output(inputs->aggregate_functions[i], &output_uval);
 						free(output_tuple);
 						kill_reason = get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed");
 						kill_signal_for_self_operator(o, kill_reason); return ;
@@ -77,9 +76,6 @@ static void execute(operator* o)
 
 					// recompute tuple_size
 					tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
-
-					// destroy the output_uval
-					inputs->aggregate_functions[i]->destroy_output(inputs->aggregate_functions[i], &output_uval);
 				}
 
 				// produce output_tuple

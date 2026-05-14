@@ -19,10 +19,6 @@ struct aggregate_function
 	// returns 0 on failure
 	int (*produce_output)(const aggregate_function* af_p, datum* output, void** state_p);
 
-	// use this function to destroy the output produced, NO-OP on NULL_DATUM
-	// this function will set the output to NULL_DATUM, so this function stays idempotent
-	void (*destroy_output)(const aggregate_function* af_p, datum* output);
-
 	// destroys state object, must be NO-OP if NULL
 	// this function will set the state to NULL, so this function stays idempotent
 	void (*destroy_state)(const aggregate_function* af_p, void** state_p);
@@ -63,7 +59,6 @@ struct aggregate_function
 
 	// give output to the expecting user
 
-	af_p->destroy_output(af_p, output);
 	af_p->destroy_state(af_p, state); // destroy state always at the last
 */
 

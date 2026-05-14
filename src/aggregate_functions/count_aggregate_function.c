@@ -26,12 +26,6 @@ static int produce_output(const aggregate_function* af_p, datum* output, void** 
 	return 1;
 }
 
-static void destroy_output(const aggregate_function* af_p, datum* output)
-{
-	// it is storing just a .uint_value
-	(*output) = (*NULL_DATUM);
-}
-
 static void destroy_state(const aggregate_function* af_p, void** state_p)
 {
 	// NOP if the state_p is already NULL
@@ -56,8 +50,6 @@ aggregate_function* get_count_aggregate_function(const data_type_info* input_typ
 	af_p->process_input = process_input;
 
 	af_p->produce_output = produce_output;
-
-	af_p->destroy_output = destroy_output;
 
 	af_p->destroy_state = destroy_state;
 
