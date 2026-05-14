@@ -209,7 +209,7 @@ void setup_sorted_aggregation_operator(operator* o, operator* input_operator, ui
 		output_dti->containees[j].al.type_info = (data_type_info*) aggregate_functions[i]->output_type_info;
 	}
 
-	initialize_tuple_data_type_info(output_dti, "keyed_aggregates", 0, max_output_tuple_size, aggregate_functions_count);
+	initialize_tuple_data_type_info(output_dti, "keyed_aggregates", 0, max_output_tuple_size, key_element_count + aggregate_functions_count);
 
 	tuple_def* output_tuple_def = malloc(sizeof(tuple_def));
 	initialize_tuple_def(output_tuple_def, output_dti);
