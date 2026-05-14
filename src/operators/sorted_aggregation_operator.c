@@ -1,6 +1,10 @@
 #include<rhendb/query_plan.h>
 
+#include<rhendb/transaction.h>
+
 #include<rhendb/aggregate_functions.h>
+
+#include<rhendb/function_compare.h>
 
 #include<stdlib.h>
 
@@ -54,51 +58,50 @@ static void execute(operator* o)
 			// destroy the input_iterator we will not be needing it
 			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
 
-			// produce output tuple and return it
+			// produce output tuple and return it, if one exists
+			if(inputs->output_tuple != NULL)
 			{
-				// generate the smallest possible tuple
-				uint32_t tuple_size = get_minimum_tuple_size(inputs->output_tuple_def);
-				uint32_t tuple_capacity = tuple_size;
-				void* output_tuple = malloc(tuple_capacity);
-				init_tuple(inputs->output_tuple_def, output_tuple);
-
-				for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
+				for(uint32_t i = 0, j = inputs->key_element_count; i < inputs->aggregate_functions_count; i++, j++)
 				{
 					// produce the output_uval the output of the i-th aggregate function
 					datum output_uval;
 					if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, &(inputs->states[i])))
 					{
 						inputs->aggregate_functions[i]->destroy_output(inputs->aggregate_functions[i], &output_uval);
-						free(output_tuple);
 						kill_reason = get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed");
 						kill_signal_for_self_operator(o, kill_reason); return ;
 					}
 
 					// ensure there are enopugh bytes in the output_tuple
-					while(!can_set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &output_uval, tuple_capacity - tuple_size))
+					while(!can_set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), inputs->output_tuple, &output_uval, inputs->output_tuple_capacity - inputs->output_tuple_size))
 					{
-						tuple_capacity = min(tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
-						output_tuple = realloc(output_tuple, tuple_capacity);
+						inputs->output_tuple_capacity = min(inputs->output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+						inputs->output_tuple = realloc(inputs->output_tuple, inputs->output_tuple_capacity);
 					}
 
 					// set output_uval in output_tuple
-					set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &output_uval, tuple_capacity - tuple_size);
+					set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), inputs->output_tuple, &output_uval, inputs->output_tuple_capacity - inputs->output_tuple_size);
 
 					// recompute tuple_size
-					tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+					inputs->output_tuple_size = get_tuple_size(inputs->output_tuple_def, inputs->output_tuple);
 
 					// destroy the output_uval
 					inputs->aggregate_functions[i]->destroy_output(inputs->aggregate_functions[i], &output_uval);
 				}
 
 				// produce output_tuple
-				int produced = produce_tuple_from_operator(o, output_tuple);
-				free(output_tuple);
+				int produced = produce_tuple_from_operator(o, inputs->output_tuple);
 				if(!produced)
 				{
 					kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
 					kill_signal_for_self_operator(o, kill_reason); return ;
 				}
+
+				// clear output_tuple
+				free(inputs->output_tuple);
+				inputs->output_tuple = NULL;
+				inputs->output_tuple_size = 0;
+				inputs->output_tuple_capacity = 0;
 			}
 
 			// destroy aggregate states, right before we quit
@@ -118,6 +121,93 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
+			// if a prepared output_tuple exists then we may need to match it's key with tuple to ensure that this tuple falls into same group or not
+			if(inputs->output_tuple != NULL)
+			{
+				int abort_error = 0;
+				int same_group = (0 == compare_tuples_rhendb(inputs->output_tuple, inputs->output_tuple_def, NULL, tuple, inputs->input_tuple_def, inputs->key_element_ids, NULL, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error));
+				if(abort_error)
+				{
+					kill_reason = get_dstring_pointing_to_literal_cstring("could_not_compare");
+					kill_signal_for_self_operator(o, kill_reason); return ;
+				}
+
+				// if tuple does not belong to the same group, then produce output tuple
+				if(!same_group)
+				{
+					for(uint32_t i = 0, j = inputs->key_element_count; i < inputs->aggregate_functions_count; i++, j++)
+					{
+						// produce the output_uval the output of the i-th aggregate function
+						datum output_uval;
+						if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, &(inputs->states[i])))
+						{
+							inputs->aggregate_functions[i]->destroy_output(inputs->aggregate_functions[i], &output_uval);
+							kill_reason = get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed");
+							kill_signal_for_self_operator(o, kill_reason); return ;
+						}
+
+						// ensure there are enopugh bytes in the output_tuple
+						while(!can_set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), inputs->output_tuple, &output_uval, inputs->output_tuple_capacity - inputs->output_tuple_size))
+						{
+							inputs->output_tuple_capacity = min(inputs->output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+							inputs->output_tuple = realloc(inputs->output_tuple, inputs->output_tuple_capacity);
+						}
+
+						// set output_uval in output_tuple
+						set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), inputs->output_tuple, &output_uval, inputs->output_tuple_capacity - inputs->output_tuple_size);
+
+						// recompute tuple_size
+						inputs->output_tuple_size = get_tuple_size(inputs->output_tuple_def, inputs->output_tuple);
+
+						// destroy the output_uval
+						inputs->aggregate_functions[i]->destroy_output(inputs->aggregate_functions[i], &output_uval);
+					}
+
+					// produce output_tuple
+					int produced = produce_tuple_from_operator(o, inputs->output_tuple);
+					if(!produced)
+					{
+						kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
+						kill_signal_for_self_operator(o, kill_reason); return ;
+					}
+
+					// clear output_tuple
+					free(inputs->output_tuple);
+					inputs->output_tuple = NULL;
+					inputs->output_tuple_size = 0;
+					inputs->output_tuple_capacity = 0;
+
+					// destroy aggregate states, right before we go forward to make/start a new groups
+					{
+						for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
+							inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(inputs->states[i]));
+					}
+				}
+			}
+
+			// if an output_tuple does not exist now create one
+			if(inputs->output_tuple == NULL)
+			{
+				// generate the smallest possible tuple
+				inputs->output_tuple_size = get_minimum_tuple_size(inputs->output_tuple_def);
+				inputs->output_tuple_capacity = inputs->output_tuple_size;
+				inputs->output_tuple = malloc(inputs->output_tuple_capacity);
+				init_tuple(inputs->output_tuple_def, inputs->output_tuple);
+
+				for(uint32_t i = 0; i < inputs->key_element_count; i++)
+				{
+					// ensure there are enopugh bytes in the output_tuple
+					while(!set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(i), inputs->output_tuple, inputs->input_tuple_def, inputs->key_element_ids[i], tuple, inputs->output_tuple_capacity - inputs->output_tuple_size))
+					{
+						inputs->output_tuple_capacity = min(inputs->output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+						inputs->output_tuple = realloc(inputs->output_tuple, inputs->output_tuple_capacity);
+					}
+
+					// recompute tuple_size
+					inputs->output_tuple_size = get_tuple_size(inputs->output_tuple_def, inputs->output_tuple);
+				}
+			}
+
 			// iterate for process_input of each udaf
 			for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
 			{
