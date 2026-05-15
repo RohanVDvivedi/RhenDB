@@ -18,7 +18,7 @@ int main()
 	rhendb rdb;
 	initialize_rhendb(&rdb, "./test.db",
 		5,
-		512, 8, 10, 10,
+		512, 8, 80, 80,
 			10000ULL, 100000ULL,
 			10000000ULL,
 		4096,
