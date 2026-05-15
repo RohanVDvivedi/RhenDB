@@ -3,16 +3,13 @@ PICKED TASKS
  * code review simple aggregation operator (make sure to delete parent consumtion iterators before suicide)
  * code review sorted aggregation operator (make sure to delete parent consumtion iterators before suicide)
 
- * all operators on creation return struct resources {
-    uint64_t bufferpool_frames; // number of bufferpool frames that this operator need, for any intermediate operator needs (worker_count * 2 + 2) number of bufferpool frames (+2 for the main job of the operator)
-                                // inserts and scans will need more of them based on whether they are index or table scans and how many inserts one does per worker, including 5 for the latching of the path from root to leaf of operator
-    uint64_t threads_count; // each scan or source operator has atleast 1 thread producing data, all worker jobs of scan operator reading tuples are counted as threads
-    uint64_t jobs_count; // each job is 1/10 th of a thread, for non-source operators, even main job is actually a job
- }
- * all setup functions when operator* o, the first parameter being NULL return just this struct instead of creating the operator completely
- * add a function to add resources and return another resources struct
- * acquire bufferpool resource first and then only acquire threads, if the second resource fails release the first resource and try again
- * do the same for aggregate functions
+
+
+
+
+
+
+
 
 PRIORITY 1 AGGREGATION
 
@@ -26,7 +23,26 @@ PRIORITY 1 AGGREGATION
 
 
 
-PRIORITY 2 JOINS
+
+PRIORITY 2
+ * all operators on creation return struct resources {
+    uint64_t bufferpool_frames; // number of bufferpool frames that this operator need, for any intermediate operator needs (worker_count * 2 + 2) number of bufferpool frames (+2 for the main job of the operator)
+                                // inserts and scans will need more of them based on whether they are index or table scans and how many inserts one does per worker, including 5 for the latching of the path from root to leaf of operator
+    uint64_t threads_count; // each scan or source operator has atleast 1 thread producing data, all worker jobs of scan operator reading tuples are counted as threads
+    uint64_t jobs_count; // each job is 1/10 th of a thread, for non-source operators, even main job is actually a job
+ }
+ * all setup functions when operator* o, the first parameter being NULL return just this struct instead of creating the operator completely
+ * add a function to add resources and return another resources struct
+ * acquire bufferpool resource first and then only acquire threads, if the second resource fails release the first resource and try again
+ * do the same for aggregate functions
+
+
+
+
+
+
+
+PRIORITY 3 JOINS
 
  * implement streaming_loop_join_operator (identical to nested_loop_join)
    * start batching on both sides left and right
