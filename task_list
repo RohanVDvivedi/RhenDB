@@ -2,7 +2,6 @@ PICKED TASKS
 
  * code review simple aggregation operator (make sure to delete parent consumtion iterators before suicide)
  * code review sorted aggregation operator (make sure to delete parent consumtion iterators before suicide)
- * code review all operators
 
  * all operators on creation return struct resources {
     uint64_t bufferpool_frames; // number of bufferpool frames that this operator need, for any intermediate operator needs (worker_count * 2 + 2) number of bufferpool frames (+2 for the main job of the operator)
