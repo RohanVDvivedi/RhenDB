@@ -13,6 +13,7 @@ PICKED TASKS
  * all setup functions when operator* o, the first parameter being NULL return just this struct instead of creating the operator completely
  * add a function to add resources and return another resources struct
  * acquire bufferpool resource first and then only acquire threads, if the second resource fails release the first resource and try again
+ * do the same for aggregate functions
 
 PRIORITY 1 AGGREGATION
 
