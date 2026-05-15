@@ -167,7 +167,7 @@ static void execute(operator* o)
 					inputs->output_tuple_size = 0;
 					inputs->output_tuple_capacity = 0;
 
-					// destroy aggregate states, right before we go forward to make/start a new groups
+					// destroy aggregate states, right before we go forward to make/start a new group
 					{
 						for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
 							inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(inputs->states[i]));
