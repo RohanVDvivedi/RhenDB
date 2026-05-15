@@ -4,6 +4,8 @@
 #include<tuplelargetypes/blob_extended.h>
 #include<tuplelargetypes/numeric_extended.h>
 
+#include<stdlib.h>
+
 int can_compare_datum_rhendb(const data_type_info* dti1, const data_type_info* dti2)
 {
 	if(are_identical_type_info(dti1, dti2))
@@ -24,7 +26,7 @@ int can_compare_datum_rhendb(const data_type_info* dti1, const data_type_info* d
 	return 0;
 }
 
-int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const datum* uval2, const data_type_info* dti2, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const datum* uval2, const data_type_info* dti2, rage_engine* ex_engine)
 {
 	if(is_datum_NULL(uval1) && is_datum_NULL(uval2))
 		return 0;
@@ -37,37 +39,80 @@ int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const d
 		return compare_datum(uval1, dti1, uval2, dti2);
 	else if((is_text_type_info(dti1) || is_blob_type_info(dti1)) && (is_text_type_info(dti2) || is_blob_type_info(dti2))) // both are text or blob
 	{
+		// for implicit read only transactions for accessing extended types in blob_store
+		const void* transaction_id = NULL;
+		int abort_error = 0;
+
 		binary_read_iterator* bri1_p = get_new_binary_read_iterator(uval1, dti1, &(ex_engine->bstd), ex_engine->pam_p);
 		binary_read_iterator* bri2_p = get_new_binary_read_iterator(uval2, dti2, &(ex_engine->bstd), ex_engine->pam_p);
 		int is_prefix = 0;
 
-		int cmp = compare_tb(bri1_p, bri2_p, &is_prefix, transaction_id, abort_error);
-		if(*abort_error)
-			goto ABORT_ERROR_TB;
+		int cmp = compare_tb(bri1_p, bri2_p, &is_prefix, transaction_id, &abort_error);
+		if(abort_error)
+		{
+			printf("experienced abort_error while comparing extended text/blob types\n");
+			exit(-1);
+		}
 
-		ABORT_ERROR_TB:;
-		delete_binary_read_iterator(bri1_p, transaction_id, abort_error);
-		delete_binary_read_iterator(bri2_p, transaction_id, abort_error);
-		if(*abort_error)
-			return 0;
+		delete_binary_read_iterator(bri1_p, transaction_id, &abort_error);
+		if(abort_error)
+		{
+			printf("experienced abort_error while hashing extended text/blob types\n");
+			exit(-1);
+		}
+
+		delete_binary_read_iterator(bri2_p, transaction_id, &abort_error);
+		if(abort_error)
+		{
+			printf("experienced abort_error while hashing extended text/blob types\n");
+			exit(-1);
+		}
+
 		return cmp;
 	}
 	else if(is_numeric_type_info(dti1) && is_numeric_type_info(dti2)) // both are numeric
 	{
-		numeric_reader_interface nri1 = init_intuple_numeric_reader_interface((*uval1), dti1, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, abort_error);
-		numeric_reader_interface nri2 = init_intuple_numeric_reader_interface((*uval2), dti2, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, abort_error);
+		// for implicit read only transactions for accessing extended types in blob_store
+		const void* transaction_id = NULL;
+		int abort_error = 0;
+
+		numeric_reader_interface nri1 = init_intuple_numeric_reader_interface((*uval1), dti1, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, &abort_error);
+		if(abort_error)
+		{
+			printf("experienced abort_error while hashing extended numeric type\n");
+			exit(-1);
+		}
+
+		numeric_reader_interface nri2 = init_intuple_numeric_reader_interface((*uval2), dti2, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, &abort_error);
+		if(abort_error)
+		{
+			printf("experienced abort_error while hashing extended numeric type\n");
+			exit(-1);
+		}
+
 		int is_prefix = 0;
 		int error = 0;
-
 		int cmp = compare_numeric(&nri1, &nri2, &is_prefix, &error);
-		if(*abort_error)
-			goto ABORT_ERROR_NUMERIC;
+		if(abort_error)
+		{
+			printf("experienced abort_error while hashing extended numeric type\n");
+			exit(-1);
+		}
 
-		ABORT_ERROR_NUMERIC:;
 		nri1.close_digits_stream(&nri1);
+		if(abort_error)
+		{
+			printf("experienced abort_error while hashing extended numeric type\n");
+			exit(-1);
+		}
+
 		nri2.close_digits_stream(&nri2);
-		if(*abort_error)
-			return 0;
+		if(abort_error)
+		{
+			printf("experienced abort_error while hashing extended numeric type\n");
+			exit(-1);
+		}
+
 		return cmp;
 	}
 	else if(is_extended_type_info(dti1) || is_extended_type_info(dti2)) // not comparable extended types, like jsonb or tuple_list
@@ -92,9 +137,7 @@ int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const d
 			if(!get_containee_from_datum(&child_value2, &child_dti2, uval2, dti2, i))
 				child_value2 = (*NULL_DATUM);
 
-			cmp = compare_datum_rhendb(&child_value1, child_dti1, &child_value2, child_dti2, ex_engine, transaction_id, abort_error);
-			if(*abort_error)
-				return 0;
+			cmp = compare_datum_rhendb(&child_value1, child_dti1, &child_value2, child_dti2, ex_engine);
 		}
 		if(cmp == 0 && (element_count1 != element_count2))
 		{
@@ -107,7 +150,7 @@ int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const d
 	}
 }
 
-int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_type_info* dti, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_type_info* dti, rage_engine* ex_engine)
 {
 	if(is_datum_NULL(uval1) && is_datum_NULL(uval2))
 		return 0;
@@ -120,37 +163,81 @@ int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_typ
 		return compare_datum2(uval1, uval2, dti);
 	else if(is_text_type_info(dti) || is_blob_type_info(dti))
 	{
+		// for implicit read only transactions for accessing extended types in blob_store
+		const void* transaction_id = NULL;
+		int abort_error = 0;
+
 		binary_read_iterator* bri1_p = get_new_binary_read_iterator(uval1, dti, &(ex_engine->bstd), ex_engine->pam_p);
 		binary_read_iterator* bri2_p = get_new_binary_read_iterator(uval2, dti, &(ex_engine->bstd), ex_engine->pam_p);
 		int is_prefix = 0;
 
-		int cmp = compare_tb(bri1_p, bri2_p, &is_prefix, transaction_id, abort_error);
-		if(*abort_error)
-			goto ABORT_ERROR_TB;
+		int cmp = compare_tb(bri1_p, bri2_p, &is_prefix, transaction_id, &abort_error);
+		if(abort_error)
+		{
+			printf("experienced abort_error while comparing extended text/blob types\n");
+			exit(-1);
+		}
 
-		ABORT_ERROR_TB:;
-		delete_binary_read_iterator(bri1_p, transaction_id, abort_error);
-		delete_binary_read_iterator(bri2_p, transaction_id, abort_error);
-		if(*abort_error)
-			return 0;
+		delete_binary_read_iterator(bri1_p, transaction_id, &abort_error);
+		if(abort_error)
+		{
+			printf("experienced abort_error while comparing extended text/blob types\n");
+			exit(-1);
+		}
+
+		delete_binary_read_iterator(bri2_p, transaction_id, &abort_error);
+		if(abort_error)
+		{
+			printf("experienced abort_error while comparing extended text/blob types\n");
+			exit(-1);
+		}
+
 		return cmp;
 	}
 	else if(is_numeric_type_info(dti))
 	{
-		numeric_reader_interface nri1 = init_intuple_numeric_reader_interface((*uval1), dti, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, abort_error);
-		numeric_reader_interface nri2 = init_intuple_numeric_reader_interface((*uval2), dti, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, abort_error);
+		// for implicit read only transactions for accessing extended types in blob_store
+		const void* transaction_id = NULL;
+		int abort_error = 0;
+
+		numeric_reader_interface nri1 = init_intuple_numeric_reader_interface((*uval1), dti, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, &abort_error);
+		if(abort_error)
+		{
+			printf("experienced abort_error while hashing extended numeric type\n");
+			exit(-1);
+		}
+
+		numeric_reader_interface nri2 = init_intuple_numeric_reader_interface((*uval2), dti, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, &abort_error);
+		if(abort_error)
+		{
+			printf("experienced abort_error while hashing extended numeric type\n");
+			exit(-1);
+		}
+
 		int is_prefix = 0;
 		int error = 0;
 
 		int cmp = compare_numeric(&nri1, &nri2, &is_prefix, &error);
-		if(*abort_error)
-			goto ABORT_ERROR_NUMERIC;
+		if(abort_error)
+		{
+			printf("experienced abort_error while hashing extended numeric type\n");
+			exit(-1);
+		}
 
-		ABORT_ERROR_NUMERIC:;
 		nri1.close_digits_stream(&nri1);
+		if(abort_error)
+		{
+			printf("experienced abort_error while hashing extended numeric type\n");
+			exit(-1);
+		}
+
 		nri2.close_digits_stream(&nri2);
-		if(*abort_error)
-			return 0;
+		if(abort_error)
+		{
+			printf("experienced abort_error while hashing extended numeric type\n");
+			exit(-1);
+		}
+
 		return cmp;
 	}
 	else if(is_extended_type_info(dti)) // not comparable extended types, like jsonb or tuple_list
@@ -177,9 +264,7 @@ int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_typ
 			if(!get_containee_from_datum(&child_value2, &temp, uval2, dti, i))
 				child_value2 = (*NULL_DATUM);
 
-			cmp = compare_datum2_rhendb(&child_value1, &child_value2, child_dti, ex_engine, transaction_id, abort_error);
-			if(*abort_error)
-				return 0;
+			cmp = compare_datum2_rhendb(&child_value1, &child_value2, child_dti, ex_engine);
 		}
 		if(cmp == 0 && (element_count1 != element_count2))
 		{
@@ -192,7 +277,7 @@ int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_typ
 	}
 }
 
-int compare_tuples_rhendb(const void* tup1, const tuple_def* tpl_d1, const positional_accessor* element_ids1, const void* tup2, const tuple_def* tpl_d2, const positional_accessor* element_ids2, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+int compare_tuples_rhendb(const void* tup1, const tuple_def* tpl_d1, const positional_accessor* element_ids1, const void* tup2, const tuple_def* tpl_d2, const positional_accessor* element_ids2, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine)
 {
 	int compare = 0;
 
@@ -208,9 +293,7 @@ int compare_tuples_rhendb(const void* tup1, const tuple_def* tpl_d1, const posit
 		if(!get_value_from_element_from_tuple(&uval2, tpl_d2, (element_ids2 != NULL) ? element_ids2[i] : STATIC_POSITION(i), tup2))
 			uval2 = (*NULL_DATUM);
 
-		compare = compare_datum_rhendb(&uval1, dti1, &uval2, dti2, ex_engine, transaction_id, abort_error);
-		if(*abort_error)
-			return 0;
+		compare = compare_datum_rhendb(&uval1, dti1, &uval2, dti2, ex_engine);
 
 		if(cmp_dir)
 			compare = compare * cmp_dir[i];
@@ -219,7 +302,7 @@ int compare_tuples_rhendb(const void* tup1, const tuple_def* tpl_d1, const posit
 	return compare;
 }
 
-int compare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+int compare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine)
 {
 	int compare = 0;
 
@@ -235,9 +318,7 @@ int compare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* 
 		if(!get_value_from_element_from_tuple(&uval2, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup2))
 			uval2 = (*NULL_DATUM);
 
-		compare = compare_datum2_rhendb(&uval1, &uval2, dti, ex_engine, transaction_id, abort_error);
-		if(*abort_error)
-			return 0;
+		compare = compare_datum2_rhendb(&uval1, &uval2, dti, ex_engine);
 
 		if(cmp_dir)
 			compare = compare * cmp_dir[i];
@@ -246,15 +327,13 @@ int compare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* 
 	return compare;
 }
 
-int compare_datums3_rhendb(const datum* uvals1, const datum* uvals2, data_type_info const * const * dtis, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+int compare_datums3_rhendb(const datum* uvals1, const datum* uvals2, data_type_info const * const * dtis, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine)
 {
 	int compare = 0;
 
 	for(uint32_t i = 0; ((i < element_count) && (compare == 0)); i++)
 	{
-		compare = compare_datum2_rhendb(uvals1 + i, uvals2 + i, dtis[i], ex_engine, transaction_id, abort_error);
-		if(*abort_error)
-			return 0;
+		compare = compare_datum2_rhendb(uvals1 + i, uvals2 + i, dtis[i], ex_engine);
 
 		if(cmp_dir)
 			compare = compare * cmp_dir[i];
