@@ -188,16 +188,14 @@ void print_value_at_rash_table_iterator(rash_table_iterator* rti_p)
 
 void insert_rth(rash_table_handle* rth_p, uint32_t v)
 {
-	int abort_error = 0;
-
 	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rth_p->rdb->persistent_acid_rage_engine), NULL, &abort_error);
+	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rth_p->rdb->persistent_acid_rage_engine));
 
-	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 0, NULL, &abort_error);
+	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 0);
 
-	binary_write_iterator* bwi_p = open_for_writing_value_in_rash_table_iterator(&rti, NULL, &abort_error);
+	binary_write_iterator* bwi_p = open_for_writing_value_in_rash_table_iterator(&rti);
 
 	int abort_error_dummy = 0;
 	append_to_binary_write_iterator(bwi_p, record, get_tuple_size(&record_def, record), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(rth_p->htan)), NULL, &abort_error_dummy);
@@ -211,14 +209,12 @@ void insert_rth(rash_table_handle* rth_p, uint32_t v)
 
 int remove_rth(rash_table_handle* rth_p, uint32_t v)
 {
-	int abort_error = 0;
-
 	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rth_p->rdb->persistent_acid_rage_engine), NULL, &abort_error);
+	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rth_p->rdb->persistent_acid_rage_engine));
 
-	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 0, NULL, &abort_error);
+	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 0);
 
 	int removed = remove_from_rash_table_iterator(&rti);
 
@@ -231,16 +227,14 @@ int remove_rth(rash_table_handle* rth_p, uint32_t v)
 
 void find_and_print(rash_table_handle* rth_p, uint32_t v)
 {
-	int abort_error = 0;
-
 	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rth_p->rdb->persistent_acid_rage_engine), NULL, &abort_error);
+	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rth_p->rdb->persistent_acid_rage_engine));
 
-	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 1, NULL, &abort_error);
+	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 1);
 
-	if(!exists_in_rash_table_iterator(&rti, NULL, &abort_error))
+	if(!exists_in_rash_table_iterator(&rti))
 	{
 		printf("%"PRIu32" -> (\n\tNULL\n)\n", v);
 		delete_rash_table_iterator(&rti);
