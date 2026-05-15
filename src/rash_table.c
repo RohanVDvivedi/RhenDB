@@ -222,7 +222,7 @@ int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_de
 	return 1;
 }
 
-rash_table_key get_new_rash_table_key(const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+rash_table_key get_new_rash_table_key(const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine)
 {
 	rash_table_key rkey = {
 		.record = record,
@@ -241,17 +241,7 @@ rash_table_key get_new_rash_table_key(const void* record, const tuple_def* recor
 
 	tuple_hasher th = *FNV_64_TUPLE_HASHER;
 	for(uint32_t i = 0; i < key_element_count; i++)
-	{
-		hash_datum_rhendb(&(rkey.mat_key.keys[i]), rkey.mat_key.key_dtis[i], &th, ex_engine, transaction_id, abort_error);
-		if(*abort_error)
-			break;
-	}
-
-	if(*abort_error)
-	{
-		destroy_materialized_key(&(rkey.mat_key));
-		return (rash_table_key){};
-	}
+		hash_datum_rhendb(&(rkey.mat_key.keys[i]), rkey.mat_key.key_dtis[i], &th, ex_engine);
 
 	serialize_uint64(rkey.hash_value, 8, th.hash);
 
@@ -279,7 +269,7 @@ rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read
 	return rti;
 }
 
-rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int is_read_only, const void* transaction_id, int* abort_error)
+rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int is_read_only)
 {
 	int abort_error_dummy = 0;
 
@@ -290,9 +280,7 @@ rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const ra
 	while(1)
 	{
 		// if exists, i.e. key compares equal is found, then break out
-		int exists = exists_in_rash_table_iterator(&rti, transaction_id, abort_error);
-		if(*abort_error)
-			break;
+		int exists = exists_in_rash_table_iterator(&rti);
 		if(exists)
 			break;
 
@@ -318,7 +306,7 @@ binary_read_iterator* read_key_in_rash_table_iterator(const rash_table_iterator*
 	return get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
 }
 
-int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* transaction_id, int* abort_error)
+int exists_in_rash_table_iterator(const rash_table_iterator* rti_p)
 {
 	int abort_error_dummy = 0;
 
@@ -373,21 +361,18 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* 
 				datum uval2;
 				get_value_from_element_from_tuple(&uval2, &(rti_p->rth_p->key_tuple_defs[i]), SELF, tuple);
 
-				result = (0 == compare_datum_rhendb(&(rti_p->rkey_p->mat_key.keys[i]), rti_p->rkey_p->mat_key.key_dtis[i], &uval2, dti2, rti_p->rth_p->ex_engine, transaction_id, abort_error));
+				result = (0 == compare_datum_rhendb(&(rti_p->rkey_p->mat_key.keys[i]), rti_p->rkey_p->mat_key.key_dtis[i], &uval2, dti2, rti_p->rth_p->ex_engine));
 			}
 		});
-
-		if(*abort_error)
-			break;
 	}
 
-	// if ther has not been an abort_error and the result = 1
+	// if the result = 1
 	// then result is still 1, only if key_bri_p is at its end, (ensured by checking that no more bytes can be peeked)
-	if(!(*abort_error) && result == 1)
+	if(result == 1)
 	{
 		uint32_t bytes_peeked;
 		peek_in_binary_read_iterator(key_bri_p, &bytes_peeked, NULL, &abort_error_dummy);
-		if((*abort_error) || bytes_peeked > 0)
+		if(bytes_peeked > 0)
 			result = 0;
 	}
 
@@ -461,7 +446,7 @@ binary_read_iterator* read_value_in_rash_table_iterator(const rash_table_iterato
 	return get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
 }
 
-binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p, const void* transaction_id, int* abort_error)
+binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p)
 {
 	if(rti_p->is_read_only)
 		return NULL;
@@ -471,9 +456,7 @@ binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_
 
 	int abort_error_dummy = 0;
 
-	int exists = exists_in_rash_table_iterator(rti_p, transaction_id, abort_error);
-	if(*abort_error)
-		return NULL;
+	int exists = exists_in_rash_table_iterator(rti_p);
 
 	if(exists) // update call
 	{

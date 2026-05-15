@@ -37,8 +37,7 @@ static int compare_consumption_iterators(const void* context_p, const void* cit1
 	const consumption_iterator* cit1_p = cit1_vp;
 	const consumption_iterator* cit2_p = cit2_vp;
 
-	int abort_error = 0;
-	return compare_datums3_rhendb(cit1_p->embed_ptrs[1], cit2_p->embed_ptrs[1], inputs->key_dtis, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+	return compare_datums3_rhendb(cit1_p->embed_ptrs[1], cit2_p->embed_ptrs[1], inputs->key_dtis, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
 }
 
 // we materialize, the keys in cit_p->embed_ptrs[1], using it as datum[] having inputs->key_element_count elements long

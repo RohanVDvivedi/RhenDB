@@ -71,8 +71,7 @@ static void execute(operator* o)
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 
-		int abort_error = 0;
-		int compare = compare_tuples_rhendb(inputs->tuples[0], inputs->input_defs[0], NULL, inputs->tuples[1], inputs->input_defs[1], NULL, NULL, inputs->element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+		int compare = compare_tuples_rhendb(inputs->tuples[0], inputs->input_defs[0], NULL, inputs->tuples[1], inputs->input_defs[1], NULL, NULL, inputs->element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
 		inputs->tuple_processed++;
 		if(compare != 0)
 		{

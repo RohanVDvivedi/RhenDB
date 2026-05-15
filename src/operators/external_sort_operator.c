@@ -118,19 +118,11 @@ static void sort_job(operator* o, void* param)
 		// pop one from the front
 		interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param);
 
-		// sort it into a ne run
-		int abort_error = 0;
-		interim_tuple_store* ots_p = sort_interim_tuples(its_p, result_counter, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+		// sort it into a new run
+		interim_tuple_store* ots_p = sort_interim_tuples(its_p, result_counter, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
 
 		// delete the input run
 		delete_interim_tuple_store(its_p);
-
-		// handling abort_error
-		if(ots_p == NULL) // case for handling possibly an abort error
-		{
-			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_sort_possibly_abort_error_on_comparing_extended_type"));
-			return;
-		}
 
 		// push ots_p at the back
 		push_run_in_tuple_runs(input_param, ots_p);
@@ -169,8 +161,7 @@ static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const v
 	const interim_tuple_store* its1_p = its1_vp;
 	const interim_tuple_store* its2_p = its2_vp;
 
-	int abort_error = 0;
-	return compare_datums3_rhendb(its1_p->embed_ptrs[0], its2_p->embed_ptrs[0], inputs->key_dtis, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error);
+	return compare_datums3_rhendb(its1_p->embed_ptrs[0], its2_p->embed_ptrs[0], inputs->key_dtis, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
 }
 
 static void merge_into_run_job(operator* o, void* param)

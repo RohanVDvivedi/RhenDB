@@ -17,10 +17,6 @@ struct sorting_context
 	const compare_direction* key_cmp_dirs;
 
 	rage_engine* ex_engine;
-	const void* transaction_id;
-	int* abort_error;
-
-	jmp_buf long_jump_on_abort_error;
 };
 
 typedef struct sortable_tuple_reference sortable_tuple_reference;
@@ -38,13 +34,7 @@ static int compare_tuples_for_interim_tuple_store_sort(const void* sc_vp, const 
 	const sortable_tuple_reference* ref1 = ref1_vp;
 	const sortable_tuple_reference* ref2 = ref2_vp;
 
-	int compare = compare_datums3_rhendb(ref1->keys, ref2->keys, sc_p->key_dtis, sc_p->key_cmp_dirs, sc_p->element_count, sc_p->ex_engine, sc_p->transaction_id, sc_p->abort_error);
-
-	// on abort error perform a long jump
-	if(*(sc_p->abort_error))
-		longjmp(((sorting_context*)sc_p)->long_jump_on_abort_error, *(sc_p->abort_error));
-
-	return compare;
+	return compare_datums3_rhendb(ref1->keys, ref2->keys, sc_p->key_dtis, sc_p->key_cmp_dirs, sc_p->element_count, sc_p->ex_engine);
 }
 
 data_definitions_value_arraylist(sortable_tuple_references, sortable_tuple_reference)
@@ -52,7 +42,7 @@ declarations_value_arraylist(sortable_tuple_references, sortable_tuple_reference
 #define EXPANSION_FACTOR 1.5
 function_definitions_value_arraylist(sortable_tuple_references, sortable_tuple_reference, static inline)
 
-interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, tuples_down_counter result_counter, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error)
+interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, tuples_down_counter result_counter, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine)
 {
 	// if the its_p is empty, OR if no result is expected, then return immediately
 	if(its_p->tuples_count == 0 || is_zero_tuples_down_counter(&result_counter))
@@ -88,10 +78,7 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, tuples_down
 		element_count,
 		NULL,
 		cmp_dir,
-
 		ex_engine,
-		transaction_id,
-		abort_error,
 	};
 	sc.key_dtis = malloc(sizeof(data_type_info) * element_count);
 	if(sc.key_dtis == NULL)
@@ -99,34 +86,8 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, tuples_down
 	for(uint32_t j = 0; j < element_count; j++)
 		sc.key_dtis[j] = get_type_info_for_element_from_tuple_def(tpl_d, element_ids[j]);
 
-	// build index accessed interface to sort it
-	//index_accessed_interface iai = get_index_accessed_interface_for_front_of_sortable_tuple_references(&list_of_sortable_tuple_references);
-
-	if(setjmp(sc.long_jump_on_abort_error) == 0)
-	{
-		// sort its_p using sc and iai
-		//quick_sort_iai(&(iai), 0, get_element_count_sortable_tuple_references(&list_of_sortable_tuple_references)-1, &contexted_comparator(&sc, compare_tuples_for_interim_tuple_store_sort));
-		if(!merge_sort_sortable_tuple_references(&list_of_sortable_tuple_references, 0, get_element_count_sortable_tuple_references(&list_of_sortable_tuple_references)-1, &contexted_comparator(&sc, compare_tuples_for_interim_tuple_store_sort), STD_C_mem_allocator))
-		{
-			printf("sorting the run failed\n");
-			exit(-1);
-		}
-	}
-	else // jumps to here on abort_error
-	{
-		deinitialize_sortable_tuple_references(&list_of_sortable_tuple_references);
-		free(sc.key_dtis);
-		free(keyss);
-		return NULL;
-	}
-
-	if(*abort_error)
-	{
-		deinitialize_sortable_tuple_references(&list_of_sortable_tuple_references);
-		free(sc.key_dtis);
-		free(keyss);
-		return NULL;
-	}
+	// sort its_p using sc and iai
+	merge_sort_sortable_tuple_references(&list_of_sortable_tuple_references, 0, get_element_count_sortable_tuple_references(&list_of_sortable_tuple_references)-1, &contexted_comparator(&sc, compare_tuples_for_interim_tuple_store_sort), STD_C_mem_allocator);
 
 	// create output interim_tuple_store
 	interim_tuple_store* ots_p = get_new_interim_tuple_store(get_total_bytes_in_interim_tuple_store(its_p));

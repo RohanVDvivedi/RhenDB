@@ -120,15 +120,7 @@ static void execute(operator* o)
 			// if a prepared output_tuple exists then we may need to match it's key with tuple to ensure that this tuple falls into same group or not
 			if(inputs->output_tuple != NULL)
 			{
-				int abort_error = 0;
-				int same_group = (0 == compare_tuples_rhendb(inputs->output_tuple, inputs->output_tuple_def, NULL, tuple, inputs->input_tuple_def, inputs->key_element_ids, NULL, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), NULL, &abort_error));
-				if(abort_error)
-				{
-					destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-
-					kill_reason = get_dstring_pointing_to_literal_cstring("could_not_compare");
-					kill_signal_for_self_operator(o, kill_reason); return ;
-				}
+				int same_group = (0 == compare_tuples_rhendb(inputs->output_tuple, inputs->output_tuple_def, NULL, tuple, inputs->input_tuple_def, inputs->key_element_ids, NULL, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine)));
 
 				// if tuple does not belong to the same group, then produce output tuple
 				if(!same_group)

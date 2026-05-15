@@ -98,7 +98,7 @@ struct rash_table_key
 // returns true, if the rash_key initialization will succeed
 int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine);
 
-rash_table_key get_new_rash_table_key(const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, const void* transaction_id, int* abort_error);
+rash_table_key get_new_rash_table_key(const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine);
 
 uint64_t get_hash_value_for_rash_table_key(const rash_table_key* rkey_p);
 
@@ -120,17 +120,17 @@ struct rash_table_iterator
 
 rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read_only);
 
-rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int is_read_only, const void* transaction_id, int* abort_error);
+rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int is_read_only);
 
 binary_read_iterator* read_key_in_rash_table_iterator(const rash_table_iterator* rti_p);
 
-int exists_in_rash_table_iterator(const rash_table_iterator* rti_p, const void* transaction_id, int* abort_error);
+int exists_in_rash_table_iterator(const rash_table_iterator* rti_p);
 
 int remove_from_rash_table_iterator(rash_table_iterator* rti_p);
 
 binary_read_iterator* read_value_in_rash_table_iterator(const rash_table_iterator* rti_p);
 
-binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p, const void* transaction_id, int* abort_error);
+binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p);
 void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, binary_write_iterator* bwi_p);
 
 int next_in_rash_table_iterator(rash_table_iterator* rti_p);
