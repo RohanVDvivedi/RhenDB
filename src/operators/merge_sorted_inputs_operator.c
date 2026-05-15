@@ -56,7 +56,7 @@ static void execute(operator* o)
 
 	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
 
-	// iterate over all waiting_input_iterators and fetch their next tuples and stor it in embed_ptrs[0]
+	// iterate over all waiting_input_iterators and fetch their next tuples and store it in embed_ptrs[0]
 	// and also move it friom waiting_input_iterators to ready_input_iterators
 	while(!is_empty_singlylist(&(inputs->waiting_input_iterators)))
 	{

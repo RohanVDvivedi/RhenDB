@@ -51,7 +51,6 @@ static void replace_min_max_state(min_max_state* ms, const datum* val, const dat
 			memory_move(ms->memory, val->string_or_binary_value, val->string_or_binary_size);
 
 			ms->min_max_value = (datum){.string_or_binary_value = ms->memory, .string_or_binary_size = val->string_or_binary_size};
-
 			break;
 		}
 		case ARRAY :
