@@ -173,15 +173,24 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 			uint64_t truncator_period_us,
 		uint64_t max_concurrent_users_count)
 {
+	if(bufferpool_frame_count < 30 || max_concurrent_users_count == 0 || wale_buffer_count < 30)
+	{
+		printf("must params => bufferpool_frame_count >= 32, max_concurrent_users_count > 0 and wale_buffer_count >= 32: check failed\n");
+		exit(-1);
+	}
+
 	uint64_t threadpool_count = min(max_concurrent_users_count * 10, 1024);
 
 	rdb->operator_thread_pool_usage_limiter = new_resource_usage_limiter(threadpool_count);
 
 	rdb->operator_thread_pool = new_executor(CACHED_THREAD_POOL_EXECUTOR, threadpool_count, JOB_QUEUE_AS_LINKEDLIST, 1000000ULL, NULL, NULL, NULL, 0);
 
-	rdb->bufferpool_usage_limiter = new_resource_usage_limiter(bufferpool_frame_count);
+	// 10% of the bufferpool resource usage is restricted to be used for periodic flush job and the rest for spare pages
+	rdb->bufferpool_usage_limiter = new_resource_usage_limiter(bufferpool_frame_count * 0.8);
 
 	rdb->persistent_acid_rage_engine = get_rage_engine_for_min_tx_engine(database_file_name, page_size_mte, page_id_width, lsn_width, bufferpool_frame_count, wale_buffer_count, page_latch_wait_us, page_lock_wait_us, checkpoint_period_us, 2 * 1000000, 200 * 1000000);
+	// modify to allow only flushing 10% of the bufferpool by periodic job at any instant
+	modify_periodic_flush_job_frame_count(&(((mini_transaction_engine*)(rdb->persistent_acid_rage_engine.context))->bufferpool_handle), bufferpool_frame_count * 0.1);
 
 	rdb->volatile_rage_engine = get_rage_engine_for_volatile_page_store(page_size_vps, page_id_width, truncator_period_us);
 
