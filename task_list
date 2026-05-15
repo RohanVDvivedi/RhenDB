@@ -1,22 +1,18 @@
 PICKED TASKS
 
-(*FOREVER TASK)
- * for all current operators kill/shutdown the complete query plan if the error is abort error on comparison or hashing an extended type
-
- * bufferpool protection tasks for extended types
-  * reserve 10% bufferpool for safety
-  * reserve 10% bufferpool for periodic flush jobs
-  * only let the user control the periodic flush job
-  * rest 80% bufferpool frames must have a resource usage limited
-  * operators have 2 more global attributes
-  * setup function returns number of bufferpool frames to reserve
-  * null operator*o implies do not modify the operator just give it this number
-  * each operator calculates it on the basis and only starts the operator if it gets fulfilled
-  * function_compare and function_hash print and do exit(-1) if the compare or hash fails on abort error
-
  * code review simple aggregation operator (make sure to delete parent consumtion iterators before suicide)
  * code review sorted aggregation operator (make sure to delete parent consumtion iterators before suicide)
+ * code review all operators
 
+ * all operators on creation return struct resources {
+    uint64_t bufferpool_frames; // number of bufferpool frames that this operator need, for any intermediate operator needs (worker_count * 2 + 2) number of bufferpool frames (+2 for the main job of the operator)
+                                // inserts and scans will need more of them based on whether they are index or table scans and how many inserts one does per worker, including 5 for the latching of the path from root to leaf of operator
+    uint64_t threads_count; // each scan or source operator has atleast 1 thread producing data, all worker jobs of scan operator reading tuples are counted as threads
+    uint64_t jobs_count; // each job is 1/10 th of a thread, for non-source operators, even main job is actually a job
+ }
+ * all setup functions when operator* o, the first parameter being NULL return just this struct instead of creating the operator completely
+ * add a function to add resources and return another resources struct
+ * acquire bufferpool resource first and then only acquire threads, if the second resource fails release the first resource and try again
 
 PRIORITY 1 AGGREGATION
 

@@ -17,7 +17,7 @@
 
 #define USERS_COUNT 10
 
-#define PRINT_DATA 0
+#define PRINT_DATA 1
 
 // OFFSET_CLAUSE can not be infinity (UINT64_MAX), undef it if you want behaviour of it being 0
 #define OFFSET_CLAUSE  UINT64_C(55)
