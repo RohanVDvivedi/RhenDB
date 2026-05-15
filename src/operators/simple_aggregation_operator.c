@@ -118,6 +118,8 @@ static void execute(operator* o)
 				// process_input for the udaf, if it fails kill the operator
 				if(!inputs->aggregate_functions[i]->process_input(inputs->aggregate_functions[i], &(inputs->states[i]), inputs->input_datums))
 				{
+					destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
 					kill_reason = get_dstring_pointing_to_literal_cstring("process_input_of_udaf_failed");
 					kill_signal_for_self_operator(o, kill_reason); return ;
 				}

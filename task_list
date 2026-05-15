@@ -1,6 +1,5 @@
 PICKED TASKS
 
- * code review simple aggregation operator (make sure to delete parent consumtion iterators before suicide)
  * code review sorted aggregation operator (make sure to delete parent consumtion iterators before suicide)
 
 
