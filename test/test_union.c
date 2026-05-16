@@ -102,7 +102,7 @@ int main(int argc, char** argv)
 
 		// second pipeline just merged the sorted source into a single sorted output
 		operator* m  = get_new_registered_operator_for_query_plan(qp);
-		setup_sorted_inputs_operator(m, sorted_input_operators, INPUT_OPERATORS_COUNT, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR);
+		setup_merge_sorted_inputs_operator(m, sorted_input_operators, INPUT_OPERATORS_COUNT, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR);
 		printf("merge sorted operator %p\n", m);
 
 		// finally match both the output of the pipelines
