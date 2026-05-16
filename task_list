@@ -72,12 +72,11 @@ PRIORITY HIGH LEVEL TASKS
     * read/write operators over simple data_structures (for full tuple indexer like access will be implemented later)
     * make a function to convert a sql expression from SQLtoAST into a tuple transformer
 
- * extended types will stay same until and as long as until their matreialized versions are required, like until they are finally needed
+ * extended types will stay same until and as long as until their materialized versions are required, until they are finally needed
  * track every function call to functions in function_compare.h and function_hash.h and make sure every operator or operator-job that gets to call them are all assigned enough buffers from bufferpool of rhendb
    * like if the key_element_ids have an extended type, for external sort operator, then assign it (max_concurrent_jobs_count * 2) number of buffers
      * and that too only if the key has extended type
-   * rash_table's key also ill need this
- * add logic to fail an operator if the abort_error is observed even on these compare and hash functions in these operators
+   * rash_table's key also will need this
 
  * implement expression evaluation using the expression tree from SQLtoAST
 
