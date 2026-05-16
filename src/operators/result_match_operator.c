@@ -104,14 +104,14 @@ void setup_result_match_operator(operator* o, operator* input_operators[2])
 	{
 		if(input_defs[i]->type_info->type != TUPLE)
 		{
-			printf("match operator, %d-th input is not a TUPLE\n", i);
+			printf("%d-th input is not a TUPLE for match operator\n", i);
 			exit(-1);
 		}
 	}
 
 	if(input_defs[0]->type_info->element_count != input_defs[1]->type_info->element_count)
 	{
-		printf("match operator, input tuple def's element counts do not match\n");
+		printf("input tuple def's element counts must match for match operator\n");
 		exit(-1);
 	}
 
@@ -122,7 +122,7 @@ void setup_result_match_operator(operator* o, operator* input_operators[2])
 		if(!can_compare_datum_rhendb(get_data_type_info_for_containee_of_container_without_data(input_defs[0]->type_info, i),
 			get_data_type_info_for_containee_of_container_without_data(input_defs[1]->type_info, i)))
 		{
-			printf("match operator, input tuple def's element types are not comparable\n");
+			printf("input tuple def's element types must be comparable for match operator\n");
 			exit(-1);
 		}
 	}

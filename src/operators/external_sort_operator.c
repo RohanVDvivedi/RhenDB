@@ -669,31 +669,31 @@ void setup_external_sort_operator(operator* o, tuples_down_counter result_counte
 {
 	if(is_zero_tuples_down_counter(&result_counter))
 	{
-		printf("result_counter can not be 0 for external sort operator\n");
+		printf("result_counter can not be 0 for external_sort_operator\n");
 		exit(-1);
 	}
 
 	if(key_element_count == 0)
 	{
-		printf("key_element_count can not be 0 for external sort operator\n");
+		printf("key_element_count can not be 0 for external_sort_operator\n");
 		exit(-1);
 	}
 
 	if(minimum_run_size == 0)
 	{
-		printf("minimum_run_size can not be 0 for external sort operator\n");
+		printf("minimum_run_size can not be 0 for external_sort_operator\n");
 		exit(-1);
 	}
 
 	if(N_way_sort < 2)
 	{
-		printf("N_way_sort can not be less than 2 for external sort operator\n");
+		printf("N_way_sort can not be less than 2 for external_sort_operator\n");
 		exit(-1);
 	}
 
 	if(max_concurrent_jobs_count == 0)
 	{
-		printf("max_concurrent_jobs_count can not be 0 for external sort operator\n");
+		printf("max_concurrent_jobs_count can not be 0 for external_sort_operator\n");
 		exit(-1);
 	}
 

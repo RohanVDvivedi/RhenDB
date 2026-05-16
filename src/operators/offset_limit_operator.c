@@ -81,12 +81,12 @@ void setup_offset_limit_operator(operator* o, operator* input_operator, tuples_d
 {
 	if(is_inf_tuples_down_counter(&offset_counter))
 	{
-		printf("offset_limit_operator, must not have offset = infinity\n");
+		printf("offset can not be infinity for offset_limit_operator\n");
 		exit(-1);
 	}
 	else if(is_zero_tuples_down_counter(&limit_counter))
 	{
-		printf("offset_limit_operator, must not have limit = zero\n");
+		printf("limit can not be 0 for offset_limit_operator\n");
 		exit(-1);
 	}
 

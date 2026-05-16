@@ -165,11 +165,11 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-void setup_sorted_inputs_operator(operator* o, operator** input_operators, uint32_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
+void setup_merge_sorted_inputs_operator(operator* o, operator** input_operators, uint32_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
 {
 	if(input_operators_count == 0)
 	{
-		printf("union operator created with 0 input_operators\n");
+		printf("input_operators can not be 0 for merge_sorted_inputs_operator\n");
 		exit(-1);
 	}
 
@@ -178,7 +178,7 @@ void setup_sorted_inputs_operator(operator* o, operator** input_operators, uint3
 	{
 		if(!are_identical_type_info(record_def->type_info, get_tuple_def_for_tuples_to_be_consumed_from(input_operators[i])->type_info))
 		{
-			printf("union operator created with non-identical input_operators\n");
+			printf("input_operators must produce identical outputs for merge_sorted_inputs_operator\n");
 			exit(-1);
 		}
 	}

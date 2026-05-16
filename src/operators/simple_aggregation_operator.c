@@ -160,7 +160,7 @@ void setup_simple_aggregation_operator(operator* o, operator* input_operator, ui
 {
 	if(aggregate_functions_count == 0)
 	{
-		printf("aggregate_functions_count can not be 0 for simple aggregation operator\n");
+		printf("aggregate_functions_count can not be 0 for simple_aggregation_operator\n");
 		exit(-1);
 	}
 
