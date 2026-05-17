@@ -143,37 +143,187 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 	// do this when either the udaf fails or the produce function fails
 	int process = 1;
 
+	// allocate pointers for states
+	void** states = calloc(sizeof(void*), inputs->aggregate_functions_count);
+
+	// allocate pointers for input params to these aggregate funtions
+	datum* input_datums = malloc(sizeof(datum) * inputs->max_of_aggregation_function_input_params_count);
+
 	while(1)
 	{
-		uint32_t parttion_id;
+		uint32_t partition_id;
 
 		// fetch the parttion to process next
 		pthread_mutex_lock(&(inputs->partition_to_aggregate_next_lock));
-		parttion_id = inputs->partition_id_to_aggregate_next;
-		if(parttion_id < inputs->partitions_count)
+		partition_id = inputs->partition_id_to_aggregate_next;
+		if(partition_id < inputs->partitions_count)
 			inputs->partition_id_to_aggregate_next++;
 		pthread_mutex_unlock(&(inputs->partition_to_aggregate_next_lock));
 
 		// if out of bounds break out of the loop
-		if(parttion_id >= inputs->partitions_count)
+		if(partition_id >= inputs->partitions_count)
 			break;
 
 		// process the parttion, no need for the build lock, we are just probing it
 		// if all you want to do is delete the remaining, then set process falg to 0
 		if(process)
 		{
-			// process aggregation for entries in the partition
-			// TODO
+			// create iterator to iterate over all the entries
+			rash_table_iterator rti = find_all_in_rash_table(&(inputs->partitions[partition_id]->rth), 1);
+
+			// loop over all entries
+			while(process)
+			{
+				// process it only if the entry exists
+				if(exists_in_rash_table_iterator(&rti))
+				{
+					int first_tuple = 1;
+
+					// prepare the output
+					uint32_t output_tuple_size = get_minimum_tuple_size(inputs->output_tuple_def);
+					uint32_t output_tuple_capacity = output_tuple_size;
+					void* output_tuple = malloc(output_tuple_capacity);
+					init_tuple(inputs->output_tuple_def, output_tuple);
+
+					// open an iterator to read values in every entry
+					binary_read_iterator* value_bri_p = read_value_in_rash_table_iterator(&rti);
+
+					int abort_error_dummy = 0;
+					while(process)
+					{
+						int finish = 0;
+						consume_tuple_from_tuple_list(tuple, inputs->input_tuple_def, value_bri_p, NULL, &abort_error_dummy,
+						{
+							if(tuple != NULL)
+							{
+								if(first_tuple) // set the keys in output
+								{
+									first_tuple = 0;
+
+									for(uint32_t i = 0; i < inputs->key_element_count; i++)
+									{
+										datum key_val;
+										if(!get_value_from_element_from_tuple(&key_val, inputs->input_tuple_def, inputs->key_element_ids[i], tuple))
+											key_val = (*NULL_DATUM);
+
+										// ensure there are enopugh bytes in the output_tuple
+										while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &key_val, output_tuple_capacity - output_tuple_size))
+										{
+											output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+											output_tuple = realloc(output_tuple, output_tuple_capacity);
+										}
+
+										// recompute tuple_size
+										output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+									}
+								}
+
+								// process the aggregate function calls for this tuple
+								for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
+								{
+									// generate input params to the i-th udaf
+									for(uint32_t j = 0; j < inputs->aggregate_functions[i]->input_type_infos_count; j++)
+									{
+										if(!get_value_from_element_from_tuple(&(input_datums[j]), inputs->input_tuple_def, inputs->aggregate_input_element_ids[i][j], tuple))
+											input_datums[j] = (*NULL_DATUM);
+									}
+
+									// process_input for the udaf, if it fails kill the operator
+									if(!inputs->aggregate_functions[i]->process_input(inputs->aggregate_functions[i], &(states[i]), input_datums))
+									{
+										kill_reason = get_dstring_pointing_to_literal_cstring("process_input_of_udaf_failed");
+										kill_signal_for_self_operator(o, kill_reason);
+
+										process = 0;
+										finish = 1;
+										goto FAILED_EXIT;
+									}
+								}
+							}
+							else
+							{
+								finish = 1;
+
+								for(uint32_t i = 0, j = inputs->key_element_count; i < inputs->aggregate_functions_count; i++, j++)
+								{
+									// produce the output_uval the output of the i-th aggregate function
+									datum output_uval;
+									if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, &(states[i])))
+									{
+										kill_reason = get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed");
+										kill_signal_for_self_operator(o, kill_reason);
+
+										process = 0;
+										finish = 1;
+										goto FAILED_EXIT;
+									}
+
+									// ensure there are enopugh bytes in the output_tuple
+									while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), output_tuple, &output_uval, output_tuple_capacity - output_tuple_size))
+									{
+										output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+										output_tuple = realloc(output_tuple, output_tuple_capacity);
+									}
+
+									// recompute tuple_size
+									output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+								}
+
+								// produce output_tuple
+								int produced = produce_tuple_from_operator(o, output_tuple);
+								if(!produced)
+								{
+									kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
+									kill_signal_for_self_operator(o, kill_reason);
+
+									process = 0;
+									finish = 1;
+									goto FAILED_EXIT;
+								}
+							}
+
+							FAILED_EXIT:;
+						});
+						if(finish)
+							break;
+					}
+
+					// once read all tuple close the read iterator
+					abort_error_dummy = 0;
+					delete_binary_read_iterator(value_bri_p, NULL, &abort_error_dummy);
+
+					// clear output_tuple
+					free(output_tuple);
+
+					// destroy any states left over, after the tuple has been processed
+					for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
+						inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(states[i]));
+				}
+
+				// if we can not go next break out
+				if(!next_in_rash_table_iterator(&rti))
+					break;
+			}
+
+			// delete the fina_all iterator
+			delete_rash_table_iterator(&rti);
 		}
 
 		// destroy the parttion
 		{
-			pthread_mutex_destroy(&(inputs->partitions[parttion_id]->build_lock));
-			destroy_rash_table(&(inputs->partitions[parttion_id]->rth));
-			free(inputs->partitions[parttion_id]);
-			inputs->partitions[parttion_id] = NULL;
+			pthread_mutex_destroy(&(inputs->partitions[partition_id]->build_lock));
+			destroy_rash_table(&(inputs->partitions[partition_id]->rth));
+			free(inputs->partitions[partition_id]);
+			inputs->partitions[partition_id] = NULL;
 		}
 	}
+
+	// destroy any states left over
+	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
+		inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(states[i]));
+
+	free(states);
+	free(input_datums);
 
 	kill_signal_for_self_operator(o, kill_reason); return ;
 }
