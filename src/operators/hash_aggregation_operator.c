@@ -2,11 +2,23 @@
 
 #include<rhendb/transaction.h>
 
+#include<rhendb/rash_table.h>
+
 #include<rhendb/aggregate_functions.h>
 
 #include<rhendb/function_compare.h>
 
 #include<stdlib.h>
+
+typedef struct rash_table_partition rash_table_partition;
+struct rash_table_partition
+{
+	// build lock on the partition, to be taken for an insert
+	// not required to be taken for porbe phase
+	pthread_mutex_t build_lock;
+
+	rash_table_handle rth;
+};
 
 typedef struct input_values input_values;
 struct input_values
@@ -35,14 +47,23 @@ struct input_values
 	const tuple_def* output_tuple_def;
 
 	// rash_table partitions
+	uint32_t partitions_count;
+	uint32_t bucket_count_per_parttion;
+	rash_table_partition** partitions;
 
-		uint32_t partitions_count;
-		// TODO
+	pthread_mutex_t partition_to_aggregate_next_lock;
+	uint32_t partition_id_to_aggregate_next;
 
 	// job params and input parasm list
 
-		uint32_t max_concurrent_jobs_count;
-		// TODO
+	uint32_t max_concurrent_jobs_count;
+	uint32_t max_concurrent_jobs_queue_size;
+
+	pthread_mutex_t insert_for_build_queue_lock;
+	linkedlist tuple_pointers_to_insert;
+	uint32_t tuple_pointers_to_insert_queue_size;
+	uint32_t active_build_phase_job_count;
+	int no_more_build_phase_data;
 };
 
 // loops until there are jobs comming, and closes the iterator to already processed consumption iterators
@@ -79,10 +100,41 @@ static void free_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	// TODO
+	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
+		inputs->aggregate_functions[i]->destroy_aggregate_function(inputs->aggregate_functions[i]);
+
+	free(inputs->aggregate_functions);
+
+	free(inputs->aggregate_input_element_ids);
+
+	for(uint32_t i = 0; i < inputs->partitions_count; i++)
+	{
+		if(inputs->partitions[i] == NULL)
+			continue;
+		pthread_mutex_destroy(&(inputs->partitions[i]->build_lock));
+		destroy_rash_table(&(inputs->partitions[i]->rth));
+		free(inputs->partitions[i]);
+		inputs->partitions[i] = NULL;
+	}
+	free(inputs->partitions);
+
+	pthread_mutex_destroy(&(inputs->partition_to_aggregate_next_lock));
+
+	while(!is_empty_linkedlist(&(inputs->tuple_pointers_to_insert)))
+	{
+		consumption_iterator* cit_p = get_head_of_linkedlist(&(inputs->tuple_pointers_to_insert));
+		remove_head_from_linkedlist(&(inputs->tuple_pointers_to_insert));
+		destroy_consumption_iterator(cit_p);
+	}
+	pthread_mutex_destroy(&(inputs->insert_for_build_queue_lock));
+
+	free((data_type_info*)(inputs->output_tuple_def->type_info));
+	free((tuple_def*)(inputs->output_tuple_def));
+
+	free(inputs);
 }
 
-void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count)
+void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t bucket_count_per_parttion, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size)
 {
 	// if key_element_count == 0 => simple aggregation
 	// if aggregate_functions_count == 0 => find distinct
@@ -162,12 +214,28 @@ void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint
 		.aggregate_input_element_ids = malloc(sizeof(aggregate_function*) * aggregate_functions_count),
 		.output_tuple_def = output_tuple_def,
 		.partitions_count = partitions_count,
+		.bucket_count_per_parttion = bucket_count_per_parttion,
+		.partitions = malloc(sizeof(rash_table_partition*) * partitions_count),
+		.partition_to_aggregate_next_lock = PTHREAD_MUTEX_INITIALIZER,
+		.partition_id_to_aggregate_next = 0,
 		.max_concurrent_jobs_count = max_concurrent_jobs_count,
+		.max_concurrent_jobs_queue_size = max_concurrent_jobs_queue_size,
+		.insert_for_build_queue_lock = PTHREAD_MUTEX_INITIALIZER,
+		.tuple_pointers_to_insert_queue_size = 0,
+		.active_build_phase_job_count = 0,
+		.no_more_build_phase_data = 0,
 	};
 
 	memory_move(inputs->aggregate_functions, aggregate_functions, sizeof(aggregate_function*) * aggregate_functions_count);
 
 	memory_move(inputs->aggregate_input_element_ids, aggregate_input_element_ids, sizeof(aggregate_function*) * aggregate_functions_count);
 
-	// TODO
+	for(uint32_t i = 0; i < partitions_count; i++)
+	{
+		inputs->partitions[i] = malloc(sizeof(rash_table_partition));
+		pthread_mutex_init(&(inputs->partitions[i]->build_lock), NULL);
+		inputs->partitions[i]->rth = get_new_rash_table(bucket_count_per_parttion, input_tuple_def, key_element_ids, key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), o->self_query_plan->curr_tx->db);
+	}
+
+	initialize_linkedlist(&(inputs->tuple_pointers_to_insert), offsetof(consumption_iterator, embed_node_ll));
 }
