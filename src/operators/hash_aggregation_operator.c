@@ -63,6 +63,7 @@ struct input_values
 	linkedlist tuple_pointers_to_insert;
 	uint32_t tuple_pointers_to_insert_queue_size;
 	uint32_t active_build_phase_job_count;
+	int probe_jobs_started;
 	int no_more_build_phase_data;
 };
 
@@ -131,6 +132,8 @@ static void insert_for_build_phase_job(operator* o, void* param)
 	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
 	inputs->active_build_phase_job_count--;
 	pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
+
+	trigger_execution_on_operator(o);
 }
 
 static void probe_for_aggregation_phase_job(operator* o, void* param)
@@ -328,13 +331,109 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 	kill_signal_for_self_operator(o, kill_reason); return ;
 }
 
+static int should_produce_more_for_build_inserts_queue(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
+	int produce_more = (inputs->tuple_pointers_to_insert_queue_size < inputs->max_concurrent_jobs_queue_size);
+	pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
+
+	return produce_more;
+}
+
+static void start_build_jobs(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
+	if(inputs->tuple_pointers_to_insert_queue_size > 0)
+	{
+		uint32_t new_build_jobs = min(inputs->tuple_pointers_to_insert_queue_size, inputs->max_concurrent_jobs_count - inputs->active_build_phase_job_count);
+		while(new_build_jobs > 0)
+		{
+			if(!run_concurrent_job_for_operator(o, NULL, insert_for_build_phase_job))
+				break;
+			inputs->active_build_phase_job_count++;
+			new_build_jobs--;
+		}
+	}
+	pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
+}
+
+static void start_probe_jobs(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
+	if(inputs->tuple_pointers_to_insert_queue_size == 0 && inputs->active_build_phase_job_count == 0 && (!(inputs->probe_jobs_started)))
+	{
+		inputs->probe_jobs_started = 1;
+		uint32_t new_probe_jobs = inputs->max_concurrent_jobs_count;
+		while(new_probe_jobs > 0)
+		{
+			if(!run_concurrent_job_for_operator(o, NULL, probe_for_aggregation_phase_job))
+				break;
+			new_probe_jobs--;
+		}
+	}
+	pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
+}
+
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
 
 	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
 
-	// TODO
+	// the operator has been woken up after possibly end of data from the producer, so start the probe jobs
+	if(inputs->input_iterator == NULL)
+	{
+		start_probe_jobs(o);
+		return;
+	}
+
+	while(should_produce_more_for_build_inserts_queue(o))
+	{
+		start_build_jobs(o);
+
+		int no_more_data = 0;
+		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
+		if(no_more_data)
+		{
+			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
+			start_probe_jobs(o);
+
+			return;
+		}
+		if(can_not_proceed_for_execution_operator(o))
+		{
+			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
+			kill_signal_for_self_operator(o, kill_reason); return ;
+		}
+
+		if(tuple != NULL)
+		{
+			consumption_iterator* input_iterator2 = inputs->input_iterator;
+			input_iterator2->embed_ptrs[0] = (void*) tuple;
+
+			inputs->input_iterator = create_consumption_iterator(inputs->input_iterator->producer, inputs->input_iterator->consumer, NULL, input_iterator2);
+
+			// insert input_iterator2 in the tuple_pointers_to_insert linkedlist
+			pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
+			insert_tail_in_linkedlist(&(inputs->tuple_pointers_to_insert), input_iterator2);
+			inputs->tuple_pointers_to_insert_queue_size++;
+			pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
+
+			start_build_jobs(o);
+		}
+		else
+			break;
+	}
+
+	return ;
 }
 
 static void free_resources(operator* o)
@@ -464,6 +563,7 @@ void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint
 		.insert_for_build_queue_lock = PTHREAD_MUTEX_INITIALIZER,
 		.tuple_pointers_to_insert_queue_size = 0,
 		.active_build_phase_job_count = 0,
+		.probe_jobs_started = 0,
 		.no_more_build_phase_data = 0,
 	};
 
