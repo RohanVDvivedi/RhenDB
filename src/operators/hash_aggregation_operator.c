@@ -71,20 +71,82 @@ static void insert_for_build_phase_job(operator* o, void* param)
 {
 	input_values* inputs = o->inputs;
 
-	consumption_iterator* cit_p = param;
-	const void* tuple = cit_p->embed_ptrs[0];
+	while(1)
+	{
+		const void* tuple = NULL;
 
-	// TODO
+		pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
+		consumption_iterator* cit_p = (consumption_iterator*) get_head_of_linkedlist(&(inputs->tuple_pointers_to_insert));
+		if(cit_p != NULL)
+		{
+			remove_head_from_linkedlist(&(inputs->tuple_pointers_to_insert));
+			inputs->tuple_pointers_to_insert_queue_size--;
+			tuple = cit_p->embed_ptrs[0];
+		}
+		pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
+
+		// if no tuple found exit
+		if(cit_p == NULL)
+			break;
+
+		if(tuple != NULL)
+		{
+			// process the insert
+			// TODO
+		}
+
+		destroy_consumption_iterator(cit_p);
+	}
+
+	// decrement active build phas jobs count
+	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
+	inputs->active_build_phase_job_count--;
+	pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
 }
 
-// gets a partitions to iterate over and produce the aggregates over each entry in the partition
-static void produce_aggregate_for_partition_on_probe_phase_job(operator* o, void* param)
+static void probe_for_aggregation_phase_job(operator* o, void* param)
 {
 	input_values* inputs = o->inputs;
 
-	uint32_t parttion_id = (uintptr_t)param;
+	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
 
-	// TODO
+	// this flag can be used to make this nested loop to stopmprocessing and instead just delete the remaining partitions
+	// do this when either the udaf fails or the produce function fails
+	int process = 1;
+
+	while(1)
+	{
+		uint32_t parttion_id;
+
+		// fetch the parttion to process next
+		pthread_mutex_lock(&(inputs->partition_to_aggregate_next_lock));
+		parttion_id = inputs->partition_id_to_aggregate_next;
+		if(parttion_id < inputs->partitions_count)
+			inputs->partition_id_to_aggregate_next++;
+		pthread_mutex_unlock(&(inputs->partition_to_aggregate_next_lock));
+
+		// if out of bounds break out of the loop
+		if(parttion_id >= inputs->partitions_count)
+			break;
+
+		// process the parttion, no need for the build lock, we are just probing it
+		// if all you want to do is delete the remaining, then set process falg to 0
+		if(process)
+		{
+			// process aggregation for entries in the partition
+			// TODO
+		}
+
+		// destroy the parttion
+		{
+			pthread_mutex_destroy(&(inputs->partitions[parttion_id]->build_lock));
+			destroy_rash_table(&(inputs->partitions[parttion_id]->rth));
+			free(inputs->partitions[parttion_id]);
+			inputs->partitions[parttion_id] = NULL;
+		}
+	}
+
+	kill_signal_for_self_operator(o, kill_reason); return ;
 }
 
 static void execute(operator* o)
@@ -122,7 +184,7 @@ static void free_resources(operator* o)
 
 	while(!is_empty_linkedlist(&(inputs->tuple_pointers_to_insert)))
 	{
-		consumption_iterator* cit_p = get_head_of_linkedlist(&(inputs->tuple_pointers_to_insert));
+		consumption_iterator* cit_p = (consumption_iterator*) get_head_of_linkedlist(&(inputs->tuple_pointers_to_insert));
 		remove_head_from_linkedlist(&(inputs->tuple_pointers_to_insert));
 		destroy_consumption_iterator(cit_p);
 	}
