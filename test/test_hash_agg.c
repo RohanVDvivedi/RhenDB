@@ -21,6 +21,7 @@
 #define BUCKETS_PER_PARTITION                 100
 #define PARALLEL_AGGREGATION_JOBS_COUNT       10
 #define PARALLEL_AGGREGATION_JOBS_QUEUE_SIZE  30
+#define MIN_BUILD_QUEUE_BUFFER_SIZE           (1 * 1024 * 1024)
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
 #define PARALLEL_SORTING_JOBS_COUNT    8
@@ -98,7 +99,7 @@ int main(int argc, char** argv)
 		printf("source operator %p\n", input_operator);
 
 		operator* aggregate_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_hash_aggregation_operator(aggregate_operator, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, PARTITIONS_COUNT, BUCKETS_PER_PARTITION, PARALLEL_AGGREGATION_JOBS_COUNT, PARALLEL_AGGREGATION_JOBS_QUEUE_SIZE);
+		setup_hash_aggregation_operator(aggregate_operator, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, PARTITIONS_COUNT, BUCKETS_PER_PARTITION, PARALLEL_AGGREGATION_JOBS_COUNT, PARALLEL_AGGREGATION_JOBS_QUEUE_SIZE, MIN_BUILD_QUEUE_BUFFER_SIZE);
 		printf("aggregate operator %p\n", aggregate_operator);
 
 		operator* sorter_operator2 = get_new_registered_operator_for_query_plan(qp);

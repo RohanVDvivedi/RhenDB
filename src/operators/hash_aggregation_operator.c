@@ -3,6 +3,7 @@
 #include<rhendb/transaction.h>
 
 #include<rhendb/rash_table.h>
+#include<rhendb/interim_tuple_store.h>
 
 #include<rhendb/aggregate_functions.h>
 
@@ -58,14 +59,18 @@ struct input_values
 
 	uint32_t max_concurrent_jobs_count;
 	uint32_t max_concurrent_jobs_queue_size;
+	uint32_t min_build_tuple_buffer_size;
 
 	pthread_mutex_t insert_for_build_queue_lock;
-	linkedlist tuple_pointers_to_insert;
-	uint32_t tuple_pointers_to_insert_queue_size;
+	linkedlist tuple_buffers_to_insert;
+	uint32_t tuple_buffers_to_insert_queue_size;
 	uint32_t active_build_phase_job_count;
 	uint32_t active_probe_phase_job_count;
 	int probe_jobs_started;
 	int no_more_build_phase_data;
+
+	// fill up this buffer before moving it into the tuple_buffers_to_insert
+	interim_tuple_store* pending_build_buffer;
 };
 
 // loops until there are jobs comming, and closes the iterator to already processed consumption iterators
@@ -75,25 +80,22 @@ static void insert_for_build_phase_job(operator* o, void* param)
 
 	while(1)
 	{
-		const void* tuple = NULL;
-
 		pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
-		consumption_iterator* cit_p = (consumption_iterator*) get_head_of_linkedlist(&(inputs->tuple_pointers_to_insert));
-		if(cit_p != NULL)
+		interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_linkedlist(&(inputs->tuple_buffers_to_insert));
+		if(its_p != NULL)
 		{
-			remove_head_from_linkedlist(&(inputs->tuple_pointers_to_insert));
-			inputs->tuple_pointers_to_insert_queue_size--;
-			tuple = cit_p->embed_ptrs[0];
+			remove_head_from_linkedlist(&(inputs->tuple_buffers_to_insert));
+			inputs->tuple_buffers_to_insert_queue_size--;
 		}
 		pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
 
-		// if no tuple iterator found exit
-		if(cit_p == NULL)
+		// if no tuple buffer found exit
+		if(its_p == NULL)
 			break;
 
 		// insert to the right partition if one exists
-		if(tuple != NULL)
-		{
+		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->input_tuple_def->size_def), its_p, inputs->min_build_tuple_buffer_size, {
+
 			// create rash table key
 			rash_table_key rtk = get_new_rash_table_key(tuple, inputs->input_tuple_def, inputs->key_element_ids, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
 
@@ -124,9 +126,9 @@ static void insert_for_build_phase_job(operator* o, void* param)
 
 			// destroy rash table key
 			destroy_rash_table_key(&rtk);
-		}
+		});
 
-		destroy_consumption_iterator(cit_p);
+		delete_interim_tuple_store(its_p);
 	}
 
 	// decrement active build phas jobs count
@@ -344,7 +346,7 @@ static int should_produce_more_for_build_inserts_queue(operator* o)
 	input_values* inputs = o->inputs;
 
 	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
-	int produce_more = (inputs->tuple_pointers_to_insert_queue_size < inputs->max_concurrent_jobs_queue_size);
+	int produce_more = (inputs->tuple_buffers_to_insert_queue_size < inputs->max_concurrent_jobs_queue_size);
 	pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
 
 	return produce_more;
@@ -366,9 +368,9 @@ static void start_build_jobs(operator* o)
 	input_values* inputs = o->inputs;
 
 	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
-	if(inputs->tuple_pointers_to_insert_queue_size > 0)
+	if(inputs->tuple_buffers_to_insert_queue_size > 0)
 	{
-		uint32_t new_build_jobs = min(inputs->tuple_pointers_to_insert_queue_size, inputs->max_concurrent_jobs_count - inputs->active_build_phase_job_count);
+		uint32_t new_build_jobs = min(inputs->tuple_buffers_to_insert_queue_size, inputs->max_concurrent_jobs_count - inputs->active_build_phase_job_count);
 		while(new_build_jobs > 0)
 		{
 			if(!run_concurrent_job_for_operator(o, NULL, insert_for_build_phase_job))
@@ -385,7 +387,7 @@ static void start_probe_jobs(operator* o)
 	input_values* inputs = o->inputs;
 
 	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
-	if(inputs->tuple_pointers_to_insert_queue_size == 0 && inputs->active_build_phase_job_count == 0 && (!(inputs->probe_jobs_started)))
+	if(inputs->tuple_buffers_to_insert_queue_size == 0 && inputs->active_build_phase_job_count == 0 && (!(inputs->probe_jobs_started)))
 	{
 		inputs->probe_jobs_started = 1;
 		uint32_t new_probe_jobs = inputs->max_concurrent_jobs_count;
@@ -427,6 +429,22 @@ static void execute(operator* o)
 		{
 			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
 
+			if(inputs->pending_build_buffer != NULL)
+			{
+				// its ownership for inputs->pending_build_buffer, is changing, so unmap it's embed_regions
+				unmap_all_embed_regions_in_interim_tuple_store(inputs->pending_build_buffer);
+
+				// insert pending_build_buffer in the tuple_buffers_to_insert linkedlist
+				pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
+				insert_tail_in_linkedlist(&(inputs->tuple_buffers_to_insert), inputs->pending_build_buffer);
+				inputs->tuple_buffers_to_insert_queue_size++;
+				pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
+				inputs->pending_build_buffer = NULL;
+
+				// start build jobs if any could be started
+				start_build_jobs(o);
+			}
+
 			start_probe_jobs(o);
 
 			return;
@@ -440,16 +458,26 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
-			consumption_iterator* input_iterator2 = create_consumption_iterator(inputs->input_iterator->producer, inputs->input_iterator->consumer, NULL, inputs->input_iterator);
-			input_iterator2->embed_ptrs[0] = input_iterator2->curr_region.tuple;
+			if(inputs->pending_build_buffer == NULL)
+				inputs->pending_build_buffer = get_new_interim_tuple_store(inputs->min_build_tuple_buffer_size);
 
-			// insert input_iterator2 in the tuple_pointers_to_insert linkedlist
-			pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
-			insert_tail_in_linkedlist(&(inputs->tuple_pointers_to_insert), input_iterator2);
-			inputs->tuple_pointers_to_insert_queue_size++;
-			pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
+			append_tuple_to_interim_tuple_store2(inputs->pending_build_buffer, &(inputs->pending_build_buffer->embed_regions[0]), (void*)tuple, &(inputs->input_tuple_def->size_def), inputs->min_build_tuple_buffer_size);
 
-			start_build_jobs(o);
+			if(get_total_bytes_in_interim_tuple_store(inputs->pending_build_buffer) >= inputs->min_build_tuple_buffer_size)
+			{
+				// its ownership for inputs->pending_build_buffer, is changing, so unmap it's embed_regions
+				unmap_all_embed_regions_in_interim_tuple_store(inputs->pending_build_buffer);
+
+				// insert pending_build_buffer in the tuple_buffers_to_insert linkedlist
+				pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
+				insert_tail_in_linkedlist(&(inputs->tuple_buffers_to_insert), inputs->pending_build_buffer);
+				inputs->tuple_buffers_to_insert_queue_size++;
+				pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
+				inputs->pending_build_buffer = NULL;
+
+				// start build jobs if any could be started
+				start_build_jobs(o);
+			}
 		}
 		else
 			break;
@@ -461,6 +489,9 @@ static void execute(operator* o)
 static void free_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
+
+	if(inputs->pending_build_buffer != NULL)
+		delete_interim_tuple_store(inputs->pending_build_buffer);
 
 	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
 		inputs->aggregate_functions[i]->destroy_aggregate_function(inputs->aggregate_functions[i]);
@@ -482,12 +513,7 @@ static void free_resources(operator* o)
 
 	pthread_mutex_destroy(&(inputs->partition_to_aggregate_next_lock));
 
-	while(!is_empty_linkedlist(&(inputs->tuple_pointers_to_insert)))
-	{
-		consumption_iterator* cit_p = (consumption_iterator*) get_head_of_linkedlist(&(inputs->tuple_pointers_to_insert));
-		remove_head_from_linkedlist(&(inputs->tuple_pointers_to_insert));
-		destroy_consumption_iterator(cit_p);
-	}
+	remove_all_from_linkedlist(&(inputs->tuple_buffers_to_insert), DELETE_ON_NOTIFY_FOR_INTERIM_TUPLE_STORE);
 	pthread_mutex_destroy(&(inputs->insert_for_build_queue_lock));
 
 	free((data_type_info*)(inputs->output_tuple_def->type_info));
@@ -496,7 +522,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t bucket_count_per_parttion, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size)
+void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t bucket_count_per_parttion, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
 {
 	// if key_element_count == 0 => simple aggregation
 	// if aggregate_functions_count == 0 => find distinct
@@ -582,11 +608,13 @@ void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint
 		.partition_id_to_aggregate_next = 0,
 		.max_concurrent_jobs_count = max_concurrent_jobs_count,
 		.max_concurrent_jobs_queue_size = max_concurrent_jobs_queue_size,
+		.min_build_tuple_buffer_size = min_build_tuple_buffer_size,
 		.insert_for_build_queue_lock = PTHREAD_MUTEX_INITIALIZER,
-		.tuple_pointers_to_insert_queue_size = 0,
+		.tuple_buffers_to_insert_queue_size = 0,
 		.active_build_phase_job_count = 0,
 		.probe_jobs_started = 0,
 		.no_more_build_phase_data = 0,
+		.pending_build_buffer = NULL,
 	};
 
 	memory_move(inputs->aggregate_functions, aggregate_functions, sizeof(aggregate_function*) * aggregate_functions_count);
@@ -600,5 +628,5 @@ void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint
 		inputs->partitions[i]->rth = get_new_rash_table(bucket_count_per_parttion, input_tuple_def, key_element_ids, key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), o->self_query_plan->curr_tx->db);
 	}
 
-	initialize_linkedlist(&(inputs->tuple_pointers_to_insert), offsetof(consumption_iterator, embed_node_ll));
+	initialize_linkedlist(&(inputs->tuple_buffers_to_insert), offsetof(interim_tuple_store, embed_node_ll));
 }
