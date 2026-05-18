@@ -63,6 +63,7 @@ struct input_values
 	linkedlist tuple_pointers_to_insert;
 	uint32_t tuple_pointers_to_insert_queue_size;
 	uint32_t active_build_phase_job_count;
+	uint32_t active_probe_phase_job_count;
 	int probe_jobs_started;
 	int no_more_build_phase_data;
 };
@@ -150,7 +151,7 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 	void** states = calloc(sizeof(void*), inputs->aggregate_functions_count);
 
 	// allocate pointers for input params to these aggregate funtions
-	datum* input_datums = malloc(sizeof(datum) * inputs->max_of_aggregation_function_input_params_count);
+	datum* input_datums = calloc(sizeof(datum), inputs->max_of_aggregation_function_input_params_count);
 
 	while(1)
 	{
@@ -246,49 +247,51 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 							else
 							{
 								finish = 1;
-
-								for(uint32_t i = 0, j = inputs->key_element_count; i < inputs->aggregate_functions_count; i++, j++)
-								{
-									// produce the output_uval the output of the i-th aggregate function
-									datum output_uval;
-									if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, &(states[i])))
-									{
-										kill_reason = get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed");
-										kill_signal_for_self_operator(o, kill_reason);
-
-										process = 0;
-										finish = 1;
-										goto FAILED_EXIT;
-									}
-
-									// ensure there are enopugh bytes in the output_tuple
-									while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), output_tuple, &output_uval, output_tuple_capacity - output_tuple_size))
-									{
-										output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
-										output_tuple = realloc(output_tuple, output_tuple_capacity);
-									}
-
-									// recompute tuple_size
-									output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
-								}
-
-								// produce output_tuple
-								int produced = produce_tuple_from_operator(o, output_tuple);
-								if(!produced)
-								{
-									kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-									kill_signal_for_self_operator(o, kill_reason);
-
-									process = 0;
-									finish = 1;
-									goto FAILED_EXIT;
-								}
 							}
 
 							FAILED_EXIT:;
 						});
 						if(finish)
 							break;
+					}
+
+					if(process)
+					{
+						for(uint32_t i = 0, j = inputs->key_element_count; i < inputs->aggregate_functions_count; i++, j++)
+						{
+							// produce the output_uval the output of the i-th aggregate function
+							datum output_uval;
+							if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, &(states[i])))
+							{
+								kill_reason = get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed");
+								kill_signal_for_self_operator(o, kill_reason);
+
+								process = 0;
+							}
+
+							// ensure there are enopugh bytes in the output_tuple
+							while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), output_tuple, &output_uval, output_tuple_capacity - output_tuple_size))
+							{
+								output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+								output_tuple = realloc(output_tuple, output_tuple_capacity);
+							}
+
+							// recompute tuple_size
+							output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+						}
+					}
+
+					// produce output_tuple
+					if(process)
+					{
+						int produced = produce_tuple_from_operator(o, output_tuple);
+						if(!produced)
+						{
+							kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
+							kill_signal_for_self_operator(o, kill_reason);
+
+							process = 0;
+						}
 					}
 
 					// once read all tuple close the read iterator
@@ -328,7 +331,12 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 	free(states);
 	free(input_datums);
 
-	kill_signal_for_self_operator(o, kill_reason); return ;
+	// decrement active build phas jobs count
+	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
+	inputs->active_probe_phase_job_count--;
+	pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
+
+	trigger_execution_on_operator(o);
 }
 
 static int should_produce_more_for_build_inserts_queue(operator* o)
@@ -340,6 +348,17 @@ static int should_produce_more_for_build_inserts_queue(operator* o)
 	pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
 
 	return produce_more;
+}
+
+static int should_kill_with_success(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
+	int should_kill_with_success = (inputs->active_probe_phase_job_count == 0);
+	pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
+
+	return should_kill_with_success;
 }
 
 static void start_build_jobs(operator* o)
@@ -374,6 +393,7 @@ static void start_probe_jobs(operator* o)
 		{
 			if(!run_concurrent_job_for_operator(o, NULL, probe_for_aggregation_phase_job))
 				break;
+			inputs->active_probe_phase_job_count++;
 			new_probe_jobs--;
 		}
 	}
@@ -390,6 +410,10 @@ static void execute(operator* o)
 	if(inputs->input_iterator == NULL)
 	{
 		start_probe_jobs(o);
+
+		if(should_kill_with_success(o))
+			kill_signal_for_self_operator(o, kill_reason);
+
 		return;
 	}
 
@@ -416,10 +440,8 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
-			consumption_iterator* input_iterator2 = inputs->input_iterator;
-			input_iterator2->embed_ptrs[0] = (void*) tuple;
-
-			inputs->input_iterator = create_consumption_iterator(inputs->input_iterator->producer, inputs->input_iterator->consumer, NULL, input_iterator2);
+			consumption_iterator* input_iterator2 = create_consumption_iterator(inputs->input_iterator->producer, inputs->input_iterator->consumer, NULL, inputs->input_iterator);
+			input_iterator2->embed_ptrs[0] = input_iterator2->curr_region.tuple;
 
 			// insert input_iterator2 in the tuple_pointers_to_insert linkedlist
 			pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));

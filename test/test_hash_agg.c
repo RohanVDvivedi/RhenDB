@@ -19,7 +19,7 @@
 
 #define PARTITIONS_COUNT                      10
 #define BUCKETS_PER_PARTITION                 100
-#define PARALLEL_AGGREGATION_JOBS_COUNT       5
+#define PARALLEL_AGGREGATION_JOBS_COUNT       1
 #define PARALLEL_AGGREGATION_JOBS_QUEUE_SIZE  12
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
