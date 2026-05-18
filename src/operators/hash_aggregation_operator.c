@@ -355,7 +355,7 @@ static int should_kill_with_success(operator* o)
 	input_values* inputs = o->inputs;
 
 	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
-	int should_kill_with_success = (inputs->active_probe_phase_job_count == 0);
+	int should_kill_with_success = (inputs->probe_jobs_started && (inputs->active_probe_phase_job_count == 0));
 	pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
 
 	return should_kill_with_success;
