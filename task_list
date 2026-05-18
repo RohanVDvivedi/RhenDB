@@ -1,6 +1,7 @@
 PICKED TASKS
 
-* test hash aggregartion operator and compare it with sort aggregation operator
+* make better task disribution for the hash_aggregation_operator
+  * we can reduce 55% of the time taken up just by the syscalls, by better task distribution, copying already mmap-ed tuple may be faster than mmap-ing them
 
 
 
