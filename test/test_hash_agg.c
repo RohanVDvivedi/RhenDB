@@ -17,10 +17,10 @@
 
 #define USERS_COUNT 10
 
-#define PARTITIONS_COUNT                      10
-#define BUCKETS_PER_PARTITION                 100
-#define PARALLEL_AGGREGATION_JOBS_COUNT       10
-#define PARALLEL_AGGREGATION_JOBS_QUEUE_SIZE  10
+#define PARTITIONS_COUNT                      64
+#define BUCKETS_PER_PARTITION                 32
+#define PARALLEL_AGGREGATION_JOBS_COUNT       6
+#define PARALLEL_AGGREGATION_JOBS_QUEUE_SIZE  6
 #define MIN_BUILD_QUEUE_BUFFER_SIZE           (1 * 1024 * 1024)
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
