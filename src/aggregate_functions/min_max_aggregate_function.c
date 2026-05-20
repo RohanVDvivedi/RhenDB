@@ -119,7 +119,7 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 			must_replace = 1;
 		else
 		{
-			int compare = compare_datum2_rhendb(&((*((min_max_state**)state_p))->min_max_value), &(inputs[0]), af_p->input_type_infos[0], ((min_max_context*)(af_p->context_p))->persistent_acid_rage_engine);
+			int compare = compare_datum_rhendb(&((*((min_max_state**)state_p))->min_max_value), af_p->output_type_info, &(inputs[0]), af_p->input_type_infos[0], ((min_max_context*)(af_p->context_p))->persistent_acid_rage_engine);
 
 			if(((min_max_context*)(af_p->context_p))->is_min)
 				must_replace = (compare > 0);
@@ -128,7 +128,7 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 		}
 
 		if(must_replace)
-			replace_min_max_state(*((min_max_state**)state_p), &(inputs[0]), af_p->input_type_infos[0]);
+			replace_min_max_state(*((min_max_state**)state_p), &(inputs[0]), af_p->output_type_info);
 	}
 
 	return 1;
@@ -158,6 +158,10 @@ static void destroy_state(const aggregate_function* af_p, void** state_p)
 
 static void destroy_aggregate_function(aggregate_function* af_p)
 {
+	// if a new output_tuple_info was allocated to make it nullable then free it
+	if(af_p->output_type_info != af_p->input_type_infos[0])
+		free((void*)af_p->output_type_info);
+
 	free((void*)af_p->context_p);
 	free(af_p);
 }
@@ -179,7 +183,23 @@ aggregate_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_
 
 	af_p->destroy_aggregate_function = destroy_aggregate_function;
 
-	af_p->output_type_info = input_type_info;
+	// if no data is present, the aggregate_function returns NULL_DATUM, so here try to make the input_type_info's shallow copy to handle null values
+	if(is_nullable_type_info(input_type_info))
+		af_p->output_type_info = input_type_info;
+	else
+	{
+		// figure out the number of bytes to shallow copy input_type_info
+		size_t bytes_to_shallow_copy = get_shallow_copy_struct_size_for_data_type_info(input_type_info);
+
+		// make shallow copy, mark it nullable, and finalize this type
+		data_type_info* output_type_info = malloc(bytes_to_shallow_copy);
+		memory_move(output_type_info, input_type_info, bytes_to_shallow_copy);
+		output_type_info->is_nullable = 1;
+		finalize_type_info(output_type_info);
+
+		// assign it to the af_p
+		af_p->output_type_info = output_type_info;
+	}
 
 	af_p->input_type_infos_count = 1;
 	af_p->input_type_infos[0] = input_type_info;
