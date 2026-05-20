@@ -1,9 +1,5 @@
 PICKED TASKS
 
-* aggregation functions may fail (UB runs infinitely) if key is indexing into variable length array or string
- * as if the element is out of bounds it implies NULL, hat if this element is non-nullable, then e may never be able to insert it, so tries to insert infinitely
- * if you encounter such dti and the datum is knon to be null_datum replace it to EMPTY_DATUM instead of NULL_DATUM
-
 * optimize hash_aggregation_operator
 
 
