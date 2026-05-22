@@ -1,7 +1,5 @@
 PICKED TASKS
 
- * try turning off appending to tail in blob_store and check if we can fix write ampification this way
-
 
 PRIORITY 1
  * all operators on creation return struct resources {
