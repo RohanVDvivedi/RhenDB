@@ -116,7 +116,7 @@ int main(int argc, char** argv)
 		printf("aggregate operator %p\n", aggregate_operator);
 
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_printf_operator(print_operator, aggregate_operator, 1);
+		setup_consumer_operator(print_operator, aggregate_operator, print_consumer, NULL);
 		printf("output print operator %p\n", print_operator);
 	}
 	printf("\n\n");

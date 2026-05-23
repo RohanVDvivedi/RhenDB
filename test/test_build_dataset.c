@@ -123,7 +123,7 @@ int main(int argc, char** argv)
 
 		#ifdef PRINT_DATA
 			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_printf_operator(print_operator, input_operator, PRINT_DATA);
+			setup_consumer_operator(print_operator, input_operator, PRINT_DATA ? print_consumer : NULL, NULL);
 			printf("output print operator %p\n", print_operator);
 		#endif
 

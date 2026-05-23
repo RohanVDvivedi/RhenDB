@@ -244,7 +244,7 @@ int main()
 		operator* input = o;
 
 		o = get_new_registered_operator_for_query_plan(qp);
-		setup_printf_operator(o, input, 1);
+		setup_consumer_operator(o, input, print_consumer, NULL);
 		printf("sink operator %p\n", o);
 
 		for(int i = 0; i < IDENTITY_OPERATORS_COUNT; i++)
@@ -275,7 +275,7 @@ int main()
 		}
 
 		o = get_new_registered_operator_for_query_plan(qp);
-		setup_printf_operator(o, input, 1);
+		setup_consumer_operator(o, input, print_consumer, NULL);
 		printf("sink operator %p\n", o);
 	}
 	printf("\n\n");

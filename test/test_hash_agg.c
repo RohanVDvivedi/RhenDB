@@ -107,7 +107,7 @@ int main(int argc, char** argv)
 		printf("sorter operator %p\n", sorter_operator2);
 
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_printf_operator(print_operator, sorter_operator2, 1);
+		setup_consumer_operator(print_operator, sorter_operator2, print_consumer, NULL);
 		printf("output print operator %p\n", print_operator);
 	}
 	printf("\n\n");
