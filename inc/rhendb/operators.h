@@ -34,9 +34,9 @@ void setup_merge_sorted_inputs_operator(operator* o, operator** input_operators,
 
 #include<cutlery/stream.h>
 
-void setup_stream_input_operator(operator* o, stream* in_strm, const tuple_def* input_tuple_def);
+operator_resource_counter setup_stream_input_operator(operator* o, stream* in_strm, const tuple_def* input_tuple_def);
 
-void setup_stream_output_operator(operator* o, operator* input_operator, stream* out_strm);
+operator_resource_counter setup_stream_output_operator(operator* o, operator* input_operator, stream* out_strm);
 
 // keyed aggregation operators
 

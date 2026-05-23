@@ -1,5 +1,7 @@
 #include<rhendb/query_plan.h>
 
+#include<rhendb/operator_resource_counter.h>
+
 #include<tuplestore/tuple.h>
 
 #include<cutlery/stream.h>
@@ -87,8 +89,12 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-void setup_stream_output_operator(operator* o, operator* input_operator, stream* out_strm)
+operator_resource_counter setup_stream_output_operator(operator* o, operator* input_operator, stream* out_strm)
 {
+	operator_resource_counter result = {.job_counter = 1};
+	if(o == NULL)
+		return result;
+
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = free_resources;
@@ -100,4 +106,6 @@ void setup_stream_output_operator(operator* o, operator* input_operator, stream*
 		.out_strm = out_strm,
 		.is_out_strm_closed = 0,
 	};
+
+	return result;
 }
