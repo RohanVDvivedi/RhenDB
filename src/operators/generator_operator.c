@@ -3,7 +3,7 @@
 #include<rhendb/transaction.h>
 
 /*
-	TEMPLATE FOR SOURCE OPERATORS (scans)
+	source operator like the scans, but it uses generator() to generate tuple by tuple (each malloc-ed) and produce it
 */
 
 typedef struct input_values input_values;
@@ -30,14 +30,12 @@ static void execute(operator* o)
 			break;
 
 		int produced = produce_tuple_from_operator(o, curr_tuple);
+		free(curr_tuple);
 		if(!produced)
 		{
 			kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-			free(curr_tuple);
 			break;
 		}
-
-		free(curr_tuple);
 	}
 
 	kill_signal_for_self_operator(o, kill_reason); return ;

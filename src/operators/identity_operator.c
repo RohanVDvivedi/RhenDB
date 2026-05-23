@@ -1,20 +1,15 @@
 #include<rhendb/query_plan.h>
 
-#include<tuplestore/tuple.h>
-
 #include<stdlib.h>
 
 /*
-	TEMPLATE FOR SINK OPERATORS (writers to file descriptors)
+	idnetity operator, primarily used for adding tuple_transformers to its produce
 */
 
 typedef struct input_values input_values;
 struct input_values
 {
 	consumption_iterator* input_iterator;
-	const tuple_def* input_tuple_def;
-
-	int do_print;
 };
 
 static void execute(operator* o)
@@ -42,8 +37,14 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
-			if(inputs->do_print)
-				print_tuple(tuple, inputs->input_tuple_def);
+			int produced = produce_tuple_from_operator(o, (void*)tuple);
+			if(!produced)
+			{
+				destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+
+				kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
+				kill_signal_for_self_operator(o, kill_reason); return ;
+			}
 		}
 		else
 			break;
@@ -52,16 +53,17 @@ static void execute(operator* o)
 	return ;
 }
 
-void setup_printf_operator(operator* o, operator* input_operator, int do_print)
+void setup_identity_operator(operator* o, operator* input_operator)
 {
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
+	// it is an identity operator, produces the same thing as it consumes
+	init_tuple_transformers(&(o->output_tuple_transformers), get_tuple_def_for_tuples_to_be_consumed_from(input_operator));
+
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
 		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
-		.input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator),
-		.do_print = do_print,
 	};
 }

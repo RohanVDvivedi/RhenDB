@@ -1,15 +1,22 @@
 #include<rhendb/query_plan.h>
 
+#include<tuplestore/tuple.h>
+
 #include<stdlib.h>
 
 /*
-	TEMPLATE FOR INTERMEDIATE OPERATORS (sorting(ordering), joins(hash_join, sort_merge_join, streaming_nested_loop_join, index_nested_loop_join), aggregations(sorted_aggregator and hash_aggregator))
+	sink operator, but it uses a consumer() to be called when a tuple becomes available
 */
 
 typedef struct input_values input_values;
 struct input_values
 {
 	consumption_iterator* input_iterator;
+	const tuple_def* input_tuple_def;
+
+	// returns 0, to kill this operator
+	int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def);
+	void* consumer_context;
 };
 
 static void execute(operator* o)
@@ -37,13 +44,14 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
-			int produced = produce_tuple_from_operator(o, (void*)tuple);
-			if(!produced)
+			if(inputs->consumer != NULL)
 			{
-				destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+				if(!inputs->consumer(inputs->consumer_context, tuple, inputs->input_tuple_def))
+				{
+					destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
 
-				kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-				kill_signal_for_self_operator(o, kill_reason); return ;
+					kill_signal_for_self_operator(o, kill_reason); return ;
+				}
 			}
 		}
 		else
@@ -53,17 +61,25 @@ static void execute(operator* o)
 	return ;
 }
 
-void setup_identity_operator(operator* o, operator* input_operator)
+int print_consumer(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def)
+{
+	print_tuple(tuple, input_tuple_def);
+
+	// always print
+	return 1;
+}
+
+void setup_consumer_operator(operator* o, operator* input_operator, void* (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context)
 {
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
-	// it is an identity operator, produces the same thing as it consumes
-	init_tuple_transformers(&(o->output_tuple_transformers), get_tuple_def_for_tuples_to_be_consumed_from(input_operator));
-
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
 		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
+		.input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator),
+		.consumer = consumer,
+		.consumer_context = consumer_context,
 	};
 }
