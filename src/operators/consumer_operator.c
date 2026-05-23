@@ -69,7 +69,7 @@ int print_consumer(void* consumer_context, const void* tuple, const tuple_def* i
 	return 1;
 }
 
-void setup_consumer_operator(operator* o, operator* input_operator, void* (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context)
+void setup_consumer_operator(operator* o, operator* input_operator, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context)
 {
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;

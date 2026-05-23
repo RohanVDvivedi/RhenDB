@@ -8,7 +8,7 @@ void setup_generator_operator(operator* o, void* (*generator)(void* generator_co
 void setup_identity_operator(operator* o, operator* input_operator);
 
 int print_consumer(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def);
-void setup_consumer_operator(operator* o, operator* input_operator, void* (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context);
+void setup_consumer_operator(operator* o, operator* input_operator, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context);
 
 void setup_result_match_operator(operator* o, operator* input_operators[2]);
 
