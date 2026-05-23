@@ -1,5 +1,7 @@
 #include<rhendb/query_plan.h>
 
+#include<rhendb/operator_resource_counter.h>
+
 #include<stdlib.h>
 
 /*
@@ -53,8 +55,12 @@ static void execute(operator* o)
 	return ;
 }
 
-void setup_identity_operator(operator* o, operator* input_operator)
+operator_resource_counter setup_identity_operator(operator* o, operator* input_operator)
 {
+	operator_resource_counter result = {.job_counter = 1};
+	if(o == NULL)
+		return result;
+
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
@@ -66,4 +72,6 @@ void setup_identity_operator(operator* o, operator* input_operator)
 	*((input_values*)(o->inputs)) = (input_values){
 		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
 	};
+
+	return result;
 }

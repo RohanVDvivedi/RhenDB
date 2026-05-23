@@ -1,5 +1,7 @@
 #include<rhendb/query_plan.h>
 
+#include<rhendb/operator_resource_counter.h>
+
 #include<rhendb/transaction.h>
 
 /*
@@ -41,8 +43,12 @@ static void execute(operator* o)
 	kill_signal_for_self_operator(o, kill_reason); return ;
 }
 
-void setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def)
+operator_resource_counter setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def)
 {
+	operator_resource_counter result = {.thread_counter = 1};
+	if(o == NULL)
+		return result;
+
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
@@ -56,4 +62,6 @@ void setup_generator_operator(operator* o, void* (*generator)(void* generator_co
 		.generator_context = generator_context,
 		.generator_tuple_def = generator_tuple_def,
 	};
+
+	return result;
 }

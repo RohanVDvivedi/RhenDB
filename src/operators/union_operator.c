@@ -1,5 +1,7 @@
 #include<rhendb/query_plan.h>
 
+#include<rhendb/operator_resource_counter.h>
+
 #include<cutlery/linkedlist.h>
 
 #include<stdlib.h>
@@ -128,7 +130,7 @@ static void notify_callback(operator* o, consumption_iterator* cit_p)
 	pthread_mutex_unlock(&(inputs->input_iterators_list_lock));
 }
 
-void setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count)
+operator_resource_counter setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count)
 {
 	if(input_operators_count == 0)
 	{
@@ -145,6 +147,10 @@ void setup_union_operator(operator* o, operator** input_operators, uint32_t inpu
 			exit(-1);
 		}
 	}
+
+	operator_resource_counter result = {.job_counter = 1};
+	if(o == NULL)
+		return result;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -170,4 +176,6 @@ void setup_union_operator(operator* o, operator** input_operators, uint32_t inpu
 		cit_p->embed_uints[0] = IS_READY;
 		insert_tail_in_linkedlist(&(inputs->ready_input_iterators), cit_p);
 	}
+
+	return result;
 }

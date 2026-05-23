@@ -5,16 +5,19 @@
 
 #include<rhendb/operator_resource_counter.h>
 
-void setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def);
+// if o = NULL, in the following functions, then operator is not initialized, but a valid operator_resource_counter is still returned
+// generator() and consumer() are considered to be not part of the query_plan and you must take care of their resources externally
 
-void setup_identity_operator(operator* o, operator* input_operator);
+operator_resource_counter setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def);
+
+operator_resource_counter setup_identity_operator(operator* o, operator* input_operator);
 
 int print_consumer(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def);
-void setup_consumer_operator(operator* o, operator* input_operator, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context);
+operator_resource_counter setup_consumer_operator(operator* o, operator* input_operator, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context);
 
 void setup_result_match_operator(operator* o, operator* input_operators[2]);
 
-void setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count);
+operator_resource_counter setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count);
 
 #include<rhendb/aggregate_functions.h>
 

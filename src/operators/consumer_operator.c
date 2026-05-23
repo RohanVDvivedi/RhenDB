@@ -1,5 +1,7 @@
 #include<rhendb/query_plan.h>
 
+#include<rhendb/operator_resource_counter.h>
+
 #include<tuplestore/tuple.h>
 
 #include<stdlib.h>
@@ -69,8 +71,12 @@ int print_consumer(void* consumer_context, const void* tuple, const tuple_def* i
 	return 1;
 }
 
-void setup_consumer_operator(operator* o, operator* input_operator, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context)
+operator_resource_counter setup_consumer_operator(operator* o, operator* input_operator, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context)
 {
+	operator_resource_counter result = {.job_counter = 1};
+	if(o == NULL)
+		return result;
+
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
@@ -82,4 +88,6 @@ void setup_consumer_operator(operator* o, operator* input_operator, int (*consum
 		.consumer = consumer,
 		.consumer_context = consumer_context,
 	};
+
+	return result;
 }
