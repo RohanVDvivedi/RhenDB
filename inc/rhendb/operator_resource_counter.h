@@ -33,11 +33,18 @@ struct operator_resource_counter
 
 #define ZERO_OPERATOR_RESOURCE_COUNTER ((operator_resource_counter){})
 
-static inline void add_resource_counters(operator_resource_counter* a, operator_resource_counter b)
+static inline void sum_resource_counters(operator_resource_counter* a, operator_resource_counter b)
 {
 	a->buffer_counter += b.buffer_counter;
 	a->thread_counter += b.thread_counter;
 	a->job_counter += b.job_counter;
+}
+
+static inline void max_resource_counters(operator_resource_counter* a, operator_resource_counter b)
+{
+	a->buffer_counter = max(a->buffer_counter, b.buffer_counter);
+	a->thread_counter = max(a->thread_counter, b.thread_counter);
+	a->job_counter = max(a->job_counter, b.job_counter);
 }
 
 #endif
