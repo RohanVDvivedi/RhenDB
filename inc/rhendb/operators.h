@@ -3,6 +3,8 @@
 
 #include<rhendb/query_plan.h>
 
+#include<rhendb/operator_resource_counter.h>
+
 void setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def);
 
 void setup_identity_operator(operator* o, operator* input_operator);
