@@ -588,6 +588,8 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 	}
 
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
+
+	// there are max_concurrent_jobs_count additional jobs, each one first hashing the key, then comparing it and finally aggregating into one entry
 	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * max(2 * has_extended_type_info3(input_tuple_def, key_element_count, key_element_ids), get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions)), .job_counter = max_concurrent_jobs_count + 1};
 	if(o == NULL)
 		return result;
