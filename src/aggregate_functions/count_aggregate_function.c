@@ -57,6 +57,8 @@ aggregate_function* get_count_aggregate_function(const data_type_info* input_typ
 
 	af_p->output_type_info = UINT_NON_NULLABLE[8];
 
+	af_p->buffers_resource_count = 0;
+
 	af_p->input_type_infos_count = 1;
 	af_p->input_type_infos[0] = input_type_info;
 

@@ -2,6 +2,8 @@
 
 #include<rhendb/function_compare.h>
 
+#include<tuplelargetypes/common_extended.h>
+
 #include<tuplestore/tuple_def.h>
 #include<tuplestore/tuple.h>
 
@@ -200,6 +202,8 @@ aggregate_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_
 		// assign it to the af_p
 		af_p->output_type_info = output_type_info;
 	}
+
+	af_p->buffers_resource_count = has_extended_type_info(input_type_info);
 
 	af_p->input_type_infos_count = 1;
 	af_p->input_type_infos[0] = input_type_info;

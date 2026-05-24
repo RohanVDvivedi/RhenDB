@@ -30,6 +30,10 @@ struct aggregate_function
 	// single value storing the type_info for the aggregate_function's output
 	const data_type_info* output_type_info;
 
+	// number of buffers from bufferpool required for the execution of the aggregate function for its inputs
+	// per live state of this aggregate_function
+	uint64_t buffers_resource_count;
+
 	// number of elements in input_type_infos[]
 	uint32_t input_type_infos_count;
 
