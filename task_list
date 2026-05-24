@@ -1,14 +1,8 @@
 PICKED TASKS
 
- * make aggregate_functions and operators return operator_resource_counter
 
 
-
-
-
-
-
-PRIORITY 2 JOINS
+PRIORITY 1 JOINS
 
  * implement streaming_cross_join_operator
    * start batching tuples on both sides left and right
