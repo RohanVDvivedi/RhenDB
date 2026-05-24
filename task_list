@@ -4,6 +4,27 @@ PICKED TASKS
 
 PRIORITY 1 JOINS
 
+ * in first implementation all below join operators will take in int preserve_left
+   * if set, return (left, NULL) if the left side tuple matches none of the right side tuples
+
+ * sort_merge_join
+   * needs left_input_operator, left_key_element_ids, right_input_operator, right_key_element_ids, key_element_count, key_compare_direction
+   * iterate further the lesser side until it becomes greater than or equal to the other side
+   * if both are equal
+     * put these first tuples in 2 interim_tuple_store-s stored_left_equals and stored_right_equals
+   * consume all the equal tuples from both the sides
+   * generate their cross product, block-by-block in chunks of 100MB at max, making sure that the next tuple fits in their block, like in block nested loop join
+   * will support only equality joins
+
+ * hash_join
+   * needs left_input_operator, left_key_element_ids, right_input_operator, right_key_element_ids, key_element_count
+   * make rash tables with partition_count, bucket_count_per_partition, and max_concurrent_jobs_count
+   * first read tuples from the right, batch it into 1MB blocks and put it in queue
+   * build jobs read this block and insert into respective partition of rash tables
+   * once there are no more right side tuples, start reading left side tuples
+   * for each one build a block of 1MB again and add it to probe job queue
+   * probe job probes the rash table partition and produces the pair with all the right tuples
+
  * implement streaming_cross_join_operator
    * start batching tuples on both sides left and right
    * maintain iterators on both sides: begin, unseen_batch_first, unseen_batch_last
@@ -13,20 +34,6 @@ PRIORITY 1 JOINS
         for tuple2 in [unseen_batch_first, unseen_batch_last]
           produce(tuple1, tuple2) OR produce(tuple2, tuple1)
       for side1.batch_size = 0, start collecting the batch again for side1
-
- * sort_merge_join
-   * iterate further the lesser side until it becomes greater than or equal to the other side
-   * if both are equal consume all the equal tuples from both the sides and generate and produce their cross product
-     * maintain start position of their first equal tuples
-     * then iterate forward until they end
-     * outer scan on the larger side and inner scan on the smaller side
-   * will support only equality joins
-
- * hash_join
-   * make rash tables with partition_count, bucket_count_per_partition, and max_worker_count
-   * read tuple, clone the iterator and give it to one of the worker
-   * worker reads the tuple, hashes it find out the right partition write locks it and inserts into it
-   * in probe phase each worker is given tuple from another size and is made to match with tuples on the built hash table
 
 
 
