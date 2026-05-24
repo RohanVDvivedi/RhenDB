@@ -1,5 +1,7 @@
 #include<rhendb/query_plan.h>
 
+#include<rhendb/operator_resource_counter.h>
+
 #include<rhendb/transaction.h>
 
 #include<rhendb/function_compare.h>
@@ -165,7 +167,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-void setup_merge_sorted_inputs_operator(operator* o, operator** input_operators, uint32_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
+operator_resource_counter setup_merge_sorted_inputs_operator(operator* o, operator** input_operators, uint32_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
 {
 	if(input_operators_count == 0)
 	{
@@ -182,6 +184,10 @@ void setup_merge_sorted_inputs_operator(operator* o, operator** input_operators,
 			exit(-1);
 		}
 	}
+
+	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids), .job_counter = 1};
+	if(o == NULL)
+		return result;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -214,4 +220,6 @@ void setup_merge_sorted_inputs_operator(operator* o, operator** input_operators,
 		cit_p->embed_ptrs[1] = &(inputs->keys[i * key_element_count]);
 		insert_tail_in_singlylist(&(inputs->waiting_input_iterators), cit_p);
 	}
+
+	return result;
 }

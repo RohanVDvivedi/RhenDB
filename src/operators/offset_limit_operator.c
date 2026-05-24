@@ -1,5 +1,7 @@
 #include<rhendb/query_plan.h>
 
+#include<rhendb/operator_resource_counter.h>
+
 #include<rhendb/tuples_down_counter.h>
 
 #include<stdlib.h>
@@ -77,7 +79,7 @@ static void execute(operator* o)
 	return ;
 }
 
-void setup_offset_limit_operator(operator* o, operator* input_operator, tuples_down_counter offset_counter, tuples_down_counter limit_counter)
+operator_resource_counter setup_offset_limit_operator(operator* o, operator* input_operator, tuples_down_counter offset_counter, tuples_down_counter limit_counter)
 {
 	if(is_inf_tuples_down_counter(&offset_counter))
 	{
@@ -89,6 +91,10 @@ void setup_offset_limit_operator(operator* o, operator* input_operator, tuples_d
 		printf("limit can not be 0 for offset_limit_operator\n");
 		exit(-1);
 	}
+
+	operator_resource_counter result = {.job_counter = 1};
+	if(o == NULL)
+		return result;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -103,4 +109,6 @@ void setup_offset_limit_operator(operator* o, operator* input_operator, tuples_d
 		.offset_counter = offset_counter,
 		.limit_counter = limit_counter,
 	};
+
+	return result;
 }

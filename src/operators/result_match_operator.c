@@ -1,5 +1,7 @@
 #include<rhendb/query_plan.h>
 
+#include<rhendb/operator_resource_counter.h>
+
 #include<rhendb/transaction.h>
 
 #include<rhendb/function_compare.h>
@@ -93,7 +95,7 @@ static void execute(operator* o)
 	return ;
 }
 
-void setup_result_match_operator(operator* o, operator* input_operators[2])
+operator_resource_counter setup_result_match_operator(operator* o, operator* input_operators[2])
 {
 	const tuple_def* input_defs[2] = {
 		get_tuple_def_for_tuples_to_be_consumed_from(input_operators[0]),
@@ -127,6 +129,10 @@ void setup_result_match_operator(operator* o, operator* input_operators[2])
 		}
 	}
 
+	operator_resource_counter result = {.buffer_counter = has_extended_type_info2(input_defs[0], SELF) + has_extended_type_info2(input_defs[1], SELF), .job_counter = 1};
+	if(o == NULL)
+		return result;
+
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
@@ -143,4 +149,6 @@ void setup_result_match_operator(operator* o, operator* input_operators[2])
 		.element_count = element_count,
 		.tuple_processed = 0,
 	};
+
+	return result;
 }

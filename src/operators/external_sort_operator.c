@@ -1,5 +1,7 @@
 #include<rhendb/query_plan.h>
 
+#include<rhendb/operator_resource_counter.h>
+
 #include<rhendb/transaction.h>
 
 #include<rhendb/function_compare.h>
@@ -665,7 +667,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-void setup_external_sort_operator(operator* o, tuples_down_counter result_counter, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t minimum_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
+operator_resource_counter setup_external_sort_operator(operator* o, tuples_down_counter result_counter, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t minimum_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
 {
 	if(is_zero_tuples_down_counter(&result_counter))
 	{
@@ -697,19 +699,26 @@ void setup_external_sort_operator(operator* o, tuples_down_counter result_counte
 		exit(-1);
 	}
 
+	const tuple_def* record_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
+
+	// there are max_concurrent_jobs_count number of additional jobs each one doing atmost 1 comparison
+	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids) * max_concurrent_jobs_count, .job_counter = 1 + max_concurrent_jobs_count};
+	if(o == NULL)
+		return result;
+
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = free_resources;
 
 	// it produces the same thing as it consumes
-	init_tuple_transformers(&(o->output_tuple_transformers), get_tuple_def_for_tuples_to_be_consumed_from(input_operator));
+	init_tuple_transformers(&(o->output_tuple_transformers), record_def);
 
 	o->inputs = malloc(sizeof(input_values));
 	input_values* inputs = o->inputs;
 	*inputs = (input_values){
 		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
 		.input_un_sorted_run = NULL,
-		.record_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator),
+		.record_def = record_def,
 		.key_element_count = key_element_count,
 		.key_element_ids = key_element_ids,
 		.key_compare_direction = key_compare_direction,
@@ -739,4 +748,6 @@ void setup_external_sort_operator(operator* o, tuples_down_counter result_counte
 		initialize_tuple_runs(truns_p);
 		insert_tail_in_linkedlist(&(inputs->job_param_free_list), truns_p);
 	}
+
+	return result;
 }

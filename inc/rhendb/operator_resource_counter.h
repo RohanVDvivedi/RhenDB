@@ -1,6 +1,10 @@
 #ifndef OPERATOR_RESOURCE_COUNTER_H
 #define OPERATOR_RESOURCE_COUNTER_H
 
+#include<stdint.h>
+
+#include<tuplelargetypes/common_extended.h>
+
 /*
 	return value for the setup functions of the operators
 	add these values (using add_resource_counters) to get to know the amount of resources needed by each of the operators
