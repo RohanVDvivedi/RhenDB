@@ -1,5 +1,7 @@
 #include<rhendb/query_plan.h>
 
+#include<rhendb/operator_resource_counter.h>
+
 #include<rhendb/transaction.h>
 
 #include<rhendb/aggregate_functions.h>
@@ -274,7 +276,7 @@ static data_type_info* shallow_clone_into_nullable_type(const data_type_info* in
 	return output_type_info;
 }
 
-void setup_sorted_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
+operator_resource_counter setup_sorted_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
 {
 	// if key_element_count == 0 => simple aggregation
 	// if aggregate_functions_count == 0 => find distinct
@@ -285,11 +287,15 @@ void setup_sorted_aggregation_operator(operator* o, operator* input_operator, ui
 		exit(-1);
 	}
 
+	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
+
+	operator_resource_counter result = {.buffer_counter = max(2 * has_extended_type_info3(input_tuple_def, key_element_count, key_element_ids), get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions)), .job_counter = 1};
+	if(o == NULL)
+		return result;
+
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->free_resources = free_resources;
-
-	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
 	uint32_t input_datums_count = 0;
 	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(key_element_count + aggregate_functions_count));
@@ -350,4 +356,6 @@ void setup_sorted_aggregation_operator(operator* o, operator* input_operator, ui
 	memory_move(inputs->aggregate_functions, aggregate_functions, sizeof(aggregate_function*) * aggregate_functions_count);
 
 	memory_move(inputs->aggregate_input_element_ids, aggregate_input_element_ids, sizeof(aggregate_function*) * aggregate_functions_count);
+
+	return result;
 }
