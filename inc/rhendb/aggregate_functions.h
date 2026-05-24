@@ -70,7 +70,7 @@ aggregate_function* get_count_aggregate_function(const data_type_info* input_typ
 
 aggregate_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_info* input_type_info, int is_min);
 
-static inline uint64_t get_max_buffers_count_for_all_aggregate_functions(uint32_t afs_count, const aggregate_function** afs_p)
+static inline uint64_t get_max_buffers_count_for_all_aggregate_functions(uint32_t afs_count, aggregate_function const * const * afs_p)
 {
 	uint64_t buffers_resource_count = 0;
 	for(uint32_t i = 0; i < afs_count; i++)
