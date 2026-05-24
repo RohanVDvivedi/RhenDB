@@ -63,6 +63,7 @@ PRIORITY 2 SCANS & INDEX PROBES
  * index_lookup_job -> for index nested loop join
  * check mvcc conditions for the tuples being visible, every single time
    * if the transaction is serializable check for locks here too
+ * implement operator with index nested loop join (need 2 buffers, because of latch crabbing)
 
 
 
