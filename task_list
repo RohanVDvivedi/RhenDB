@@ -98,6 +98,11 @@ FUTURE TASKS
 
  6.* optimize hash aggregation operator
 
+ 7.* always sum up all the operator_resource_counter-s after making the operators and request that many resources from the rhendb's resource_usage_limiter-s
+   * once the query is done and shutdown, free up all the resources
+   * if required store the buffers_allotted and thread_alloted in the query plan, and free the resources when not needed by some means later
+   * finally before we do all this, make sure that the operator actually calculates the right number of resources for bufferpool and threadpool
+
 SYSTEM LIMITS
  * limit extended (text, blob, numeric, jsonb) columns to become no more than 15 MB big in it's total number of bytes
  * any table will not allowed to have more than 5000 columns, and no more than 100 of them can be extended types
