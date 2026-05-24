@@ -104,6 +104,16 @@ FUTURE TASKS
 
  6.* optimize hash aggregation operator
 
+SYSTEM LIMITS
+ * limit extended (text, blob, numeric, jsonb) columns to become no more than 15 MB big in it's total number of bytes
+ * any table will not allowed to have more than 5000 columns, and no more than 100 of them can be extended types
+ * simple varchar, array, tuples can not be more than 10 KB at maximum
+ * So, no more than 10 KB can be prefixed for any extended types
+ * this limits total tuple size for heap table (which are page_size) to 1.55 GB, without metadata, which keeps it well under 2GB limit of tuple store
+ * the same limits also apply for intermediate tuple sizes
+ * both the limits are also applicable for queries, the referenced columns all of them in the queries must not cross this limits
+   * in all of referenced columns in query, there must not be more than 5000 total columns, and no more than 100 of them being extended
+
 DESIGN METHODOLOGY
    * we will use postgresql architecture over (mysql like) mini transactions
    * we will have heap_table for storing tables, insert to which gives us a page_id (physical page_id) and a tuple_index (slot no) in that page
