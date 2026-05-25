@@ -1,13 +1,5 @@
 PICKED TASKS
 
- * rash_table will have 4-bit BIT_FIELD called meta_bits
- * starts with state of 0
- * there will be simple function to set this value from an int
- * this will help with full outer hash join algorithm
-
-
-
-
 
 PRIORITY 0 CATALOG
  * THINK how to structure? how to lock<when doing ddl?> OR <when doing read for catalog>?
