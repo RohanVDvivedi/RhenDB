@@ -1,5 +1,9 @@
 PICKED TASKS
 
+ * rash_table will have 4-bit BIT_FIELD called meta_bits
+ * starts with state of 0
+ * there will be simple function to set this value from an int
+ * this will help with full outer hash join algorithm
 
 
 
@@ -42,9 +46,12 @@ PRIORITY 0 CATALOG
      * BLOB 10 MB (prefix of 10 KB max)
      * NUMERIC 10 MB (prefix of 10 KB max)
      * JSONB 10 MB (prefix of 10 KB max) (non-indexable)
+   * cache single instances of all these types to construct it from catalog tables
  * only these many types will be supported
  * no heap tuple larger than page may be generated, if min_tuple_size > page_size fail table definition, create and alter both fail here
-
+ * we will have catalog management that allows mvcc, but the vaccum for these tables will differ
+ * all catalog operations will lock the previous entry of the older version of the table, by it's name
+ * table will have to be versioned, all entries are not rewritten, upon catalog changes, only interpretation changes, effectively giving us partitions
 
 
 
@@ -54,6 +61,9 @@ PRIORITY 0 CATALOG
 PRIORITY 1 TABLES & INDEXES
  * no heap tuple larger than page may begenerated
  * only support for heap_table, blob_store(for all extended columns), and btree_index(key size lesser than 1/3 of DB page)
+  * btree_index will have an entry that store key, tuple_location(root_page_id, page_id, tuple_index)
+  * root_page_id allows us to know about all versions of the table effectively picking the right altered version from the right table
+  * alter table creates new versions not modify old tables
  * insert tuple is a set of mini transactions
    * insert to heap_table with right mvcc header but no column data
    * hold latch on the heap_page and commit the previous mini tx
@@ -73,8 +83,7 @@ PRIORITY 1 TABLES & INDEXES
    * finally delete the heap page tuple in context
  * in all these operations take enough number of buffers for these operators that use these functions
  * modifications check locks and mvcc visibility both
- * only tuple locks (page_id, tuple_index) will be available first
-
+ * only tuple locks (root_page_id, page_id, tuple_index) will be available first (root_page_id belongs to the heap_table in context)
 
 
 
