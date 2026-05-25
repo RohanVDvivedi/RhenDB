@@ -202,6 +202,8 @@ void insert_rth(rash_table_handle* rth_p, uint32_t v)
 
 	close_and_write_value_in_hash_table_iterator(&rti, bwi_p);
 
+	write_state_in_rash_table_iterator(&rti, read_state_in_rash_table_iterator(&rti) + 1);
+
 	delete_rash_table_iterator(&rti);
 
 	destroy_rash_table_key(&rtk);
@@ -243,7 +245,7 @@ void find_and_print(rash_table_handle* rth_p, uint32_t v)
 
 	binary_read_iterator* value_bri_p = read_value_in_rash_table_iterator(&rti);
 
-	printf("%"PRIu32" -> (\n", v);
+	printf("%"PRIu32" -> %"PRIu64", (\n", v, read_state_in_rash_table_iterator(&rti));
 	print_value(value_bri_p);
 	printf(")\n");
 
