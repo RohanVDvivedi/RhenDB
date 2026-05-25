@@ -1,6 +1,7 @@
 PICKED TASKS
 
 
+
 PRIORITY 0 CATALOG
  * THINK how to structure? how to lock<when doing ddl?> OR <when doing read for catalog>?
  * max columns 5000, of which at max 100 can be extended types
@@ -53,6 +54,7 @@ CATALOG TABLES
 
 
 
+
 PRIORITY 1 TABLES & INDEXES
  * no heap tuple larger than page may begenerated
  * only support for heap_table, blob_store(for all extended columns), and btree_index(key size lesser than 1/3 of DB page)
@@ -84,6 +86,7 @@ PRIORITY 1 TABLES & INDEXES
 
 
 
+
 PRIORITY 2 SCANS & INDEX PROBES
  * heap_table_scan_operator -> starts from first full heap pages until reaches the end
  * index_scan_operator -> collects valid tuples in batches, sorts (page_id, tuple_index) in a job for each batch, returns heap tuples as is
@@ -96,12 +99,14 @@ PRIORITY 2 SCANS & INDEX PROBES
 
 
 
+
 PRIORITY 3 JOINS
 
- * in first implementation all below join operators will take in int preserve_left
-   * if set, return (left, NULL) if the left side tuple matches none of the right side tuples
+ * in first implementation all below join operators will take in int preserve_side
+   * PRESERVE_LEFT = 1; PRESERVE_RIGHT = 2
 
  * sort_merge_join
+   * supports both PRESERVE_LEFT and PRESERVE_RIGHT
    * needs left_input_operator, left_key_element_ids, right_input_operator, right_key_element_ids, key_element_count, key_compare_direction
    * iterate further the lesser side until it becomes greater than or equal to the other side
    * if both are equal
@@ -111,6 +116,7 @@ PRIORITY 3 JOINS
    * will support only equality joins
 
  * hash_join
+   * supports both PRESERVE_LEFT and PRESERVE_RIGHT
    * needs left_input_operator, left_key_element_ids, right_input_operator, right_key_element_ids, key_element_count
    * make rash tables with partition_count, bucket_count_per_partition, and max_concurrent_jobs_count
    * first read tuples from the right, batch it into 1MB blocks and put it in queue
@@ -118,8 +124,11 @@ PRIORITY 3 JOINS
    * once there are no more right side tuples, start reading left side tuples
    * for each one build a block of 1MB again and add it to probe job queue
    * probe job probes the rash table partition and produces the pair with all the right tuples
+   * if a right entry is matched with any left entry mark state of right side entry to 1
+   * finally produce all (NULL, right) for all rights where state still is 0
 
  * implement streaming_cross_join_operator
+   * supports none of PRESERVE_LEFT and not even PRESERVE_RIGHT
    * start batching tuples on both sides left and right
    * maintain iterators on both sides: begin, unseen_batch_first, unseen_batch_last
    * batch unseen tuples (batch_size bytes big) atleast on any side
@@ -128,6 +137,9 @@ PRIORITY 3 JOINS
         for tuple2 in [unseen_batch_first, unseen_batch_last]
           produce(tuple1, tuple2) OR produce(tuple2, tuple1)
       for side1.batch_size = 0, start collecting the batch again for side1
+
+ * implement block_nested_loop_join
+   * supports only PRESERVE_LEFT
 
 
 
