@@ -7,14 +7,15 @@ static const positional_accessor hash_position = STATIC_POSITION(0);
 static const positional_accessor key_position = STATIC_POSITION(1);
 static const positional_accessor value_position = STATIC_POSITION(2);
 static const positional_accessor tail_of_value_position = STATIC_POSITION(3);
+static const positional_accessor state_position = STATIC_POSITION(4);
 
 static const positional_accessor actual_key_positions[] = {hash_position};
 
 void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb)
 {
-	data_type_info* record_type_info = malloc(sizeof_tuple_data_type_info(4));
+	data_type_info* record_type_info = malloc(sizeof_tuple_data_type_info(5));
 
-	initialize_tuple_data_type_info(record_type_info, "rash_record", 1, RASH_RECORD_MAX_SIZE, 4);
+	initialize_tuple_data_type_info(record_type_info, "rash_record", 1, RASH_RECORD_MAX_SIZE, 5);
 
 	strcpy(record_type_info->containees[0].field_name, "hash");
 	record_type_info->containees[0].al.type_info = UINT_NON_NULLABLE[8];
@@ -27,6 +28,9 @@ void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb)
 
 	strcpy(record_type_info->containees[3].field_name, "tail_of_value");
 	record_type_info->containees[3].al.type_info = &(rdb->volatile_rage_engine.pam_p->pas.tuple_pointer_type_info);
+
+	strcpy(record_type_info->containees[4].field_name, "state");
+	record_type_info->containees[4].al.type_info = BIT_FIELD_NON_NULLABLE[STATE_BITS];
 
 	tuple_def* record_def = malloc(sizeof(tuple_def));
 	initialize_tuple_def(record_def, record_type_info);
@@ -147,6 +151,12 @@ void print_rash_table(rash_table_handle* rth_p, void (*print_value)(binary_read_
 				datum uval;
 				get_value_from_element_from_tuple(&uval, rth_p->rdb->rash_httd.lpltd.record_def, hash_position, entry);
 				printf("\tHASH(%"PRIu64")\n", uval.uint_value);
+			}
+
+			{
+				datum uval;
+				get_value_from_element_from_tuple(&uval, rth_p->rdb->rash_httd.lpltd.record_def, state_position, entry);
+				printf("\tSTATE(%"PRIu64")\n", uval.bit_field_value);
 			}
 
 			printf("\t\tKEY(\n");
@@ -309,6 +319,31 @@ binary_read_iterator* read_key_in_rash_table_iterator(const rash_table_iterator*
 	get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, key_position, record_tuple);
 
 	return get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
+}
+
+uint64_t read_state_in_rash_table_iterator(const rash_table_iterator* rti_p)
+{
+	const void* record_tuple = get_tuple_hash_table_iterator(rti_p->hti_p);
+	if(record_tuple == NULL)
+		return 0;
+
+	datum uval;
+	get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, state_position, record_tuple);
+
+	return uval.bit_field_value;
+}
+
+int write_state_in_rash_table_iterator(rash_table_iterator* rti_p, uint64_t state)
+{
+	if(rti_p->is_read_only)
+		return 0;
+
+	int abort_error_dummy = 0;
+
+	if(!exists_in_rash_table_iterator(rti_p))
+		return 0;
+
+	return update_non_key_element_in_place_at_hash_table_iterator(rti_p->hti_p, state_position, &((const datum){.bit_field_value = state}), NULL, &abort_error_dummy);
 }
 
 int exists_in_rash_table_iterator(const rash_table_iterator* rti_p)

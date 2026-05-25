@@ -23,11 +23,12 @@
 
 #define PREFIX_BYTES_FOR_KEY           120
 #define PREFIX_BYTES_FOR_VALUE          90
+#define STATE_BITS                       8
 
 #define EXTENDED_TYPE_MAX_SIZE_FOR_KEY    ((4 + (4 + 12)) + (4 + PREFIX_BYTES_FOR_KEY))
 #define EXTENDED_TYPE_MAX_SIZE_FOR_VALUE  ((4 + (4 + 12)) + (4 + PREFIX_BYTES_FOR_VALUE))
 
-#define RASH_RECORD_MAX_SIZE              ((4 + (8 + 4 + 4 + 12)) + EXTENDED_TYPE_MAX_SIZE_FOR_KEY + EXTENDED_TYPE_MAX_SIZE_FOR_VALUE)
+#define RASH_RECORD_MAX_SIZE              ((4 + (8 + 4 + 4 + 12 + (1 + (STATE_BITS/8)))) + EXTENDED_TYPE_MAX_SIZE_FOR_KEY + EXTENDED_TYPE_MAX_SIZE_FOR_VALUE)
 
 fail_build_on(RASH_RECORD_MAX_SIZE > 1024);
 
@@ -123,6 +124,10 @@ rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read
 rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int is_read_only);
 
 binary_read_iterator* read_key_in_rash_table_iterator(const rash_table_iterator* rti_p);
+
+uint64_t read_state_in_rash_table_iterator(const rash_table_iterator* rti_p);
+
+int write_state_in_rash_table_iterator(rash_table_iterator* rti_p, uint64_t state);
 
 int exists_in_rash_table_iterator(const rash_table_iterator* rti_p);
 
