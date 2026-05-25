@@ -7,25 +7,6 @@ PICKED TASKS
 
 
 
- * catalog tables
-  * types
-    * bitfield 1-64, int 1-32, uint 1-32, float, double, binary, string, blob, text, and rest will be custom user defined tuples
-    * definition:    id, name
-    * primark key: id
-  * type_attributes
-    * definition:    parent_id -> types, position, name, child_id -> types, array_size [0 -> variable length, 1 -> no array inside, directly compositing the element, N >= 2 -> fixed sized array]
-    * primary key: parent_id, position
-    * secondary key: name, parent_id, position
-  * db_objects
-    * definition:    id, name, db_object_type[table, btree, hash, rtree, inverted], type_id -> types, is_index_of_id -> db_objects[db_object_type = table], is_altered_from_id -> db_objects[name = name]
-    * primary key: id
-    * secondary key: name, id
-  * indexed_attributes
-    * definition:    index_id -> db_objects, position, table_positional_accessor(array of uint32_t or NULL), sql_expression(over the whole row)
-
-
-
-
 
 
 PRIORITY 0 CATALOG
@@ -34,8 +15,8 @@ PRIORITY 0 CATALOG
  * max tuple size is 75% of page
  * supported types
    * INLINE TYPES
-     * INT 1 to 8 bytes
-     * UINT 1 to 8 bytes
+     * INT 1 to 32 bytes
+     * UINT 1 to 32 bytes
      * BIT_FIELD 1 - 64 bits
      * FLOAT 4 and 8 bytes
      * STRING 10 KB (but limited by page_size)
@@ -46,13 +27,35 @@ PRIORITY 0 CATALOG
      * BLOB 10 MB (prefix of 10 KB max)
      * NUMERIC 10 MB (prefix of 10 KB max)
      * JSONB 10 MB (prefix of 10 KB max) (non-indexable)
+   * all attributes are nullable or not
    * cache single instances of all these types to construct it from catalog tables
  * only these many types will be supported
  * no heap tuple larger than page may be generated, if min_tuple_size > page_size fail table definition, create and alter both fail here
  * we will have catalog management that allows mvcc, but the vaccum for these tables will differ
  * all catalog operations will lock the previous entry of the older version of the table, by it's name
  * table will have to be versioned, all entries are not rewritten, upon catalog changes, only interpretation changes, effectively giving us partitions
+ * alter table will only support
+   * add column (always adds column at the end, at previous relative_position.max + 1)
+   * drop column (leaves an empty space at the relative_position)
+   * concurrent alters are blocked, table_name has a lock
+   * add index and drop index are concurrently dropped
 
+CATALOG TABLES
+ * types
+   * (uint64_t) id, (char [64]) name, (uint32_t) size (used only for INT, UINT, BIT_FIELD (for bits count <= 64), and FLOAT), (BIT_FIELD-1) is_nullable
+   * has default types listed above
+   * users can have their own new types
+   * new types can only be built using existing visible types
+ * attributes
+   * (uint64_t) id, (char [64]) name, relative_position (uint64_t integer (ordered but not contiguous) position in the type), ((uint64_t)) type_id, (uint32_t) count (0 -> variable length, 1 -> not an array, N -> fixed length array)
+ * catalog table's entries for types and attributes are never discarded
+ * objects
+   * creator_tx_id, is_ready, (uint64_t) id, (char [128]) name, (BIT_FIELD-5) type (enum of heap_table, blob_store, btree_index and hash_index), (page_id) root_page_id, (uint64_t) type_id, (uint32_t) key_attributes_count (used only for hash_index and btree_index)
+ * as soon as object entry for index is created it becomes insertable, but not usable unless is_ready flag is set
+ * it can be deleted by anyone by taking a lock on it
+ * lock on table name (not object->id) for altering, here on add column append a new relative_position, and on discard discard this specific relation_position
+ * table_index_mapping
+  * table_object_id, table_type_id, table_attribute_relative_position, index_object_id, index_type_id, index_attribute_relative_position
 
 
 
