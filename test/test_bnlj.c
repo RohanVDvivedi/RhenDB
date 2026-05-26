@@ -131,7 +131,7 @@ int main(int argc, char** argv)
 		printf("source left operator %p\n", right_input_operator);
 
 		operator* join_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_block_nested_loop_join_operator(join_operator, left_input_operator, right_input_operator, NULL, join_matcher, PRESERVE_NONE, MAX_BLOCK_SIZE);
+		setup_block_nested_loop_join_operator(join_operator, left_input_operator, right_input_operator, NULL, join_matcher, PRESERVE_LEFT, MAX_BLOCK_SIZE);
 		printf("join operator %p\n", join_operator);
 
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
