@@ -109,12 +109,6 @@ PRIORITY 2 SCANS & INDEX PROBES
 
 PRIORITY 3 JOINS
 
- * in first implementation all below join operators will take in int preserve_side
-   * PRESERVE_RIGHT = 1; PRESERVE_LEFT = 2, PRESERVE_BOTH = 3
-
- * implement block_nested_loop_join
-   * supports only PRESERVE_LEFT
-
  * sort_merge_join
    * supports both PRESERVE_LEFT and PRESERVE_RIGHT
    * needs left_input_operator, left_key_element_ids, right_input_operator, right_key_element_ids, key_element_count, key_compare_direction
