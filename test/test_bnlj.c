@@ -44,7 +44,7 @@ void generate_random_inputs()
 		memory_swap(left_inputs + (((uint32_t)rand()) % COUNT_LEFT), left_inputs + (((uint32_t)rand()) % COUNT_LEFT), sizeof(uint32_t));
 
 	for(uint32_t i = 0; i < COUNT_RIGHT; i++)
-		right_inputs[i] = MIN_LEFT + i;
+		right_inputs[i] = MIN_RIGHT + i;
 	for(uint32_t i = 0; i < COUNT_RIGHT; i++)
 		memory_swap(right_inputs + (((uint32_t)rand()) % COUNT_RIGHT), right_inputs + (((uint32_t)rand()) % COUNT_RIGHT), sizeof(uint32_t));
 }
