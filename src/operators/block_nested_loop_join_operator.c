@@ -34,6 +34,11 @@ struct input_values
 	uint32_t max_block_size;
 };
 
+static void produce_batched_left_block_loop_over_all_right(operator* o)
+{
+
+}
+
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
@@ -72,39 +77,49 @@ static void execute(operator* o)
 		}
 	}
 
-	/*dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
-
 	while(1)
 	{
 		int no_more_data = 0;
-		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
+		const void* tuple = consume_for_consumption_iterator(inputs->left_input_iterator, &no_more_data);
 		if(no_more_data)
 		{
-			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+			// close left side operator
+			destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
+
+			produce_batched_left_block_loop_over_all_right(o);
+
+			delete_interim_tuple_store(inputs->batched_left_side_tuples); inputs->batched_left_side_tuples = NULL;
+			delete_interim_tuple_store(inputs->right_side_tuples); inputs->right_side_tuples = NULL;
 
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+			destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
+
+			delete_interim_tuple_store(inputs->batched_left_side_tuples); inputs->batched_left_side_tuples = NULL;
+			delete_interim_tuple_store(inputs->right_side_tuples); inputs->right_side_tuples = NULL;
 
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 
 		if(tuple != NULL)
 		{
-			int produced = produce_tuple_from_operator(o, (void*)tuple);
-			if(!produced)
-			{
-				destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+			append_tuple_to_interim_tuple_store2(inputs->batched_left_side_tuples, &(inputs->batched_left_side_tuples->embed_regions[0]), tuple, &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
 
-				kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-				kill_signal_for_self_operator(o, kill_reason); return ;
+			if(get_total_bytes_in_interim_tuple_store(inputs->batched_left_side_tuples) > inputs->max_block_size)
+			{
+				produce_batched_left_block_loop_over_all_right(o);
+
+				unmap_all_embed_regions_in_interim_tuple_store(inputs->batched_left_side_tuples);
+				unmap_all_embed_regions_in_interim_tuple_store(inputs->right_side_tuples);
+
+				reinitialize_interim_tuple_store(inputs->batched_left_side_tuples, inputs->max_block_size);
 			}
 		}
 		else
-			break;
-	}*/
+			return;
+	}
 
 	return ;
 }
