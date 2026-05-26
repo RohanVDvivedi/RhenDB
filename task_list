@@ -1,6 +1,10 @@
 PICKED TASKS
 
 
+* implement logic to test if a tuple at a prticular is contained in the tuple_region for interim_tuple_store
+
+
+
 
 PRIORITY 0 CATALOG
  * THINK how to structure? how to lock<when doing ddl?> OR <when doing read for catalog>?
@@ -50,6 +54,9 @@ CATALOG TABLES
  * table_index_mapping
   * table_object_id, table_type_id, table_attribute_relative_position, index_object_id, index_type_id, index_attribute_relative_position
 
+ * need to take care for is_auto_increment, is_unique and default_value in attribute or types table
+ * for auto_increment store a counter in the catalog table and increment it and return it
+ * for unique constraint maintain a lock in lock_manager and hold lock on the 80-bit serialized hash value and then only check the unique btree index
 
 
 
@@ -103,7 +110,10 @@ PRIORITY 2 SCANS & INDEX PROBES
 PRIORITY 3 JOINS
 
  * in first implementation all below join operators will take in int preserve_side
-   * PRESERVE_LEFT = 1; PRESERVE_RIGHT = 2
+   * PRESERVE_RIGHT = 1; PRESERVE_LEFT = 2, PRESERVE_BOTH = 3
+
+ * implement block_nested_loop_join
+   * supports only PRESERVE_LEFT
 
  * sort_merge_join
    * supports both PRESERVE_LEFT and PRESERVE_RIGHT
@@ -126,20 +136,6 @@ PRIORITY 3 JOINS
    * probe job probes the rash table partition and produces the pair with all the right tuples
    * if a right entry is matched with any left entry mark state of right side entry to 1
    * finally produce all (NULL, right) for all rights where state still is 0
-
- * implement streaming_cross_join_operator
-   * supports none of PRESERVE_LEFT and not even PRESERVE_RIGHT
-   * start batching tuples on both sides left and right
-   * maintain iterators on both sides: begin, unseen_batch_first, unseen_batch_last
-   * batch unseen tuples (batch_size bytes big) atleast on any side
-   * and then nested loop as follows:
-      for tuple1 in [begin, unseen_batch_first)
-        for tuple2 in [unseen_batch_first, unseen_batch_last]
-          produce(tuple1, tuple2) OR produce(tuple2, tuple1)
-      for side1.batch_size = 0, start collecting the batch again for side1
-
- * implement block_nested_loop_join
-   * supports only PRESERVE_LEFT
 
 
 
@@ -190,6 +186,17 @@ FUTURE TASKS
    * once the query is done and shutdown, free up all the resources
    * if required store the buffers_allotted and thread_alloted in the query plan, and free the resources when not needed by some means later
    * finally before we do all this, make sure that the operator actually calculates the right number of resources for bufferpool and threadpool
+
+ 8.* implement streaming_cross_join_operator
+   * supports none of PRESERVE_LEFT and not even PRESERVE_RIGHT
+   * start batching tuples on both sides left and right
+   * maintain iterators on both sides: begin, unseen_batch_first, unseen_batch_last
+   * batch unseen tuples (batch_size bytes big) atleast on any side
+   * and then nested loop as follows:
+      for tuple1 in [begin, unseen_batch_first)
+        for tuple2 in [unseen_batch_first, unseen_batch_last]
+          produce(tuple1, tuple2) OR produce(tuple2, tuple1)
+      for side1.batch_size = 0, start collecting the batch again for side1
 
 SYSTEM LIMITS
  * limit extended (text, blob, numeric, jsonb) columns to become no more than 15 MB big in it's total number of bytes
