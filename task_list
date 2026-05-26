@@ -1,10 +1,6 @@
 PICKED TASKS
 
 
-* implement logic to test if a tuple at a prticular is contained in the tuple_region for interim_tuple_store
-
-
-
 
 PRIORITY 0 CATALOG
  * THINK how to structure? how to lock<when doing ddl?> OR <when doing read for catalog>?
