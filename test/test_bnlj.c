@@ -78,6 +78,15 @@ void* right_generator(void* generator_context, const tuple_def* generator_tuple_
 	return generated;
 }
 
+#define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
+#define PARALLEL_SORTING_JOBS_COUNT    8
+#define N_WAY_SORT                     16
+
+#define RECORD_S_KEY_ELEMENT_COUNT 2
+
+positional_accessor KEY_POS[2] = {STATIC_POSITION(0,0), STATIC_POSITION(1,0)};
+compare_direction CMP_DIR[2] = {ASC, ASC};
+
 query_plan* qp = NULL;
 
 void intHandler(int dummy)
@@ -134,8 +143,12 @@ int main(int argc, char** argv)
 		setup_block_nested_loop_join_operator(join_operator, left_input_operator, right_input_operator, NULL, join_matcher, PRESERVE_LEFT, MAX_BLOCK_SIZE);
 		printf("join operator %p\n", join_operator);
 
+		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
+		setup_external_sort_operator(sorter_operator, TUPLES_DOWN_COUNTER_INF, join_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		printf("sorter operator %p\n", sorter_operator);
+
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(print_operator, join_operator, PRINT_DATA ? print_consumer : NULL, NULL);
+		setup_consumer_operator(print_operator, sorter_operator, PRINT_DATA ? print_consumer : NULL, NULL);
 		printf("output print operator %p\n", print_operator);
 	}
 	printf("\n\n");
