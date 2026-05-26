@@ -471,6 +471,32 @@ int contains_for_interim_tuple_region(const interim_tuple_region* itr_p, uint64_
 	return (region_start <= offset_start) && (offset_end <= region_end);
 }
 
+int contains_tuple_at_offset_in_interim_tuple_store(const interim_tuple_store* its_p, const interim_tuple_region* itr_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d)
+{
+	if(is_empty_interim_tuple_region(itr_p))
+		return 0;
+
+	uint64_t region_start = itr_p->region_offset;
+	uint64_t region_end = region_start + itr_p->region_size;
+
+	// fail immediately, if the tuple_offset if completely outside the tuple region
+	if(tuple_offset < region_start || region_end <= tuple_offset)
+		return 0;
+
+	// if the tuple_offset is more than the highest value then fail immediately
+	if(its_p->next_tuple_offset <= tuple_offset)
+		return 0;
+
+	// calculate tuple_offset start and end
+	uint64_t tuple_offset_start = tuple_offset;
+	uint64_t tuple_offset_end = tuple_offset_start + get_tuple_size_for_interim_tuple_store(its_p, itr_p, tuple_offset_start, tpl_sz_d);
+
+	if((region_start <= tuple_offset_start) && (tuple_offset_end <= region_end))
+		return 1;
+
+	return 0;
+}
+
 void delete_on_notify_for_interim_tuple_store(void* resource_p, const void* data_p)
 {
 	delete_interim_tuple_store((interim_tuple_store*)data_p);

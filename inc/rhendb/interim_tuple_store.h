@@ -166,6 +166,9 @@ uint64_t next_tuple_offset_for_interim_tuple_region(const interim_tuple_region* 
 // offset_start is inclusive and offset_end is exclusive
 int contains_for_interim_tuple_region(const interim_tuple_region* itr_p, uint64_t offset_start, uint64_t offset_end);
 
+// returns 1, if the tuple at tuple_offset in this tuple_region
+int contains_tuple_at_offset_in_interim_tuple_store(const interim_tuple_store* its_p, const interim_tuple_region* itr_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d);
+
 #define INIT_INTERIM_TUPLE_REGION ((interim_tuple_region){})
 
 // to be used with cutlery containers only
