@@ -135,14 +135,14 @@ uint64_t append_all_from_another_interim_tuple_store2(interim_tuple_store* its_p
 
 // utility macro to iterate over all the tuples
 
-#define FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, tpl_sz_d, its_p, min_bytes_to_mmap, LOOP_BODY) do{                   \
-	void* tuple = NULL;                                                                                                                              \
+#define FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(_tuple, tuple_index, tuple_offset, tpl_sz_d, its_p, min_bytes_to_mmap, LOOP_BODY) do{                   \
+	void* _tuple = NULL;                                                                                                                              \
 	uint64_t tuple_index = 0;                                                                                                                        \
 	uint64_t tuple_offset = 0;                                                                                                                       \
 	interim_tuple_region _temp_tuple_region = INIT_INTERIM_TUPLE_REGION;                                                                             \
 	while(mmap_for_reading_tuple(its_p, &_temp_tuple_region, tuple_offset, tpl_sz_d, min_bytes_to_mmap))                                             \
 	{                                                                                                                                                \
-		tuple = _temp_tuple_region.tuple;                                                                                                            \
+		_tuple = _temp_tuple_region.tuple;                                                                                                            \
 		{                                                                                                                                            \
 			LOOP_BODY;                                                                                                                               \
 		}                                                                                                                                            \

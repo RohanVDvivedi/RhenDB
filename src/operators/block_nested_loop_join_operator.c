@@ -34,9 +34,78 @@ struct input_values
 	uint32_t max_block_size;
 };
 
-static void produce_batched_left_block_loop_over_all_right(operator* o)
+// returns 0 on error
+static int produce_batched_left_block_loop_over_all_right(operator* o)
 {
+	input_values* inputs = o->inputs;
 
+	void* left_tuple_matched_bitmap = NULL;
+	if(DOES_IT_PRESERVE_LEFT(inputs->ptype))
+	{
+		left_tuple_matched_bitmap = malloc(UINT_ALIGN_UP(inputs->batched_left_side_tuples->tuples_count, 8) / 8);
+		memory_set(left_tuple_matched_bitmap, 0, UINT_ALIGN_UP(inputs->batched_left_side_tuples->tuples_count, 8) / 8);
+	}
+
+	// iterate over all the right_side_tuples
+	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(right_tuple, right_tuple_index, right_tuple_offset, (&(inputs->right_input_tuple_def->size_def)), inputs->right_side_tuples, inputs->max_block_size,
+	{
+
+		void* left_tuple = NULL;
+		uint64_t left_tuple_index = 0;
+		uint64_t left_tuple_offset = 0;
+
+		while(mmap_for_reading_tuple(inputs->batched_left_side_tuples, &(inputs->batched_left_side_tuples->embed_regions[0]), left_tuple_offset, &(inputs->left_input_tuple_def->size_def), get_total_bytes_in_interim_tuple_store(inputs->batched_left_side_tuples)))
+		{
+			left_tuple = inputs->batched_left_side_tuples->embed_regions[0].tuple;
+
+			int matched = 1;
+			if(inputs->join_matcher != NULL)
+				matched = inputs->join_matcher(inputs->join_matcher_context_p, left_tuple, inputs->left_input_tuple_def, right_tuple, inputs->right_input_tuple_def);
+
+			if(matched == -1)
+			{
+				if(left_tuple_matched_bitmap != NULL)
+					free(left_tuple_matched_bitmap);
+
+				dstring kill_reason = get_dstring_pointing_to_literal_cstring("block_nested_loop_join_mater_errored");
+				kill_signal_for_self_operator(o, kill_reason); return 0;
+				return 0;
+			}
+
+			if(matched)
+			{
+				if(left_tuple_matched_bitmap != NULL)
+				{
+					set_bit(left_tuple_matched_bitmap, left_tuple_index);
+				}
+			}
+
+			if(matched)
+			{
+				uint32_t output_tuple_capacity = 32 + get_tuple_size(inputs->left_input_tuple_def, left_tuple) + get_tuple_size(inputs->right_input_tuple_def, right_tuple);
+				void* output_tuple = malloc(output_tuple_capacity);
+
+				init_tuple(inputs->output_tuple_def, output_tuple);
+
+				set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(0), output_tuple, inputs->left_input_tuple_def, SELF, left_tuple, UINT32_MAX);
+				set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(1), output_tuple, inputs->right_input_tuple_def, SELF, right_tuple, UINT32_MAX);
+
+				// produce output_tuple
+				int produced = produce_tuple_from_operator(o, output_tuple);
+				free(output_tuple);
+				if(!produced)
+				{
+					dstring kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
+					kill_signal_for_self_operator(o, kill_reason); return 0;
+				}
+			}
+
+			left_tuple_offset = next_tuple_offset_for_interim_tuple_region(&(inputs->batched_left_side_tuples->embed_regions[0]));
+			left_tuple_index++;
+		}
+	});
+
+	return 1;
 }
 
 static void execute(operator* o)
@@ -109,7 +178,15 @@ static void execute(operator* o)
 
 			if(get_total_bytes_in_interim_tuple_store(inputs->batched_left_side_tuples) > inputs->max_block_size)
 			{
-				produce_batched_left_block_loop_over_all_right(o);
+				if(!produce_batched_left_block_loop_over_all_right(o)) // returns 0, and fails
+				{
+					destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
+
+					delete_interim_tuple_store(inputs->batched_left_side_tuples); inputs->batched_left_side_tuples = NULL;
+					delete_interim_tuple_store(inputs->right_side_tuples); inputs->right_side_tuples = NULL;
+
+					kill_signal_for_self_operator(o, kill_reason); return ;
+				}
 
 				unmap_all_embed_regions_in_interim_tuple_store(inputs->batched_left_side_tuples);
 				unmap_all_embed_regions_in_interim_tuple_store(inputs->right_side_tuples);
