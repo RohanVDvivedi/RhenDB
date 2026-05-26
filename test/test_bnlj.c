@@ -6,12 +6,18 @@
 
 #include<test_dataset_tuple_def.h>
 
+#include<cutlery/stream_for_file_descriptor.h>
+
 #include<string.h>
 #include<stdio.h>
 #include<stdlib.h>
 #include<unistd.h>
 #include<signal.h>
 #include<fcntl.h>
+
+#define USERS_COUNT 10
+
+#define PRINT_DATA 1
 
 #define MIN_LEFT 20
 #define MAX_LEFT 320
@@ -129,7 +135,7 @@ int main(int argc, char** argv)
 		printf("join operator %p\n", join_operator);
 
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(print_operator, input_operator, PRINT_DATA ? print_consumer : NULL, NULL);
+		setup_consumer_operator(print_operator, join_operator, PRINT_DATA ? print_consumer : NULL, NULL);
 		printf("output print operator %p\n", print_operator);
 	}
 	printf("\n\n");
