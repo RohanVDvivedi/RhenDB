@@ -65,9 +65,8 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 				if(left_tuple_matched_bitmap != NULL)
 					free(left_tuple_matched_bitmap);
 
-				dstring kill_reason = get_dstring_pointing_to_literal_cstring("block_nested_loop_join_mater_errored");
+				dstring kill_reason = get_dstring_pointing_to_literal_cstring("block_nested_loop_join_matcher_errored");
 				kill_signal_for_self_operator(o, kill_reason); return 0;
-				return 0;
 			}
 
 			if(matched)
