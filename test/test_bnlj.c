@@ -5,6 +5,7 @@
 #include<rhendb/tuple_transformers.h>
 
 #include<test_dataset_tuple_def.h>
+#include<test_dataset_2_tuple_def.h>
 
 #include<cutlery/stream_for_file_descriptor.h>
 
@@ -58,7 +59,7 @@ void* left_generator(void* generator_context, const tuple_def* generator_tuple_d
 		return NULL;
 
 	void* generated = malloc(BUFFER_SIZE);
-	construct_record(generated, left_inputs[index], 0, "LEFT"); // every 3rd tuple has NULL instead of my name
+	construct_record(generated, left_inputs[index], 0, "LEFT");
 	index++;
 
 	return generated;
@@ -72,7 +73,7 @@ void* right_generator(void* generator_context, const tuple_def* generator_tuple_
 		return NULL;
 
 	void* generated = malloc(BUFFER_SIZE);
-	construct_record(generated, right_inputs[index], 0, "RIGHT"); // every 3rd tuple has NULL instead of my name
+	construct_record2(generated, right_inputs[index]);
 	index++;
 
 	return generated;
@@ -122,6 +123,7 @@ int main(int argc, char** argv)
 	generate_random_inputs();
 
 	initialize_tuple_defs();
+	initialize_tuple_defs2();
 
 	transaction tx = initialize_transaction(&rdb);
 
@@ -136,7 +138,7 @@ int main(int argc, char** argv)
 		printf("source left operator %p\n", left_input_operator);
 
 		operator* right_input_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_generator_operator(right_input_operator, right_generator, NULL, &record_def);
+		setup_generator_operator(right_input_operator, right_generator, NULL, &record_def2);
 		printf("source left operator %p\n", right_input_operator);
 
 		operator* join_operator = get_new_registered_operator_for_query_plan(qp);
@@ -170,6 +172,7 @@ int main(int argc, char** argv)
 	deinitialize_transaction(&tx);
 
 	deinitialize_tuple_defs();
+	deinitialize_tuple_defs2();
 
 	deinitialize_rhendb(&rdb);
 
