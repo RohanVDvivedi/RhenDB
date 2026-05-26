@@ -51,6 +51,6 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 // DOES_IT_PRESERVE_RIGHT(ptype) must be 0
 // we can not do right size preserving joins
 // if join_matcher == NULL, this becomes a cross join operator
-operator_resource_counter setup_block_nested_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, const void* join_match_context_p, int (*join_matcher)(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def), join_preserve_type ptype, uint32_t max_block_size);
+operator_resource_counter setup_block_nested_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, const void* join_matcher_context_p, int (*join_matcher)(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def), join_preserve_type ptype, uint32_t max_block_size);
 
 #endif
