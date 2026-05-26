@@ -33,6 +33,6 @@ void construct_record2(void* buffer, uint64_t num)
 	set_element_in_tuple(&record_def2, STATIC_POSITION(0), buffer, &(datum){.uint_value = num}, UINT32_MAX);
 
 	char temp[100];
-	num_in_words(temp, 0);
+	num_in_words(temp, find_order(num, 0));
 	set_element_in_tuple(&record_def2, STATIC_POSITION(1), buffer, &(datum){.string_value = temp, .string_size = strlen(temp)}, UINT32_MAX);
 }
