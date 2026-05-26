@@ -44,4 +44,13 @@ operator_resource_counter setup_sorted_aggregation_operator(operator* o, operato
 
 operator_resource_counter setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t bucket_count_per_parttion, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size);
 
+// join operators
+
+#include<rhendb/join_preserve_type.h>
+
+// DOES_IT_PRESERVE_RIGHT(ptype) must be 0
+// we can not do right size preserving joins
+// if join_matcher == NULL, this becomes a cross join operator
+operator_resource_counter setup_block_nested_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, const void* join_match_context_p, int (*join_matcher)(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def), join_preserve_type ptype);
+
 #endif
