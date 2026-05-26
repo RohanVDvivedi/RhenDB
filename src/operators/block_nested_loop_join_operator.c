@@ -142,8 +142,20 @@ static data_type_info* shallow_clone_into_nullable_type(const data_type_info* in
 	return output_type_info;
 }
 
-operator_resource_counter setup_block_nested_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, const void* join_matcher_context_p, int (*join_matcher)(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def), join_preserve_type ptype, uint32_t max_block_size)
+operator_resource_counter setup_block_nested_loop_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, const void* join_matcher_context_p, int (*join_matcher)(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def), join_preserve_type ptype, uint32_t max_block_size)
 {
+	if(max_block_size == 0)
+	{
+		printf("max_block_size can not be 0 for block_nested_loop_join_operator\n");
+		exit(-1);
+	}
+
+	if(DOES_IT_PRESERVE_RIGHT(ptype))
+	{
+		printf("can not be preserve right for block_nested_loop_join_operator\n");
+		exit(-1);
+	}
+
 	operator_resource_counter result = {.job_counter = 1};
 	if(o == NULL)
 		return result;
