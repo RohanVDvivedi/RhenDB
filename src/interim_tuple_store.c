@@ -288,7 +288,7 @@ int unmap_for_interim_tuple_region(interim_tuple_region* itr_p)
 	return 0;
 }
 
-uint64_t append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* tupl, const tuple_size_def* tpl_sz_d)
+uint64_t append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, const void* tupl, const tuple_size_def* tpl_sz_d)
 {
 	// compute the offset to be returned
 	// this will be the offset for the first tuple that will be copied in from the other_its_p
@@ -328,7 +328,7 @@ uint64_t append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, void* t
 	return offset;
 }
 
-uint64_t append_tuple_to_interim_tuple_store2(interim_tuple_store* its_p, interim_tuple_region* itr_p, void* tupl, const tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap)
+uint64_t append_tuple_to_interim_tuple_store2(interim_tuple_store* its_p, interim_tuple_region* itr_p, const void* tupl, const tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap)
 {
 	// get size of the tuple
 	uint32_t tuple_size = get_tuple_size_using_tuple_size_def(tpl_sz_d, tupl);

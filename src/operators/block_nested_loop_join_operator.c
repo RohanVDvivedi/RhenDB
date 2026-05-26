@@ -25,9 +25,11 @@ struct input_values
 
 	const tuple_def* output_tuple_def;
 
+	// it becomes a cross join if the join_matcher is NULL
 	const void* join_matcher_context_p;
 	int (*join_matcher)(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def);
 
+	// ptype can not be PRESERVE_RIGHT or PRESERVE_BOTH
 	join_preserve_type ptype;
 	uint32_t max_block_size;
 };
@@ -35,6 +37,40 @@ struct input_values
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
+
+	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
+
+	// first concume all of the right side first
+	if(inputs->right_input_iterator != NULL)
+	{
+		while(1)
+		{
+			int no_more_data = 0;
+			const void* tuple = consume_for_consumption_iterator(inputs->right_input_iterator, &no_more_data);
+			if(no_more_data)
+			{
+				destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
+				break;
+			}
+			if(can_not_proceed_for_execution_operator(o))
+			{
+				destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
+				destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
+
+				delete_interim_tuple_store(inputs->batched_left_side_tuples); inputs->batched_left_side_tuples = NULL;
+				delete_interim_tuple_store(inputs->right_side_tuples); inputs->right_side_tuples = NULL;
+
+				kill_signal_for_self_operator(o, kill_reason); return ;
+			}
+
+			if(tuple != NULL)
+			{
+				append_tuple_to_interim_tuple_store2(inputs->right_side_tuples, &(inputs->right_side_tuples->embed_regions[0]), tuple, &(inputs->right_input_tuple_def->size_def), inputs->max_block_size);
+			}
+			else
+				return;
+		}
+	}
 
 	/*dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
 
@@ -77,8 +113,10 @@ static void free_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	delete_interim_tuple_store(inputs->batched_left_side_tuples);
-	delete_interim_tuple_store(inputs->right_side_tuples);
+	if(inputs->batched_left_side_tuples)
+		delete_interim_tuple_store(inputs->batched_left_side_tuples);
+	if(inputs->right_side_tuples)
+		delete_interim_tuple_store(inputs->right_side_tuples);
 
 	// all key_dtis were made into nullable types, so free them first
 	for(uint32_t i = 0; i < 2; i++)
