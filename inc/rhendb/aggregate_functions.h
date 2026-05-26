@@ -6,8 +6,6 @@
 
 #include<rhendb/rhendb.h>
 
-#define AGGREGATE_FUNCTION_PARAM_TYPE_INFO_HOLDER_CAPACITY 4
-
 typedef struct aggregate_function aggregate_function;
 struct aggregate_function
 {
