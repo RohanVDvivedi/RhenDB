@@ -37,6 +37,27 @@ struct input_values
 	uint32_t max_block_size;
 };
 
+static int produce_join_result(operator* o, const void* left_tuple, const void* right_tuple)
+{
+	uint32_t output_tuple_capacity = 32 + ((left_tuple != NULL) ? get_tuple_size(inputs->left_input_tuple_def, left_tuple) : 0) + ((right_tuple != NULL) ? get_tuple_size(inputs->right_input_tuple_def, right_tuple) : 0);
+
+	void* output_tuple = malloc(output_tuple_capacity);
+
+	init_tuple(inputs->output_tuple_def, output_tuple);
+
+	if(left_tuple)
+		set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(0), output_tuple, inputs->left_input_tuple_def, SELF, left_tuple, UINT32_MAX);
+
+	if(right_tuple)
+		set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(1), output_tuple, inputs->right_input_tuple_def, SELF, right_tuple, UINT32_MAX);
+
+	// produce output_tuple
+	int produced = produce_tuple_from_operator(o, output_tuple);
+	free(output_tuple);
+
+	return produced;
+}
+
 // returns 0 on error
 static int cross_product_equal_tuples_on_both_sides(operator* o)
 {
@@ -53,7 +74,147 @@ static void execute(operator* o)
 
 	while(1)
 	{
+		// fetch left side tuple if possible
+		if(inputs->left_input_iterator != NULL)
+		{
+			if(input->left_input_iterator->embed_ptrs[0] == NULL)
+			{
+				int no_more_data = 0;
+				input->left_input_iterator->embed_ptrs[0] = consume_for_consumption_iterator(inputs->left_input_iterator, &no_more_data);
+				if(no_more_data)
+				{
+					destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
+				}
+				if(can_not_proceed_for_execution_operator(o))
+				{
+					destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
+					if(inputs->right_input_iterator != NULL)
+					{
+						destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
+					}
 
+					delete_interim_tuple_store(inputs->left_side_equal_tuples_batch); inputs->left_side_equal_tuples_batch = NULL;
+					delete_interim_tuple_store(inputs->right_side_equal_tuples_batch); inputs->right_side_equal_tuples_batch = NULL;
+
+					kill_signal_for_self_operator(o, kill_reason); return ;
+				}
+				if(input->left_input_iterator->embed_ptrs[0])
+					return;
+			}
+		}
+
+		// fetch right side tuple if possible
+		if(inputs->right_input_iterator != NULL)
+		{
+			if(input->right_input_iterator->embed_ptrs[0] == NULL)
+			{
+				int no_more_data = 0;
+				input->right_input_iterator->embed_ptrs[0] = consume_for_consumption_iterator(inputs->right_input_iterator, &no_more_data);
+				if(no_more_data)
+				{
+					destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
+				}
+				if(can_not_proceed_for_execution_operator(o))
+				{
+					destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
+					if(inputs->left_input_iterator != NULL)
+					{
+						destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
+					}
+
+					delete_interim_tuple_store(inputs->left_side_equal_tuples_batch); inputs->left_side_equal_tuples_batch = NULL;
+					delete_interim_tuple_store(inputs->right_side_equal_tuples_batch); inputs->right_side_equal_tuples_batch = NULL;
+
+					kill_signal_for_self_operator(o, kill_reason); return ;
+				}
+				if(input->right_input_iterator->embed_ptrs[0])
+					return;
+			}
+		}
+
+		// if there are no more tuples left on any side, then return success
+		if(inputs->left_input_iterator == NULL && inputs->right_input_iterator == NULL)
+		{
+			delete_interim_tuple_store(inputs->left_side_equal_tuples_batch); inputs->left_side_equal_tuples_batch = NULL;
+			delete_interim_tuple_store(inputs->right_side_equal_tuples_batch); inputs->right_side_equal_tuples_batch = NULL;
+
+			kill_signal_for_self_operator(o, kill_reason); return ;
+		}
+
+		if(get_total_bytes_in_interim_tuple_store(inputs->left_side_equal_tuples_batch) == 0) // if the batch of equal tuples is not yet started
+		{
+			int consume_left = 0;
+			int consume_right = 0;
+
+			if(inputs->right_input_iterator == NULL)
+				consume_left = 1;
+			else if(inputs->left_input_iterator == NULL)
+				consume_right = 1;
+			else
+			{
+				int cmp = compare_tuples_rhendb(input->left_input_iterator->embed_ptrs[0], inputs->left_tuple_def, inputs->left_key_element_ids,
+												input->right_input_iterator->embed_ptrs[0], inputs->right_tuple_def, inputs->right_key_element_ids,
+							inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
+
+				if(cmp == -1)
+				{
+					consume_left = 1;
+				}
+				else if(cmp == 1)
+				{
+					consume_right = 1;
+				}
+				else
+				{
+					consume_left = 1;
+					consume_right = 1;
+				}
+			}
+
+			if(consume_left && (!consume_right))
+			{
+				if(DOES_IT_PRESERVE_LEFT(inputs->ptype))
+				{
+					if(!produce_join_result(o, input->left_input_iterator->embed_ptrs[0], NULL))
+					{
+						destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
+
+						delete_interim_tuple_store(inputs->left_side_equal_tuples_batch); inputs->left_side_equal_tuples_batch = NULL;
+						delete_interim_tuple_store(inputs->right_side_equal_tuples_batch); inputs->right_side_equal_tuples_batch = NULL;
+
+						kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
+						kill_signal_for_self_operator(o, kill_reason); return ;
+					}
+				}
+				input->left_input_iterator->embed_ptrs[0] = NULL;
+			}
+			else if(consume_right && (!consume_left))
+			{
+				if(DOES_IT_PRESERVE_RIGHT(inputs->ptype))
+				{
+					if(!produce_join_result(o, input->right_input_iterator->embed_ptrs[0], NULL))
+					{
+						destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
+
+						delete_interim_tuple_store(inputs->left_side_equal_tuples_batch); inputs->left_side_equal_tuples_batch = NULL;
+						delete_interim_tuple_store(inputs->right_side_equal_tuples_batch); inputs->right_side_equal_tuples_batch = NULL;
+
+						kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
+						kill_signal_for_self_operator(o, kill_reason); return ;
+					}
+				}
+				input->right_input_iterator->embed_ptrs[0] = NULL;
+			}
+			else
+			{
+				append_tuple_to_interim_tuple_store2(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[1]), input->left_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+
+				append_tuple_to_interim_tuple_store2(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[1]), input->right_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+
+				input->left_input_iterator->embed_ptrs[0] = NULL;
+				input->right_input_iterator->embed_ptrs[0] = NULL;
+			}
+		}
 	}
 
 	return ;
