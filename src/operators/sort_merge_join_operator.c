@@ -69,12 +69,20 @@ static int cross_product_equal_tuples_on_both_sides(operator* o)
 
 	// simple nlj over the left and right tuples
 	// TODO implement bnlj
+	int fail = 0;
 	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(left_tuple, left_tuple_index, left_tuple_offset, &(inputs->left_input_tuple_def->size_def), inputs->left_side_equal_tuples_batch, inputs->max_block_size, {
 		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(right_tuple, right_tuple_index, right_tuple_offset, &(inputs->right_input_tuple_def->size_def), inputs->right_side_equal_tuples_batch, inputs->max_block_size, {
 			if(!produce_join_result(o, left_tuple, right_tuple))
-				return 0;
+				fail = 1;
+			if(fail)
+				break;
 		});
+		if(fail)
+			break;
 	});
+
+	if(fail)
+		return 0;
 
 	return 1;
 }
