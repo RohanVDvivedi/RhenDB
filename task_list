@@ -1,5 +1,11 @@
 PICKED TASKS
 
+* sort merge join
+  * implement a block nested loop join for the equal set of tuples, instead of simple nested loop join
+  * code review sort merge join operator
+  * test present test case throughly
+  * test with another test case that does block nested loop join and sort merge join on num_in_words and match results of both after sorting, comparing the 1M tuples input, on PRESERVE_NONE for num_in_words on a self join
+
 
 
 PRIORITY 0 CATALOG
@@ -104,16 +110,6 @@ PRIORITY 2 SCANS & INDEX PROBES
 
 
 PRIORITY 3 JOINS
-
- * sort_merge_join
-   * supports both PRESERVE_LEFT and PRESERVE_RIGHT
-   * needs left_input_operator, left_key_element_ids, right_input_operator, right_key_element_ids, key_element_count, key_compare_direction
-   * iterate further the lesser side until it becomes greater than or equal to the other side
-   * if both are equal
-     * put these first tuples in 2 interim_tuple_store-s stored_left_equals and stored_right_equals
-   * consume all the equal tuples from both the sides
-   * generate their cross product, block-by-block in chunks of 100MB at max, making sure that the next tuple fits in their block, like in block nested loop join
-   * will support only equality joins
 
  * hash_join
    * supports both PRESERVE_LEFT and PRESERVE_RIGHT
