@@ -67,6 +67,18 @@ static int cross_product_equal_tuples_on_both_sides(operator* o)
 {
 	input_values* inputs = o->inputs;
 
+	// debug print left tuples
+	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(left_tuple, tuple_index, tuple_offset, &(inputs->left_input_tuple_def->size_def), inputs->left_side_equal_tuples_batch, inputs->max_block_size, {
+		print_tuple(left_tuple, inputs->left_input_tuple_def);
+		printf("\n");
+	});
+
+	// debug print right tuples
+	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(right_tuple, tuple_index, tuple_offset, &(inputs->right_input_tuple_def->size_def), inputs->right_side_equal_tuples_batch, inputs->max_block_size, {
+		print_tuple(right_tuple, inputs->right_input_tuple_def);
+		printf("\n");
+	});
+
 	return 1;
 }
 
