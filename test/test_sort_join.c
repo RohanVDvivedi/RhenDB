@@ -167,7 +167,7 @@ int main(int argc, char** argv)
 		printf("sorter for right operator %p\n", right_sorter_operator);
 
 		operator* join_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_block_nested_loop_join_operator(join_operator, left_sorter_operator, KEY_POS, right_sorter_operator, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_BOTH, MAX_BLOCK_SIZE);
+		setup_sort_merge_join_operator(join_operator, left_sorter_operator, KEY_POS, right_sorter_operator, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_BOTH, MAX_BLOCK_SIZE);
 		printf("join operator %p\n", join_operator);
 
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
