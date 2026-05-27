@@ -1,5 +1,7 @@
 #include<rhendb/query_plan.h>
 
+#include<rhendb/transaction.h>
+
 #include<rhendb/operator_resource_counter.h>
 
 #include<rhendb/function_compare.h>
@@ -39,6 +41,8 @@ struct input_values
 
 static int produce_join_result(operator* o, const void* left_tuple, const void* right_tuple)
 {
+	input_values* inputs = o->inputs;
+
 	uint32_t output_tuple_capacity = 32 + ((left_tuple != NULL) ? get_tuple_size(inputs->left_input_tuple_def, left_tuple) : 0) + ((right_tuple != NULL) ? get_tuple_size(inputs->right_input_tuple_def, right_tuple) : 0);
 
 	void* output_tuple = malloc(output_tuple_capacity);
@@ -77,10 +81,10 @@ static void execute(operator* o)
 		// fetch left side tuple if possible
 		if(inputs->left_input_iterator != NULL)
 		{
-			if(input->left_input_iterator->embed_ptrs[0] == NULL)
+			if(inputs->left_input_iterator->embed_ptrs[0] == NULL)
 			{
 				int no_more_data = 0;
-				input->left_input_iterator->embed_ptrs[0] = consume_for_consumption_iterator(inputs->left_input_iterator, &no_more_data);
+				inputs->left_input_iterator->embed_ptrs[0] = (void*) consume_for_consumption_iterator(inputs->left_input_iterator, &no_more_data);
 				if(no_more_data)
 				{
 					destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
@@ -98,7 +102,7 @@ static void execute(operator* o)
 
 					kill_signal_for_self_operator(o, kill_reason); return ;
 				}
-				if(input->left_input_iterator->embed_ptrs[0])
+				if(inputs->left_input_iterator->embed_ptrs[0])
 					return;
 			}
 		}
@@ -106,10 +110,10 @@ static void execute(operator* o)
 		// fetch right side tuple if possible
 		if(inputs->right_input_iterator != NULL)
 		{
-			if(input->right_input_iterator->embed_ptrs[0] == NULL)
+			if(inputs->right_input_iterator->embed_ptrs[0] == NULL)
 			{
 				int no_more_data = 0;
-				input->right_input_iterator->embed_ptrs[0] = consume_for_consumption_iterator(inputs->right_input_iterator, &no_more_data);
+				inputs->right_input_iterator->embed_ptrs[0] = (void*) consume_for_consumption_iterator(inputs->right_input_iterator, &no_more_data);
 				if(no_more_data)
 				{
 					destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
@@ -127,7 +131,7 @@ static void execute(operator* o)
 
 					kill_signal_for_self_operator(o, kill_reason); return ;
 				}
-				if(input->right_input_iterator->embed_ptrs[0])
+				if(inputs->right_input_iterator->embed_ptrs[0])
 					return;
 			}
 		}
@@ -152,8 +156,8 @@ static void execute(operator* o)
 				consume_right = 1;
 			else
 			{
-				int cmp = compare_tuples_rhendb(input->left_input_iterator->embed_ptrs[0], inputs->left_tuple_def, inputs->left_key_element_ids,
-												input->right_input_iterator->embed_ptrs[0], inputs->right_tuple_def, inputs->right_key_element_ids,
+				int cmp = compare_tuples_rhendb(inputs->left_input_iterator->embed_ptrs[0], inputs->left_input_tuple_def, inputs->left_key_element_ids,
+												inputs->right_input_iterator->embed_ptrs[0], inputs->right_input_tuple_def, inputs->right_key_element_ids,
 							inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
 
 				if(cmp == -1)
@@ -175,7 +179,7 @@ static void execute(operator* o)
 			{
 				if(DOES_IT_PRESERVE_LEFT(inputs->ptype))
 				{
-					if(!produce_join_result(o, input->left_input_iterator->embed_ptrs[0], NULL))
+					if(!produce_join_result(o, inputs->left_input_iterator->embed_ptrs[0], NULL))
 					{
 						destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
 
@@ -186,13 +190,13 @@ static void execute(operator* o)
 						kill_signal_for_self_operator(o, kill_reason); return ;
 					}
 				}
-				input->left_input_iterator->embed_ptrs[0] = NULL;
+				inputs->left_input_iterator->embed_ptrs[0] = NULL;
 			}
 			else if(consume_right && (!consume_left))
 			{
 				if(DOES_IT_PRESERVE_RIGHT(inputs->ptype))
 				{
-					if(!produce_join_result(o, input->right_input_iterator->embed_ptrs[0], NULL))
+					if(!produce_join_result(o, inputs->right_input_iterator->embed_ptrs[0], NULL))
 					{
 						destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
 
@@ -203,17 +207,78 @@ static void execute(operator* o)
 						kill_signal_for_self_operator(o, kill_reason); return ;
 					}
 				}
-				input->right_input_iterator->embed_ptrs[0] = NULL;
+				inputs->right_input_iterator->embed_ptrs[0] = NULL;
 			}
 			else
 			{
-				append_tuple_to_interim_tuple_store2(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[1]), input->left_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+				// insert this as left tuple and mmap this first tuple in embed_regions[1]
+				append_tuple_to_interim_tuple_store2(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), inputs->left_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+				mmap_for_reading_tuple(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[1]), 0, &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+				inputs->left_input_iterator->embed_uints[0] = 1;
 
-				append_tuple_to_interim_tuple_store2(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[1]), input->right_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+				// insert this as right tuple and mmap this first tuple in embed_regions[1]
+				append_tuple_to_interim_tuple_store2(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), inputs->right_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+				mmap_for_reading_tuple(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[1]), 0, &(inputs->right_input_tuple_def->size_def), inputs->max_block_size);
+				inputs->right_input_iterator->embed_uints[0] = 1;
 
-				input->left_input_iterator->embed_ptrs[0] = NULL;
-				input->right_input_iterator->embed_ptrs[0] = NULL;
+				// embed_uints[0] = 1, implies previous tuple matched so attempt to compare it with the next
+
+				inputs->left_input_iterator->embed_ptrs[0] = NULL;
+				inputs->right_input_iterator->embed_ptrs[0] = NULL;
 			}
+
+			continue;
+		}
+		else
+		{
+			if(inputs->left_input_iterator->embed_uints[0])
+			{
+				inputs->left_input_iterator->embed_uints[0] = (0 == compare_tuples2_rhendb(inputs->left_input_iterator->embed_ptrs[0], inputs->left_side_equal_tuples_batch->embed_regions[1].tuple,
+															inputs->left_input_tuple_def, inputs->left_key_element_ids,
+							inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine)));
+			}
+
+			if(inputs->right_input_iterator->embed_uints[0])
+			{
+				inputs->right_input_iterator->embed_uints[0] = (0 == compare_tuples2_rhendb(inputs->right_input_iterator->embed_ptrs[0], inputs->right_side_equal_tuples_batch->embed_regions[1].tuple,
+															inputs->right_input_tuple_def, inputs->right_key_element_ids,
+							inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine)));
+			}
+
+			if(inputs->left_input_iterator->embed_uints[0])
+				append_tuple_to_interim_tuple_store2(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), inputs->left_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+
+			if(inputs->right_input_iterator->embed_uints[0])
+				append_tuple_to_interim_tuple_store2(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), inputs->right_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+
+			if((inputs->left_input_iterator->embed_uints[0] == 0) && (inputs->right_input_iterator->embed_uints[0] == 0))
+			{
+				if(!cross_product_equal_tuples_on_both_sides(o))
+				{
+					if(inputs->left_input_iterator != NULL)
+					{
+						destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
+					}
+					if(inputs->right_input_iterator != NULL)
+					{
+						destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
+					}
+
+					delete_interim_tuple_store(inputs->left_side_equal_tuples_batch); inputs->left_side_equal_tuples_batch = NULL;
+					delete_interim_tuple_store(inputs->right_side_equal_tuples_batch); inputs->right_side_equal_tuples_batch = NULL;
+
+					kill_reason = get_dstring_pointing_to_literal_cstring("could_not_cross_for_equal_tuples");
+					kill_signal_for_self_operator(o, kill_reason); return ;
+				}
+
+				unmap_all_embed_regions_in_interim_tuple_store(inputs->left_side_equal_tuples_batch);
+				unmap_all_embed_regions_in_interim_tuple_store(inputs->right_side_equal_tuples_batch);
+
+				reinitialize_interim_tuple_store(inputs->left_side_equal_tuples_batch, inputs->max_block_size);
+				reinitialize_interim_tuple_store(inputs->right_side_equal_tuples_batch, inputs->max_block_size);
+			}
+
+			continue;
 		}
 	}
 
