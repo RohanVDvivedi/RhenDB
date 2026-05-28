@@ -19,7 +19,7 @@ PRIORITY 0 CATALOG
      * BLOB 10 MB (prefix of 10 KB max)
      * NUMERIC 10 MB (prefix of 10 KB max)
      * JSONB 10 MB (prefix of 10 KB max) (non-indexable)
-   * all attributes are nullable or not
+   * any attribute is nullable or not
    * cache single instances of all these types to construct it from catalog tables
  * only these many types will be supported
  * no heap tuple larger than page may be generated, if min_tuple_size > page_size fail table definition, create and alter both fail here
