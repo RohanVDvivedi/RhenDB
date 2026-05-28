@@ -107,7 +107,7 @@ int main(int argc, char** argv)
 
 			operator* output_smj_operator = get_new_registered_operator_for_query_plan(qp);
 			setup_external_sort_operator(output_smj_operator, TUPLES_DOWN_COUNTER_INF, smj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-			printf("sorter for output of bnlj operator %p\n", output_smj_operator);
+			printf("sorter for output of smj operator %p\n", output_smj_operator);
 
 			operator* matcher = get_new_registered_operator_for_query_plan(qp);
 			setup_result_match_operator(matcher, (operator* []){output_bnlj_operator, output_smj_operator});
