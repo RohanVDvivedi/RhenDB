@@ -1,9 +1,7 @@
 PICKED TASKS
 
 * sort merge join
-  * implement a block nested loop join for the equal set of tuples, instead of simple nested loop join
   * code review sort merge join operator
-  * test present test case throughly
   * test with another test case that does block nested loop join and sort merge join on num_in_words and match results of both after sorting, comparing the 1M tuples input, on PRESERVE_NONE for num_in_words on a self join
 
 
