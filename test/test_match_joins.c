@@ -85,7 +85,7 @@ int main(int argc, char** argv)
 		{
 			bnlj = get_new_registered_operator_for_query_plan(qp);
 			setup_block_nested_loop_join_operator(bnlj, input_operator, input_operator, &(rdb.persistent_acid_rage_engine), join_matcher, PRESERVE_NONE, MAX_BLOCK_SIZE);
-			printf("join operator %p\n", bnlj);
+			printf("block nested loop join operator %p\n", bnlj);
 		}
 
 		operator* smj = NULL;
@@ -96,7 +96,7 @@ int main(int argc, char** argv)
 
 			smj = get_new_registered_operator_for_query_plan(qp);
 			setup_sort_merge_join_operator(smj, input_sorted_operator, KEY_POS, input_sorted_operator, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, MAX_BLOCK_SIZE);
-			printf("join operator %p\n", smj);
+			printf("sort merge join operator %p\n", smj);
 		}
 
 		// match phase

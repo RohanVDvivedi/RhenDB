@@ -166,7 +166,7 @@ void trigger_execution_on_operator(operator* o)
 	was_killed = process_kill_signal_if_received_for_operator_UNSAFE(o);
 	if(!was_killed)
 	{
-		if(!(o->is_kill_signal_sent))
+		if(!(o->is_kill_signal_sent)) // if the kill signal is sent, let the operator decide it's own fate
 		{
 			if(o->state == OPERATOR_RUNNING)
 			{
@@ -178,9 +178,8 @@ void trigger_execution_on_operator(operator* o)
 				o->state = OPERATOR_QUEUED;
 				should_queue = 1;
 			}
+			// else if already OPERATOR_QUEUED nothing needs to be done
 		}
-		else
-			o->state = OPERATOR_WAITING;
 	}
 	pthread_mutex_unlock(&(o->state_lock));
 
