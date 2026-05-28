@@ -67,10 +67,10 @@ static int cross_product_equal_tuples_on_both_sides(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	// simple nlj over the left and right tuples
 	int fail = 0;
 
-	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(left_tuple, left_tuple_index, left_tuple_offset, &(inputs->left_input_tuple_def->size_def), inputs->left_side_equal_tuples_batch, inputs->max_block_size, {
+	// simple nlj over the left and right tuples, UNOPTIMIZED
+	/*FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(left_tuple, left_tuple_index, left_tuple_offset, &(inputs->left_input_tuple_def->size_def), inputs->left_side_equal_tuples_batch, inputs->max_block_size, {
 		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(right_tuple, right_tuple_index, right_tuple_offset, &(inputs->right_input_tuple_def->size_def), inputs->right_side_equal_tuples_batch, inputs->max_block_size, {
 			if(!produce_join_result(o, left_tuple, right_tuple))
 				fail = 1;
@@ -79,7 +79,57 @@ static int cross_product_equal_tuples_on_both_sides(operator* o)
 		});
 		if(fail)
 			break;
-	});
+	});*/
+
+	// block nested loop join over the left and right tuples
+	uint64_t left_block_offset = 0;
+	while(mmap_for_reading_tuple(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), left_block_offset, &(inputs->left_input_tuple_def->size_def), inputs->max_block_size))
+	{
+		uint64_t next_left_block_offset = left_block_offset;
+
+		uint64_t right_block_offset = 0;
+		while(mmap_for_reading_tuple(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), right_block_offset, &(inputs->right_input_tuple_def->size_def), inputs->max_block_size))
+		{
+			uint64_t next_right_block_offset = right_block_offset;
+
+			uint64_t left_tuple_offset = left_block_offset;
+			while(contains_tuple_at_offset_in_interim_tuple_store(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), left_tuple_offset, &(inputs->left_input_tuple_def->size_def))
+			 && mmap_for_reading_tuple(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), left_tuple_offset, &(inputs->left_input_tuple_def->size_def), inputs->max_block_size))
+			{
+				const void* left_tuple = inputs->left_side_equal_tuples_batch->embed_regions[0].tuple;
+
+				uint64_t right_tuple_offset = right_block_offset;
+				while(contains_tuple_at_offset_in_interim_tuple_store(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), right_tuple_offset, &(inputs->right_input_tuple_def->size_def))
+				 && mmap_for_reading_tuple(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), right_tuple_offset, &(inputs->right_input_tuple_def->size_def), inputs->max_block_size))
+				{
+					const void* right_tuple = inputs->right_side_equal_tuples_batch->embed_regions[0].tuple;
+
+					if(!produce_join_result(o, left_tuple, right_tuple))
+						fail = 1;
+					if(fail)
+						break;
+
+					right_tuple_offset = next_tuple_offset_for_interim_tuple_region(&(inputs->right_side_equal_tuples_batch->embed_regions[0]));
+				}
+				if(fail)
+					break;
+
+				next_right_block_offset = max(right_tuple_offset, next_right_block_offset);
+
+				left_tuple_offset = next_tuple_offset_for_interim_tuple_region(&(inputs->left_side_equal_tuples_batch->embed_regions[0]));
+			}
+			if(fail)
+				break;
+
+			right_block_offset = next_right_block_offset;
+
+			next_left_block_offset =  max(left_tuple_offset, next_left_block_offset);
+		}
+		if(fail)
+			break;
+
+		left_block_offset = next_left_block_offset;
+	}
 
 	if(fail)
 		return 0;
