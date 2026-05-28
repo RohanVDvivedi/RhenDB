@@ -154,7 +154,7 @@ static void execute(operator* o)
 
 	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
 
-	// first concume all of the right side first
+	// first consume all of the right side first
 	if(inputs->right_input_iterator != NULL)
 	{
 		while(1)
