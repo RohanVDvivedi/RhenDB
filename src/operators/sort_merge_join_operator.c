@@ -34,7 +34,6 @@ struct input_values
 
 	const tuple_def* output_tuple_def;
 
-	// ptype can not be PRESERVE_RIGHT or PRESERVE_BOTH
 	join_preserve_type ptype;
 	uint32_t max_block_size;
 };
@@ -267,6 +266,10 @@ static void execute(operator* o)
 					if(!produce_join_result(o, inputs->left_input_iterator->embed_ptrs[0], NULL))
 					{
 						destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
+						if(inputs->right_input_iterator != NULL)
+						{
+							destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
+						}
 
 						delete_interim_tuple_store(inputs->left_side_equal_tuples_batch); inputs->left_side_equal_tuples_batch = NULL;
 						delete_interim_tuple_store(inputs->right_side_equal_tuples_batch); inputs->right_side_equal_tuples_batch = NULL;
@@ -284,6 +287,10 @@ static void execute(operator* o)
 					if(!produce_join_result(o, NULL, inputs->right_input_iterator->embed_ptrs[0]))
 					{
 						destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
+						if(inputs->left_input_iterator != NULL)
+						{
+							destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
+						}
 
 						delete_interim_tuple_store(inputs->left_side_equal_tuples_batch); inputs->left_side_equal_tuples_batch = NULL;
 						delete_interim_tuple_store(inputs->right_side_equal_tuples_batch); inputs->right_side_equal_tuples_batch = NULL;
