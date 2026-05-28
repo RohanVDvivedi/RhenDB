@@ -94,7 +94,7 @@ int main(int argc, char** argv)
 			setup_external_sort_operator(input_sorted_operator, TUPLES_DOWN_COUNTER_INF, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 			printf("sorter for smj operator %p\n", input_sorted_operator);
 
-			operator* smj = get_new_registered_operator_for_query_plan(qp);
+			smj = get_new_registered_operator_for_query_plan(qp);
 			setup_sort_merge_join_operator(smj, input_sorted_operator, KEY_POS, input_sorted_operator, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, MAX_BLOCK_SIZE);
 			printf("join operator %p\n", smj);
 		}
