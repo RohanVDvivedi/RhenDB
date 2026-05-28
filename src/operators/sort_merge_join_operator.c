@@ -210,6 +210,20 @@ static void execute(operator* o)
 		// if there are no more tuples left on any side, then return success
 		if(inputs->left_input_iterator == NULL && inputs->right_input_iterator == NULL)
 		{
+			// unmap the append regions embed_regions[1]
+			unmap_for_interim_tuple_region(&(inputs->left_side_equal_tuples_batch->embed_regions[1]));
+			unmap_for_interim_tuple_region(&(inputs->right_side_equal_tuples_batch->embed_regions[1]));
+
+			// if there are any pending tuples process them
+			if(!cross_product_equal_tuples_on_both_sides(o))
+			{
+				delete_interim_tuple_store(inputs->left_side_equal_tuples_batch); inputs->left_side_equal_tuples_batch = NULL;
+				delete_interim_tuple_store(inputs->right_side_equal_tuples_batch); inputs->right_side_equal_tuples_batch = NULL;
+
+				kill_reason = get_dstring_pointing_to_literal_cstring("could_not_cross_for_equal_tuples");
+				kill_signal_for_self_operator(o, kill_reason); return ;
+			}
+
 			delete_interim_tuple_store(inputs->left_side_equal_tuples_batch); inputs->left_side_equal_tuples_batch = NULL;
 			delete_interim_tuple_store(inputs->right_side_equal_tuples_batch); inputs->right_side_equal_tuples_batch = NULL;
 
