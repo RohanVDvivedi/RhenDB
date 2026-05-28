@@ -12,3 +12,4 @@ gcc -Wall -O3 -flto -I. ./test_sort_agg.c -o test_sort_agg.out -lrhendb -lmintxe
 gcc -Wall -O3 -flto -I. ./test_hash_agg.c -o test_hash_agg.out -lrhendb -lmintxengine -ltuplelargetypes -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz
 gcc -Wall -O3 -flto -I. ./test_bnlj.c -o test_bnlj.out -lrhendb -lmintxengine -ltuplelargetypes -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz
 gcc -Wall -O3 -flto -I. ./test_sort_join.c -o test_sort_join.out -lrhendb -lmintxengine -ltuplelargetypes -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz
+gcc -Wall -O3 -flto -I. ./test_match_joins.c -o test_match_joins.out -lrhendb -lmintxengine -ltuplelargetypes -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz

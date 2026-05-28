@@ -104,20 +104,6 @@ void intHandler(int dummy)
 	shutdown_query_plan(qp, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
 }
 
-int join_matcher(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def)
-{
-	datum num_left;
-	get_value_from_element_from_tuple(&num_left, left_tuple_def, STATIC_POSITION(0), left_tuple);
-
-	datum num_right;
-	get_value_from_element_from_tuple(&num_right, right_tuple_def, STATIC_POSITION(0), right_tuple);
-
-	if(num_left.uint_value >= num_right.uint_value)
-		return (num_left.uint_value - num_right.uint_value) <= 3;
-	else
-		return (num_right.uint_value - num_left.uint_value) <= 3;
-}
-
 int main(int argc, char** argv)
 {
 	stream rs, ws;
