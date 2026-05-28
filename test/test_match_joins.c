@@ -41,7 +41,7 @@ void intHandler(int dummy)
 
 int join_matcher(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def)
 {
-	return (0 == compare_tuples_rhendb(left_tuple, left_tuple_def, KEY_POS, right_tuple, right_tuple_def, KEY_POS, NULL, RECORD_S_KEY_ELEMENT_COUNT, join_match_context_p));
+	return (0 == compare_tuples_rhendb(left_tuple, left_tuple_def, KEY_POS, right_tuple, right_tuple_def, KEY_POS, NULL, RECORD_S_KEY_ELEMENT_COUNT, (rage_engine*)join_match_context_p));
 }
 
 int main(int argc, char** argv)
@@ -62,8 +62,6 @@ int main(int argc, char** argv)
 			10000000ULL,
 		USERS_COUNT);
 	printf("database initialized\n\n");
-
-	generate_random_inputs();
 
 	initialize_tuple_defs();
 	initialize_tuple_defs2();
