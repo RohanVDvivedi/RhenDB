@@ -4,6 +4,8 @@
 #include<rhendb/operators.h>
 #include<rhendb/tuple_transformers.h>
 
+#include<rhendb/function_compare.h>
+
 #include<test_dataset_tuple_def.h>
 #include<test_dataset_2_tuple_def.h>
 
@@ -84,7 +86,7 @@ int main(int argc, char** argv)
 		operator* bnlj = NULL;
 		{
 			bnlj = get_new_registered_operator_for_query_plan(qp);
-			setup_block_nested_loop_join_operator(bnlj, left_input_operator, right_input_operator, &(rdb.persistent_acid_rage_engine), join_matcher, PRESERVE_NONE, MAX_BLOCK_SIZE);
+			setup_block_nested_loop_join_operator(bnlj, input_operator, input_operator, &(rdb.persistent_acid_rage_engine), join_matcher, PRESERVE_NONE, MAX_BLOCK_SIZE);
 			printf("join operator %p\n", bnlj);
 		}
 
