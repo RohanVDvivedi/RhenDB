@@ -228,7 +228,7 @@ static void execute(operator* o)
 			{
 				if(!produce_batched_left_block_loop_over_all_right(o)) // returns 0, and fails
 				{
-					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("failed_cross_join_on equal_batches"));
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("failed_cross_join_on_batches"));
 					return ;
 				}
 
