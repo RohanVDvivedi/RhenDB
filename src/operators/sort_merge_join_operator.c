@@ -10,6 +10,8 @@
 
 #include<rhendb/join_preserve_type.h>
 
+#include<rhendb/nullable_type_info_maker.h>
+
 #include<stdlib.h>
 
 /*
@@ -408,21 +410,6 @@ static void free_resources(operator* o)
 	free((tuple_def*)(inputs->output_tuple_def));
 
 	free(inputs);
-}
-
-static data_type_info* shallow_clone_into_nullable_type(const data_type_info* input_type_info)
-{
-	// figure out the number of bytes to shallow copy input_type_info
-	size_t bytes_to_shallow_copy = get_shallow_copy_struct_size_for_data_type_info(input_type_info);
-
-	// make shallow copy, mark it nullable, and finalize this type
-	data_type_info* output_type_info = malloc(bytes_to_shallow_copy);
-	memory_move(output_type_info, input_type_info, bytes_to_shallow_copy);
-	output_type_info->is_nullable = 1;
-	finalize_type_info(output_type_info);
-
-	// return it
-	return output_type_info;
 }
 
 operator_resource_counter setup_sort_merge_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, join_preserve_type ptype, uint32_t max_block_size)

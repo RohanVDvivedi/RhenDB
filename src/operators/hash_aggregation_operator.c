@@ -11,6 +11,8 @@
 
 #include<rhendb/function_compare.h>
 
+#include<rhendb/nullable_type_info_maker.h>
+
 #include<stdlib.h>
 
 typedef struct rash_table_partition rash_table_partition;
@@ -547,21 +549,6 @@ static void free_resources(operator* o)
 	free((tuple_def*)(inputs->output_tuple_def));
 
 	free(inputs);
-}
-
-static data_type_info* shallow_clone_into_nullable_type(const data_type_info* input_type_info)
-{
-	// figure out the number of bytes to shallow copy input_type_info
-	size_t bytes_to_shallow_copy = get_shallow_copy_struct_size_for_data_type_info(input_type_info);
-
-	// make shallow copy, mark it nullable, and finalize this type
-	data_type_info* output_type_info = malloc(bytes_to_shallow_copy);
-	memory_move(output_type_info, input_type_info, bytes_to_shallow_copy);
-	output_type_info->is_nullable = 1;
-	finalize_type_info(output_type_info);
-
-	// return it
-	return output_type_info;
 }
 
 operator_resource_counter setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t bucket_count_per_parttion, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
