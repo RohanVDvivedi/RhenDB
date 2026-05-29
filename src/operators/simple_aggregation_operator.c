@@ -32,6 +32,23 @@ struct input_values
 	const tuple_def* output_tuple_def;
 };
 
+static void clean_up_before_killing_self(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	if(inputs->input_iterator != NULL)
+	{
+		destroy_consumption_iterator(inputs->input_iterator);
+		inputs->input_iterator = NULL;
+	}
+
+	// destroy aggregate states, right before we quit
+	{
+		for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
+			inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(inputs->states[i]));
+	}
+}
+
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
@@ -85,22 +102,20 @@ static void execute(operator* o)
 				free(output_tuple);
 				if(!produced)
 				{
+					clean_up_before_killing_self(o);
+
 					kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
 					kill_signal_for_self_operator(o, kill_reason); return ;
 				}
 			}
 
-			// destroy aggregate states, right before we quit
-			{
-				for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
-					inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(inputs->states[i]));
-			}
+			clean_up_before_killing_self(o);
 
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+			clean_up_before_killing_self(o);
 
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
@@ -120,7 +135,7 @@ static void execute(operator* o)
 				// process_input for the udaf, if it fails kill the operator
 				if(!inputs->aggregate_functions[i]->process_input(inputs->aggregate_functions[i], &(inputs->states[i]), inputs->input_datums))
 				{
-					destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+					clean_up_before_killing_self(o);
 
 					kill_reason = get_dstring_pointing_to_literal_cstring("process_input_of_udaf_failed");
 					kill_signal_for_self_operator(o, kill_reason); return ;
