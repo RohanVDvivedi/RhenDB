@@ -47,12 +47,12 @@ void send_kill_signal_to_operator(operator* o, dstring kill_reason)
 	pthread_mutex_unlock(&(o->state_lock));
 }
 
-// returns true, if the operator as killed
+// returns true, if the operator was killed
 // if this call succeeds please call trigger_execution_on_operator(o->consumer_operator);
 static int process_kill_signal_if_received_for_operator_UNSAFE(operator* o)
 {
 	// already killed return 1
-	if(o->state == OPERATOR_KILLED)
+	if(o->state == OPERATOR_KILLED || o->state == OPERATOR_CLEANED_UP)
 		return 1;
 
 	// only condition for the operator to be placed in OPERATOR_KILLED state
@@ -61,13 +61,13 @@ static int process_kill_signal_if_received_for_operator_UNSAFE(operator* o)
 		// mark it and put it in killed state
 		o->state = OPERATOR_KILLED;
 
-		// wake up anyone aiting for this operator to get killed
-		pthread_cond_broadcast(&(o->wait_until_killed));
+		// push this operator's clean_up_resources function to the global thread pool
+		// TODO
 
 		return 1;
 	}
 
-	// the kill signal as not sent OR there are active jobs queued/running
+	// the kill signal was not sent OR it is in running state OR there are active jobs queued/running
 	return 0;
 }
 
@@ -308,12 +308,12 @@ int run_concurrent_job_for_operator(operator* o, void* param, void (*operator_jo
 }
 
 // wait here after you send the operators a kill signal, waiting for them to die
-static void wait_for_operator_to_die(operator* o)
+static void wait_for_operator_to_complete(operator* o)
 {
 	pthread_mutex_lock(&(o->state_lock));
 
-	while(o->state != OPERATOR_KILLED)
-		pthread_cond_wait(&(o->wait_until_killed), &(o->state_lock));
+	while(o->state != OPERATOR_CLEANED_UP)
+		pthread_cond_wait(&(o->wait_until_completion), &(o->state_lock));
 
 	pthread_mutex_unlock(&(o->state_lock));
 }
@@ -726,10 +726,10 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	o->self_query_plan = qp;
 
 	o->inputs = NULL;
-	o->context = NULL;
 
 	o->execute = NULL;
 	o->operator_release_latches_and_store_context = NULL;
+	o->clean_up_resources = NULL;
 	o->free_resources = NULL;
 
 	pthread_cond_init_with_monotonic_clock(&(o->wait_on_lock_table_for_lock));
@@ -742,7 +742,7 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	init_tuple_transformers(&(o->output_tuple_transformers), NULL); // must initialize it again, unless it is the sink operator
 
 	pthread_mutex_init(&(o->state_lock), NULL);
-	pthread_cond_init_with_monotonic_clock(&(o->wait_until_killed));
+	pthread_cond_init_with_monotonic_clock(&(o->wait_until_completion));
 	o->state = OPERATOR_WAITING;
 	o->queued_jobs_count = 0;
 	o->running_jobs_count = 0;
@@ -808,7 +808,7 @@ void wait_for_shutdown_of_query_plan(query_plan* qp)
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
 	{
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
-		wait_for_operator_to_die(o);
+		wait_for_operator_to_complete(o);
 	}
 }
 
@@ -824,10 +824,10 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		o->self_query_plan = NULL;
 
 		o->inputs = NULL;
-		o->context = NULL;
 
 		o->execute = NULL;
 		o->operator_release_latches_and_store_context = NULL;
+		o->clean_up_resources = NULL;
 		o->free_resources = NULL;
 
 		pthread_cond_destroy(&(o->wait_on_lock_table_for_lock));
@@ -859,7 +859,7 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		destroy_tuple_transformers(&(o->output_tuple_transformers));
 
 		pthread_mutex_destroy(&(o->state_lock));
-		pthread_cond_destroy(&(o->wait_until_killed));
+		pthread_cond_destroy(&(o->wait_until_completion));
 		o->state = OPERATOR_KILLED;
 		o->queued_jobs_count = 0;
 		o->running_jobs_count = 0;
