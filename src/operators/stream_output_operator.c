@@ -22,8 +22,6 @@ static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
-
 	while(1)
 	{
 		int no_more_data = 0;
@@ -33,22 +31,13 @@ static void execute(operator* o)
 			int strm_error = 0;
 			flush_all_from_stream(inputs->out_strm, &strm_error);
 
-			inputs->is_out_strm_closed = 1;
-			close_stream(inputs->out_strm, &strm_error);
-
-			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			int strm_error = 0;
-			inputs->is_out_strm_closed = 1;
-			close_stream(inputs->out_strm, &strm_error);
-
-			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+			return ;
 		}
 
 		if(tuple != NULL)
@@ -57,14 +46,8 @@ static void execute(operator* o)
 			write_to_stream(inputs->out_strm, tuple, get_tuple_size(inputs->input_tuple_def, tuple), &strm_error);
 			if(strm_error)
 			{
-				int strm_error = 0;
-				inputs->is_out_strm_closed = 1;
-				close_stream(inputs->out_strm, &strm_error);
-
-				destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-
-				kill_reason = get_dstring_pointing_to_literal_cstring("error_output_stream_operator");
-				kill_signal_for_self_operator(o, kill_reason); return ;
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("error_output_stream_operator"));
+				return ;
 			}
 		}
 		else
@@ -77,6 +60,8 @@ static void execute(operator* o)
 static void clean_up_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
+
+	destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
 
 	if(!(inputs->is_out_strm_closed))
 	{
