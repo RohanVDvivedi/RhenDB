@@ -135,7 +135,6 @@ operator_resource_counter setup_stream_input_operator(operator* o, stream* in_st
 	*((input_values*)(o->inputs)) = (input_values){
 		.in_strm = in_strm,
 		.input_tuple_def = input_tuple_def,
-		.is_in_strm_closed = 0,
 	};
 
 	return result;
