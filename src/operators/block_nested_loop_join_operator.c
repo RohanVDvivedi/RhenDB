@@ -51,6 +51,18 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 	// iterate over all the right_side_tuples
 	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(right_tuple, right_tuple_index, right_tuple_offset, (&(inputs->right_input_tuple_def->size_def)), inputs->right_side_tuples, inputs->max_block_size,
 	{
+		if((right_tuple_index % 200) == 0 && can_not_proceed_for_execution_operator(o))
+		{
+			if(left_tuple_matched_bitmap != NULL)
+				free(left_tuple_matched_bitmap);
+
+			// region used for the outer loop
+			unmap_for_interim_tuple_region(&_temp_tuple_region);
+
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("block_nested_loop_join_killed_abruptly"));
+			return 0;
+		}
+
 		void* left_tuple = NULL;
 		uint64_t left_tuple_index = 0;
 		uint64_t left_tuple_offset = 0;
