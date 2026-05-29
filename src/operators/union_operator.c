@@ -28,8 +28,6 @@ static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
-
 	while(1)
 	{
 		consumption_iterator* cit_p = NULL;
@@ -77,20 +75,16 @@ static void execute(operator* o)
 
 				if(inputs->input_operators_count == 0)
 				{
-					remove_all_from_linkedlist(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-					remove_all_from_linkedlist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-
-					kill_signal_for_self_operator(o, kill_reason); return ;
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+					return ;
 				}
 
 				break;
 			}
 			if(can_not_proceed_for_execution_operator(o))
 			{
-				remove_all_from_linkedlist(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-				remove_all_from_linkedlist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-
-				kill_signal_for_self_operator(o, kill_reason); return ;
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+				return ;
 			}
 
 			if(tuple != NULL) // if there was a tuple, produce it
@@ -98,11 +92,8 @@ static void execute(operator* o)
 				int produced = produce_tuple_from_operator(o, (void*)tuple);
 				if(!produced)
 				{
-					remove_all_from_linkedlist(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-					remove_all_from_linkedlist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-
-					kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-					kill_signal_for_self_operator(o, kill_reason); return ;
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+					return ;
 				}
 			}
 			else // else we break out of this loop and return, and pick the next ready_input_iterator
@@ -130,6 +121,15 @@ static void notify_callback(operator* o, consumption_iterator* cit_p)
 	pthread_mutex_unlock(&(inputs->input_iterators_list_lock));
 }
 
+static void clean_up_resources(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	remove_all_from_linkedlist(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+
+	remove_all_from_linkedlist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+}
+
 operator_resource_counter setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count)
 {
 	if(input_operators_count == 0)
@@ -154,6 +154,7 @@ operator_resource_counter setup_union_operator(operator* o, operator** input_ope
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
+	o->clean_up_resources = clean_up_resources;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	// it is an union operator (identity-like), produces the same thing as it consumes
