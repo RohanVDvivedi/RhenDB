@@ -18,37 +18,43 @@ enum operator_state
 {
 	OPERATOR_WAITING, // (begin state) -> then always goes to OPERATOR_RUNNING on being queued
 	OPERATOR_QUEUED,
-	OPERATOR_RUNNING, // -> always goes first to OPERATOR_PAUSED,
-	OPERATOR_KILLED, // (termianl state)
+	OPERATOR_RUNNING, // -> never goes to OPERATOR_KILLED from here
+
+	// on suicide or kill signal from above state the next state will always be OPERATOR_KILLED
+
+	// dead states are below
+
+	OPERATOR_KILLED, // -> always goes to OPERATOR_CLEANED_UP from here
+	OPERATOR_CLEANED_UP, // (terminal state)
 };
 
-// operator is actually a task in the pipeline of the query_plan, it must be implemented single threadedly to pull resources
-// and for multithreading clone new operators from your current one into the query_plan
+// operator is actually a multithreadable task in the pipeline of the query_plan,
+// it must be implemented as a single threaded execute function to pull resources from it's producer operator, and produce tuples for it's consuming operators
+// and for multithreading operator needs to queue jobs using run_concurrent_job_for_operator()
 typedef struct operator operator;
 struct operator
 {
 	// pointer to the query_plan that this operator is part of
 	query_plan* self_query_plan;
 
-	void* inputs;			// pointer for the operator to store input params
+	void* inputs;			// pointer for the operator to store input params and it's state
 
-	void* context;			// to store positions of the scans for the operator
-
-	void (*execute)(operator* o); // the operator's main function that produces tuples until it dies or has nothing in it's input
-	// a source operator is always the thread hoarding operator in most simple cases
-	// other operators like join and group_by and sort are job based and exit when nothing is found in their input
+	void (*execute)(operator* o); // the operator's main function that produces tuples until it dies or has nothing in it's input operators
 	// they get triggered again by the source operator when it pushes in the pipeline
 
-	// this function get's called before operator goes into waiting on lock_table or the operator_buffer
+	// this function get's called before operator goes into waiting on lock_table
 	void (*operator_release_latches_and_store_context)(operator* o);
 
-	// the free_resources function gets called after the operator is killed
-	// it should only be responsible for cleaning up inputs and contexts used by the operator
-	void (*free_resources)(operator* o);	// only thing left to be done after this call must be to call free on the operator
+	// called while the operator gets into OPERATOR_KILLED state, after this function is called asynchronously and after execution gets placed into OPERATOR_CLEANED_UP state
+	void (*clean_up_resources)(operator* o);
+
+	// the free_resources function gets called after the operator is in OPERATOR_CLEANED_UP state, i.e after terminal state
+	// it should only be responsible for cleaning up inputs used by the operator
+	void (*free_resources)(operator* o);
 
 	// below is the condition variable that this operator will wait on, when it needs to acquire locks on the database entities in the lock table
 	// only scans/writers on indexes and heap tables will need this
-	// the mutex to be used with this condition variable must be operator * o->self_query_plan->curr_tx->db->lock_manager_external_lock
+	// the mutex to be used with this condition variable must be o->self_query_plan->curr_tx->db->lock_manager_external_lock
 	pthread_cond_t wait_on_lock_table_for_lock;
 
 	// -----------------------------------------------------------------------------------------------------
@@ -79,22 +85,20 @@ struct operator
 
 	// below variables are only needed for the internal function of the state machine of the operator
 
-	pthread_mutex_t state_lock;			// lock for all the operator's attributes given below, related to only states
-	pthread_cond_t wait_until_killed; 	// wait for the operator to be killed
+	pthread_mutex_t state_lock;				// lock for all the operator's attributes given below, related to only states
+	pthread_cond_t wait_until_completion; 	// wait for the operator to be in it's terminal state
 
 	operator_state state;
 
-	// count of the concurrent jobs currently in active state spaned by the operator
+	// count of the concurrent jobs currently in active state spawned by the operator
 	// using the function run_concurrent_job_for_operator()
 	uint64_t queued_jobs_count;
 	uint64_t running_jobs_count;
 
 	int is_kill_signal_sent:1;
-	int is_trigger_signaled_on_running:1; // this flag ill be set, if a trigger as signalled while the operator was in running state
+	int is_trigger_signaled_on_running:1; // this flag will be set, if a trigger is signalled while the operator was in running state
 
-	// this kill_reason will be set while sending a kill signal to the operator
-	// kill_reason is valid only if a kill signal was sent
-	// kill_reasons only get appended here
+	// this kill_reason will be set/appended while sending a kill signal to the operator
 	dstring kill_reason;
 };
 
@@ -143,7 +147,7 @@ struct consumption_iterator
 };
 
 // check if the operator is allowed to do it's execution
-// returns 1, if the operator is_killed or is_kill_signal_sent
+// returns 1, if the operator is in state OPERATOR_KILLED or OPERATOR_CLEANED_UP states or is_kill_signal_sent
 int can_not_proceed_for_execution_operator(operator* o);
 
 // called by any one to put the operator in shutting down state
@@ -166,6 +170,9 @@ void release_lock_on_resource_from_operator(operator* o, uint32_t resource_type,
 
 // below is a no-op function to be used with operator_release_latches_and_store_context
 void OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION(operator* o);
+
+// below is a simple flat clean_up_resource function to be used with simple operators
+void OPERATOR_CLEAN_UP_RESOURCE_NO_OP_FUNCTION(operator* o);
 
 // below is a simple flat free_resource function to be used with simple operators
 void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o);
@@ -210,7 +217,7 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp);
 
 void start_all_operators_for_query_plan(query_plan* qp);
 
-// may be called as many times as you desire
+// may be called as many times as you desire, from the inside of the operators or from outside
 void shutdown_query_plan(query_plan* qp, dstring kill_reasons);
 
 void wait_for_shutdown_of_query_plan(query_plan* qp);

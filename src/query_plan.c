@@ -10,7 +10,7 @@ static int is_killed_operator(operator* o)
 {
 	pthread_mutex_lock(&(o->state_lock));
 
-	int result = (o->state == OPERATOR_KILLED);
+	int result = (o->state == OPERATOR_KILLED || o->state == OPERATOR_CLEANED_UP);
 
 	pthread_mutex_unlock(&(o->state_lock));
 
@@ -21,7 +21,7 @@ int can_not_proceed_for_execution_operator(operator* o)
 {
 	pthread_mutex_lock(&(o->state_lock));
 
-	int result = (!!(o->is_kill_signal_sent));
+	int result = (!!(o->is_kill_signal_sent)) || (o->state == OPERATOR_KILLED || o->state == OPERATOR_CLEANED_UP);
 
 	pthread_mutex_unlock(&(o->state_lock));
 
@@ -394,18 +394,14 @@ void release_lock_on_resource_from_operator(operator* o, uint32_t resource_type,
 
 void OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION(operator* o){}
 
+void OPERATOR_CLEAN_UP_RESOURCE_NO_OP_FUNCTION(operator* o){}
+
 void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
 {
 	if(o->inputs)
 	{
 		free(o->inputs);
 		o->inputs = NULL;
-	}
-
-	if(o->context)
-	{
-		free(o->context);
-		o->context = NULL;
 	}
 }
 
