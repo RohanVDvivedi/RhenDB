@@ -47,6 +47,22 @@ void send_kill_signal_to_operator(operator* o, dstring kill_reason)
 	pthread_mutex_unlock(&(o->state_lock));
 }
 
+static void* async_clean_up_resource_wrapper(void* o_vp)
+{
+	operator* o = o_vp;
+
+	// the operator here must be in OPERATOR_KILLED state
+	o->clean_up_resources(o);
+
+	// just put it in OPERATOR_CLEEANED_UP state and wake up anyone that could be waiting for this operator's completion
+	pthread_mutex_lock(&(o->state_lock));
+	o->state = OPERATOR_CLEANED_UP;
+	pthread_cond_broadcast(&(o->wait_until_completion));
+	pthread_mutex_unlock(&(o->state_lock));
+
+	return NULL;
+}
+
 // returns true, if the operator was killed
 // if this call succeeds please call trigger_execution_on_operator(o->consumer_operator);
 static int process_kill_signal_if_received_for_operator_UNSAFE(operator* o)
@@ -62,7 +78,11 @@ static int process_kill_signal_if_received_for_operator_UNSAFE(operator* o)
 		o->state = OPERATOR_KILLED;
 
 		// push this operator's clean_up_resources function to the global thread pool
-		// TODO
+		if(!submit_job_executor(o->self_query_plan->curr_tx->db->operator_thread_pool, (void* (*)(void*))(async_clean_up_resource_wrapper), o, NULL, NULL, BLOCKING))
+		{
+			printf("ISSUE in query_plan : COULD NOT PUSH A OPERATOR'S CLEAN_UP JOB TO QUEUE IT\n");
+			exit(-1);
+		}
 
 		return 1;
 	}
