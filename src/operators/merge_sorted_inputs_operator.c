@@ -56,8 +56,6 @@ static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
-
 	// iterate over all waiting_input_iterators and fetch their next tuples and store it in embed_ptrs[0]
 	// and also move it friom waiting_input_iterators to ready_input_iterators
 	while(!is_empty_singlylist(&(inputs->waiting_input_iterators)))
@@ -74,10 +72,8 @@ static void execute(operator* o)
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			remove_all_from_pheap(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-			remove_all_from_singlylist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+			return ;
 		}
 
 		if(cit_p->embed_ptrs[0] != NULL)
@@ -109,11 +105,8 @@ static void execute(operator* o)
 			int produced = produce_tuple_from_operator(o, (void*)tuple);
 			if(!produced)
 			{
-				remove_all_from_pheap(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-				remove_all_from_singlylist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-
-				kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-				kill_signal_for_self_operator(o, kill_reason); return ;
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+				return ;
 			}
 		}
 
@@ -130,10 +123,8 @@ static void execute(operator* o)
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			remove_all_from_pheap(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-			remove_all_from_singlylist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+			return ;
 		}
 
 		if(cit_p->embed_ptrs[0] != NULL)
@@ -153,18 +144,20 @@ static void execute(operator* o)
 	}
 
 	// if there is nothing ready (there already is nothing in waiting also), we are done, we quit with success
-	remove_all_from_pheap(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-	remove_all_from_singlylist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-	kill_signal_for_self_operator(o, kill_reason); return ;
+	kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+	return ;
 }
 
-static void free_resources(operator* o)
+static void clean_up_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
+	remove_all_from_pheap(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+
+	remove_all_from_singlylist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+
 	free(inputs->keys);
 	free(inputs->key_dtis);
-	free(inputs);
 }
 
 operator_resource_counter setup_merge_sorted_inputs_operator(operator* o, operator** input_operators, uint32_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
@@ -191,7 +184,8 @@ operator_resource_counter setup_merge_sorted_inputs_operator(operator* o, operat
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
-	o->free_resources = free_resources;
+	o->clean_up_resources = clean_up_resources;
+	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	// it is an union operator (identity-like), produces the same thing as it consumes
 	init_tuple_transformers(&(o->output_tuple_transformers), record_def);
