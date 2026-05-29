@@ -47,6 +47,31 @@ struct input_values
 	uint32_t output_tuple_capacity;
 };
 
+static void clean_up_before_killing_self(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	if(inputs->output_tuple != NULL)
+	{
+		free(inputs->output_tuple);
+		inputs->output_tuple = NULL;
+		inputs->output_tuple_size = 0;
+		inputs->output_tuple_capacity = 0;
+	}
+
+	if(inputs->input_iterator != NULL)
+	{
+		destroy_consumption_iterator(inputs->input_iterator);
+		inputs->input_iterator = NULL;
+	}
+
+	// destroy aggregate states, right before we quit
+	{
+		for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
+			inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(inputs->states[i]));
+	}
+}
+
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
@@ -71,6 +96,8 @@ static void execute(operator* o)
 					datum output_uval;
 					if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, &(inputs->states[i])))
 					{
+						clean_up_before_killing_self(o);
+
 						kill_reason = get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed");
 						kill_signal_for_self_operator(o, kill_reason); return ;
 					}
@@ -93,28 +120,20 @@ static void execute(operator* o)
 				int produced = produce_tuple_from_operator(o, inputs->output_tuple);
 				if(!produced)
 				{
+					clean_up_before_killing_self(o);
+
 					kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
 					kill_signal_for_self_operator(o, kill_reason); return ;
 				}
-
-				// clear output_tuple
-				free(inputs->output_tuple);
-				inputs->output_tuple = NULL;
-				inputs->output_tuple_size = 0;
-				inputs->output_tuple_capacity = 0;
 			}
 
-			// destroy aggregate states, right before we quit
-			{
-				for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
-					inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(inputs->states[i]));
-			}
+			clean_up_before_killing_self(o);
 
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+			clean_up_before_killing_self(o);
 
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
@@ -135,7 +154,7 @@ static void execute(operator* o)
 						datum output_uval;
 						if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, &(inputs->states[i])))
 						{
-							destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+							clean_up_before_killing_self(o);
 
 							kill_reason = get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed");
 							kill_signal_for_self_operator(o, kill_reason); return ;
@@ -159,7 +178,7 @@ static void execute(operator* o)
 					int produced = produce_tuple_from_operator(o, inputs->output_tuple);
 					if(!produced)
 					{
-						destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+						clean_up_before_killing_self(o);
 
 						kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
 						kill_signal_for_self_operator(o, kill_reason); return ;
@@ -219,7 +238,7 @@ static void execute(operator* o)
 				// process_input for the udaf, if it fails kill the operator
 				if(!inputs->aggregate_functions[i]->process_input(inputs->aggregate_functions[i], &(inputs->states[i]), inputs->input_datums))
 				{
-					destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
+					clean_up_before_killing_self(o);
 
 					kill_reason = get_dstring_pointing_to_literal_cstring("process_input_of_udaf_failed");
 					kill_signal_for_self_operator(o, kill_reason); return ;
