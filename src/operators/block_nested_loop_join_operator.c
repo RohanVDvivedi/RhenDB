@@ -36,33 +36,6 @@ struct input_values
 	uint32_t max_block_size;
 };
 
-static void clean_up_before_killing_self(operator* o)
-{
-	input_values* inputs = o->inputs;
-
-	if(inputs->right_input_iterator != NULL)
-	{
-		destroy_consumption_iterator(inputs->right_input_iterator);
-		inputs->right_input_iterator = NULL;
-	}
-	if(inputs->left_input_iterator != NULL)
-	{
-		destroy_consumption_iterator(inputs->left_input_iterator);
-		inputs->left_input_iterator = NULL;
-	}
-
-	if(inputs->batched_left_side_tuples != NULL)
-	{
-		delete_interim_tuple_store(inputs->batched_left_side_tuples);
-		inputs->batched_left_side_tuples = NULL;
-	}
-	if(inputs->right_side_tuples != NULL)
-	{
-		delete_interim_tuple_store(inputs->right_side_tuples);
-		inputs->right_side_tuples = NULL;
-	}
-}
-
 // returns 0 on error
 static int produce_batched_left_block_loop_over_all_right(operator* o)
 {
@@ -94,10 +67,8 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 				if(left_tuple_matched_bitmap != NULL)
 					free(left_tuple_matched_bitmap);
 
-				clean_up_before_killing_self(o);
-
-				dstring kill_reason = get_dstring_pointing_to_literal_cstring("block_nested_loop_join_matcher_errored");
-				kill_signal_for_self_operator(o, kill_reason); return 0;
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("block_nested_loop_join_matcher_errored"));
+				return 0;
 			}
 
 			if(matched)
@@ -126,10 +97,8 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 					if(left_tuple_matched_bitmap != NULL)
 						free(left_tuple_matched_bitmap);
 
-					clean_up_before_killing_self(o);
-
-					dstring kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-					kill_signal_for_self_operator(o, kill_reason); return 0;
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+					return 0;
 				}
 			}
 
@@ -165,10 +134,8 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 					if(left_tuple_matched_bitmap != NULL)
 						free(left_tuple_matched_bitmap);
 
-					clean_up_before_killing_self(o);
-
-					dstring kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-					kill_signal_for_self_operator(o, kill_reason); return 0;
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+					return 0;
 				}
 			}
 
@@ -187,8 +154,6 @@ static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
-
 	// first consume all of the right side first
 	if(inputs->right_input_iterator != NULL)
 	{
@@ -198,14 +163,14 @@ static void execute(operator* o)
 			const void* tuple = consume_for_consumption_iterator(inputs->right_input_iterator, &no_more_data);
 			if(no_more_data)
 			{
-				destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
+				destroy_consumption_iterator(inputs->right_input_iterator);
+				inputs->right_input_iterator = NULL;
 				break;
 			}
 			if(can_not_proceed_for_execution_operator(o))
 			{
-				clean_up_before_killing_self(o);
-
-				kill_signal_for_self_operator(o, kill_reason); return ;
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+				return ;
 			}
 
 			if(tuple != NULL)
@@ -223,20 +188,15 @@ static void execute(operator* o)
 		const void* tuple = consume_for_consumption_iterator(inputs->left_input_iterator, &no_more_data);
 		if(no_more_data)
 		{
-			// close left side operator
-			destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
-
 			produce_batched_left_block_loop_over_all_right(o);
 
-			clean_up_before_killing_self(o);
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			clean_up_before_killing_self(o);
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+			return ;
 		}
 
 		if(tuple != NULL)
@@ -247,9 +207,8 @@ static void execute(operator* o)
 			{
 				if(!produce_batched_left_block_loop_over_all_right(o)) // returns 0, and fails
 				{
-					clean_up_before_killing_self(o);
-
-					kill_signal_for_self_operator(o, kill_reason); return ;
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("failed_cross_join_on equal_batches"));
+					return ;
 				}
 
 				unmap_all_embed_regions_in_interim_tuple_store(inputs->batched_left_side_tuples);
@@ -265,14 +224,36 @@ static void execute(operator* o)
 	return ;
 }
 
-static void free_resources(operator* o)
+static void clean_up_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	if(inputs->batched_left_side_tuples)
+	if(inputs->right_input_iterator != NULL)
+	{
+		destroy_consumption_iterator(inputs->right_input_iterator);
+		inputs->right_input_iterator = NULL;
+	}
+	if(inputs->left_input_iterator != NULL)
+	{
+		destroy_consumption_iterator(inputs->left_input_iterator);
+		inputs->left_input_iterator = NULL;
+	}
+
+	if(inputs->batched_left_side_tuples != NULL)
+	{
 		delete_interim_tuple_store(inputs->batched_left_side_tuples);
-	if(inputs->right_side_tuples)
+		inputs->batched_left_side_tuples = NULL;
+	}
+	if(inputs->right_side_tuples != NULL)
+	{
 		delete_interim_tuple_store(inputs->right_side_tuples);
+		inputs->right_side_tuples = NULL;
+	}
+}
+
+static void free_resources(operator* o)
+{
+	input_values* inputs = o->inputs;
 
 	// all key_dtis were made into nullable types, so free them first
 	for(uint32_t i = 0; i < 2; i++)
@@ -303,6 +284,7 @@ operator_resource_counter setup_block_nested_loop_join_operator(operator* o, ope
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
+	o->clean_up_resources = clean_up_resources;
 	o->free_resources = free_resources;
 
 	const tuple_def* left_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(left_input_operator);
