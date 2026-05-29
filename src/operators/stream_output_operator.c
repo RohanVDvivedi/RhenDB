@@ -15,7 +15,6 @@ struct input_values
 	const tuple_def* input_tuple_def;
 
 	stream* out_strm;
-	int is_out_strm_closed;
 };
 
 static void execute(operator* o)
@@ -61,17 +60,19 @@ static void clean_up_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-
-	if(!(inputs->is_out_strm_closed))
+	if(inputs->input_iterator != NULL)
 	{
-		int strm_error = 0;
-		inputs->is_out_strm_closed = 1;
-		close_stream(inputs->out_strm, &strm_error);
+		destroy_consumption_iterator(inputs->input_iterator);
+		inputs->input_iterator = NULL;
 	}
 
-	deinitialize_stream(inputs->out_strm);
-	free(inputs);
+	if(inputs->out_strm != NULL)
+	{
+		int strm_error = 0;
+		close_stream(inputs->out_strm, &strm_error);
+		deinitialize_stream(inputs->out_strm);
+		inputs->out_strm = NULL;
+	}
 }
 
 static void free_resources(operator* o)

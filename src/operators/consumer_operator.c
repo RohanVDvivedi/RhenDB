@@ -25,23 +25,19 @@ static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
-
 	while(1)
 	{
 		int no_more_data = 0;
 		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
 		{
-			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+			return ;
 		}
 
 		if(tuple != NULL)
@@ -50,9 +46,8 @@ static void execute(operator* o)
 			{
 				if(!inputs->consumer(inputs->consumer_context, tuple, inputs->input_tuple_def))
 				{
-					destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-
-					kill_signal_for_self_operator(o, kill_reason); return ;
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+					return ;
 				}
 			}
 		}
@@ -71,6 +66,17 @@ int print_consumer(void* consumer_context, const void* tuple, const tuple_def* i
 	return 1;
 }
 
+static void clean_up_resources(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	if(inputs->input_iterator != NULL)
+	{
+		destroy_consumption_iterator(inputs->input_iterator);
+		inputs->input_iterator = NULL;
+	}
+}
+
 operator_resource_counter setup_consumer_operator(operator* o, operator* input_operator, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context)
 {
 	operator_resource_counter result = {.job_counter = 1};
@@ -79,6 +85,7 @@ operator_resource_counter setup_consumer_operator(operator* o, operator* input_o
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
+	o->clean_up_resources = clean_up_resources;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	o->inputs = malloc(sizeof(input_values));

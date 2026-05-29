@@ -51,6 +51,7 @@ operator_resource_counter setup_generator_operator(operator* o, void* (*generato
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
+	o->clean_up_resources = OPERATOR_CLEAN_UP_RESOURCE_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	// generator's output is what we produce

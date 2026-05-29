@@ -14,7 +14,6 @@ struct input_values
 	const tuple_def* input_tuple_def;
 
 	stream* in_strm;
-	int is_in_strm_closed;
 };
 
 fail_build_on(sizeof(uint32_t) > sizeof(cy_uint))
@@ -94,24 +93,21 @@ static void execute(operator* o)
 		free(curr_tuple);
 	}
 
-	int strm_error = 0;
-	inputs->is_in_strm_closed = 1;
-	close_stream(inputs->in_strm, &strm_error);
-	kill_signal_for_self_operator(o, kill_reason); return ;
+	kill_signal_for_self_operator(o, kill_reason);
+	return ;
 }
 
 static void clean_up_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	if(!(inputs->is_in_strm_closed))
+	if(inputs->in_strm != NULL)
 	{
 		int strm_error = 0;
-		inputs->is_in_strm_closed = 1;
 		close_stream(inputs->in_strm, &strm_error);
+		deinitialize_stream(inputs->in_strm);
+		inputs->in_strm = NULL;
 	}
-
-	deinitialize_stream(inputs->in_strm);
 }
 
 static void free_resources(operator* o)
