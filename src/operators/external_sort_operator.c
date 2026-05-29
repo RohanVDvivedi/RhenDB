@@ -553,8 +553,6 @@ static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
-
 	pthread_mutex_lock(&(inputs->runs_lock));
 	int need_to_produce_more_runs = (inputs->total_concurrent_jobs_count < inputs->max_concurrent_jobs_count);
 	if(inputs->flag_no_new_un_sorted_runs)
@@ -570,11 +568,6 @@ static void execute(operator* o)
 		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
 		{
-			// destroy input_iterator, this is success case
-			{
-				destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-			}
-
 			// its ownership for inputs->input_un_sorted_run, is changing, so unmap it's embed_regions
 			if(inputs->input_un_sorted_run != NULL)
 				unmap_all_embed_regions_in_interim_tuple_store(inputs->input_un_sorted_run);
@@ -592,9 +585,8 @@ static void execute(operator* o)
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+			return ;
 		}
 
 		if(tuple != NULL)
@@ -632,12 +624,21 @@ static void execute(operator* o)
 	return ;
 }
 
-static void free_resources(operator* o)
+static void clean_up_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
+	if(inputs->input_iterator != NULL)
+	{
+		destroy_consumption_iterator(inputs->input_iterator);
+		inputs->input_iterator = NULL;
+	}
+
 	if(inputs->input_un_sorted_run != NULL)
+	{
 		delete_interim_tuple_store(inputs->input_un_sorted_run);
+		inputs->input_un_sorted_run = NULL;
+	}
 
 	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(&(inputs->un_sorted_runs)); its_p != NULL; its_p = pop_run_from_tuple_runs(&(inputs->un_sorted_runs)))
 		delete_interim_tuple_store(its_p);
@@ -661,10 +662,7 @@ static void free_resources(operator* o)
 		free(truns_p);
 	}
 
-	pthread_mutex_destroy(&(inputs->runs_lock));
-
 	free(inputs->key_dtis);
-	free(inputs);
 }
 
 operator_resource_counter setup_external_sort_operator(operator* o, tuples_down_counter result_counter, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t minimum_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
@@ -708,7 +706,8 @@ operator_resource_counter setup_external_sort_operator(operator* o, tuples_down_
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
-	o->free_resources = free_resources;
+	o->clean_up_resources = clean_up_resources;
+	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	// it produces the same thing as it consumes
 	init_tuple_transformers(&(o->output_tuple_transformers), record_def);
