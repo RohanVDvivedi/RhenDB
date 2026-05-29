@@ -137,11 +137,6 @@ static void clean_up_resources(operator* o)
 
 	free(inputs->states);
 
-	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
-		inputs->aggregate_functions[i]->destroy_aggregate_function(inputs->aggregate_functions[i]);
-
-	free(inputs->aggregate_functions);
-
 	free(inputs->input_datums);
 
 	free(inputs->aggregate_input_element_ids);
@@ -150,6 +145,11 @@ static void clean_up_resources(operator* o)
 static void free_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
+
+	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
+		inputs->aggregate_functions[i]->destroy_aggregate_function(inputs->aggregate_functions[i]);
+
+	free(inputs->aggregate_functions);
 
 	free((data_type_info*)(inputs->output_tuple_def->type_info));
 	free((tuple_def*)(inputs->output_tuple_def));
