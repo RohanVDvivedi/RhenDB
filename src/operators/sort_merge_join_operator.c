@@ -40,33 +40,6 @@ struct input_values
 	uint32_t max_block_size;
 };
 
-static void clean_up_before_killing_self(operator* o)
-{
-	input_values* inputs = o->inputs;
-
-	if(inputs->right_input_iterator != NULL)
-	{
-		destroy_consumption_iterator(inputs->right_input_iterator);
-		inputs->right_input_iterator = NULL;
-	}
-	if(inputs->left_input_iterator != NULL)
-	{
-		destroy_consumption_iterator(inputs->left_input_iterator);
-		inputs->left_input_iterator = NULL;
-	}
-
-	if(inputs->left_side_equal_tuples_batch != NULL)
-	{
-		delete_interim_tuple_store(inputs->left_side_equal_tuples_batch);
-		inputs->left_side_equal_tuples_batch = NULL;
-	}
-	if(inputs->right_side_equal_tuples_batch != NULL)
-	{
-		delete_interim_tuple_store(inputs->right_side_equal_tuples_batch);
-		inputs->right_side_equal_tuples_batch = NULL;
-	}
-}
-
 static int produce_join_result(operator* o, const void* left_tuple, const void* right_tuple)
 {
 	input_values* inputs = o->inputs;
@@ -169,8 +142,6 @@ static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
-
 	while(1)
 	{
 		// fetch left side tuple if possible
@@ -182,14 +153,14 @@ static void execute(operator* o)
 				inputs->left_input_iterator->embed_ptrs[0] = (void*) consume_for_consumption_iterator(inputs->left_input_iterator, &no_more_data);
 				if(no_more_data)
 				{
-					destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
+					destroy_consumption_iterator(inputs->left_input_iterator);
+					inputs->left_input_iterator = NULL;
 					goto LEFT_TUPLE_FETCHED;
 				}
 				if(can_not_proceed_for_execution_operator(o))
 				{
-					clean_up_before_killing_self(o);
-
-					kill_signal_for_self_operator(o, kill_reason); return ;
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+					return ;
 				}
 				if(inputs->left_input_iterator->embed_ptrs[0] == NULL)
 					return;
@@ -206,14 +177,14 @@ static void execute(operator* o)
 				inputs->right_input_iterator->embed_ptrs[0] = (void*) consume_for_consumption_iterator(inputs->right_input_iterator, &no_more_data);
 				if(no_more_data)
 				{
-					destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
+					destroy_consumption_iterator(inputs->right_input_iterator);
+					inputs->right_input_iterator = NULL;
 					goto RIGHT_TUPLE_FETCHED;
 				}
 				if(can_not_proceed_for_execution_operator(o))
 				{
-					clean_up_before_killing_self(o);
-
-					kill_signal_for_self_operator(o, kill_reason); return ;
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+					return ;
 				}
 				if(inputs->right_input_iterator->embed_ptrs[0] == NULL)
 					return;
@@ -231,15 +202,12 @@ static void execute(operator* o)
 			// if there are any pending tuples process them
 			if(!cross_product_equal_tuples_on_both_sides(o))
 			{
-				clean_up_before_killing_self(o);
-
-				kill_reason = get_dstring_pointing_to_literal_cstring("could_not_cross_for_equal_tuples");
-				kill_signal_for_self_operator(o, kill_reason); return ;
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_cross_for_equal_tuples"));
+				return ;
 			}
 
-			clean_up_before_killing_self(o);
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			return ;
 		}
 
 		if(get_total_bytes_in_interim_tuple_store(inputs->left_side_equal_tuples_batch) == 0) // if the batch of equal tuples is not yet started
@@ -278,10 +246,8 @@ static void execute(operator* o)
 				{
 					if(!produce_join_result(o, inputs->left_input_iterator->embed_ptrs[0], NULL))
 					{
-						clean_up_before_killing_self(o);
-
-						kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-						kill_signal_for_self_operator(o, kill_reason); return ;
+						kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+						return ;
 					}
 				}
 				inputs->left_input_iterator->embed_ptrs[0] = NULL;
@@ -292,10 +258,8 @@ static void execute(operator* o)
 				{
 					if(!produce_join_result(o, NULL, inputs->right_input_iterator->embed_ptrs[0]))
 					{
-						clean_up_before_killing_self(o);
-
-						kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-						kill_signal_for_self_operator(o, kill_reason); return ;
+						kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+						return ;
 					}
 				}
 				inputs->right_input_iterator->embed_ptrs[0] = NULL;
@@ -361,10 +325,8 @@ static void execute(operator* o)
 
 				if(!cross_product_equal_tuples_on_both_sides(o))
 				{
-					clean_up_before_killing_self(o);
-
-					kill_reason = get_dstring_pointing_to_literal_cstring("could_not_cross_for_equal_tuples");
-					kill_signal_for_self_operator(o, kill_reason); return ;
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_cross_for_equal_tuples"));
+					return ;
 				}
 
 				unmap_all_embed_regions_in_interim_tuple_store(inputs->left_side_equal_tuples_batch);
@@ -381,14 +343,36 @@ static void execute(operator* o)
 	return ;
 }
 
-static void free_resources(operator* o)
+static void clean_up_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	if(inputs->left_side_equal_tuples_batch)
+	if(inputs->right_input_iterator != NULL)
+	{
+		destroy_consumption_iterator(inputs->right_input_iterator);
+		inputs->right_input_iterator = NULL;
+	}
+	if(inputs->left_input_iterator != NULL)
+	{
+		destroy_consumption_iterator(inputs->left_input_iterator);
+		inputs->left_input_iterator = NULL;
+	}
+
+	if(inputs->left_side_equal_tuples_batch != NULL)
+	{
 		delete_interim_tuple_store(inputs->left_side_equal_tuples_batch);
-	if(inputs->right_side_equal_tuples_batch)
+		inputs->left_side_equal_tuples_batch = NULL;
+	}
+	if(inputs->right_side_equal_tuples_batch != NULL)
+	{
 		delete_interim_tuple_store(inputs->right_side_equal_tuples_batch);
+		inputs->right_side_equal_tuples_batch = NULL;
+	}
+}
+
+static void free_resources(operator* o)
+{
+	input_values* inputs = o->inputs;
 
 	// all key_dtis were made into nullable types, so free them first
 	for(uint32_t i = 0; i < 2; i++)
@@ -425,6 +409,7 @@ operator_resource_counter setup_sort_merge_join_operator(operator* o, operator* 
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
+	o->clean_up_resources = clean_up_resources;
 	o->free_resources = free_resources;
 
 	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(2));
