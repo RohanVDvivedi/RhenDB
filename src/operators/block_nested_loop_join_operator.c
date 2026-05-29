@@ -36,6 +36,33 @@ struct input_values
 	uint32_t max_block_size;
 };
 
+static void clean_up_before_killing_self(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	if(inputs->right_input_iterator != NULL)
+	{
+		destroy_consumption_iterator(inputs->right_input_iterator);
+		inputs->right_input_iterator = NULL;
+	}
+	if(inputs->left_input_iterator != NULL)
+	{
+		destroy_consumption_iterator(inputs->left_input_iterator);
+		inputs->left_input_iterator = NULL;
+	}
+
+	if(inputs->batched_left_side_tuples != NULL)
+	{
+		delete_interim_tuple_store(inputs->batched_left_side_tuples);
+		inputs->batched_left_side_tuples = NULL;
+	}
+	if(inputs->right_side_tuples != NULL)
+	{
+		delete_interim_tuple_store(inputs->right_side_tuples);
+		inputs->right_side_tuples = NULL;
+	}
+}
+
 // returns 0 on error
 static int produce_batched_left_block_loop_over_all_right(operator* o)
 {
@@ -67,6 +94,8 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 				if(left_tuple_matched_bitmap != NULL)
 					free(left_tuple_matched_bitmap);
 
+				clean_up_before_killing_self(o);
+
 				dstring kill_reason = get_dstring_pointing_to_literal_cstring("block_nested_loop_join_matcher_errored");
 				kill_signal_for_self_operator(o, kill_reason); return 0;
 			}
@@ -96,6 +125,8 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 				{
 					if(left_tuple_matched_bitmap != NULL)
 						free(left_tuple_matched_bitmap);
+
+					clean_up_before_killing_self(o);
 
 					dstring kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
 					kill_signal_for_self_operator(o, kill_reason); return 0;
@@ -134,6 +165,8 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 					if(left_tuple_matched_bitmap != NULL)
 						free(left_tuple_matched_bitmap);
 
+					clean_up_before_killing_self(o);
+
 					dstring kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
 					kill_signal_for_self_operator(o, kill_reason); return 0;
 				}
@@ -170,11 +203,7 @@ static void execute(operator* o)
 			}
 			if(can_not_proceed_for_execution_operator(o))
 			{
-				destroy_consumption_iterator(inputs->right_input_iterator); inputs->right_input_iterator = NULL;
-				destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
-
-				delete_interim_tuple_store(inputs->batched_left_side_tuples); inputs->batched_left_side_tuples = NULL;
-				delete_interim_tuple_store(inputs->right_side_tuples); inputs->right_side_tuples = NULL;
+				clean_up_before_killing_self(o);
 
 				kill_signal_for_self_operator(o, kill_reason); return ;
 			}
@@ -199,17 +228,13 @@ static void execute(operator* o)
 
 			produce_batched_left_block_loop_over_all_right(o);
 
-			delete_interim_tuple_store(inputs->batched_left_side_tuples); inputs->batched_left_side_tuples = NULL;
-			delete_interim_tuple_store(inputs->right_side_tuples); inputs->right_side_tuples = NULL;
+			clean_up_before_killing_self(o);
 
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
-
-			delete_interim_tuple_store(inputs->batched_left_side_tuples); inputs->batched_left_side_tuples = NULL;
-			delete_interim_tuple_store(inputs->right_side_tuples); inputs->right_side_tuples = NULL;
+			clean_up_before_killing_self(o);
 
 			kill_signal_for_self_operator(o, kill_reason); return ;
 		}
@@ -222,10 +247,7 @@ static void execute(operator* o)
 			{
 				if(!produce_batched_left_block_loop_over_all_right(o)) // returns 0, and fails
 				{
-					destroy_consumption_iterator(inputs->left_input_iterator); inputs->left_input_iterator = NULL;
-
-					delete_interim_tuple_store(inputs->batched_left_side_tuples); inputs->batched_left_side_tuples = NULL;
-					delete_interim_tuple_store(inputs->right_side_tuples); inputs->right_side_tuples = NULL;
+					clean_up_before_killing_self(o);
 
 					kill_signal_for_self_operator(o, kill_reason); return ;
 				}
