@@ -119,12 +119,6 @@ PRIORITY 3 JOINS
 
 
 
-PRIORITY 4 (* future optimization)
- * find a way to early delete interim_tuple_store and free/(delete rash tables) volatile_page_store resources soon after the threads cease to exist for all jobs of the same operator
-
-
-
-
 PRIORITY HIGH LEVEL TASKS (not yet prioritizwd)
 
  * make a function to convert a sql expression from SQLtoAST into a tuple transformer
