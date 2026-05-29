@@ -21,14 +21,14 @@
 #define PRINT_DATA 1
 
 #define MIN_LEFT 20
-#define MAX_LEFT 320
+#define MAX_LEFT 3200
 
 #define COUNT_LEFT (MAX_LEFT - MIN_LEFT + 1)
 
 uint32_t left_inputs[COUNT_LEFT];
 
 #define MIN_RIGHT 10
-#define MAX_RIGHT 300
+#define MAX_RIGHT 3000
 
 #define COUNT_RIGHT (MAX_RIGHT - MIN_RIGHT + 1)
 

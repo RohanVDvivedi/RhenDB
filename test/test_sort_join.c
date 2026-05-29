@@ -23,14 +23,14 @@
 #define MIN_LEFT 6
 #define JUMP_LEFT 2
 
-#define COUNT_LEFT 150
+#define COUNT_LEFT 3000
 
 uint32_t left_inputs[COUNT_LEFT];
 
 #define MIN_RIGHT 12
 #define JUMP_RIGHT 3
 
-#define COUNT_RIGHT 150
+#define COUNT_RIGHT 3000
 
 #define MAX_BLOCK_SIZE 4096
 
