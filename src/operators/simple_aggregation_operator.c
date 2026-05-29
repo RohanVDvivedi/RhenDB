@@ -32,28 +32,9 @@ struct input_values
 	const tuple_def* output_tuple_def;
 };
 
-static void clean_up_before_killing_self(operator* o)
-{
-	input_values* inputs = o->inputs;
-
-	if(inputs->input_iterator != NULL)
-	{
-		destroy_consumption_iterator(inputs->input_iterator);
-		inputs->input_iterator = NULL;
-	}
-
-	// destroy aggregate states, right before we quit
-	{
-		for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
-			inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(inputs->states[i]));
-	}
-}
-
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
-
-	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
 
 	while(1)
 	{
@@ -61,9 +42,6 @@ static void execute(operator* o)
 		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data) // if no_more_data, produce the final output
 		{
-			// destroy the input_iterator we will not be needing it
-			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-
 			// produce output tuple and return it
 			{
 				// generate the smallest possible tuple
@@ -79,8 +57,8 @@ static void execute(operator* o)
 					if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, &(inputs->states[i])))
 					{
 						free(output_tuple);
-						kill_reason = get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed");
-						kill_signal_for_self_operator(o, kill_reason); return ;
+						kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed"));
+						return ;
 					}
 
 					// ensure there are enopugh bytes in the output_tuple
@@ -102,22 +80,18 @@ static void execute(operator* o)
 				free(output_tuple);
 				if(!produced)
 				{
-					clean_up_before_killing_self(o);
-
-					kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-					kill_signal_for_self_operator(o, kill_reason); return ;
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+					return ;
 				}
 			}
 
-			clean_up_before_killing_self(o);
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			clean_up_before_killing_self(o);
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+			return ;
 		}
 
 		if(tuple != NULL)
@@ -135,10 +109,8 @@ static void execute(operator* o)
 				// process_input for the udaf, if it fails kill the operator
 				if(!inputs->aggregate_functions[i]->process_input(inputs->aggregate_functions[i], &(inputs->states[i]), inputs->input_datums))
 				{
-					clean_up_before_killing_self(o);
-
-					kill_reason = get_dstring_pointing_to_literal_cstring("process_input_of_udaf_failed");
-					kill_signal_for_self_operator(o, kill_reason); return ;
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("process_input_of_udaf_failed"));
+					return ;
 				}
 			}
 		}
@@ -149,10 +121,17 @@ static void execute(operator* o)
 	return ;
 }
 
-static void free_resources(operator* o)
+static void clean_up_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
+	if(inputs->input_iterator != NULL)
+	{
+		destroy_consumption_iterator(inputs->input_iterator);
+		inputs->input_iterator = NULL;
+	}
+
+	// destroy aggregate states, right before we quit
 	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
 		inputs->aggregate_functions[i]->destroy_state(inputs->aggregate_functions[i], &(inputs->states[i]));
 
@@ -166,6 +145,11 @@ static void free_resources(operator* o)
 	free(inputs->input_datums);
 
 	free(inputs->aggregate_input_element_ids);
+}
+
+static void free_resources(operator* o)
+{
+	input_values* inputs = o->inputs;
 
 	free((data_type_info*)(inputs->output_tuple_def->type_info));
 	free((tuple_def*)(inputs->output_tuple_def));
@@ -189,6 +173,7 @@ operator_resource_counter setup_simple_aggregation_operator(operator* o, operato
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
+	o->clean_up_resources = clean_up_resources;
 	o->free_resources = free_resources;
 
 	uint32_t input_datums_count = 0;
