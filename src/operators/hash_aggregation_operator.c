@@ -446,6 +446,10 @@ static void execute(operator* o)
 		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
 		{
+			// this signals completion of build phase
+			destroy_consumption_iterator(inputs->input_iterator);
+			inputs->input_iterator = NULL;
+
 			if(inputs->pending_build_buffer != NULL)
 			{
 				// its ownership for inputs->pending_build_buffer, is changing, so unmap it's embed_regions
