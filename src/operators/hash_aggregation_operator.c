@@ -151,8 +151,6 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 {
 	input_values* inputs = o->inputs;
 
-	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
-
 	// this flag can be used to make this nested loop to stopmprocessing and instead just delete the remaining partitions
 	// do this when either the udaf fails or the produce function fails
 	int process = 1;
@@ -263,8 +261,7 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 										// process_input for the udaf, if it fails kill the operator
 										if(!inputs->aggregate_functions[i]->process_input(inputs->aggregate_functions[i], &(states[i]), input_datums))
 										{
-											kill_reason = get_dstring_pointing_to_literal_cstring("process_input_of_udaf_failed");
-											kill_signal_for_self_operator(o, kill_reason);
+											kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("process_input_of_udaf_failed"));
 
 											process = 0;
 											finish = 1;
@@ -291,8 +288,7 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 								datum output_uval;
 								if(!inputs->aggregate_functions[i]->produce_output(inputs->aggregate_functions[i], &output_uval, &(states[i])))
 								{
-									kill_reason = get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed");
-									kill_signal_for_self_operator(o, kill_reason);
+									kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("produce_output_of_udaf_failed"));
 
 									process = 0;
 								}
@@ -319,8 +315,7 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 						int produced = produce_tuple_from_operator(o, output_tuple);
 						if(!produced)
 						{
-							kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
-							kill_signal_for_self_operator(o, kill_reason);
+							kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
 
 							process = 0;
 						}
@@ -432,15 +427,13 @@ static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
-
 	// the operator has been woken up after possibly end of data from the producer, so start the probe jobs
 	if(inputs->input_iterator == NULL)
 	{
 		start_probe_jobs(o);
 
 		if(should_kill_with_success(o))
-			kill_signal_for_self_operator(o, kill_reason);
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
 
 		return;
 	}
@@ -453,8 +446,6 @@ static void execute(operator* o)
 		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
 		{
-			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-
 			if(inputs->pending_build_buffer != NULL)
 			{
 				// its ownership for inputs->pending_build_buffer, is changing, so unmap it's embed_regions
@@ -477,9 +468,8 @@ static void execute(operator* o)
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
-			destroy_consumption_iterator(inputs->input_iterator); inputs->input_iterator = NULL;
-
-			kill_signal_for_self_operator(o, kill_reason); return ;
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+			return ;
 		}
 
 		if(tuple != NULL)
@@ -512,17 +502,21 @@ static void execute(operator* o)
 	return ;
 }
 
-static void free_resources(operator* o)
+static void clean_up_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
+	if(inputs->input_iterator != NULL)
+	{
+		destroy_consumption_iterator(inputs->input_iterator);
+		inputs->input_iterator = NULL;
+	}
+
 	if(inputs->pending_build_buffer != NULL)
+	{
 		delete_interim_tuple_store(inputs->pending_build_buffer);
-
-	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
-		inputs->aggregate_functions[i]->destroy_aggregate_function(inputs->aggregate_functions[i]);
-
-	free(inputs->aggregate_functions);
+		inputs->pending_build_buffer = NULL;
+	}
 
 	free(inputs->aggregate_input_element_ids);
 
@@ -530,17 +524,23 @@ static void free_resources(operator* o)
 	{
 		if(inputs->partitions[i] == NULL)
 			continue;
-		pthread_mutex_destroy(&(inputs->partitions[i]->build_lock));
 		destroy_rash_table(&(inputs->partitions[i]->rth));
 		free(inputs->partitions[i]);
 		inputs->partitions[i] = NULL;
 	}
 	free(inputs->partitions);
 
-	pthread_mutex_destroy(&(inputs->partition_to_aggregate_next_lock));
-
 	remove_all_from_linkedlist(&(inputs->tuple_buffers_to_insert), DELETE_ON_NOTIFY_FOR_INTERIM_TUPLE_STORE);
-	pthread_mutex_destroy(&(inputs->insert_for_build_queue_lock));
+}
+
+static void free_resources(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
+		inputs->aggregate_functions[i]->destroy_aggregate_function(inputs->aggregate_functions[i]);
+
+	free(inputs->aggregate_functions);
 
 	// all key_dtis were made into nullable types, so free them first
 	for(uint32_t i = 0; i < inputs->key_element_count; i++)
@@ -583,6 +583,7 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
+	o->clean_up_resources = clean_up_resources;
 	o->free_resources = free_resources;
 
 	uint32_t input_datums_count = 0;
