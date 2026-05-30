@@ -93,8 +93,12 @@ void* right_generator(void* generator_context, const tuple_def* generator_tuple_
 
 #define RECORD_S_KEY_ELEMENT_COUNT 1
 
-positional_accessor LEFT_KEY_POS[1] = {STATIC_POSITION(2)};
-positional_accessor RIGHT_KEY_POS[1] = {STATIC_POSITION(1)};
+positional_accessor LEFT_KEY_POS[1] = {STATIC_POSITION(0)};
+positional_accessor RIGHT_KEY_POS[1] = {STATIC_POSITION(0)};
+
+/*positional_accessor LEFT_KEY_POS[1] = {STATIC_POSITION(2)};
+positional_accessor RIGHT_KEY_POS[1] = {STATIC_POSITION(1)};*/
+
 compare_direction CMP_DIR[1] = {ASC};
 
 query_plan* qp = NULL;
