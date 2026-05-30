@@ -1,7 +1,6 @@
 PICKED TASKS
 
 * hash join algorithm
- * test jash join operator, and compare results with sort merge join on all 4 join types supported PRESERVE_ NONE, LEFT, RIGHT, and BOTH
  * test it everything against test_match_joins.c
 
 
