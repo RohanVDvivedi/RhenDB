@@ -720,6 +720,7 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 
 		.partitions_count = partitions_count,
 		.bucket_count_per_parttion = bucket_count_per_parttion,
+		.partitions = malloc(sizeof(rash_table_partition*) * partitions_count),
 
 		.partition_to_right_only_join_next_lock = PTHREAD_MUTEX_INITIALIZER,
 		.partition_to_right_only_join_next = 0,
