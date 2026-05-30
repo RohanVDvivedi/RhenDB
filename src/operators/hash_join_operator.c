@@ -115,7 +115,7 @@ static void build_right_side_partitions(operator* o, void* param)
 		if(its_p == NULL)
 			break;
 
-		// insert to the right partition if one exists
+		// insert all to the right partition
 		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->right_input_tuple_def->size_def), its_p, get_total_bytes_in_interim_tuple_store(its_p), {
 
 			// create rash table key
@@ -181,7 +181,7 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 		if(its_p == NULL)
 			break;
 
-		// insert to the right partition if one exists
+		// probe all left_tuple-s to the right partition if one exists
 		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->left_input_tuple_def->size_def), its_p, get_total_bytes_in_interim_tuple_store(its_p), {
 			// create rash table key
 			rash_table_key rtk = get_new_rash_table_key(tuple, inputs->left_input_tuple_def, inputs->left_key_element_ids, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
