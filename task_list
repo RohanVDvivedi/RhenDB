@@ -1,5 +1,10 @@
 PICKED TASKS
 
+* hash join algorithm
+ * iterate over all right until it is not NULL, insert it to rash table partition
+ * iterate over all lefts until it is not NULL, and probe and find matches, if for any tuple on left does not have a match, produce its (left_tuple, NULL) if does_preserve_left, set right entry bit if matches
+ * finally iterate all right_entries and produce (NULL, right_tuple) if the bit is not set
+
 
 PRIORITY 0 CATALOG
  * THINK how to structure? how to lock<when doing ddl?> OR <when doing read for catalog>?
@@ -96,25 +101,6 @@ PRIORITY 2 SCANS & INDEX PROBES
  * check mvcc conditions for the tuples being visible, every single time
    * if the transaction is serializable check for locks here too
  * implement operator with index nested loop join (need 2 buffers, because of latch crabbing)
-
-
-
-
-
-
-PRIORITY 3 JOINS
-
- * hash_join
-   * supports both PRESERVE_LEFT and PRESERVE_RIGHT
-   * needs left_input_operator, left_key_element_ids, right_input_operator, right_key_element_ids, key_element_count
-   * make rash tables with partition_count, bucket_count_per_partition, and max_concurrent_jobs_count
-   * first read tuples from the right, batch it into 1MB blocks and put it in queue
-   * build jobs read this block and insert into respective partition of rash tables
-   * once there are no more right side tuples, start reading left side tuples
-   * for each one build a block of 1MB again and add it to probe job queue
-   * probe job probes the rash table partition and produces the pair with all the right tuples
-   * if a right entry is matched with any left entry mark state of right side entry to 1
-   * finally produce all (NULL, right) for all rights where state still is 0
 
 
 
