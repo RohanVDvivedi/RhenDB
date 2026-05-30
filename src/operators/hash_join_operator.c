@@ -743,7 +743,7 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 	{
 		inputs->partitions[i] = malloc(sizeof(rash_table_partition));
 		pthread_mutex_init(&(inputs->partitions[i]->build_lock), NULL);
-		inputs->partitions[i]->rth = get_new_rash_table(bucket_count_per_parttion, right_input_tuple_def, left_key_element_ids, key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), o->self_query_plan->curr_tx->db);
+		inputs->partitions[i]->rth = get_new_rash_table(bucket_count_per_parttion, right_input_tuple_def, right_key_element_ids, key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), o->self_query_plan->curr_tx->db);
 	}
 
 	initialize_linkedlist(&(inputs->buffers_queue), offsetof(interim_tuple_store, embed_node_ll));
