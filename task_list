@@ -1,9 +1,8 @@
 PICKED TASKS
 
 * hash join algorithm
- * iterate over all right until it is not NULL, insert it to rash table partition
- * iterate over all lefts until it is not NULL, and probe and find matches, if for any tuple on left does not have a match, produce its (left_tuple, NULL) if does_preserve_left, set right entry bit if matches
- * finally iterate all right_entries and produce (NULL, right_tuple) if the bit is not set
+ * test jash join operator, and compare results with sort merge join on all 4 join types supported PRESERVE_ NONE, LEFT, RIGHT, and BOTH
+ * test it everything against test_match_joins.c
 
 
 PRIORITY 0 CATALOG
