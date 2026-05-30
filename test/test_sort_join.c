@@ -134,6 +134,9 @@ int main(int argc, char** argv)
 
 	// make operators
 
+	positional_accessor FINAL_KEY_POS[2] = {STATIC_POSITION(0, 0), STATIC_POSITION(1, 0)};
+	compare_direction FINAL_CMP_DIR[2] = {ASC, ASC};
+
 	printf("Building pipeline :\n");
 	{
 		operator* left_input_operator = get_new_registered_operator_for_query_plan(qp);
@@ -156,8 +159,14 @@ int main(int argc, char** argv)
 		setup_sort_merge_join_operator(join_operator, left_sorter_operator, KEY_POS, right_sorter_operator, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_BOTH, MAX_BLOCK_SIZE);
 		printf("join operator %p\n", join_operator);
 
+		// REMEMBER OUTPUT OF SORT-MERGE JOIN MAY NOT BE SORTED UNLESS IT IS INNER JOIN
+
+		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
+		setup_external_sort_operator(sorter_operator, TUPLES_DOWN_COUNTER_INF, join_operator, 2, FINAL_KEY_POS, FINAL_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		printf("sorter for output operator %p\n", sorter_operator);
+
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(print_operator, join_operator, PRINT_DATA ? print_consumer : NULL, NULL);
+		setup_consumer_operator(print_operator, sorter_operator, PRINT_DATA ? print_consumer : NULL, NULL);
 		printf("output print operator %p\n", print_operator);
 	}
 	printf("\n\n");
