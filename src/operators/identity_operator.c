@@ -5,7 +5,7 @@
 #include<stdlib.h>
 
 /*
-	idnetity operator, primarily used for adding tuple_transformers to its produce
+	identity operator, primarily used for adding tuple_transformers to its produce
 */
 
 typedef struct input_values input_values;

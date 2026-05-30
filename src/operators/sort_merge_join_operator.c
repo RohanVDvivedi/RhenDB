@@ -14,10 +14,6 @@
 
 #include<stdlib.h>
 
-/*
-	idnetity operator, primarily used for adding tuple_transformers to its produce
-*/
-
 typedef struct input_values input_values;
 struct input_values
 {
@@ -387,7 +383,7 @@ operator_resource_counter setup_sort_merge_join_operator(operator* o, operator* 
 {
 	if(max_block_size == 0)
 	{
-		printf("max_block_size can not be 0 for block_nested_loop_join_operator\n");
+		printf("max_block_size can not be 0 for sort_merge_join_operator\n");
 		exit(-1);
 	}
 

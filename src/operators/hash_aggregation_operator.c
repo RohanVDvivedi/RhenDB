@@ -71,7 +71,6 @@ struct input_values
 	uint32_t active_build_phase_job_count;
 	uint32_t active_probe_phase_job_count;
 	int probe_jobs_started;
-	int no_more_build_phase_data;
 
 	// fill up this buffer before moving it into the tuple_buffers_to_insert
 	interim_tuple_store* pending_build_buffer;
@@ -642,7 +641,6 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 		.tuple_buffers_to_insert_queue_size = 0,
 		.active_build_phase_job_count = 0,
 		.probe_jobs_started = 0,
-		.no_more_build_phase_data = 0,
 		.pending_build_buffer = NULL,
 	};
 
