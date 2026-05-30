@@ -96,11 +96,62 @@ static int produce_join_result(operator* o, const void* left_tuple, const void* 
 	return produced;
 }
 
-static void build_right_side_partitions(operator* o, void* param);
+static void build_right_side_partitions(operator* o, void* param)
+{
+	input_values* inputs = o->inputs;
 
-static void probe_right_side_partitions_using_left_tuples(operator* o, void* param);
 
-static void probe_right_side_partitions_for_right_only_tuples(operator* o, void* param);
+
+
+
+
+	// decrement active build phase jobs count
+	pthread_mutex_lock(&(inputs->buffers_queue_lock));
+	inputs->active_build_phase_job_count--;
+	pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+
+	trigger_execution_on_operator(o);
+}
+
+static void probe_right_side_partitions_using_left_tuples(operator* o, void* param)
+{
+	input_values* inputs = o->inputs;
+
+	int failed = 0;
+
+
+
+
+
+
+	// decrement active build phas jobs count
+	pthread_mutex_lock(&(inputs->buffers_queue_lock));
+	inputs->active_probe_phase_job_count--;
+	pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+
+	if(!failed)
+		trigger_execution_on_operator(o);
+}
+
+static void probe_right_side_partitions_for_right_only_tuples(operator* o, void* param)
+{
+	input_values* inputs = o->inputs;
+
+	int failed = 0;
+
+
+
+
+
+
+	// decrement active build phas jobs count
+	pthread_mutex_lock(&(inputs->buffers_queue_lock));
+	inputs->active_right_only_probe_phase_job_count--;
+	pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+
+	if(!failed)
+		trigger_execution_on_operator(o);
+}
 
 static void start_right_side_build_jobs(operator* o)
 {

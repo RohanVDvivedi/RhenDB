@@ -138,7 +138,7 @@ static void insert_for_build_phase_job(operator* o, void* param)
 		delete_interim_tuple_store(its_p);
 	}
 
-	// decrement active build phas jobs count
+	// decrement active build phase jobs count
 	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
 	inputs->active_build_phase_job_count--;
 	pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
@@ -342,7 +342,7 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 	free(states);
 	free(input_datums);
 
-	// decrement active build phas jobs count
+	// decrement active probe phase jobs count
 	pthread_mutex_lock(&(inputs->insert_for_build_queue_lock));
 	inputs->active_probe_phase_job_count--;
 	pthread_mutex_unlock(&(inputs->insert_for_build_queue_lock));
