@@ -100,10 +100,62 @@ static void build_right_side_partitions(operator* o, void* param)
 {
 	input_values* inputs = o->inputs;
 
+	while(1)
+	{
+		pthread_mutex_lock(&(inputs->buffers_queue_lock));
+		interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_linkedlist(&(inputs->buffers_queue));
+		if(its_p != NULL)
+		{
+			remove_head_from_linkedlist(&(inputs->buffers_queue));
+			inputs->buffers_queue_size--;
+		}
+		pthread_mutex_unlock(&(inputs->buffers_queue_lock));
 
+		// if no tuple buffer found exit
+		if(its_p == NULL)
+			break;
 
+		// insert to the right partition if one exists
+		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->right_input_tuple_def->size_def), its_p, get_total_bytes_in_interim_tuple_store(its_p), {
 
+			// create rash table key
+			rash_table_key rtk = get_new_rash_table_key(tuple, inputs->right_input_tuple_def, inputs->right_key_element_ids, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
 
+			// find the parttion this key goes into
+			uint32_t partition_id = get_hash_value_for_rash_table_key(&rtk) % inputs->partitions_count;
+
+			// take build lock of the partition at parttion_id
+			pthread_mutex_lock(&(inputs->partitions[partition_id]->build_lock));
+
+			// open rash table iterator for insertion/appending
+			rash_table_iterator rti = find_equals_in_rash_table(&(inputs->partitions[partition_id]->rth), &rtk, 0);
+
+			// open write iterator on this key
+			binary_write_iterator* bwi_p = open_for_writing_value_in_rash_table_iterator(&rti);
+
+			// store the value in the rash_table, if we need to compute any aggregation columns, else keys is just enough
+			if(inputs->aggregate_functions_count > 0)
+			{
+				// perform append into this iterator storing in the complete tuple
+				int abort_error_dummy = 0;
+				append_to_binary_write_iterator(bwi_p, tuple, get_tuple_size(inputs->right_input_tuple_def, tuple), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->partitions[partition_id]->rth.htan)), NULL, &abort_error_dummy);
+			}
+
+			// close the bwi_p
+			close_and_write_value_in_hash_table_iterator(&rti, bwi_p);
+
+			// delete the insertion iterator
+			delete_rash_table_iterator(&rti);
+
+			// release build lock on the partition
+			pthread_mutex_unlock(&(inputs->partitions[partition_id]->build_lock));
+
+			// destroy rash table key
+			destroy_rash_table_key(&rtk);
+		});
+
+		delete_interim_tuple_store(its_p);
+	}
 
 	// decrement active build phase jobs count
 	pthread_mutex_lock(&(inputs->buffers_queue_lock));
