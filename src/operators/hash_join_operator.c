@@ -165,7 +165,7 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 	input_values* inputs = o->inputs;
 
 	int failed = 0;
-	while(1)
+	while(!failed)
 	{
 		pthread_mutex_lock(&(inputs->buffers_queue_lock));
 		interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_linkedlist(&(inputs->buffers_queue));
