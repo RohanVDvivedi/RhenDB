@@ -166,10 +166,90 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 	input_values* inputs = o->inputs;
 
 	int failed = 0;
+	while(1)
+	{
+		pthread_mutex_lock(&(inputs->buffers_queue_lock));
+		interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_linkedlist(&(inputs->buffers_queue));
+		if(its_p != NULL)
+		{
+			remove_head_from_linkedlist(&(inputs->buffers_queue));
+			inputs->buffers_queue_size--;
+		}
+		pthread_mutex_unlock(&(inputs->buffers_queue_lock));
 
+		// if no tuple buffer found exit
+		if(its_p == NULL)
+			break;
 
+		// insert to the right partition if one exists
+		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->left_input_tuple_def->size_def), its_p, get_total_bytes_in_interim_tuple_store(its_p), {
+			// create rash table key
+			rash_table_key rtk = get_new_rash_table_key(tuple, inputs->left_input_tuple_def, inputs->left_key_element_ids, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
 
+			// find the parttion this key goes into
+			uint32_t partition_id = get_hash_value_for_rash_table_key(&rtk) % inputs->partitions_count;
 
+			// open rash table iterator for insertion/appending
+			rash_table_iterator rti = find_equals_in_rash_table(&(inputs->partitions[partition_id]->rth), &rtk, 0);
+
+			if(exists_in_rash_table_iterator(&rti))
+			{
+				write_state_in_rash_table_iterator(&rti, 1); // we matched right with a left, so set the state flag on the right side entry to 1, NOTE: doing this without a lock is a hack
+
+				// iterate over all tuples on the right and produce join results
+				{
+					// open an iterator to read values of this entry
+					binary_read_iterator* value_bri_p = read_value_in_rash_table_iterator(&rti);
+
+					int abort_error_dummy = 0;
+					while(!failed)
+					{
+						int finish = 0;
+						consume_tuple_from_tuple_list(right_tuple, inputs->right_input_tuple_def, value_bri_p, NULL, &abort_error_dummy,
+						{
+							if(right_tuple != NULL)
+							{
+								if(!produce_join_result(o, tuple, right_tuple))
+								{
+									kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+									failed = 1;
+									finish = 1;
+								}
+							}
+							else
+							{
+								finish = 1;
+							}
+						});
+						if(finish)
+							break;
+					}
+
+					// after read all tuples close the read iterator in value
+					delete_binary_read_iterator(value_bri_p, NULL, &abort_error_dummy);
+				}
+			}
+			else // left_tuple is a loner
+			{
+				if(!produce_join_result(o, tuple, NULL))
+				{
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+					failed = 1;
+				}
+			}
+
+			// delete the insertion iterator
+			delete_rash_table_iterator(&rti);
+
+			// destroy rash table key
+			destroy_rash_table_key(&rtk);
+
+			if(failed)
+				break;
+		});
+
+		delete_interim_tuple_store(its_p);
+	}
 
 
 	// decrement active build phas jobs count
