@@ -68,7 +68,9 @@ struct input_values
 
 	uint32_t active_build_phase_job_count;
 	uint32_t active_probe_phase_job_count;
-	int probe_jobs_started;
+	uint32_t active_right_only_probe_phase_job_count;
+
+	int phase; // 0, 1, 2
 };
 
 static int produce_join_result(operator* o, const void* left_tuple, const void* right_tuple)
@@ -100,11 +102,59 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 
 static void probe_right_side_partitions_for_right_only_tuples(operator* o, void* param);
 
-static void start_right_side_build_jobs(operator* o);
+static void start_right_side_build_jobs(operator* o)
+{
+	input_values* inputs = o->inputs;
 
-static void start_right_side_probe_for_left_tupled_jobs(operator* o);
+	pthread_mutex_lock(&(inputs->buffers_queue_lock));
+	if(inputs->buffers_queue_size > 0)
+	{
+		uint32_t new_jobs = min(inputs->buffers_queue_size, inputs->max_concurrent_jobs_count - inputs->active_build_phase_job_count);
+		while(new_jobs > 0)
+		{
+			if(!run_concurrent_job_for_operator(o, NULL, build_right_side_partitions))
+				break;
+			inputs->active_build_phase_job_count++;
+			new_jobs--;
+		}
+	}
+	pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+}
 
-static void start_right_side_only_probe_jobs(operator* o);
+static void start_right_side_probe_for_left_tupled_jobs(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	pthread_mutex_lock(&(inputs->buffers_queue_lock));
+	if(inputs->buffers_queue_size > 0)
+	{
+		uint32_t new_jobs = min(inputs->buffers_queue_size, inputs->max_concurrent_jobs_count - inputs->active_probe_phase_job_count);
+		while(new_jobs > 0)
+		{
+			if(!run_concurrent_job_for_operator(o, NULL, probe_right_side_partitions_using_left_tuples))
+				break;
+			inputs->active_probe_phase_job_count++;
+			new_jobs--;
+		}
+	}
+	pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+}
+
+static void start_right_side_only_probe_jobs(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	pthread_mutex_lock(&(inputs->buffers_queue_lock));
+	uint32_t new_jobs = inputs->max_concurrent_jobs_count;
+	while(new_jobs > 0)
+	{
+		if(!run_concurrent_job_for_operator(o, NULL, probe_right_side_partitions_for_right_only_tuples))
+			break;
+		inputs->active_right_only_probe_phase_job_count++;
+		new_jobs--;
+	}
+	pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+}
 
 static void execute(operator* o)
 {
@@ -139,7 +189,7 @@ static void execute(operator* o)
 					start_right_side_build_jobs(o);
 				}
 
-				break;
+				break ;
 			}
 			if(can_not_proceed_for_execution_operator(o))
 			{
@@ -178,6 +228,17 @@ static void execute(operator* o)
 	// accumulate left_tuple-s into pending_buffer and queue it to probe right side partitions
 	if(inputs->right_input_iterator == NULL && inputs->left_input_iterator != NULL)
 	{
+		if(inputs->phase == 0)
+		{
+			pthread_mutex_lock(&(inputs->buffers_queue_lock));
+			if(inputs->buffers_queue_size == 0 && inputs->active_build_phase_job_count == 0)
+				inputs->phase = 1;
+			pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+
+			if(inputs->phase == 0) // if the phase is still 0, return immediately
+				return ;
+		}
+
 		while(1)
 		{
 			int no_more_data = 0;
@@ -204,7 +265,7 @@ static void execute(operator* o)
 					start_right_side_probe_for_left_tupled_jobs(o);
 				}
 
-				break;
+				break ;
 			}
 			if(can_not_proceed_for_execution_operator(o))
 			{
@@ -243,6 +304,44 @@ static void execute(operator* o)
 	// queue several jobs to just scan for right-only unmatched entries and produce them
 	if(inputs->right_input_iterator == NULL && inputs->left_input_iterator == NULL)
 	{
+		if(inputs->phase == 1)
+		{
+			pthread_mutex_lock(&(inputs->buffers_queue_lock));
+			if(inputs->buffers_queue_size == 0 && inputs->active_probe_phase_job_count == 0)
+				inputs->phase = 2;
+			pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+
+			if(inputs->phase == 1) // if the phase is still 1, return immediately
+				return ;
+		}
+
+		if(inputs->phase == 2)
+		{
+			if(!DOES_IT_PRESERVE_RIGHT(inputs->ptype))
+			{
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+				return;
+			}
+			inputs->phase = 3;
+			start_right_side_only_probe_jobs(o);
+		}
+
+		if(inputs->phase == 3)
+		{
+			pthread_mutex_lock(&(inputs->buffers_queue_lock));
+			if(inputs->active_right_only_probe_phase_job_count == 0)
+				inputs->phase = 4;
+			pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+
+			if(inputs->phase == 3)
+				return;
+		}
+
+		if(inputs->phase == 4)
+		{
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			return;
+		}
 	}
 }
 
@@ -386,7 +485,9 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 
 		.active_build_phase_job_count = 0,
 		.active_probe_phase_job_count = 0,
-		.probe_jobs_started = 0,
+		.active_right_only_probe_phase_job_count = 0,
+
+		.phase = 0, // always start with phase 0
 	};
 
 	for(uint32_t i = 0; i < partitions_count; i++)
