@@ -94,9 +94,156 @@ static int produce_join_result(operator* o, const void* left_tuple, const void* 
 	return produced;
 }
 
+static void build_right_side_partitions(operator* o, void* param);
+
+static void probe_right_side_partitions_using_left_tuples(operator* o, void* param);
+
+static void probe_right_side_partitions_for_right_only_tuples(operator* o, void* param);
+
+static void start_right_side_build_jobs(operator* o);
+
+static void start_right_side_probe_for_left_tupled_jobs(operator* o);
+
+static void start_right_side_only_probe_jobs(operator* o);
+
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
+
+	// accumulate right_tuple-s into pending_buffer and queue it to build right side partitions
+	if(inputs->right_input_iterator != NULL)
+	{
+		while(1)
+		{
+			int no_more_data = 0;
+			const void* tuple = consume_for_consumption_iterator(inputs->right_input_iterator, &no_more_data);
+			if(no_more_data)
+			{
+				// this signals completion of build phase
+				destroy_consumption_iterator(inputs->right_input_iterator);
+				inputs->right_input_iterator = NULL;
+
+				if(inputs->pending_buffer != NULL)
+				{
+					// its ownership for inputs->pending_buffer, is changing, so unmap it's embed_regions
+					unmap_all_embed_regions_in_interim_tuple_store(inputs->pending_buffer);
+
+					// insert pending_build_buffer in the buffers_queue linkedlist
+					pthread_mutex_lock(&(inputs->buffers_queue_lock));
+					insert_tail_in_linkedlist(&(inputs->buffers_queue), inputs->pending_buffer);
+					inputs->buffers_queue_size++;
+					pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+					inputs->pending_buffer = NULL;
+
+					// start build jobs if any could be started
+					start_right_side_build_jobs(o);
+				}
+
+				break;
+			}
+			if(can_not_proceed_for_execution_operator(o))
+			{
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+				return ;
+			}
+
+			if(tuple != NULL)
+			{
+				if(inputs->pending_buffer == NULL)
+					inputs->pending_buffer = get_new_interim_tuple_store(inputs->min_pending_buffer_size);
+
+				append_tuple_to_interim_tuple_store2(inputs->pending_buffer, &(inputs->pending_buffer->embed_regions[0]), tuple, &(inputs->right_input_tuple_def->size_def), inputs->min_pending_buffer_size);
+
+				if(get_total_bytes_in_interim_tuple_store(inputs->pending_buffer) >= inputs->min_pending_buffer_size)
+				{
+					// its ownership for inputs->pending_buffer, is changing, so unmap it's embed_regions
+					unmap_all_embed_regions_in_interim_tuple_store(inputs->pending_buffer);
+
+					// insert pending_build_buffer in the buffers_queue linkedlist
+					pthread_mutex_lock(&(inputs->buffers_queue_lock));
+					insert_tail_in_linkedlist(&(inputs->buffers_queue), inputs->pending_buffer);
+					inputs->buffers_queue_size++;
+					pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+					inputs->pending_buffer = NULL;
+
+					// start build jobs if any could be started
+					start_right_side_build_jobs(o);
+				}
+			}
+			else
+				return ;
+		}
+	}
+
+	// accumulate left_tuple-s into pending_buffer and queue it to probe right side partitions
+	if(inputs->right_input_iterator == NULL && inputs->left_input_iterator != NULL)
+	{
+		while(1)
+		{
+			int no_more_data = 0;
+			const void* tuple = consume_for_consumption_iterator(inputs->left_input_iterator, &no_more_data);
+			if(no_more_data)
+			{
+				// this signals completion of probe phase
+				destroy_consumption_iterator(inputs->left_input_iterator);
+				inputs->left_input_iterator = NULL;
+
+				if(inputs->pending_buffer != NULL)
+				{
+					// its ownership for inputs->pending_buffer, is changing, so unmap it's embed_regions
+					unmap_all_embed_regions_in_interim_tuple_store(inputs->pending_buffer);
+
+					// insert pending_build_buffer in the buffers_queue linkedlist
+					pthread_mutex_lock(&(inputs->buffers_queue_lock));
+					insert_tail_in_linkedlist(&(inputs->buffers_queue), inputs->pending_buffer);
+					inputs->buffers_queue_size++;
+					pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+					inputs->pending_buffer = NULL;
+
+					// start build jobs if any could be started
+					start_right_side_probe_for_left_tupled_jobs(o);
+				}
+
+				break;
+			}
+			if(can_not_proceed_for_execution_operator(o))
+			{
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
+				return ;
+			}
+
+			if(tuple != NULL)
+			{
+				if(inputs->pending_buffer == NULL)
+					inputs->pending_buffer = get_new_interim_tuple_store(inputs->min_pending_buffer_size);
+
+				append_tuple_to_interim_tuple_store2(inputs->pending_buffer, &(inputs->pending_buffer->embed_regions[0]), tuple, &(inputs->left_input_tuple_def->size_def), inputs->min_pending_buffer_size);
+
+				if(get_total_bytes_in_interim_tuple_store(inputs->pending_buffer) >= inputs->min_pending_buffer_size)
+				{
+					// its ownership for inputs->pending_buffer, is changing, so unmap it's embed_regions
+					unmap_all_embed_regions_in_interim_tuple_store(inputs->pending_buffer);
+
+					// insert pending_build_buffer in the buffers_queue linkedlist
+					pthread_mutex_lock(&(inputs->buffers_queue_lock));
+					insert_tail_in_linkedlist(&(inputs->buffers_queue), inputs->pending_buffer);
+					inputs->buffers_queue_size++;
+					pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+					inputs->pending_buffer = NULL;
+
+					// start build jobs if any could be started
+					start_right_side_probe_for_left_tupled_jobs(o);
+				}
+			}
+			else
+				return ;
+		}
+	}
+
+	// queue several jobs to just scan for right-only unmatched entries and produce them
+	if(inputs->right_input_iterator == NULL && inputs->left_input_iterator == NULL)
+	{
+	}
 }
 
 static void clean_up_resources(operator* o)
