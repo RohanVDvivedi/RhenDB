@@ -194,7 +194,8 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 
 			if(exists_in_rash_table_iterator(&rti))
 			{
-				write_state_in_rash_table_iterator(&rti, 1); // we matched right with a left, so set the state flag on the right side entry to 1, NOTE: doing this without a lock is a hack
+				if(DOES_IT_PRESERVE_RIGHT(inputs->ptype))
+					write_state_in_rash_table_iterator(&rti, 1); // we matched right with a left, so set the state flag on the right side entry to 1, NOTE: doing this without a lock is a hack
 
 				// iterate over all tuples on the right and produce join results
 				{
@@ -231,10 +232,13 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 			}
 			else // left_tuple is a loner
 			{
-				if(!produce_join_result(o, tuple, NULL))
+				if(DOES_IT_PRESERVE_LEFT(inputs->ptype))
 				{
-					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
-					failed = 1;
+					if(!produce_join_result(o, tuple, NULL))
+					{
+						kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+						failed = 1;
+					}
 				}
 			}
 
@@ -266,11 +270,77 @@ static void probe_right_side_partitions_for_right_only_tuples(operator* o, void*
 	input_values* inputs = o->inputs;
 
 	int failed = 0;
+	while(!failed)
+	{
+		uint32_t partition_id;
 
+		// fetch the parttion to process next
+		pthread_mutex_lock(&(inputs->partition_to_right_only_join_next_lock));
+		partition_id = inputs->partition_to_right_only_join_next;
+		if(partition_id < inputs->partitions_count)
+			inputs->partition_to_right_only_join_next++;
+		pthread_mutex_unlock(&(inputs->partition_to_right_only_join_next_lock));
 
+		// if out of bounds break out of the loop
+		if(partition_id >= inputs->partitions_count)
+			break;
 
+		// create iterator to iterate over all the entries
+		rash_table_iterator rti = find_all_in_rash_table(&(inputs->partitions[partition_id]->rth), 1);
 
+		// loop over all entries while not failed
+		while(!failed)
+		{
+			// process it only if the entry exists
+			if(exists_in_rash_table_iterator(&rti) && read_state_in_rash_table_iterator(&rti) == 0)
+			{
+				// open an iterator to read values of this entry
+				binary_read_iterator* value_bri_p = read_value_in_rash_table_iterator(&rti);
 
+				int abort_error_dummy = 0;
+				while(!failed)
+				{
+					int finish = 0;
+					consume_tuple_from_tuple_list(tuple, inputs->right_input_tuple_def, value_bri_p, NULL, &abort_error_dummy,
+					{
+						if(tuple != NULL)
+						{
+							if(!produce_join_result(o, NULL, tuple))
+							{
+								kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+								failed = 1;
+								finish = 1;
+							}
+						}
+						else
+						{
+							finish = 1;
+						}
+					});
+					if(finish)
+						break;
+				}
+
+				// after read all tuples close the read iterator in value
+				delete_binary_read_iterator(value_bri_p, NULL, &abort_error_dummy);
+			}
+
+			// if we can not go next break out
+			if(!next_in_rash_table_iterator(&rti))
+				break;
+		}
+
+		// delete the fina_all iterator
+		delete_rash_table_iterator(&rti);
+
+		// destroy the parttion
+		{
+			pthread_mutex_destroy(&(inputs->partitions[partition_id]->build_lock));
+			destroy_rash_table(&(inputs->partitions[partition_id]->rth));
+			free(inputs->partitions[partition_id]);
+			inputs->partitions[partition_id] = NULL;
+		}
+	}
 
 	// decrement active build phas jobs count
 	pthread_mutex_lock(&(inputs->buffers_queue_lock));
