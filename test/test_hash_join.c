@@ -23,14 +23,14 @@
 #define MIN_LEFT 6
 #define JUMP_LEFT 2
 
-#define COUNT_LEFT 3000
+#define COUNT_LEFT 20
 
 uint32_t left_inputs[COUNT_LEFT];
 
 #define MIN_RIGHT 12
 #define JUMP_RIGHT 3
 
-#define COUNT_RIGHT 3000
+#define COUNT_RIGHT 20
 
 #define MAX_BLOCK_SIZE 4096
 
@@ -150,7 +150,7 @@ int main(int argc, char** argv)
 
 		operator* right_input_operator = get_new_registered_operator_for_query_plan(qp);
 		setup_generator_operator(right_input_operator, right_generator, NULL, &record_def2);
-		printf("source left operator %p\n", right_input_operator);
+		printf("source right operator %p\n", right_input_operator);
 
 		operator* join_operator = get_new_registered_operator_for_query_plan(qp);
 		setup_hash_join_operator(join_operator, left_input_operator, KEY_POS, right_input_operator, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_BOTH, PARTITIONS_COUNT, BUCKETS_PER_PARTITION, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE);

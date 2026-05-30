@@ -148,7 +148,7 @@ int main(int argc, char** argv)
 
 		operator* right_input_operator = get_new_registered_operator_for_query_plan(qp);
 		setup_generator_operator(right_input_operator, right_generator, NULL, &record_def2);
-		printf("source left operator %p\n", right_input_operator);
+		printf("source right operator %p\n", right_input_operator);
 
 		operator* join_operator = get_new_registered_operator_for_query_plan(qp);
 		setup_block_nested_loop_join_operator(join_operator, left_input_operator, right_input_operator, NULL, join_matcher, PRESERVE_LEFT, MAX_BLOCK_SIZE);

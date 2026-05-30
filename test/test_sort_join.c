@@ -146,7 +146,7 @@ int main(int argc, char** argv)
 
 		operator* right_input_operator = get_new_registered_operator_for_query_plan(qp);
 		setup_generator_operator(right_input_operator, right_generator, NULL, &record_def2);
-		printf("source left operator %p\n", right_input_operator);
+		printf("source right operator %p\n", right_input_operator);
 
 		operator* right_sorter_operator = get_new_registered_operator_for_query_plan(qp);
 		setup_external_sort_operator(right_sorter_operator, TUPLES_DOWN_COUNTER_INF, right_input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
