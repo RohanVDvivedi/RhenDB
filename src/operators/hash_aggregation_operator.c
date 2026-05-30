@@ -429,8 +429,6 @@ static void execute(operator* o)
 
 	while(should_produce_more_for_build_inserts_queue(o))
 	{
-		start_build_jobs(o);
-
 		int no_more_data = 0;
 		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
