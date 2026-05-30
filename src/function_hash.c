@@ -6,6 +6,26 @@
 
 #include<stdlib.h>
 
+int do_these_types_on_being_equal_hash_to_same_value(const data_type_info* dti1, const data_type_info* dti2)
+{
+	if(are_identical_type_info(dti1, dti2))
+		return 1;
+	else if(!is_container_type_info(dti1) && !is_container_type_info(dti2)) // non container types, primitive numbers: bit_field, uint, int, large_uint, large_int, float, they hash to same value only if they are same type and size
+		return are_identical_type_info(dti1, dti2);
+	else if((is_text_type_info(dti1) || is_blob_type_info(dti1)) && (is_text_type_info(dti2) || is_blob_type_info(dti2))) // both are text or blob
+		return 1;
+	else if(is_numeric_type_info(dti1) && is_numeric_type_info(dti2)) // both are numeric
+		return 1;
+	else if(is_extended_type_info(dti1) || is_extended_type_info(dti2)) // one of them is some not comparable extended types, like jsonb or tuple_list
+		return 0;
+	else if((dti1->type == STRING || dti1->type == BINARY || dti1->type == ARRAY) && (dti2->type == STRING || dti2->type == BINARY || dti2->type == ARRAY)) // STRING, BINARY and ARRAY are internally comparable, if their containee types are comparable
+		return do_these_types_on_being_equal_hash_to_same_value(dti1->containee, dti2->containee); // recursive call, so 2 inline arrays of extended-text types are comparable
+	else // else it is not identical inline tuple, and they can not be compared directly
+		return 0;
+
+	return 0;
+}
+
 uint64_t hash_datum_rhendb(const datum* uval, const data_type_info* dti, tuple_hasher* th, rage_engine* ex_engine)
 {
 	if(is_datum_NULL(uval))

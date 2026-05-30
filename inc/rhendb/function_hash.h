@@ -10,6 +10,8 @@
 	else the application crashes
 */
 
+int do_these_types_on_being_equal_hash_to_same_value(const data_type_info* dti1, const data_type_info* dti2);
+
 // it only reads data from the ex_engine for the extended atributes, provision atleast 1 buffer for each one of this function calls
 // the ex_engine will/must be the min_tx_engine
 // transaction_id is passed as NULL, to read extended types as a separate read-only transaction
