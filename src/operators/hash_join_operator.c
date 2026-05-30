@@ -133,13 +133,9 @@ static void build_right_side_partitions(operator* o, void* param)
 			// open write iterator on this key
 			binary_write_iterator* bwi_p = open_for_writing_value_in_rash_table_iterator(&rti);
 
-			// store the value in the rash_table, if we need to compute any aggregation columns, else keys is just enough
-			if(inputs->aggregate_functions_count > 0)
-			{
-				// perform append into this iterator storing in the complete tuple
-				int abort_error_dummy = 0;
-				append_to_binary_write_iterator(bwi_p, tuple, get_tuple_size(inputs->right_input_tuple_def, tuple), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->partitions[partition_id]->rth.htan)), NULL, &abort_error_dummy);
-			}
+			// perform append into this iterator storing in the complete tuple
+			int abort_error_dummy = 0;
+			append_to_binary_write_iterator(bwi_p, tuple, get_tuple_size(inputs->right_input_tuple_def, tuple), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->partitions[partition_id]->rth.htan)), NULL, &abort_error_dummy);
 
 			// close the bwi_p
 			close_and_write_value_in_hash_table_iterator(&rti, bwi_p);
