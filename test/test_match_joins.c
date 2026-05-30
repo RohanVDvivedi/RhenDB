@@ -24,6 +24,12 @@
 #define PARALLEL_SORTING_JOBS_COUNT    8
 #define N_WAY_SORT                     16
 
+#define PARTITIONS_COUNT                      64
+#define BUCKETS_PER_PARTITION                 32
+#define PARALLEL_HASH_JOIN_JOBS_COUNT         6
+#define PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE    6
+#define MIN_BUFFER_SIZE                       (1 * 1024 * 1024)
+
 #define RECORD_S_KEY_ELEMENT_COUNT 1
 
 #define MAX_BLOCK_SIZE (1024 * 1024)
@@ -99,6 +105,13 @@ int main(int argc, char** argv)
 			printf("sort merge join operator %p\n", smj);
 		}
 
+		operator* hj = NULL;
+		{
+			hj = get_new_registered_operator_for_query_plan(qp);
+			setup_hash_join_operator(hj, input_operator, KEY_POS, input_operator, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, PARTITIONS_COUNT, BUCKETS_PER_PARTITION, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE);
+			printf("hash join operator %p\n", hj);
+		}
+
 		// match phase
 		{
 			operator* output_bnlj_operator = get_new_registered_operator_for_query_plan(qp);
@@ -109,9 +122,21 @@ int main(int argc, char** argv)
 			setup_external_sort_operator(output_smj_operator, TUPLES_DOWN_COUNTER_INF, smj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 			printf("sorter for output of smj operator %p\n", output_smj_operator);
 
-			operator* matcher = get_new_registered_operator_for_query_plan(qp);
-			setup_result_match_operator(matcher, (operator* []){output_bnlj_operator, output_smj_operator});
-			printf("result match operator %p\n", matcher);
+			operator* output_hj_operator = get_new_registered_operator_for_query_plan(qp);
+			setup_external_sort_operator(output_hj_operator, TUPLES_DOWN_COUNTER_INF, hj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+			printf("sorter for output of hj operator %p\n", output_hj_operator);
+
+			operator* matcher1 = get_new_registered_operator_for_query_plan(qp);
+			setup_result_match_operator(matcher1, (operator* []){output_bnlj_operator, output_smj_operator});
+			printf("result match1 operator %p\n", matcher1);
+
+			operator* matcher2 = get_new_registered_operator_for_query_plan(qp);
+			setup_result_match_operator(matcher2, (operator* []){output_bnlj_operator, output_hj_operator});
+			printf("result match2 operator %p\n", matcher2);
+
+			operator* matcher3 = get_new_registered_operator_for_query_plan(qp);
+			setup_result_match_operator(matcher3, (operator* []){output_smj_operator, output_hj_operator});
+			printf("result match3 operator %p\n", matcher3);
 		}
 	}
 	printf("\n\n");
