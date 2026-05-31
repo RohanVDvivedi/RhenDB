@@ -657,7 +657,7 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 	uint64_t left_side_buffers = has_extended_type_info3(left_input_tuple_def, key_element_count, left_key_element_ids);
 	uint64_t right_side_buffers = has_extended_type_info3(right_input_tuple_def, key_element_count, right_key_element_ids);
 
-	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * (max(2 * right_side_buffers, left_side_buffers + right_side_buffers)), .job_counter = max_concurrent_jobs_count};
+	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * (max(2 * right_side_buffers, left_side_buffers + right_side_buffers)), .job_counter = max_concurrent_jobs_count + 1};
 	if(o == NULL)
 		return result;
 

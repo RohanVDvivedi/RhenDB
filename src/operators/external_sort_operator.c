@@ -700,7 +700,7 @@ operator_resource_counter setup_external_sort_operator(operator* o, tuples_down_
 	const tuple_def* record_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
 	// there are max_concurrent_jobs_count number of additional jobs each one doing atmost 1 comparison
-	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids) * max_concurrent_jobs_count, .job_counter = 1 + max_concurrent_jobs_count};
+	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids) * max_concurrent_jobs_count, .job_counter = max_concurrent_jobs_count + 1};
 	if(o == NULL)
 		return result;
 
