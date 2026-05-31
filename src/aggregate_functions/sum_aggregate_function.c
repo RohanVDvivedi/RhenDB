@@ -8,29 +8,23 @@
 
 #include<stdlib.h>
 
-/*
-	for unsigned integers output_type_info = LARGE_UINT_NULLABLE[32]
-	for integers output_type_info = LARGE_INT_NULLABLE[32]
-	for float output_type_info = FLOAT_double_NULLABLE
-*/
-
 static data_type_info* get_sum_output_type_info(const data_type_info* input_type_info)
 {
 	switch(input_type_info->type)
 	{
 		case BIT_FIELD :
 		case UINT :
-			return LARGE_UINT_NULLABLE[9];
+			return LARGE_UINT_NON_NULLABLE[9];
 		case LARGE_UINT:
-			return LARGE_UINT_NULLABLE[32];
+			return LARGE_UINT_NON_NULLABLE[32];
 
 		case INT :
-			return LARGE_INT_NULLABLE[9];
+			return LARGE_INT_NON_NULLABLE[9];
 		case LARGE_INT:
-			return LARGE_INT_NULLABLE[32];
+			return LARGE_INT_NON_NULLABLE[32];
 
 		case FLOAT :
-			return FLOAT_double_NULLABLE;
+			return FLOAT_double_NON_NULLABLE;
 
 		default :
 			return NULL;
@@ -72,9 +66,6 @@ static void* create_sum_state(const data_type_info* input_type_info)
 
 static datum get_sum_from_sum_state(const void* state, const data_type_info* input_type_info)
 {
-	if(state == NULL)
-		return (*NULL_DATUM);
-
 	switch(input_type_info->type)
 	{
 		case BIT_FIELD :
@@ -171,6 +162,7 @@ update_sum_state get_dedicated_update_sum_state_function(const data_type_info* i
 
 static int process_input(const aggregate_function* af_p, void** state_p, const datum inputs[])
 {
+	// always create an empty state if one does not exist yet
 	if((*state_p) == NULL)
 		(*state_p) = create_sum_state(af_p->input_type_infos[0]);
 
@@ -185,6 +177,10 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 
 static int produce_output(const aggregate_function* af_p, datum* output, void** state_p)
 {
+	// always create an empty state if one does not exist yet
+	if((*state_p) == NULL)
+		(*state_p) = create_sum_state(af_p->input_type_infos[0]);
+
 	(*output) = get_sum_from_sum_state((*state_p), af_p->input_type_infos[0]);
 	return 1;
 }
