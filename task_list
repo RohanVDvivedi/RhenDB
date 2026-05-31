@@ -1,5 +1,25 @@
 PICKED TASKS
 
+DESIGN CATALOG TABLES
+ db_types
+  => id, name, size(used only for primitve signed/unsigned integral, bit_field and float types)
+  * append only table
+
+ db_attributes
+  => id, name, type_id, rel_pos_in_type, count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_nullable, default_value, derived_from_expression(for derived columns of table and index expressions)
+  * append only table
+
+ db_tables
+  => id, version(increments on every alter statements), name, type_id, root_page_id, blobs_root_page_id
+  * only add column and drop column supported
+  * rel_pos_in_type is only incremented on add column in a new type on copy
+  * on drop a clone is done for all attributes and the type_id and a row from this clone is dropped
+  * default value and is nullable changes are made in place
+
+ db_indices
+  => id, name, table_id, key_type_id, root_page_id
+  * key_type_id implicitly has tuple_pointer (heap_table_root_page_id, page_id, tuple_index) in it for uniqueness and to find the actual tuples in the heap_table
+
 PRIORITY 0 CATALOG
  * THINK how to structure? how to lock<when doing ddl?> OR <when doing read for catalog>?
  * max columns 5000, of which at max 100 can be extended types
@@ -30,23 +50,6 @@ PRIORITY 0 CATALOG
    * drop column (leaves an empty space at the relative_position)
    * concurrent alters are blocked, table_name has a lock
    * add index and drop index are concurrently dropped
-
-CATALOG TABLES
- * types
-   * (uint64_t) id, (char [64]) name, (uint32_t) size (used only for INT, UINT, BIT_FIELD (for bits count <= 64), and FLOAT), (BIT_FIELD-1) is_nullable
-   * has default types listed above
-   * users can have their own new types
-   * new types can only be built using existing visible types
- * attributes
-   * (uint64_t) id, (char [64]) name, relative_position (uint64_t integer (ordered but not contiguous) position in the type), ((uint64_t)) type_id, (uint32_t) count (0 -> variable length, 1 -> not an array, N -> fixed length array)
- * catalog table's entries for types and attributes are never discarded
- * objects
-   * creator_tx_id, is_ready, (uint64_t) id, (char [128]) name, (BIT_FIELD-5) type (enum of heap_table, blob_store, btree_index and hash_index), (page_id) root_page_id, (uint64_t) type_id, (uint32_t) key_attributes_count (used only for hash_index and btree_index)
- * as soon as object entry for index is created it becomes insertable, but not usable unless is_ready flag is set
- * it can be deleted by anyone by taking a lock on it
- * lock on table name (not object->id) for altering, here on add column append a new relative_position, and on discard discard this specific relation_position
- * table_index_mapping
-  * table_object_id, table_type_id, table_attribute_relative_position, index_object_id, index_type_id, index_attribute_relative_position
 
  * need to take care for is_auto_increment, is_unique and default_value in attribute or types table
  * for auto_increment store a counter in the catalog table and increment it and return it
