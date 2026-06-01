@@ -21,38 +21,37 @@ DESIGN CATALOG TABLES
   * key_type_id implicitly has tuple_pointer (heap_table_root_page_id, page_id, tuple_index) in it for uniqueness and to find the actual tuples in the heap_table
 
 PRIORITY 0 CATALOG
- * THINK how to structure? how to lock<when doing ddl?> OR <when doing read for catalog>?
- * max columns 5000, of which at max 100 can be extended types
- * max tuple size is 75% of page
- * supported types
+ * for every primitive type add it's fixed size OR it's approximate component sizes, or 500 for extended types -> this number must never cross 3.9 GB for intermediate type infos of tuples and PAGE_SIZE for the ones that will go into heap tables
+ * never materialize-inline all of it at once, at any stage of the query
+ * maximum size of the tuple is first set to page size
+  * calculate maximum heap table tuple size that fit on tha page and then make it maximum size of the tuple and finalize it finally
+ * supported primitive types
    * INLINE TYPES
      * INT 1 to 32 bytes
      * UINT 1 to 32 bytes
      * BIT_FIELD 1 - 64 bits
      * FLOAT 4 and 8 bytes
-     * STRING 10 KB (but limited by page_size)
-     * BINARY 10 KB (but limited by page_size)
-     * DECIMAL 10 KB (but limited by page_size)
+     * STRING/CHAR/VARCHAR     handles upto 32 KB (500 bytes max in prefix)
+     * BINARY                  handles upto 32 KB (500 bytes max in prefix)
+     * DECIMAL                 handles upto 32 KB (500 bytes max in prefix)
    * EXTENDED TYPES
-     * TEXT 10 MB (prefix of 10 KB max)
-     * BLOB 10 MB (prefix of 10 KB max)
-     * NUMERIC 10 MB (prefix of 10 KB max)
-     * JSONB 10 MB (prefix of 10 KB max) (non-indexable)
-   * any attribute is nullable or not
-   * cache single instances of all these types to construct it from catalog tables
- * only these many types will be supported
+     * TEXT         32 KB - 32 MB (500 bytes max in prefix)
+     * BLOB         32 KB - 32 MB (500 bytes max in prefix)
+     * NUMERIC      32 KB - 32 MB (500 bytes max in prefix)
+     * JSONB        32 KB - 32 MB (500 bytes max in prefix) (non-indexable, unless json accessor is used on the stream)
+     * TUPLE_LIST   32 KB - 32 MB (500 bytes max in prefix) (non-indexable, unless type-casted as an array stream is used)
+   * any attribute is nullable or not, default_value and
+ * only these many primitive types will be supported, rest every other will be user defined types and types that go into table
  * no heap tuple larger than page may be generated, if min_tuple_size > page_size fail table definition, create and alter both fail here
- * we will have catalog management that allows mvcc, but the vaccum for these tables will differ
- * all catalog operations will lock the previous entry of the older version of the table, by it's name
- * table will have to be versioned, all entries are not rewritten, upon catalog changes, only interpretation changes, effectively giving us partitions
+ * all catalog operations will lock the previous entry of the older version of the table, by it's id
+ * table will have to be versioned, giving us partition
  * alter table will only support
    * add column (always adds column at the end, at previous relative_position.max + 1)
    * drop column (leaves an empty space at the relative_position)
    * concurrent alters are blocked, table_name has a lock
    * add index and drop index are concurrently dropped
-
  * need to take care for is_auto_increment, is_unique and default_value in attribute or types table
- * for auto_increment store a counter in the catalog table and increment it and return it
+ * for auto_increment store a counter in the db_table object and increment it and return it
  * for unique constraint maintain a lock in lock_manager and hold lock on the 80-bit serialized hash value and then only check the unique btree index
 
 
