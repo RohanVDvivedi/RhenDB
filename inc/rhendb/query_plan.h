@@ -11,6 +11,8 @@
 
 #include<cutlery/arraylist.h>
 
+#define MAX_INTERMEDIATE_TUPLE_SIZE 3.9e9 // set to 3.9 billion (4.2 is max value for this) bytes
+
 typedef struct query_plan query_plan;
 
 typedef enum operator_state operator_state;

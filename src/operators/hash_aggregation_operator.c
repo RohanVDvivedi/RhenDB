@@ -579,7 +579,7 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 
 	uint32_t input_datums_count = 0;
 	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(key_element_count + aggregate_functions_count));
-	uint32_t max_output_tuple_size = 0;
+	uint64_t max_output_tuple_size = 8;
 
 	for(uint32_t i = 0; i < key_element_count; i++)
 	{
@@ -605,6 +605,12 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 
 		sprintf(output_dti->containees[j].field_name, "agg_%u", i);
 		output_dti->containees[j].al.type_info = (data_type_info*) aggregate_functions[i]->output_type_info;
+	}
+
+	if(max_output_tuple_size > MAX_INTERMEDIATE_TUPLE_SIZE)
+	{
+		printf("too big output tuple for hash_aggregation_operator\n");
+		exit(-1);
 	}
 
 	initialize_tuple_data_type_info(output_dti, "keyed_aggregates", 0, max_output_tuple_size, key_element_count + aggregate_functions_count);

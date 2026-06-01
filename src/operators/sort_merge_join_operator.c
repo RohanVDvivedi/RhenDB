@@ -409,7 +409,7 @@ operator_resource_counter setup_sort_merge_join_operator(operator* o, operator* 
 	o->free_resources = free_resources;
 
 	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(2));
-	uint32_t max_output_tuple_size = 0;
+	uint64_t max_output_tuple_size = 8;
 
 	{
 		data_type_info* left_dti = left_input_tuple_def->type_info;
@@ -433,6 +433,12 @@ operator_resource_counter setup_sort_merge_join_operator(operator* o, operator* 
 
 		strcpy(output_dti->containees[1].field_name, "right");
 		output_dti->containees[1].al.type_info = shallow_clone_into_nullable_type(right_dti);
+	}
+
+	if(max_output_tuple_size > MAX_INTERMEDIATE_TUPLE_SIZE)
+	{
+		printf("too big output tuple for sort_merge_join_operator\n");
+		exit(-1);
 	}
 
 	initialize_tuple_data_type_info(output_dti, "join", 0, max_output_tuple_size, 2);

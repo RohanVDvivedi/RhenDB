@@ -178,7 +178,7 @@ operator_resource_counter setup_simple_aggregation_operator(operator* o, operato
 
 	uint32_t input_datums_count = 0;
 	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(aggregate_functions_count));
-	uint32_t max_output_tuple_size = 0;
+	uint64_t max_output_tuple_size = 8;
 
 	for(uint32_t i = 0; i < aggregate_functions_count; i++)
 	{
@@ -191,6 +191,12 @@ operator_resource_counter setup_simple_aggregation_operator(operator* o, operato
 
 		sprintf(output_dti->containees[i].field_name, "agg_%u", i);
 		output_dti->containees[i].al.type_info = (data_type_info*) aggregate_functions[i]->output_type_info;
+	}
+
+	if(max_output_tuple_size > MAX_INTERMEDIATE_TUPLE_SIZE)
+	{
+		printf("too big output tuple for simple_aggregation_operator\n");
+		exit(-1);
 	}
 
 	initialize_tuple_data_type_info(output_dti, "aggregates", 0, max_output_tuple_size, aggregate_functions_count);
