@@ -1,26 +1,78 @@
 PICKED TASKS
 
+
+
+
+
+PRIORITY 0 SIMPLE OPERATORS SOURCE/SINK
+
+DB acess operators
+ * source operartor to read all tuples from an interim_tuple_store (used for static query like a values query)
+
+ * all operators here are single threaded (needs 2-3 frames each)
+  * source operator to produce all tuples given a heap_table, from a from_page_id (inclusive) to to_page_id (exclusive), NULL_PAGE_ID implies do not stop
+  * source operator to produce all tuples given a bplus_tree that match a key range, both ends being exclusive or inclusive, in forward or reverse direction, NULL key implies going until end of stream
+    * based on a function to return a bplus_tree iterator using the passed params for also doing index nested loop joins
+  * source operator to produce all tuples given a hash_table that match a key exactly
+    * based on a function to return a hash_table iterator using the passed params for also doing index nested loop joins
+ * all inserts here individually happening inside a new mini transaction (needs as many frames as height of the tree involved + 2)
+  * operator to insert into heap_table (heap table maintenance in separate individual mini transaction)
+  * operator to insert into bplus_tree always inserts only if key is unique
+  * operator to insert into hash_table takes is_unique flag
+  * operator to delete into heap_table by root_page_id, page_id, tuple_index
+  * operator to delete into bplus_tree by exact key
+  * operator to delete into hash_table by exact key
+
+ * relation insert/delete to relation will be designed later
+   * insert to heap_table first, then extend the blob_stores in place updating the heap_tuple
+   * only after that inserting into the indexes, after the real tuple is set in it's place at the desired root_page_id, page_id, tuple_index
+ * operator to receive root_page_id, page_id, tuple_index, materialize it into tuple and return it, with or without sorting in bulk
+   * to receive just page_id, tuple_index (take root_page_id -> tuple_def implicitly as input param) and do the same
+ * index nested loop join for bplus_tree and hash_table using the iterator maker functions above
+
+ * table_locks -> locks the table_id of the table (not the version) for schema changes
+ * tuple_locks -> lock root_page_id, page_id, tuple_index
+ * key_locks -> hash key how ever big it is concatenate it with root_page_id and lock it
+
+
+
+
+
+
+
+
+
 DESIGN CATALOG TABLES
  db_types
-  => id, name, size(used only for primitve signed/unsigned integral, bit_field and float types)
-  * append only table
+  => mvcc_hdr, id, name, size(used only for primitve signed/unsigned integral, bit_field and float types)
+  * if the id < 10000, then it is permanent and can not be deleted
 
  db_attributes
-  => id, name, type_id, rel_pos_in_type, count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_nullable, default_value, derived_from_expression(for derived columns of table and index expressions)
+  => mvcc_hdr, id, name, type_id, rel_pos_in_type, count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_nullable, default_value, derived_from_expression(for derived columns of table and index expressions)
   * append only table
 
  db_tables
-  => id, version(increments on every alter statements), name, type_id, root_page_id, blobs_root_page_id
+  => mvcc_hdr, id, version(increments on every alter statements), name, type_id, root_page_id, blobs_root_page_id
   * only add column and drop column supported
   * rel_pos_in_type is only incremented on add column in a new type on copy
   * on drop a clone is done for all attributes and the type_id and a row from this clone is dropped
   * default value and is nullable changes are made in place
 
  db_indices
-  => id, name, table_id, key_type_id, root_page_id
+  => mvcc_hdr, id, name, table_id, key_type_id, root_page_id
   * key_type_id implicitly has tuple_pointer (heap_table_root_page_id, page_id, tuple_index) in it for uniqueness and to find the actual tuples in the heap_table
 
-PRIORITY 0 CATALOG
+ db_ref_counters
+  * root_page_id, reference_count, tuple_def, key_element_ids, key_element_count, object_type (bplus_tree, hash_table, heap_table, blob_store)
+  * delete the underlying data structure only if the reference_counter reaches 0
+  * stores root_page_id and reference_count for all non system tables
+
+ db_schema_blobs (blob_store for storing default value or tuple_defs)
+
+ db_name_index
+  * name, db_object_type, tuple_pointer
+
+PRIORITY 1 CATALOG
  * for every primitive type add it's fixed size OR it's approximate component sizes, or 500 for extended types -> this number must never cross 3.9 GB for intermediate type infos of tuples and PAGE_SIZE for the ones that will go into heap tables
  * never materialize-inline all of it at once, at any stage of the query
  * maximum size of the tuple is first set to page size
@@ -57,46 +109,6 @@ PRIORITY 0 CATALOG
 
 
 
-
-PRIORITY 1 TABLES & INDEXES
- * no heap tuple larger than page may begenerated
- * only support for heap_table, blob_store(for all extended columns), and btree_index(key size lesser than 1/3 of DB page)
-  * btree_index will have an entry that store key, tuple_location(root_page_id, page_id, tuple_index)
-  * root_page_id allows us to know about all versions of the table effectively picking the right altered version from the right table
-  * alter table creates new versions not modify old tables
- * insert tuple is a set of mini transactions
-   * insert to heap_table with right mvcc header but no column data
-   * hold latch on the heap_page and commit the previous mini tx
-   * set inline and extended attributes one by one
-   * for inline attributes do nothing
-   * for extended types commit current mini tx and start a new one
-   * open blob type tuple large types bases appended
-   * append bytes in chunk of 1 MB and commit after every time updating the heap page tuple in that mini transaction, to preserve head (NOP if the head remains unchanged)
-   * once all columns are set commit the final minitransaction
-   * then finally create individual index entries and insert into all the indices
-   * if any mini transaction aborts vaccum will take care of clearing it based on it's mvcc header
- * to update do what you did with insert but before that create a mini transaction to write xmax to the older tuple version
- * to delete just write your xmax to older tuple version
- * on vaccum
-   * first delete all the index entries one by one in individual mini transactions
-   * then destroy all extended types by discarding 1 MB at a time, and intermittently setting the new heads
-   * finally delete the heap page tuple in context
- * in all these operations take enough number of buffers for these operators that use these functions
- * modifications check locks and mvcc visibility both
- * only tuple locks (root_page_id, page_id, tuple_index) will be available first (root_page_id belongs to the heap_table in context)
-
-
-
-
-
-
-PRIORITY 2 SCANS & INDEX PROBES
- * heap_table_scan_operator -> starts from first full heap pages until reaches the end
- * index_scan_operator -> collects valid tuples in batches, sorts (page_id, tuple_index) in a job for each batch, returns heap tuples as is
- * index_lookup_job -> for index nested loop join
- * check mvcc conditions for the tuples being visible, every single time
-   * if the transaction is serializable check for locks here too
- * implement operator with index nested loop join (need 2 buffers, because of latch crabbing)
 
 
 
@@ -137,16 +149,13 @@ FUTURE TASKS
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock (*future, do it when query optimizer and catalog tables are ready)
 
  5.* implement lcm, gcd like aggregate functions (*future)
-   * avg is just sum/count
 
- 6.* optimize hash aggregation operator
-
- 7.* always sum up all the operator_resource_counter-s after making the operators and request that many resources from the rhendb's resource_usage_limiter-s
+ 6.* always sum up all the operator_resource_counter-s after making the operators and request that many resources from the rhendb's resource_usage_limiter-s
    * once the query is done and shutdown, free up all the resources
    * if required store the buffers_allotted and thread_alloted in the query plan, and free the resources when not needed by some means later
    * finally before we do all this, make sure that the operator actually calculates the right number of resources for bufferpool and threadpool
 
- 8.* implement streaming_cross_join_operator
+ 7.* implement streaming_cross_join_operator
    * supports none of PRESERVE_LEFT and not even PRESERVE_RIGHT
    * start batching tuples on both sides left and right
    * maintain iterators on both sides: begin, unseen_batch_first, unseen_batch_last
@@ -156,16 +165,6 @@ FUTURE TASKS
         for tuple2 in [unseen_batch_first, unseen_batch_last]
           produce(tuple1, tuple2) OR produce(tuple2, tuple1)
       for side1.batch_size = 0, start collecting the batch again for side1
-
-SYSTEM LIMITS
- * limit extended (text, blob, numeric, jsonb) columns to become no more than 15 MB big in it's total number of bytes
- * any table will not allowed to have more than 5000 columns, and no more than 100 of them can be extended types
- * simple varchar, array, tuples can not be more than 10 KB at maximum
- * So, no more than 10 KB can be prefixed for any extended types
- * this limits total tuple size for heap table (which are page_size) to 1.55 GB, without metadata, which keeps it well under 2GB limit of tuple store
- * the same limits also apply for intermediate tuple sizes
- * both the limits are also applicable for queries, the referenced columns all of them in the queries must not cross this limits
-   * in all of referenced columns in query, there must not be more than 5000 total columns, and no more than 100 of them being extended
 
 DESIGN METHODOLOGY
    * we will use postgresql architecture over (mysql like) mini transactions
