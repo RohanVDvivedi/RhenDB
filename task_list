@@ -26,6 +26,7 @@ DB acess operators
  * relation insert/delete to relation will be designed later
    * insert to heap_table first, then extend the blob_stores in place updating the heap_tuple
    * only after that inserting into the indexes, after the real tuple is set in it's place at the desired root_page_id, page_id, tuple_index
+ * delete is not important as trash_cleaner will do this later
  * operator to receive root_page_id, page_id, tuple_index, materialize it into tuple and return it, with or without sorting in bulk
    * to receive just page_id, tuple_index (take root_page_id -> tuple_def implicitly as input param) and do the same
  * index nested loop join for bplus_tree and hash_table using the iterator maker functions above
@@ -138,7 +139,7 @@ FUTURE TASKS
    * savepoints will flip the is_xmin_NULL bit to 1 to undo an insert
    * and will flip the is_xmax_NULL bit to 1 to undo a delete
    * then we will do this until we hit a ROLLBACK to savepoint is hit
-   * we will let vaccum do it's task of cleaning up inserts later in time
+   * we will let trash_cleaner do it's task of cleaning up inserts later in time
    * this stack will be in volatile page store and upon a crash we will just consider this transaction as aborted and we will never need this information
 
  3.* define statistics tables (*future and (low priority)) - persistent
@@ -173,7 +174,7 @@ DESIGN METHODOLOGY
    * inserts to table
      * insert row in heap_table
      * insert all index entries in all indexes, only after heap table row is inserted
-   * true deletion only happens in vaccum job
+   * true deletion only happens in trash_cleaner job (aka postgresql's vaccum)
      * scan heap_table and find the rows on a page that need to be discarded
      * discard all the index entries for these row
      * only then discard the heap_table row
@@ -183,7 +184,7 @@ DESIGN METHODOLOGY
    * inserts/deletes to indexes will be done in mini transactions not owned by anyone
    * updates are just logical delete (xmax = self) followed by an actual insert into the heap
    * reads will be be done without mini transactions, but in a fixed number of them, controlled by the resource usage limiter of the bufferpool
-   * there will be vaccum, like postgresql
+   * there will be trash_cleaner, like postgresql's vaccum
    * header will include xmin, xmax, is_xmin_committed?, is_xmax_committed?, is_xmin_aborted?, is_xmax_aborted? and both of which can be NULL
      * xmin, xmax will be as wide as transaction_table suggests
      * the *? are advisory bitmaps and should be kept updated when ever a heap page is being read (if only a read lock on page is held then let another writer do it asynchronously) or written
