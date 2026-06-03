@@ -1,5 +1,31 @@
 PICKED TASKS
 
+1.
+new tuple transformer
+ * make a tuple_transformer to produce row numbers as uint64_t, concatenating an auto-incrementing integer, starting with a fixed value, roll to 0 on overflow
+ * make a tuple_transformer to produce row identifier as uint64_t, concatenating a fixed integral number
+
+------------
+
+2.
+given an interim_tuple_store and tuple_def
+fixed_data_set_operator
+ * read tuples from interim_tuple_store and produce them
+
+------------
+
+3.
+given root_page_id, heap_table_tuple_defs
+ * heap_table_scan_operator, produce tuple_pointer and tuple, concatenated
+ * heap_table_lookup_operator, given a stream of tuple pointers from an input operator produce all tuple_pointer and tuple
+ * heap_table_insert_operator given a tuple, insert it, in batches
+ * heap_table_delete_operator given a tuple_pointer, delete it
+ * collect changed pages in notifier and update one in individual mini transactions
+ * once completed, if the int produce_tuple_pointers is passed, then produce the inserted/deleted tuple_pointers
+ * produces tuple_pointers only after the corresponding mini transaction commits
+
+
+
 
 
 
@@ -10,11 +36,12 @@ DB acess operators
  * source operartor to read all tuples from an interim_tuple_store (used for static query like a values query)
 
  * all operators here are single threaded (needs 2-3 frames each)
-  * source operator to produce all tuples given a heap_table, from a from_page_id (inclusive) to to_page_id (exclusive), NULL_PAGE_ID implies do not stop
+  * source operator to produce all tuples given a heap_table, produces (tuple_pointer, tuple)
+   * operator to receive tuple_pointers and produce heap_table tuples of the above format, after collecting a batch_count number of them and sorting them by page_id and tuple_index in order (keep batch_count = 0 for no sorting in batches)
   * source operator to produce all tuples given a bplus_tree that match a key range, both ends being exclusive or inclusive, in forward or reverse direction, NULL key implies going until end of stream
-    * based on a function to return a bplus_tree iterator using the passed params for also doing index nested loop joins
-  * source operator to produce all tuples given a hash_table that match a key exactly
-    * based on a function to return a hash_table iterator using the passed params for also doing index nested loop joins
+    * based on a function to return a bplus_tree iterator using the passed params for also doing index nested loop joins, return NULL if the bplus_tree is empty of is at the end of the scan
+  * source operator to produce all tuples given a hash_table that match a key, key_def, key_element_ids, key_element_count exactly
+    * based on a function to return a hash_table iterator using the passed params for also doing index nested loop joins, returns NULL if the hash_table is empty of is at the end of the scan
  * all inserts here individually happening inside a new mini transaction (needs as many frames as height of the tree involved + 2)
   * operator to insert into heap_table (heap table maintenance in separate individual mini transaction)
   * operator to insert into bplus_tree always inserts only if key is unique
@@ -58,6 +85,7 @@ DESIGN CATALOG TABLES
   * rel_pos_in_type is only incremented on add column in a new type on copy
   * on drop a clone is done for all attributes and the type_id and a row from this clone is dropped
   * default value and is nullable changes are made in place
+  * to create a new partition, insert a new entry here with a new root_page_id and a new cloned type_id and attributes
 
  db_indices
   => mvcc_hdr, id, name, table_id, key_type_id, root_page_id
