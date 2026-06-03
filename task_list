@@ -1,11 +1,5 @@
 PICKED TASKS
 
-1.
-new tuple transformer
- * make a tuple_transformer to produce row numbers as uint64_t, concatenating an auto-incrementing integer, starting with a fixed value, roll to 0 on overflow
- * make a tuple_transformer to produce row identifier as uint64_t, concatenating a fixed integral number
-
-------------
 
 2.
 given an interim_tuple_store and tuple_def
