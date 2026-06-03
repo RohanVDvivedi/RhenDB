@@ -1,15 +1,8 @@
 PICKED TASKS
 
 
-2.
-given an interim_tuple_store and tuple_def
-fixed_data_set_operator
- * read tuples from interim_tuple_store and produce them
-
-------------
-
-3.
-given root_page_id, heap_table_tuple_defs
+heap table operators
+given root_page_id and heap_table_tuple_defs
  * heap_table_scan_operator, produce tuple_pointer and tuple, concatenated
  * heap_table_lookup_operator, given a stream of tuple pointers from an input operator produce all tuple_pointer and tuple
  * heap_table_insert_operator given a tuple, insert it, in batches
@@ -17,6 +10,9 @@ given root_page_id, heap_table_tuple_defs
  * collect changed pages in notifier and update one in individual mini transactions
  * once completed, if the int produce_tuple_pointers is passed, then produce the inserted/deleted tuple_pointers
  * produces tuple_pointers only after the corresponding mini transaction commits
+
+
+
 
 
 
