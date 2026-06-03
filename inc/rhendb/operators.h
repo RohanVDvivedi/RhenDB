@@ -5,6 +5,9 @@
 
 #include<rhendb/operator_resource_counter.h>
 
+// generates fixed set of tuples from constant_dataset_p havuing tuple_def of record_def
+operator_resource_counter setup_constant_dataset_operator(operator* o, interim_tuple_store* constant_dataset_p, const tuple_def* record_def);
+
 // if o = NULL, in the following functions, then operator is not initialized, but a valid operator_resource_counter is still returned
 // generator() and consumer() are considered to be not part of the query_plan and you must take care of their resources externally
 

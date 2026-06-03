@@ -48,9 +48,6 @@ static void execute(operator* o)
 
 	while(1)
 	{
-		if(can_not_proceed_for_execution_operator(o))
-			break;
-
 		uint32_t tuple_size = get_tuple_size_using_tuple_size_def2(&(inputs->input_tuple_def->size_def), inputs->in_strm, read_tuple_prefix_from_stream);
 		if(tuple_size == 0)
 		{

@@ -24,9 +24,6 @@ static void execute(operator* o)
 
 	while(1)
 	{
-		if(can_not_proceed_for_execution_operator(o))
-			break;
-
 		void* curr_tuple = inputs->generator(inputs->generator_context, inputs->generator_tuple_def);
 		if(curr_tuple == NULL)
 			break;
