@@ -243,8 +243,12 @@ int main()
 		printf("source operator %p\n", o);
 		operator* input = o;
 
+		operator* i1 = get_new_registered_operator_for_query_plan(qp);
+		setup_identity_operator(i1, input);
+		append_tuple_transformer(&(i1->output_tuple_transformers), get_new_row_number_prepender_transformer(get_tuple_def_for_tuples_to_be_consumed_from(i1), 7));
+		printf("i1 operator %p\n", i1);
 		o = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(o, input, print_consumer, NULL);
+		setup_consumer_operator(o, i1, print_consumer, NULL);
 		printf("sink operator %p\n", o);
 
 		for(int i = 0; i < IDENTITY_OPERATORS_COUNT; i++)
@@ -274,8 +278,12 @@ int main()
 			input = o;
 		}
 
+		operator* i2 = get_new_registered_operator_for_query_plan(qp);
+		setup_identity_operator(i2, input);
+		append_tuple_transformer(&(i2->output_tuple_transformers), get_new_row_identifier_prepender_transformer(get_tuple_def_for_tuples_to_be_consumed_from(i2), 777));
+		printf("i2 operator %p\n", i2);
 		o = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(o, input, print_consumer, NULL);
+		setup_consumer_operator(o, i2, print_consumer, NULL);
 		printf("sink operator %p\n", o);
 	}
 	printf("\n\n");
