@@ -3,13 +3,13 @@ PICKED TASKS
 
 heap table operators
 given root_page_id and heap_table_tuple_defs
- * heap_table_scan_operator, produce tuple_pointer and tuple, concatenated
- * heap_table_lookup_operator, given a stream of tuple pointers from an input operator produce all tuple_pointer and tuple
- * heap_table_insert_operator given a tuple, insert it, in batches
- * heap_table_delete_operator given a tuple_pointer, delete it
- * collect changed pages in notifier and update one in individual mini transactions
- * once completed, if the int produce_tuple_pointers is passed, then produce the inserted/deleted tuple_pointers
- * produces tuple_pointers only after the corresponding mini transaction commits
+ *2 heap_table_scan_operator, produce tuple_pointer and tuple, concatenated
+ *3 heap_table_lookup_operator, given a stream of tuple pointers from an input operator produce all tuple_pointer and tuple
+ *1 heap_table_insert_operator given a tuple, insert it, in batches
+ *4 heap_table_delete_operator given a tuple_pointer, delete it
+   * collect changed pages in notifier and update one in individual mini transactions
+   * once completed, if the int produce_tuple_pointers is passed, then produce the inserted/deleted tuple_pointers
+   * produces tuple_pointers only after the corresponding mini transaction commits
 
 
 
