@@ -1,35 +1,17 @@
 PICKED TASKS
 
-P0
 
-bplus_tree operators (root_page_id, bplus_tree_tuple_defs)
- * bplus_tree_insert_operator -> tuple -> tuple (if produce_output = 1)
- * bplus_tree_scan_operator -> (start_scan_key, start_find_pos, stop_scan_key, stop_find_pos, key_element_count) -> tuple
- * bplus_tree_delete_operator -> key -> tuple (if produce_output = 1)
-
-hash_table operators (hash_table_handle, hash_table_tuple_defs)
- * hash_table_insert_operator -> tuple -> tuple (if produce_output = 1)
- * hash_table_scan_operator -> (scan_key) -> tuple
- * hash_table_delete_operator -> key -> tuple (if produce_output = 1)
-
-** insert and scan here can be directly used in the index operators
-
-P1
-
-heap table operators
-given root_page_id and heap_table_tuple_defs
- *2 heap_table_scan_operator, produce (tuple_pointer, tuple), concatenated
- *3 heap_table_lookup_operator, given a stream of tuple pointers from an input operator produce (tuple_pointer, tuple)
- *1 heap_table_insert_operator given a tuple, insert it, in batches
- *4 heap_table_delete_operator given a tuple_pointer, delete it
-   * collect changed pages in notifier and update one in individual mini transactions
-   * once completed, if the int produce_output is passed, then produce the inserted/deleted (tuple_pointers, tuple)
-
-* database modifying operators produce output only after the corresponding mini transaction inside that operator commits
-
-
-
-
+start with
+  rhendb_type
+  rhendb_type_info
+   getter to get a data_type_info from this for fully materialized type (possibly 32 MB or 32 KB string/binary/text/blob types) and page fitting size which is fixed size (for integers and other primitive types) or 500 for extended types
+  rhendb_alter_type
+   ADD_COLUMN
+   DROP_COLUMN
+  rhendb_alteration
+   type, uint64_t rel_pos, uint32_t real_pos, default_value, char* computed_from_expression
+  rhendb_partition
+   uint64_t heap_root_page_id, uint64_t blob_store_root_page_id, data_type_info* dti_p
 
 
 
@@ -39,31 +21,18 @@ given root_page_id and heap_table_tuple_defs
 PRIORITY 0 SIMPLE OPERATORS SOURCE/SINK
 
 DB acess operators
- * all operators here are single threaded (needs 2-3 frames each)
-  * source operator to produce all tuples given a heap_table, produces (tuple_pointer, tuple)
-   * operator to receive tuple_pointers and produce heap_table tuples of the above format, after collecting a batch_count number of them and sorting them by page_id and tuple_index in order (keep batch_count = 0 for no sorting in batches)
-  * source operator to produce all tuples given a bplus_tree that match a key range, both ends being exclusive or inclusive, in forward or reverse direction, NULL key implies going until end of stream
-    * based on a function to return a bplus_tree iterator using the passed params for also doing index nested loop joins, return NULL if the bplus_tree is empty of is at the end of the scan
-  * source operator to produce all tuples given a hash_table that match a key, key_def, key_element_ids, key_element_count exactly
-    * based on a function to return a hash_table iterator using the passed params for also doing index nested loop joins, returns NULL if the hash_table is empty of is at the end of the scan
- * all inserts here individually happening inside a new mini transaction (needs as many frames as height of the tree involved + 2)
-  * operator to insert into heap_table (heap table maintenance in separate individual mini transaction)
-  * operator to insert into bplus_tree always inserts only if key is unique
-  * operator to insert into hash_table takes is_unique flag
-  * operator to delete into heap_table by root_page_id, page_id, tuple_index
-  * operator to delete into bplus_tree by exact key
-  * operator to delete into hash_table by exact key
+ * scan over relation_heap, in parallel with all versions/partitions, atmost max_concurrent scans at a time
+ * insert/update/delete into relation for sink operator
+ * scan over relation_index (bplus_tree index), given start_scan_key, start_find_pos and stop_scan_key, stop_find_pos, decides scan direction on it's own, start and scan can be exclusive inclusive
+ * index nested loop join
 
- * relation insert/delete to relation will be designed later
-   * insert to heap_table first, then extend the blob_stores in place updating the heap_tuple
-   * only after that inserting into the indexes, after the real tuple is set in it's place at the desired root_page_id, page_id, tuple_index
- * delete is not important as trash_cleaner will do this later
- * operator to receive root_page_id, page_id, tuple_index, materialize it into tuple and return it, with or without sorting in bulk
-   * to receive just page_id, tuple_index (take root_page_id -> tuple_def implicitly as input param) and do the same
- * index nested loop join for bplus_tree and hash_table using the iterator maker functions above
+ * mvcc check is done for the output of every scan
+ * filter check is done again for the output of index if it's key is possibly extended type
 
- * table_locks -> locks the table_id of the table (not the version) for schema changes
- * tuple_locks -> lock root_page_id, page_id, tuple_index
+* deletes taken care of by trash_cleaner task over that tuple, to be implemented later, also takes care of filling up the hint bits of mvcc headers
+
+ * table_locks -> locks the table_id of the table (not just the version) for schema changes
+ * tuple_locks -> lock root_page_id, page_id, tuple_index -> on update or delete, lock the older version, newer version is not even visible
  * key_locks -> hash key how ever big it is concatenate it with root_page_id and lock it
 
 
@@ -151,8 +120,6 @@ PRIORITY HIGH LEVEL TASKS (not yet prioritizwd)
  * make a function to convert a sql expression from SQLtoAST into a tuple transformer
  * need expression evaluation function for expression of type provided by SQLtoAST
 
- * extended types will stay same until and as long as until their materialized versions are required, until they are finally needed
-
 FUTURE TASKS
 
  1*
@@ -187,17 +154,6 @@ FUTURE TASKS
    * once the query is done and shutdown, free up all the resources
    * if required store the buffers_allotted and thread_alloted in the query plan, and free the resources when not needed by some means later
    * finally before we do all this, make sure that the operator actually calculates the right number of resources for bufferpool and threadpool
-
- 7.* implement streaming_cross_join_operator
-   * supports none of PRESERVE_LEFT and not even PRESERVE_RIGHT
-   * start batching tuples on both sides left and right
-   * maintain iterators on both sides: begin, unseen_batch_first, unseen_batch_last
-   * batch unseen tuples (batch_size bytes big) atleast on any side
-   * and then nested loop as follows:
-      for tuple1 in [begin, unseen_batch_first)
-        for tuple2 in [unseen_batch_first, unseen_batch_last]
-          produce(tuple1, tuple2) OR produce(tuple2, tuple1)
-      for side1.batch_size = 0, start collecting the batch again for side1
 
 DESIGN METHODOLOGY
    * we will use postgresql architecture over (mysql like) mini transactions
