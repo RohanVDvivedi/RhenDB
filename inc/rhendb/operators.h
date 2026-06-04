@@ -22,10 +22,10 @@ operator_resource_counter setup_result_match_operator(operator* o, operator* inp
 
 operator_resource_counter setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count);
 
-#include<rhendb/aggregate_functions.h>
+#include<rhendb/rhendb_functions.h>
 
 // the data_type_infos pointed to by the aggregate_input_element_ids, must be the same as the output from the input_operator and the input of the corresponding aggregate_functions
-operator_resource_counter setup_simple_aggregation_operator(operator* o, operator* input_operator, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids);
+operator_resource_counter setup_simple_aggregation_operator(operator* o, operator* input_operator, uint32_t aggregate_functions_count, rhendb_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids);
 
 #include<rhendb/tuples_down_counter.h>
 
@@ -43,9 +43,9 @@ operator_resource_counter setup_stream_output_operator(operator* o, operator* in
 
 // keyed aggregation operators
 
-operator_resource_counter setup_sorted_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids);
+operator_resource_counter setup_sorted_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, rhendb_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids);
 
-operator_resource_counter setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t bucket_count_per_parttion, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size);
+operator_resource_counter setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, rhendb_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t bucket_count_per_parttion, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size);
 
 // join operators
 
