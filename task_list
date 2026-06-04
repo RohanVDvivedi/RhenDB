@@ -119,10 +119,10 @@ PRIORITY HIGH LEVEL TASKS (not yet prioritizwd)
  * need expression evaluation function for expression of type provided by SQLtoAST
 
  * implement lcm, gcd like aggregate functions
- * implement get date, time, with timezone as rhendb_function
- * implement concat and substring as rhendb_functions
- * implement double fucntions, sin, cos, tan, asin, acos, atan, log, exp
- * implement type casting functions to large_uint, large_int, uint, int, string to numbers
+ * implement get date, time, with timezone, and time in string to unix epoch -> rhendb_function (with is_aggregate_function = 0)
+ * implement concat and substring -> rhendb_functions (with is_aggregate_function = 0)
+ * implement double fucntions, sin, cos, tan, asin, acos, atan, log, expr -> rhendb_function (with is_aggregate_function = 0)
+ * implement type casting functions to large_uint, large_int, uint, int, string to numbers -> rhendb_function (with is_aggregate_function = 0)
 
 FUTURE TASKS
 
