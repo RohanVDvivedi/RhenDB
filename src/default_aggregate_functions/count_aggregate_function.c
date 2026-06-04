@@ -1,0 +1,68 @@
+#include<rhendb/rhendb_functions.h>
+
+#include<tuplestore/tuple_def.h>
+#include<tuplestore/tuple.h>
+
+#include<stdlib.h>
+
+static int process_input(const rhendb_function* af_p, void** state_p, const datum inputs[])
+{
+	if((*state_p) == NULL)
+		(*state_p) = calloc(sizeof(uint64_t), 1);
+
+	if(!is_datum_NULL(&(inputs[0])))
+		(**((uint64_t**)state_p))++;
+
+	return 1;
+}
+
+static int produce_output(const rhendb_function* af_p, datum* output, void** state_p)
+{
+	(*output) = (datum){.uint_value = 0};
+
+	if((*state_p) != NULL)
+		output->uint_value = (**((uint64_t**)state_p));
+
+	return 1;
+}
+
+static void destroy_state(const rhendb_function* af_p, void** state_p)
+{
+	// NOP if the state_p is already NULL
+	if((*state_p) == NULL)
+		return;
+
+	free(*state_p);
+	(*state_p) = NULL;
+}
+
+static void destroy_rhendb_function(rhendb_function* af_p)
+{
+	free(af_p);
+}
+
+rhendb_function* get_count_aggregate_function(const data_type_info* input_type_info)
+{
+	rhendb_function* af_p = malloc(size_of_rhendb_function(1));
+
+	af_p->context_p = NULL;
+
+	af_p->is_aggregate_function = 1;
+
+	af_p->process_input = process_input;
+
+	af_p->produce_output = produce_output;
+
+	af_p->destroy_state = destroy_state;
+
+	af_p->destroy_rhendb_function = destroy_rhendb_function;
+
+	af_p->output_type_info = UINT_NON_NULLABLE[8];
+
+	af_p->buffers_resource_count = 0;
+
+	af_p->input_type_infos_count = 1;
+	af_p->input_type_infos[0] = input_type_info;
+
+	return af_p;
+}
