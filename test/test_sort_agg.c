@@ -61,7 +61,7 @@ int main(int argc, char** argv)
 
 	// make operators
 
-	aggregate_function* const AGGREGATES[] = {
+	rhendb_function* const AGGREGATES[] = {
 		get_count_aggregate_function(record_def.type_info),
 		get_count_aggregate_function(record_def.type_info->containees[4].al.type_info),
 
@@ -101,7 +101,7 @@ int main(int argc, char** argv)
 		printf("sorter operator %p\n", sorter_operator);
 
 		operator* aggregate_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_sorted_aggregation_operator(aggregate_operator, sorter_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS);
+		setup_sorted_aggregation_operator(aggregate_operator, sorter_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, sizeof(AGGREGATES) / sizeof(rhendb_function*), AGGREGATES, AGGREGATE_INPUTS);
 		printf("aggregate operator %p\n", aggregate_operator);
 
 		operator* sorter_operator2 = get_new_registered_operator_for_query_plan(qp);
