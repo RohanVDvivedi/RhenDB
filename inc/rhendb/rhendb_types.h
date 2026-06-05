@@ -5,7 +5,7 @@
 
 #include<tuplestore/data_type_info.h>
 
-#define MAX_INLINE_SIZE 250
+#define MAX_INLINE_SIZE 230
 
 #define TRANSACTION_ID_WIDTH 10 // in bytes, this integer is big enough for most use case
 
