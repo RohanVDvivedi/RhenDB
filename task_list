@@ -2,16 +2,11 @@ PICKED TASKS
 
 
 start with
-  rhendb_type
-  rhendb_type_info
-   getter to get a data_type_info from this for fully materialized type (possibly 32 MB or 32 KB string/binary/text/blob types) and page fitting size which is fixed size (for integers and other primitive types) or 500 for extended types
-  rhendb_alter_type
-   ADD_COLUMN
-   DROP_COLUMN
-  rhendb_alteration
-   type, uint64_t rel_pos, uint32_t real_pos, default_value, char* computed_from_expression
+  finish implementing get_data_type_info_for_rhendb_type_info
   rhendb_partition
    uint64_t heap_root_page_id, uint64_t blob_store_root_page_id, data_type_info* dti_p
+  make a function to get constructed data_type_info after all alterations are performed as a log entry
+  this is what makes a partition
 
 
 

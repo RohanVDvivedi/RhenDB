@@ -68,7 +68,7 @@ struct rhendb_type_info
 	};
 };
 
-data_type_info* get_data_type_info(const rhendb_type_info* rti_p, const rhendb* rdb);
+data_type_info* get_data_type_info_for_rhendb_type_info(const rhendb_type_info* rti_p, const rhendb* rdb);
 
 typedef enum rhendb_alter_type rhendb_alter_type;
 enum rhendb_alter_type
@@ -85,8 +85,9 @@ struct rhendb_alter_operation
 	uint32_t real_position;
 	uint64_t relative_position;
 
-	char column_name;
+	char column_name[64];
 	rhendb_type_info* column_type;
+	char* computed_column_expression;
 };
 
 #endif
