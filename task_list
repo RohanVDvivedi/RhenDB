@@ -1,5 +1,11 @@
 PICKED TASKS
 
+* implement non joins
+ * non_join_type SEMI_JOIN (produce only left_tuples that match only once) and ANTI_JOIN (produce only the left_tuples that do not match)
+ * hash_non_join
+ * sort_merge_non_join
+ * block_nested_non_join
+
 
 start with
   finish implementing get_data_type_info_for_rhendb_type_info
@@ -17,7 +23,8 @@ DB acess operators
  * scan over relation_heap, in parallel with all versions/partitions, atmost max_concurrent scans at a time
  * insert/update/delete into relation for sink operator
  * scan over relation_index (bplus_tree index), given start_scan_key, start_find_pos and stop_scan_key, stop_find_pos, decides scan direction on it's own, start and scan can be exclusive inclusive
- * index nested loop join
+ * index_nested_loop_join
+ * index_nested_loop_non_join
 
  * mvcc check is done for the output of every scan
  * filter check is done again for the output of index if it's key is possibly extended type
