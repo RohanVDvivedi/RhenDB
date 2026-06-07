@@ -104,10 +104,12 @@ int join_matcher(const void* join_match_context_p, const void* left_tuple, const
 	datum num_right;
 	get_value_from_element_from_tuple(&num_right, right_tuple_def, STATIC_POSITION(0), right_tuple);
 
-	if(num_left.uint_value >= num_right.uint_value)
+	return num_left.uint_value == num_right.uint_value;
+
+	/*if(num_left.uint_value >= num_right.uint_value)
 		return (num_left.uint_value - num_right.uint_value) <= 3;
 	else
-		return (num_right.uint_value - num_left.uint_value) <= 3;
+		return (num_right.uint_value - num_left.uint_value) <= 3;*/
 }
 
 int main(int argc, char** argv)
