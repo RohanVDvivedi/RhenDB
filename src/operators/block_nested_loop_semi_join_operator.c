@@ -143,6 +143,8 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 		}
 	}
 
+	free(left_tuple_matched_bitmap);
+
 	return 1;
 }
 
