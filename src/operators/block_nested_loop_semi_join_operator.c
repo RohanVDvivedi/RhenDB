@@ -70,30 +70,30 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 			if(left_tuples_matched_count == inputs->batched_left_side_tuples->tuples_count)
 				break;
 
-			// if this left side tuple already matched, then skip to next tuple, without the check
-			if(get_bit(left_tuple_matched_bitmap, left_tuple_index) == 1)
-				continue;
-
-			int matched = 1;
-			if(inputs->join_matcher != NULL)
-				matched = inputs->join_matcher(inputs->join_matcher_context_p, left_tuple, inputs->left_input_tuple_def, right_tuple, inputs->right_input_tuple_def);
-
-			if(matched == -1)
+			// if this left side tuple not already matched, then only process it
+			if(get_bit(left_tuple_matched_bitmap, left_tuple_index) == 0)
 			{
-				free(left_tuple_matched_bitmap);
+				int matched = 1;
+				if(inputs->join_matcher != NULL)
+					matched = inputs->join_matcher(inputs->join_matcher_context_p, left_tuple, inputs->left_input_tuple_def, right_tuple, inputs->right_input_tuple_def);
 
-				// region used for the outer loop
-				unmap_for_interim_tuple_region(&_temp_tuple_region);
+				if(matched == -1)
+				{
+					free(left_tuple_matched_bitmap);
 
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("block_nested_loop_join_matcher_errored"));
-				return 0;
-			}
+					// region used for the outer loop
+					unmap_for_interim_tuple_region(&_temp_tuple_region);
 
-			// mark this left_tuple matched, so we could skip it next time
-			if(matched)
-			{
-				set_bit(left_tuple_matched_bitmap, left_tuple_index);
-				left_tuples_matched_count++;
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("block_nested_loop_join_matcher_errored"));
+					return 0;
+				}
+
+				// mark this left_tuple matched, so we could skip it next time
+				if(matched)
+				{
+					set_bit(left_tuple_matched_bitmap, left_tuple_index);
+					left_tuples_matched_count++;
+				}
 			}
 
 			left_tuple_offset = next_tuple_offset_for_interim_tuple_region(&(inputs->batched_left_side_tuples->embed_regions[0]));
