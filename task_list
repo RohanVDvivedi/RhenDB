@@ -1,10 +1,7 @@
 PICKED TASKS
 
-* implement non joins
- * non_join_type SEMI_JOIN (produce only left_tuples that match only once) and ANTI_JOIN (produce only the left_tuples that do not match)
- * hash_non_join
- * sort_merge_non_join
- * block_nested_non_join
+* implement semi join for block nested loop join version
+ * block_nested_semi_join with both LEFT_SEMI_JOIN and LEFT_ANTI_JOIN
 
 
 start with
