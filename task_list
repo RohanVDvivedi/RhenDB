@@ -13,16 +13,17 @@ start with
 PRIORITY 0 SIMPLE OPERATORS SOURCE/SINK
 
 DB acess operators
- * scan over relation_heap, in parallel with all versions/partitions, atmost max_concurrent scans at a time
+ * scan over relation_heap, in parallel with all versions/partitions, atmost max_concurrent scans at a time (root_page_id, tuple_pointer, tuple_with_mvcc_versions) -> tuple_pointer can alone uniquely identify it, but we need root_page_id to update/delete it, it will have 1-7 output modes
  * insert/update/delete into relation for sink operator
- * scan over relation_index (bplus_tree index), given start_scan_key, start_find_pos and stop_scan_key, stop_find_pos, decides scan direction on it's own, start and scan can be exclusive inclusive
+ * scan over relation_index (bplus_tree index), in parallel with all versions/partitions, given start_scan_key, start_find_pos and stop_scan_key, stop_find_pos, decides scan direction on it's own, start and scan can be exclusive inclusive, outputs same 1-7 output modes based tuples, i.e. looks up heap tuples on it's own
  * index_nested_loop_join
  * index_nested_loop_semi_join
+   * both joins take key_element_count as input, and the index to look up from
 
  * mvcc check is done for the output of every scan
  * filter check is done again for the output of index if it's key is possibly extended type
 
-* deletes taken care of by trash_cleaner task over that tuple, to be implemented later, also takes care of filling up the hint bits of mvcc headers
+ * deletes taken care of by trash_cleaner task over that tuple, to be implemented later, also takes care of filling up the hint bits of mvcc headers
 
  * table_locks -> locks the table_id of the table (not just the version) for schema changes
  * tuple_locks -> lock root_page_id, page_id, tuple_index -> on update or delete, lock the older version, newer version is not even visible
@@ -56,16 +57,17 @@ DESIGN CATALOG TABLES
  db_indices
   => mvcc_hdr, id, name, table_id, key_type_id, root_page_id
   * key_type_id implicitly has tuple_pointer (heap_table_root_page_id, page_id, tuple_index) in it for uniqueness and to find the actual tuples in the heap_table
-
- db_ref_counters
-  * root_page_id, reference_count, tuple_def, key_element_ids, key_element_count, object_type (bplus_tree, hash_table, heap_table, blob_store)
-  * delete the underlying data structure only if the reference_counter reaches 0
-  * stores root_page_id and reference_count for all non system tables
+  * each table version gets it's own individual set of indices, no index is ever shared by 2 versions of same table or different tables
 
  db_schema_blobs (blob_store for storing default value or tuple_defs)
 
  db_name_index
   * name, db_object_type, tuple_pointer
+
+ * schema changes (add/drop column) adds a new version to the table, and also new set of existing indices
+ * schema change or new forced partition does not add xmax to old visible versions
+ * drop table is suggested by marking xmax on all versions simultaneously
+ * actual drop of index or table is considered after a later scan is done by the trash_cleaner
 
 PRIORITY 1 CATALOG
  * for every primitive type add it's fixed size OR it's approximate component sizes, or 500 for extended types -> this number must never cross 3.9 GB for intermediate type infos of tuples and PAGE_SIZE for the ones that will go into heap tables
