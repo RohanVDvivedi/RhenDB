@@ -139,9 +139,6 @@ int main(int argc, char** argv)
 
 	// make operators
 
-	positional_accessor FINAL_KEY_POS[2] = {STATIC_POSITION(0, 0), STATIC_POSITION(1, 0)};
-	compare_direction FINAL_CMP_DIR[2] = {ASC, ASC};
-
 	printf("Building pipeline :\n");
 	{
 		operator* left_input_operator = get_new_registered_operator_for_query_plan(qp);
