@@ -9,7 +9,7 @@
 
 #include<rhendb/function_hash.h>
 
-#include<rhendb/join_preserve_type.h>
+#include<rhendb/join_type.h>
 
 #include<rhendb/nullable_type_info_maker.h>
 
@@ -39,9 +39,7 @@ struct input_values
 	const tuple_def* right_input_tuple_def;
 	const positional_accessor* right_key_element_ids;
 
-	const tuple_def* output_tuple_def;
-
-	join_preserve_type ptype;
+	semi_join_type stype;
 
 	// fill up this buffer before moving it into the tuple_buffers_to_insert
 	interim_tuple_store* pending_buffer;
@@ -50,11 +48,6 @@ struct input_values
 	uint32_t partitions_count;
 	uint32_t bucket_count_per_parttion;
 	rash_table_partition** partitions;
-
-	// to be used in the last phase to produce tuples on the right side that do not have a match on the left
-	// when DOES_IT_PRESERVE_RIGHT(ptype) == 1
-	pthread_mutex_t partition_to_right_only_join_next_lock;
-	uint32_t partition_to_right_only_join_next;
 
 	// job params and input params list
 
@@ -72,29 +65,6 @@ struct input_values
 
 	int phase; // 0, 1, 2
 };
-
-static int produce_join_result(operator* o, const void* left_tuple, const void* right_tuple)
-{
-	input_values* inputs = o->inputs;
-
-	uint32_t output_tuple_capacity = 32 + ((left_tuple != NULL) ? get_tuple_size(inputs->left_input_tuple_def, left_tuple) : 0) + ((right_tuple != NULL) ? get_tuple_size(inputs->right_input_tuple_def, right_tuple) : 0);
-
-	void* output_tuple = malloc(output_tuple_capacity);
-
-	init_tuple(inputs->output_tuple_def, output_tuple);
-
-	if(left_tuple)
-		set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(0), output_tuple, inputs->left_input_tuple_def, SELF, left_tuple, UINT32_MAX);
-
-	if(right_tuple)
-		set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(1), output_tuple, inputs->right_input_tuple_def, SELF, right_tuple, UINT32_MAX);
-
-	// produce output_tuple
-	int produced = produce_tuple_from_operator(o, output_tuple);
-	free(output_tuple);
-
-	return produced;
-}
 
 static void build_right_side_partitions(operator* o, void* param)
 {
@@ -129,15 +99,15 @@ static void build_right_side_partitions(operator* o, void* param)
 			// open rash table iterator for insertion/appending
 			rash_table_iterator rti = find_equals_in_rash_table(&(inputs->partitions[partition_id]->rth), &rtk, 0);
 
-			// open write iterator on this key
-			binary_write_iterator* bwi_p = open_for_writing_value_in_rash_table_iterator(&rti);
+			// we only insert entry, if it does not exist and no need to store the entire right_tuple like the regular join
+			if(!exists_in_rash_table_iterator(&rti))
+			{
+				// open write iterator on this key
+				binary_write_iterator* bwi_p = open_for_writing_value_in_rash_table_iterator(&rti);
 
-			// perform append into this iterator storing in the complete tuple
-			int abort_error_dummy = 0;
-			append_to_binary_write_iterator(bwi_p, tuple, get_tuple_size(inputs->right_input_tuple_def, tuple), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->partitions[partition_id]->rth.htan)), NULL, &abort_error_dummy);
-
-			// close the bwi_p
-			close_and_write_value_in_hash_table_iterator(&rti, bwi_p);
+				// close the bwi_p
+				close_and_write_value_in_hash_table_iterator(&rti, bwi_p);
+			}
 
 			// delete the insertion iterator
 			delete_rash_table_iterator(&rti);
@@ -189,51 +159,24 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 			uint32_t partition_id = get_hash_value_for_rash_table_key(&rtk) % inputs->partitions_count;
 
 			// open rash table iterator for insertion/appending
-			rash_table_iterator rti = find_equals_in_rash_table(&(inputs->partitions[partition_id]->rth), &rtk, 0);
+			rash_table_iterator rti = find_equals_in_rash_table(&(inputs->partitions[partition_id]->rth), &rtk, 1);
 
 			if(exists_in_rash_table_iterator(&rti))
 			{
-				if(DOES_IT_PRESERVE_RIGHT(inputs->ptype))
-					write_state_in_rash_table_iterator(&rti, 1); // we matched right with a left, so set the state flag on the right side entry to 1, NOTE: doing this without a lock is a hack
-
-				// iterate over all tuples on the right and produce join results
+				if(DOES_PRODUCE_MATCHED_LEFT_TUPLES(inputs->stype))
 				{
-					// open an iterator to read values of this entry
-					binary_read_iterator* value_bri_p = read_value_in_rash_table_iterator(&rti);
-
-					int abort_error_dummy = 0;
-					while(!failed)
+					if(!produce_tuple_from_operator(o, tuple))
 					{
-						int finish = 0;
-						consume_tuple_from_tuple_list(right_tuple, inputs->right_input_tuple_def, value_bri_p, NULL, &abort_error_dummy,
-						{
-							if(right_tuple != NULL)
-							{
-								if(!produce_join_result(o, tuple, right_tuple))
-								{
-									kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
-									failed = 1;
-									finish = 1;
-								}
-							}
-							else
-							{
-								finish = 1;
-							}
-						});
-						if(finish)
-							break;
+						kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+						failed = 1;
 					}
-
-					// after read all tuples close the read iterator in value
-					delete_binary_read_iterator(value_bri_p, NULL, &abort_error_dummy);
 				}
 			}
-			else // left_tuple is a loner
+			else
 			{
-				if(DOES_IT_PRESERVE_LEFT(inputs->ptype))
+				if(DOES_PRODUCE_UN_MATCHED_LEFT_TUPLES(inputs->stype))
 				{
-					if(!produce_join_result(o, tuple, NULL))
+					if(!produce_tuple_from_operator(o, tuple))
 					{
 						kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
 						failed = 1;
@@ -258,92 +201,6 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 	// decrement active build phas jobs count
 	pthread_mutex_lock(&(inputs->buffers_queue_lock));
 	inputs->active_probe_phase_job_count--;
-	pthread_mutex_unlock(&(inputs->buffers_queue_lock));
-
-	if(!failed)
-		trigger_execution_on_operator(o);
-}
-
-static void probe_right_side_partitions_for_right_only_tuples(operator* o, void* param)
-{
-	input_values* inputs = o->inputs;
-
-	int failed = 0;
-	while(!failed)
-	{
-		uint32_t partition_id;
-
-		// fetch the parttion to process next
-		pthread_mutex_lock(&(inputs->partition_to_right_only_join_next_lock));
-		partition_id = inputs->partition_to_right_only_join_next;
-		if(partition_id < inputs->partitions_count)
-			inputs->partition_to_right_only_join_next++;
-		pthread_mutex_unlock(&(inputs->partition_to_right_only_join_next_lock));
-
-		// if out of bounds break out of the loop
-		if(partition_id >= inputs->partitions_count)
-			break;
-
-		// create iterator to iterate over all the entries
-		rash_table_iterator rti = find_all_in_rash_table(&(inputs->partitions[partition_id]->rth), 1);
-
-		// loop over all entries while not failed
-		while(!failed)
-		{
-			// process it only if the entry exists
-			if(exists_in_rash_table_iterator(&rti) && read_state_in_rash_table_iterator(&rti) == 0)
-			{
-				// open an iterator to read values of this entry
-				binary_read_iterator* value_bri_p = read_value_in_rash_table_iterator(&rti);
-
-				int abort_error_dummy = 0;
-				while(!failed)
-				{
-					int finish = 0;
-					consume_tuple_from_tuple_list(tuple, inputs->right_input_tuple_def, value_bri_p, NULL, &abort_error_dummy,
-					{
-						if(tuple != NULL)
-						{
-							if(!produce_join_result(o, NULL, tuple))
-							{
-								kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
-								failed = 1;
-								finish = 1;
-							}
-						}
-						else
-						{
-							finish = 1;
-						}
-					});
-					if(finish)
-						break;
-				}
-
-				// after read all tuples close the read iterator in value
-				delete_binary_read_iterator(value_bri_p, NULL, &abort_error_dummy);
-			}
-
-			// if we can not go next break out
-			if(!next_in_rash_table_iterator(&rti))
-				break;
-		}
-
-		// delete the fina_all iterator
-		delete_rash_table_iterator(&rti);
-
-		// destroy the parttion
-		{
-			pthread_mutex_destroy(&(inputs->partitions[partition_id]->build_lock));
-			destroy_rash_table(&(inputs->partitions[partition_id]->rth));
-			free(inputs->partitions[partition_id]);
-			inputs->partitions[partition_id] = NULL;
-		}
-	}
-
-	// decrement active build phas jobs count
-	pthread_mutex_lock(&(inputs->buffers_queue_lock));
-	inputs->active_right_only_probe_phase_job_count--;
 	pthread_mutex_unlock(&(inputs->buffers_queue_lock));
 
 	if(!failed)
@@ -384,22 +241,6 @@ static void start_right_side_probe_for_left_tupled_jobs(operator* o)
 			inputs->active_probe_phase_job_count++;
 			new_jobs--;
 		}
-	}
-	pthread_mutex_unlock(&(inputs->buffers_queue_lock));
-}
-
-static void start_right_side_only_probe_jobs(operator* o)
-{
-	input_values* inputs = o->inputs;
-
-	pthread_mutex_lock(&(inputs->buffers_queue_lock));
-	uint32_t new_jobs = inputs->max_concurrent_jobs_count;
-	while(new_jobs > 0)
-	{
-		if(!run_concurrent_job_for_operator(o, NULL, probe_right_side_partitions_for_right_only_tuples))
-			break;
-		inputs->active_right_only_probe_phase_job_count++;
-		new_jobs--;
 	}
 	pthread_mutex_unlock(&(inputs->buffers_queue_lock));
 }
@@ -565,28 +406,6 @@ static void execute(operator* o)
 
 		if(inputs->phase == 2)
 		{
-			if(!DOES_IT_PRESERVE_RIGHT(inputs->ptype))
-			{
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
-				return;
-			}
-			inputs->phase = 3;
-			start_right_side_only_probe_jobs(o);
-		}
-
-		if(inputs->phase == 3)
-		{
-			pthread_mutex_lock(&(inputs->buffers_queue_lock));
-			if(inputs->active_right_only_probe_phase_job_count == 0)
-				inputs->phase = 4;
-			pthread_mutex_unlock(&(inputs->buffers_queue_lock));
-
-			if(inputs->phase == 3)
-				return;
-		}
-
-		if(inputs->phase == 4)
-		{
 			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
 			return;
 		}
@@ -627,20 +446,7 @@ static void clean_up_resources(operator* o)
 	remove_all_from_linkedlist(&(inputs->buffers_queue), DELETE_ON_NOTIFY_FOR_INTERIM_TUPLE_STORE);
 }
 
-static void free_resources(operator* o)
-{
-	input_values* inputs = o->inputs;
-
-	// all key_dtis were made into nullable types, so free them first
-	for(uint32_t i = 0; i < 2; i++)
-		free((data_type_info*)(inputs->output_tuple_def->type_info->containees[i].al.type_info));
-	free((data_type_info*)(inputs->output_tuple_def->type_info));
-	free((tuple_def*)(inputs->output_tuple_def));
-
-	free(inputs);
-}
-
-operator_resource_counter setup_hash_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype, uint32_t partitions_count, uint32_t bucket_count_per_parttion, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
+operator_resource_counter setup_hash_semi_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, uint32_t key_element_count, semi_join_type stype, uint32_t partitions_count, uint32_t bucket_count_per_parttion, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
 {
 	const tuple_def* left_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(left_input_operator);
 	const tuple_def* right_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(right_input_operator);
@@ -649,7 +455,7 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 	{
 		if(!do_these_types_on_being_equal_hash_to_same_value(get_type_info_for_element_from_tuple_def(left_input_tuple_def, left_key_element_ids[i]), get_type_info_for_element_from_tuple_def(right_input_tuple_def, right_key_element_ids[i])))
 		{
-			printf("input_operators must produce comparably hash equal on having equal key for inputs to hash_join_operator\n");
+			printf("input_operators must produce comparably hash equal on having equal key for inputs to hash_semi_join_operator\n");
 			exit(-1);
 		}
 	}
@@ -664,49 +470,10 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->clean_up_resources = clean_up_resources;
-	o->free_resources = free_resources;
-
-	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(2));
-	uint64_t max_output_tuple_size = 8;
-
-	{
-		data_type_info* left_dti = left_input_tuple_def->type_info;
-
-		if(left_dti == BIT_FIELD)
-			max_output_tuple_size += 9;
-		else
-			max_output_tuple_size += left_dti->is_variable_sized ? (8 + left_dti->max_size) : (1 + left_dti->size);
-
-		strcpy(output_dti->containees[0].field_name, "left");
-		output_dti->containees[0].al.type_info = shallow_clone_into_nullable_type(left_dti);
-	}
-
-	{
-		data_type_info* right_dti = right_input_tuple_def->type_info;
-
-		if(right_dti == BIT_FIELD)
-			max_output_tuple_size += 9;
-		else
-			max_output_tuple_size += right_dti->is_variable_sized ? (8 + right_dti->max_size) : (1 + right_dti->size);
-
-		strcpy(output_dti->containees[1].field_name, "right");
-		output_dti->containees[1].al.type_info = shallow_clone_into_nullable_type(right_dti);
-	}
-
-	if(max_output_tuple_size > MAX_INTERMEDIATE_TUPLE_SIZE)
-	{
-		printf("too big output tuple for hash_join_operator\n");
-		exit(-1);
-	}
-
-	initialize_tuple_data_type_info(output_dti, "join", 0, max_output_tuple_size, 2);
-
-	tuple_def* output_tuple_def = malloc(sizeof(tuple_def));
-	initialize_tuple_def(output_tuple_def, output_dti);
-
+	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	// it is an identity operator, produces the same thing as it consumes
-	init_tuple_transformers(&(o->output_tuple_transformers), output_tuple_def);
+	init_tuple_transformers(&(o->output_tuple_transformers), left_input_tuple_def);
 
 	o->inputs = malloc(sizeof(input_values));
 	input_values* inputs = o->inputs;
@@ -721,18 +488,13 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 		.right_input_tuple_def = right_input_tuple_def,
 		.right_key_element_ids = right_key_element_ids,
 
-		.output_tuple_def = output_tuple_def,
-
-		.ptype = ptype,
+		.stype = stype,
 
 		.pending_buffer = NULL,
 
 		.partitions_count = partitions_count,
 		.bucket_count_per_parttion = bucket_count_per_parttion,
 		.partitions = malloc(sizeof(rash_table_partition*) * partitions_count),
-
-		.partition_to_right_only_join_next_lock = PTHREAD_MUTEX_INITIALIZER,
-		.partition_to_right_only_join_next = 0,
 
 		.max_concurrent_jobs_count = max_concurrent_jobs_count,
 		.max_concurrent_jobs_queue_size = max_concurrent_jobs_queue_size,
