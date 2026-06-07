@@ -21,7 +21,7 @@ DB acess operators
  * insert/update/delete into relation for sink operator
  * scan over relation_index (bplus_tree index), given start_scan_key, start_find_pos and stop_scan_key, stop_find_pos, decides scan direction on it's own, start and scan can be exclusive inclusive
  * index_nested_loop_join
- * index_nested_loop_non_join
+ * index_nested_loop_semi_join
 
  * mvcc check is done for the output of every scan
  * filter check is done again for the output of index if it's key is possibly extended type
