@@ -105,7 +105,7 @@ operator_resource_counter setup_offset_limit_operator(operator* o, operator* inp
 	o->clean_up_resources = clean_up_resources;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
-	// it is an identity operator, produces the same thing as it consumes
+	// it is an identity-like operator, produces the same thing as it consumes
 	init_tuple_transformers(&(o->output_tuple_transformers), get_tuple_def_for_tuples_to_be_consumed_from(input_operator));
 
 	o->inputs = malloc(sizeof(input_values));

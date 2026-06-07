@@ -213,7 +213,6 @@ operator_resource_counter setup_simple_aggregation_operator(operator* o, operato
 	tuple_def* output_tuple_def = malloc(sizeof(tuple_def));
 	initialize_tuple_def(output_tuple_def, output_dti);
 
-	// it is an identity operator, produces the same thing as it consumes
 	init_tuple_transformers(&(o->output_tuple_transformers), output_tuple_def);
 
 	o->inputs = malloc(sizeof(input_values));
