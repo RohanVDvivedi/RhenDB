@@ -1,9 +1,5 @@
 PICKED TASKS
 
-* implement semi join for block nested loop join version
- * block_nested_semi_join with both LEFT_SEMI_JOIN and LEFT_ANTI_JOIN
-
-
 start with
   finish implementing get_data_type_info_for_rhendb_type_info
   rhendb_partition
