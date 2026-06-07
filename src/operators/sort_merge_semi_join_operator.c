@@ -94,6 +94,15 @@ static void execute(operator* o)
 			return ;
 		}
 
+		// if left side tuples are left, but there are none remaining to be read on the right side
+		// this means all the left side tuples will remian un-matched
+		// this means if we are not meant to produce any unmatched tuples then quit
+		if(inputs->right_input_iterator == NULL && (!(DOES_PRODUCE_UN_MATCHED_LEFT_TUPLES(inputs->stype))))
+		{
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			return ;
+		}
+
 		{
 			int produce_left = 0;
 			int consume_left = 0;
