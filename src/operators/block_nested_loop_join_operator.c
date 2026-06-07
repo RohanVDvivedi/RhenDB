@@ -4,7 +4,7 @@
 
 #include<rhendb/interim_tuple_store.h>
 
-#include<rhendb/join_preserve_type.h>
+#include<rhendb/join_type.h>
 
 #include<rhendb/nullable_type_info_maker.h>
 

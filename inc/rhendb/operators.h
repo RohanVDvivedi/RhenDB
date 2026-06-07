@@ -49,7 +49,7 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 
 // join operators
 
-#include<rhendb/join_preserve_type.h>
+#include<rhendb/join_type.h>
 
 // DOES_IT_PRESERVE_RIGHT(ptype) must be 0
 // we can not do right size preserving joins

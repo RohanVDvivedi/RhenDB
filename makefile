@@ -7,7 +7,7 @@ DOWNLOAD_DIR:=/usr/local
 # we may download all the public headers
 
 # list of public api headers (only these headers will be installed)
-PUBLIC_HEADERS:=${PROJECT_NAME}.h rage_engine.h transaction.h query_plan.h tuple_transformer_interface.h operators.h operator_resource_counter.h rhendb_functions.h join_preserve_type.h tuple_transformers.h transaction_table.h transaction_status.h mvcc_snapshot.h mvcc_header.h lock_manager.h interim_tuple_store.h rash_table.h tuples_down_counter.h function_compare.h function_hash.h rhendb_types.h
+PUBLIC_HEADERS:=${PROJECT_NAME}.h rage_engine.h transaction.h query_plan.h tuple_transformer_interface.h operators.h operator_resource_counter.h rhendb_functions.h join_type.h tuple_transformers.h transaction_table.h transaction_status.h mvcc_snapshot.h mvcc_header.h lock_manager.h interim_tuple_store.h rash_table.h tuples_down_counter.h function_compare.h function_hash.h rhendb_types.h
 # the library, which we will create
 LIBRARY:=lib${PROJECT_NAME}.a
 # the binary, which will use the created library

@@ -9,7 +9,7 @@
 
 #include<rhendb/function_hash.h>
 
-#include<rhendb/join_type.h>
+#include<rhendb/join_preserve_type.h>
 
 #include<rhendb/nullable_type_info_maker.h>
 
