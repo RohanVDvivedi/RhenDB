@@ -143,8 +143,7 @@ int main(int argc, char** argv)
 
 	// make operators
 
-	positional_accessor FINAL_KEY_POS[2] = {STATIC_POSITION(0, 0), STATIC_POSITION(1, 0)};
-	compare_direction FINAL_CMP_DIR[2] = {ASC, ASC};
+	compare_direction FINAL_CMP_DIR[1] = {ASC};
 
 	printf("Building pipeline :\n");
 	{
@@ -161,7 +160,7 @@ int main(int argc, char** argv)
 		printf("join operator %p\n", join_operator);
 
 		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_external_sort_operator(sorter_operator, TUPLES_DOWN_COUNTER_INF, join_operator, 2, FINAL_KEY_POS, FINAL_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		setup_external_sort_operator(sorter_operator, TUPLES_DOWN_COUNTER_INF, join_operator, RECORD_S_KEY_ELEMENT_COUNT, LEFT_KEY_POS, FINAL_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 		printf("sorter for output operator %p\n", sorter_operator);
 
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
