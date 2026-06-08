@@ -1,16 +1,68 @@
 PICKED TASKS
 
-start with
-  finish implementing get_data_type_info_for_rhendb_type_info
-  rhendb_partition
-   uint64_t heap_root_page_id, uint64_t blob_store_root_page_id, data_type_info* dti_p
-  make a function to get constructed data_type_info after all alterations are performed as a log entry
-  this is what makes a partition
+implement get_data_type_info_for_rhendb_type_info for rhendb_type_info
+
+DESIGN CATALOG TABLES
+ LOCKING IS EXTERNAL USING LOCK TABLES
+
+ db_schema_table_ids
+  * page_table consisting of root_page_id's at fixed locations of all known schema tables, constructed at the start up in a single mini transaction right after first start up
+
+ db_types
+  => mvcc_hdr, id, name, size(used only for primitve signed/unsigned integral, bit_field and float types)
+  * default and primitive types are created at the database start up in the first mini transaction
+
+ db_attributes
+  => mvcc_hdr, id, name, owner_id, owner_version_id, rel_pos_in_type, attribute_type_id, count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, default_value, derived_from_expression(for derived columns of table and index expressions)
+  * owner_id can be any one of type, table or index
+
+ db_tables
+  => mvcc_hdr, id, version, name, heap_root_page_id, blobs_root_page_id
+  * only add column and drop column supported
+  * rel_pos_in_type remains the same for un modified types of the same table
+  * version starts with 0 and always increments
+
+ db_indices
+  => mvcc_hdr, id, name, table_id, table_version_id, root_page_id
+  * key_type_id implicitly has tuple_pointer (heap_table_root_page_id, page_id, tuple_index) in it for uniqueness and to find the actual tuples in the heap_table
+  * each table version gets it's own individual set of indices, no index is ever shared by 2 versions of same table or different tables
+
+ * schema changes (add/drop column) OR new partition, adds a new version to the table, and also new set of existing indices
+ * actual drop of index or table is considered after a later scan is done by the trash_cleaner, when no entries, records exists in the corresponding data structures at root_page_id
+
+ * global id is mamnaged for the complete schema tables, id is unique for all
+
+PRIORITY 1 CATALOG
+ * grab a new id for a new table creation and lock it first
+ * if you already have table id, lock it immediately
+
+ * CREATE TABLE
+   * insert entries for table at table_id previously generated, initial attributes with mvcc header (tx_id, infinity)
+
+ * ADD/DROP COLUMN lists
+   * insert new table version for table_id, insert old and new attributes keeping rel_pos_in_type same for unchanged columns, and also new attributes even the unchanged entries are re written
+   * as we are creating a new version for the table, we also need to drop indexes for attributes that are being dropped\
+   * and create new versions for the old indices pointing to the new table_id and verision
+
+ * CREATE INDEX
+   * create new entry for all table, version in context, and copy again the attributes
+
+ * DROP INDEX
+   * write xmax = tx_id for all index versions, and it's attributes (clean up happens by the trash cleaner, once all entries in root_page_id are hard deleted)
+ * DROP TABLE
+   * write xmax = tx_id for all table versions, index versions and attributes
+
+ * every one of these modification you need to lock the table_id with a schema lock, allowing no modification to schema but allowing read of all versions and their indices
 
 
 
 
-PRIORITY 0 SIMPLE OPERATORS SOURCE/SINK
+
+
+
+
+
+PRIORITY 1 SIMPLE OPERATORS SOURCE/SINK
 
 DB acess operators
  * scan over relation_heap, in parallel with all versions/partitions, atmost max_concurrent scans at a time (root_page_id, tuple_pointer, tuple_with_mvcc_versions) -> tuple_pointer can alone uniquely identify it, but we need root_page_id to update/delete it, it will have 1-7 output modes
@@ -29,80 +81,8 @@ DB acess operators
  * tuple_locks -> lock root_page_id, page_id, tuple_index -> on update or delete, lock the older version, newer version is not even visible
  * key_locks -> hash key how ever big it is concatenate it with root_page_id and lock it
 
-
-
-
-
-
-
-
-
-DESIGN CATALOG TABLES
- db_types
-  => mvcc_hdr, id, name, size(used only for primitve signed/unsigned integral, bit_field and float types)
-  * if the id < 10000, then it is permanent and can not be deleted
-
- db_attributes
-  => mvcc_hdr, id, name, type_id, rel_pos_in_type, count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_nullable, default_value, derived_from_expression(for derived columns of table and index expressions)
-  * append only table
-
- db_tables
-  => mvcc_hdr, id, version(increments on every alter statements), name, type_id, root_page_id, blobs_root_page_id
-  * only add column and drop column supported
-  * rel_pos_in_type is only incremented on add column in a new type on copy
-  * on drop a clone is done for all attributes and the type_id and a row from this clone is dropped
-  * default value and is nullable changes are made in place
-  * to create a new partition, insert a new entry here with a new root_page_id and a new cloned type_id and attributes
-
- db_indices
-  => mvcc_hdr, id, name, table_id, key_type_id, root_page_id
-  * key_type_id implicitly has tuple_pointer (heap_table_root_page_id, page_id, tuple_index) in it for uniqueness and to find the actual tuples in the heap_table
-  * each table version gets it's own individual set of indices, no index is ever shared by 2 versions of same table or different tables
-
- db_schema_blobs (blob_store for storing default value or tuple_defs)
-
- db_name_index
-  * name, db_object_type, tuple_pointer
-
- * schema changes (add/drop column) adds a new version to the table, and also new set of existing indices
- * schema change or new forced partition does not add xmax to old visible versions
- * drop table is suggested by marking xmax on all versions simultaneously
- * actual drop of index or table is considered after a later scan is done by the trash_cleaner
-
-PRIORITY 1 CATALOG
- * for every primitive type add it's fixed size OR it's approximate component sizes, or 500 for extended types -> this number must never cross 3.9 GB for intermediate type infos of tuples and PAGE_SIZE for the ones that will go into heap tables
- * never materialize-inline all of it at once, at any stage of the query
- * maximum size of the tuple is first set to page size
-  * calculate maximum heap table tuple size that fit on tha page and then make it maximum size of the tuple and finalize it finally
- * supported primitive types
-   * INLINE TYPES
-     * INT 1 to 32 bytes
-     * UINT 1 to 32 bytes
-     * BIT_FIELD 1 - 64 bits
-     * FLOAT 4 and 8 bytes
-     * STRING/CHAR/VARCHAR     handles upto 32 KB (500 bytes max in prefix)
-     * BINARY                  handles upto 32 KB (500 bytes max in prefix)
-     * DECIMAL                 handles upto 32 KB (500 bytes max in prefix)
-   * EXTENDED TYPES
-     * TEXT         32 KB - 32 MB (500 bytes max in prefix)
-     * BLOB         32 KB - 32 MB (500 bytes max in prefix)
-     * NUMERIC      32 KB - 32 MB (500 bytes max in prefix)
-     * JSONB        32 KB - 32 MB (500 bytes max in prefix) (non-indexable, unless json accessor is used on the stream)
-     * TUPLE_LIST   32 KB - 32 MB (500 bytes max in prefix) (non-indexable, unless type-casted as an array stream is used)
-   * any attribute is nullable or not, default_value and
- * only these many primitive types will be supported, rest every other will be user defined types and types that go into table
- * no heap tuple larger than page may be generated, if min_tuple_size > page_size fail table definition, create and alter both fail here
- * all catalog operations will lock the previous entry of the older version of the table, by it's id
- * table will have to be versioned, giving us partition
- * alter table will only support
-   * add column (always adds column at the end, at previous relative_position.max + 1)
-   * drop column (leaves an empty space at the relative_position)
-   * concurrent alters are blocked, table_name has a lock
-   * add index and drop index are concurrently dropped
- * need to take care for is_auto_increment, is_unique and default_value in attribute or types table
  * for auto_increment store a counter in the db_table object and increment it and return it
  * for unique constraint maintain a lock in lock_manager and hold lock on the 80-bit serialized hash value and then only check the unique btree index
-
 
 
 
