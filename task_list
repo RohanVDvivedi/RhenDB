@@ -13,7 +13,7 @@ DESIGN CATALOG TABLES
   * default and primitive types are created at the database start up in the first mini transaction
 
  db_attributes
-  => mvcc_hdr, id, name, owner_id, owner_version_id, rel_pos_in_type, attribute_type_id, count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, default_value, derived_from_expression(for derived columns of table and index expressions)
+  => mvcc_hdr, id, name, owner_id, owner_version_id, rel_pos_in_type, attribute_type_id, count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, default_value, derived_from_expression(for derived columns of table and index expressions, referencing rel_pos_info)
   * owner_id can be any one of type, table or index
 
  db_tables
@@ -23,9 +23,17 @@ DESIGN CATALOG TABLES
   * version starts with 0 and always increments
 
  db_indices
-  => mvcc_hdr, id, name, table_id, table_version_id, root_page_id
+  => mvcc_hdr, id, version, name, table_id, root_page_id
   * key_type_id implicitly has tuple_pointer (heap_table_root_page_id, page_id, tuple_index) in it for uniqueness and to find the actual tuples in the heap_table
   * each table version gets it's own individual set of indices, no index is ever shared by 2 versions of same table or different tables
+
+  * table and index, are related to each other by version and table_id
+  * one logical table with a unique table id, has many versions of the partitions with possibly same or different schema, and each of these partitions will have indexes on them with same names, and the sma enumber of them with same name
+
+  * for tables id, version identifies a unique partition, and id, version identifies a unique index, with table_id suggesting which logical table it belongs to, and table_id, version suggesting which partition of that table it belongs to
+
+  db_schema_names (bplus_tree)
+  * name -> id, version, db_object_type (type, table, index or function(future))
 
  * schema changes (add/drop column) OR new partition, adds a new version to the table, and also new set of existing indices
  * actual drop of index or table is considered after a later scan is done by the trash_cleaner, when no entries, records exists in the corresponding data structures at root_page_id
