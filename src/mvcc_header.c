@@ -4,7 +4,7 @@
 
 #include<stdlib.h>
 
-tuple_def* get_mvcc_header_tuple_definition(uint8_t transaction_id_width)
+data_type_info* get_mvcc_header_tuple_definition(uint8_t transaction_id_width)
 {
 	data_type_info* dti_p = malloc(sizeof_tuple_data_type_info(6));
 
@@ -28,11 +28,7 @@ tuple_def* get_mvcc_header_tuple_definition(uint8_t transaction_id_width)
 	strcpy(dti_p->containees[5].field_name, "xmax");
 	dti_p->containees[5].al.type_info = LARGE_UINT_NULLABLE[transaction_id_width];
 
-	tuple_def* mvcchdr_def = malloc(sizeof(tuple_def));
-
-	initialize_tuple_def(mvcchdr_def, dti_p);
-
-	return mvcchdr_def;
+	return dti_p;
 }
 
 void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_tup, const tuple_def* mvcchdr_def)

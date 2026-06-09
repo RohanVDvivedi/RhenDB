@@ -2,6 +2,7 @@
 #define MVCC_HEADER_H
 
 #include<tuplestore/tuple_def.h>
+#include<tuplestore/data_type_info.h>
 
 // below function generates a mvcc_header tuple_def to be used by all of the database based on what transaction_id_width [1,32] it is using
 // it consists of
@@ -16,7 +17,7 @@
 
 	xmax              LARGE_UINT[transaction_id_width] (nullable, tuple is not yet marked deleted if this field is NULL)
 */
-tuple_def* get_mvcc_header_tuple_definition(uint8_t transaction_id_width);
+data_type_info* get_mvcc_header_type_info(uint8_t transaction_id_width);
 
 /*
 	a funny thing to note before moving forward
