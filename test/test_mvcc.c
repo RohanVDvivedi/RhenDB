@@ -55,7 +55,8 @@ transaction_status_getter tsg = {NULL, get_transaction_status__};
 int main()
 {
 	{
-		tuple_def* mvcc_header_def = get_mvcc_header_tuple_definition(20);
+		tuple_def* mvcc_header_def = malloc(sizeof(tuple_def));
+		initialize_tuple_def(mvcc_header_def, get_mvcc_header_type_info(20));
 
 		mvcc_header a = {
 			.is_xmin_NULL = 0,
