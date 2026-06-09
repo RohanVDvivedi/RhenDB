@@ -77,12 +77,7 @@ data_type_info* get_data_type_info_for_rhendb_type_info(const rhendb_type_info* 
 			return &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_type_info);
 
 		case RHENDB_MVCC_HEADER :
-		{
-			tuple_def* mvcc_header_def = get_mvcc_header_tuple_definition(TRANSACTION_ID_WIDTH);
-			data_type_info* mvcc_header_type_info = mvcc_header_def->type_info;
-			free(mvcc_header_def);
-			return mvcc_header_type_info;
-		}
+			return rdb->mvcc_hdr_type_info;
 
 
 		case RHENDB_STRING :

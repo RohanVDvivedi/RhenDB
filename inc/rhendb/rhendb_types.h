@@ -7,8 +7,6 @@
 
 #define MAX_INLINE_SIZE 230
 
-#define TRANSACTION_ID_WIDTH 10 // in bytes, this integer is big enough for most use case
-
 #define SMALL_TYPE_SIZE 32000
 #define LARGE_TYPE_SIZE 32000000
 

@@ -13,9 +13,15 @@
 
 #include<stdint.h>
 
+// practically infinite transactions
+#define TRANSACTION_ID_WIDTH 11
+
 typedef struct rhendb rhendb;
 struct rhendb
 {
+	// data_type_info for any mvcc_hdr in this rhendb
+	data_type_info* mvcc_hdr_type_info;
+
 	// prevent from over allocating operator threads
 	resource_usage_limiter* operator_thread_pool_usage_limiter;
 
