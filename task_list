@@ -1,7 +1,5 @@
 PICKED TASKS
 
-implement get_data_type_info_for_rhendb_type_info for rhendb_type_info
-
 DESIGN CATALOG TABLES
  LOCKING IS EXTERNAL USING LOCK TABLES
 
