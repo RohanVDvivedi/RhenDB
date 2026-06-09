@@ -79,6 +79,32 @@ data_type_info* get_data_type_info_for_rhendb_type_info(const rhendb_type_info* 
 		case RHENDB_MVCC_HEADER :
 			return rdb->mvcc_hdr_type_info;
 
+		case RHENDB_ARRAY :
+		{
+			data_type_info* dti_p = malloc(sizeof(data_type_info));
+			data_type_info* containee_dti_p = get_data_type_info_for_rhendb_type_info(rti_p->containee, rdb);
+			if(rti_p->element_count == 0)
+			{
+				(*dti_p) = get_variable_element_count_array_type("rhendb_array", rdb->persistent_acid_rage_engine.pam_p->pas.page_size, containee_dti_p);
+			}
+			else
+			{
+				(*dti_p) = get_fixed_element_count_array_type("rhendb_array", rti_p->element_count, rdb->persistent_acid_rage_engine.pam_p->pas.page_size, rti_p->is_nullable, containee_dti_p);
+			}
+			return dti_p;
+		}
+
+		case RHENDB_TUPLE :
+		{
+			data_type_info* dti_p = malloc(sizeof_tuple_data_type_info(rti_p->element_count));
+			for(uint32_t i = 0; i < rti_p->element_count; i++)
+			{
+				strncpy(dti_p->containees[i].field_name, rti_p->containees[i].attribute_name, sizeof(rti_p->containees[i].attribute_name));
+				dti_p->containees[i].al.type_info = get_data_type_info_for_rhendb_type_info(rti_p->containee, rdb);
+			}
+			initialize_tuple_data_type_info(dti_p, rti_p->type_name, rti_p->is_nullable, rdb->persistent_acid_rage_engine.pam_p->pas.page_size, rti_p->element_count);
+			return dti_p;
+		}
 
 		case RHENDB_STRING :
 		case RHENDB_TEXT :
