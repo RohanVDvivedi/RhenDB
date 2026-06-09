@@ -4,7 +4,7 @@
 
 #include<stdlib.h>
 
-data_type_info* get_mvcc_header_tuple_definition(uint8_t transaction_id_width)
+data_type_info* get_mvcc_header_type_info(uint8_t transaction_id_width)
 {
 	data_type_info* dti_p = malloc(sizeof_tuple_data_type_info(6));
 
