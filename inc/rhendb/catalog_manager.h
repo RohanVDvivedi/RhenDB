@@ -56,6 +56,6 @@ struct catalog_manager
 	rage_engine* catmgr_engine;
 };
 
-void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, rage_engine* catmgr_engine);
+void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine);
 
 #endif
