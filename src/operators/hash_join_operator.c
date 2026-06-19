@@ -618,6 +618,7 @@ static void clean_up_resources(operator* o)
 	{
 		if(inputs->partitions[i] == NULL)
 			continue;
+		pthread_mutex_destroy(&(inputs->partitions[i]->build_lock));
 		destroy_rash_table(&(inputs->partitions[i]->rth));
 		free(inputs->partitions[i]);
 		inputs->partitions[i] = NULL;
@@ -625,6 +626,9 @@ static void clean_up_resources(operator* o)
 	free(inputs->partitions);
 
 	remove_all_from_linkedlist(&(inputs->buffers_queue), DELETE_ON_NOTIFY_FOR_INTERIM_TUPLE_STORE);
+
+	pthread_mutex_destroy(&(inputs->partition_to_right_only_join_next_lock));
+	pthread_mutex_destroy(&(inputs->buffers_queue_lock));
 }
 
 static void free_resources(operator* o)

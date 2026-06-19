@@ -128,6 +128,8 @@ static void clean_up_resources(operator* o)
 	remove_all_from_linkedlist(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
 
 	remove_all_from_linkedlist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+
+	pthread_mutex_destroy(&(inputs->input_iterators_list_lock));
 }
 
 operator_resource_counter setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count)

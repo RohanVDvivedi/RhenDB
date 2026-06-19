@@ -75,13 +75,6 @@ static void clean_up_resources(operator* o)
 	}
 }
 
-static void free_resources(operator* o)
-{
-	input_values* inputs = o->inputs;
-
-	free(inputs);
-}
-
 operator_resource_counter setup_stream_output_operator(operator* o, operator* input_operator, stream* out_strm)
 {
 	operator_resource_counter result = {.job_counter = 1};
@@ -91,7 +84,7 @@ operator_resource_counter setup_stream_output_operator(operator* o, operator* in
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->clean_up_resources = clean_up_resources;
-	o->free_resources = free_resources;
+	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){

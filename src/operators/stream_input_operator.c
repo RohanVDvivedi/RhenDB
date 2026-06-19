@@ -107,13 +107,6 @@ static void clean_up_resources(operator* o)
 	}
 }
 
-static void free_resources(operator* o)
-{
-	input_values* inputs = o->inputs;
-
-	free(inputs);
-}
-
 operator_resource_counter setup_stream_input_operator(operator* o, stream* in_strm, const tuple_def* input_tuple_def)
 {
 	operator_resource_counter result = {.thread_counter = 1};
@@ -123,7 +116,7 @@ operator_resource_counter setup_stream_input_operator(operator* o, stream* in_st
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->clean_up_resources = clean_up_resources;
-	o->free_resources = free_resources;
+	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	// generator's output is what we produce
 	init_tuple_transformers(&(o->output_tuple_transformers), input_tuple_def);

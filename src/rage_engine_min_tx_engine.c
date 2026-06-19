@@ -243,11 +243,7 @@ rage_engine get_rage_engine_for_min_tx_engine(const char* database_file_name, ui
 
 	// initialize all the three components
 
-	if(!initialize_mini_transaction_engine(((mini_transaction_engine*)(e.context)), database_file_name, page_size, page_id_width, log_sequence_number_width, bufferpool_frame_count, wale_append_only_buffer_block_count, latch_wait_timeout_in_microseconds, write_lock_wait_timeout_in_microseconds, checkpointing_period_in_microseconds, checkpointing_LSN_diff_in_bytes, max_wal_file_size_in_bytes))
-	{
-		printf("FAILED to initialize persistent store\n");
-		exit(-1);
-	}
+	initialize_mini_transaction_engine(((mini_transaction_engine*)(e.context)), database_file_name, page_size, page_id_width, log_sequence_number_width, bufferpool_frame_count, wale_append_only_buffer_block_count, latch_wait_timeout_in_microseconds, write_lock_wait_timeout_in_microseconds, checkpointing_period_in_microseconds, checkpointing_LSN_diff_in_bytes, max_wal_file_size_in_bytes);
 
 	initialize_pam_for_mte(e.pam_p, ((mini_transaction_engine*)(e.context)));
 

@@ -663,6 +663,8 @@ static void clean_up_resources(operator* o)
 	}
 
 	free(inputs->key_dtis);
+
+	pthread_mutex_destroy(&(inputs->runs_lock));
 }
 
 operator_resource_counter setup_external_sort_operator(operator* o, tuples_down_counter result_counter, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t minimum_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
