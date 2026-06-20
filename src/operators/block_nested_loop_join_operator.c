@@ -313,7 +313,7 @@ operator_resource_counter setup_block_nested_loop_join_operator(operator* o, ope
 	{
 		data_type_info* left_dti = left_input_tuple_def->type_info;
 
-		if(left_dti == BIT_FIELD)
+		if(left_dti->type == BIT_FIELD)
 			max_output_tuple_size += 9;
 		else
 			max_output_tuple_size += left_dti->is_variable_sized ? (8 + left_dti->max_size) : (1 + left_dti->size);
@@ -325,7 +325,7 @@ operator_resource_counter setup_block_nested_loop_join_operator(operator* o, ope
 	{
 		data_type_info* right_dti = right_input_tuple_def->type_info;
 
-		if(right_dti == BIT_FIELD)
+		if(right_dti->type == BIT_FIELD)
 			max_output_tuple_size += 9;
 		else
 			max_output_tuple_size += right_dti->is_variable_sized ? (8 + right_dti->max_size) : (1 + right_dti->size);

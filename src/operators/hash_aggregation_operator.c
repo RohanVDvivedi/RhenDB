@@ -598,7 +598,7 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 	{
 		data_type_info* key_dti = (data_type_info*) get_type_info_for_element_from_tuple_def(input_tuple_def, key_element_ids[i]);
 
-		if(key_dti == BIT_FIELD)
+		if(key_dti->type == BIT_FIELD)
 			max_output_tuple_size += 9;
 		else
 			max_output_tuple_size += key_dti->is_variable_sized ? (8 + key_dti->max_size) : (1 + key_dti->size);
