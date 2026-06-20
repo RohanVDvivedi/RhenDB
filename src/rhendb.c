@@ -173,7 +173,7 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 			uint64_t truncator_period_us,
 		uint64_t max_concurrent_users_count)
 {
-	if(bufferpool_frame_count < 30 || max_concurrent_users_count == 0 || wale_buffer_count < 30)
+	if(bufferpool_frame_count < 32 || max_concurrent_users_count == 0 || wale_buffer_count < 32)
 	{
 		printf("must params => bufferpool_frame_count >= 32, max_concurrent_users_count > 0 and wale_buffer_count >= 32: check failed\n");
 		exit(-1);
