@@ -125,9 +125,32 @@ static void clean_up_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	remove_all_from_linkedlist(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+	// dance of this loop is needed only because it could run concurrently to notify_callback above
+	consumption_iterator* cit_p = NULL;
+	do{
+		// pick one cit_p to be discarded
+		pthread_mutex_lock(&(inputs->input_iterators_list_lock));
 
-	remove_all_from_linkedlist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
+		cit_p = (consumption_iterator*) get_head_of_linkedlist(&(inputs->ready_input_iterators));
+		if(cit_p == NULL)
+			cit_p = (consumption_iterator*) get_head_of_linkedlist(&(inputs->waiting_input_iterators));
+
+		if(cit_p != NULL)
+		{
+			if(cit_p->embed_uints[0] == IS_WAITING)
+				remove_from_linkedlist(&(inputs->waiting_input_iterators), cit_p);
+			else if(cit_p->embed_uints[0] == IS_READY)
+				remove_from_linkedlist(&(inputs->ready_input_iterators), cit_p);
+
+			cit_p->embed_uints[0] = IS_DELETED;
+		}
+
+		pthread_mutex_unlock(&(inputs->input_iterators_list_lock));
+
+		if(cit_p != NULL)
+			destroy_consumption_iterator(cit_p);
+
+	}while(cit_p != NULL);
 
 	pthread_mutex_destroy(&(inputs->input_iterators_list_lock));
 }
