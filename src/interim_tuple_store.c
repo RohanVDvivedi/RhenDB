@@ -309,7 +309,7 @@ uint64_t append_tuple_to_interim_tuple_store(interim_tuple_store* its_p, const v
 	{
 		its_p->total_size = new_total_size;
 		// and extend the file to the new size
-		if(-1 == ftruncate(its_p->fd, its_p->total_size))
+		if(-1 == ftruncate64(its_p->fd, its_p->total_size))
 		{
 			printf("FAILED to extend the file for interim_tuple_store\n");
 			exit(-1);
@@ -375,7 +375,7 @@ uint64_t append_all_from_another_interim_tuple_store2(interim_tuple_store* its_p
 	{
 		its_p->total_size = new_total_size;
 		// and extend the file to the new size
-		if(-1 == ftruncate(its_p->fd, its_p->total_size))
+		if(-1 == ftruncate64(its_p->fd, its_p->total_size))
 		{
 			printf("FAILED to extend the file for interim_tuple_store\n");
 			exit(-1);
