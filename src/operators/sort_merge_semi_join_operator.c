@@ -29,7 +29,7 @@ struct input_values
 	const positional_accessor* right_key_element_ids;
 
 	semi_join_type stype;
-	uint32_t max_block_size;
+	uint32_t min_block_size;
 };
 
 static void execute(operator* o)
@@ -173,11 +173,11 @@ static void clean_up_resources(operator* o)
 	}
 }
 
-operator_resource_counter setup_sort_merge_semi_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype, uint32_t max_block_size)
+operator_resource_counter setup_sort_merge_semi_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype, uint32_t min_block_size)
 {
-	if(max_block_size == 0)
+	if(min_block_size == 0)
 	{
-		printf("max_block_size can not be 0 for sort_merge_join_operator\n");
+		printf("min_block_size can not be 0 for sort_merge_join_operator\n");
 		exit(-1);
 	}
 
@@ -224,7 +224,7 @@ operator_resource_counter setup_sort_merge_semi_join_operator(operator* o, opera
 		.right_key_element_ids = right_key_element_ids,
 
 		.stype = stype,
-		.max_block_size = max_block_size,
+		.min_block_size = min_block_size,
 	};
 
 	return result;

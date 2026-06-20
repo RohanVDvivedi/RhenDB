@@ -33,7 +33,7 @@ struct input_values
 	const tuple_def* output_tuple_def;
 
 	join_preserve_type ptype;
-	uint32_t max_block_size;
+	uint32_t min_block_size;
 };
 
 static int produce_join_result(operator* o, const void* left_tuple, const void* right_tuple)
@@ -67,8 +67,8 @@ static int cross_product_equal_tuples_on_both_sides(operator* o)
 	int fail = 0;
 
 	// simple nlj over the left and right tuples, UNOPTIMIZED
-	/*FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(left_tuple, left_tuple_index, left_tuple_offset, &(inputs->left_input_tuple_def->size_def), inputs->left_side_equal_tuples_batch, inputs->max_block_size, {
-		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(right_tuple, right_tuple_index, right_tuple_offset, &(inputs->right_input_tuple_def->size_def), inputs->right_side_equal_tuples_batch, inputs->max_block_size, {
+	/*FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(left_tuple, left_tuple_index, left_tuple_offset, &(inputs->left_input_tuple_def->size_def), inputs->left_side_equal_tuples_batch, inputs->min_block_size, {
+		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(right_tuple, right_tuple_index, right_tuple_offset, &(inputs->right_input_tuple_def->size_def), inputs->right_side_equal_tuples_batch, inputs->min_block_size, {
 			if(!produce_join_result(o, left_tuple, right_tuple))
 				fail = 1;
 			if(fail)
@@ -80,24 +80,24 @@ static int cross_product_equal_tuples_on_both_sides(operator* o)
 
 	// block nested loop join over the left and right tuples
 	uint64_t left_block_offset = 0;
-	while(mmap_for_reading_tuple(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), left_block_offset, &(inputs->left_input_tuple_def->size_def), inputs->max_block_size))
+	while(mmap_for_reading_tuple(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), left_block_offset, &(inputs->left_input_tuple_def->size_def), inputs->min_block_size))
 	{
 		uint64_t next_left_block_offset = left_block_offset;
 
 		uint64_t right_block_offset = 0;
-		while(mmap_for_reading_tuple(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), right_block_offset, &(inputs->right_input_tuple_def->size_def), inputs->max_block_size))
+		while(mmap_for_reading_tuple(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), right_block_offset, &(inputs->right_input_tuple_def->size_def), inputs->min_block_size))
 		{
 			uint64_t next_right_block_offset = right_block_offset;
 
 			uint64_t left_tuple_offset = left_block_offset;
 			while(contains_tuple_at_offset_in_interim_tuple_store(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), left_tuple_offset, &(inputs->left_input_tuple_def->size_def))
-			 && mmap_for_reading_tuple(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), left_tuple_offset, &(inputs->left_input_tuple_def->size_def), inputs->max_block_size))
+			 && mmap_for_reading_tuple(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), left_tuple_offset, &(inputs->left_input_tuple_def->size_def), inputs->min_block_size))
 			{
 				const void* left_tuple = inputs->left_side_equal_tuples_batch->embed_regions[0].tuple;
 
 				uint64_t right_tuple_offset = right_block_offset;
 				while(contains_tuple_at_offset_in_interim_tuple_store(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), right_tuple_offset, &(inputs->right_input_tuple_def->size_def))
-				 && mmap_for_reading_tuple(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), right_tuple_offset, &(inputs->right_input_tuple_def->size_def), inputs->max_block_size))
+				 && mmap_for_reading_tuple(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), right_tuple_offset, &(inputs->right_input_tuple_def->size_def), inputs->min_block_size))
 				{
 					const void* right_tuple = inputs->right_side_equal_tuples_batch->embed_regions[0].tuple;
 
@@ -263,11 +263,11 @@ static void execute(operator* o)
 			else
 			{
 				// insert this as left tuple and mmap this first tuple in embed_regions[0]
-				append_tuple_to_interim_tuple_store2(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), inputs->left_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+				append_tuple_to_interim_tuple_store2(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), inputs->left_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->min_block_size);
 				inputs->left_side_equal_tuples_batch->embed_uints[0] = 1;
 
 				// insert this as right tuple and mmap this first tuple in embed_regions[0]
-				append_tuple_to_interim_tuple_store2(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), inputs->right_input_iterator->embed_ptrs[0], &(inputs->right_input_tuple_def->size_def), inputs->max_block_size);
+				append_tuple_to_interim_tuple_store2(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), inputs->right_input_iterator->embed_ptrs[0], &(inputs->right_input_tuple_def->size_def), inputs->min_block_size);
 				inputs->right_side_equal_tuples_batch->embed_uints[0] = 1;
 
 				// embed_uints[0] = 1, implies previous tuple matched so attempt to compare it with the next
@@ -303,13 +303,13 @@ static void execute(operator* o)
 			if(inputs->left_side_equal_tuples_batch->embed_uints[0])
 			{
 				// any further append uses embed_regions[1] in left_side_equal_tuples_batch
-				append_tuple_to_interim_tuple_store2(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[1]), inputs->left_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+				append_tuple_to_interim_tuple_store2(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[1]), inputs->left_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->min_block_size);
 				inputs->left_input_iterator->embed_ptrs[0] = NULL;
 			}
 
 			if(inputs->right_side_equal_tuples_batch->embed_uints[0])
 			{
-				append_tuple_to_interim_tuple_store2(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[1]), inputs->right_input_iterator->embed_ptrs[0], &(inputs->right_input_tuple_def->size_def), inputs->max_block_size);
+				append_tuple_to_interim_tuple_store2(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[1]), inputs->right_input_iterator->embed_ptrs[0], &(inputs->right_input_tuple_def->size_def), inputs->min_block_size);
 				inputs->right_input_iterator->embed_ptrs[0] = NULL;
 			}
 
@@ -328,8 +328,8 @@ static void execute(operator* o)
 				unmap_all_embed_regions_in_interim_tuple_store(inputs->left_side_equal_tuples_batch);
 				unmap_all_embed_regions_in_interim_tuple_store(inputs->right_side_equal_tuples_batch);
 
-				reinitialize_interim_tuple_store(inputs->left_side_equal_tuples_batch, inputs->max_block_size);
-				reinitialize_interim_tuple_store(inputs->right_side_equal_tuples_batch, inputs->max_block_size);
+				reinitialize_interim_tuple_store(inputs->left_side_equal_tuples_batch, inputs->min_block_size);
+				reinitialize_interim_tuple_store(inputs->right_side_equal_tuples_batch, inputs->min_block_size);
 			}
 
 			continue;
@@ -379,11 +379,11 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-operator_resource_counter setup_sort_merge_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, join_preserve_type ptype, uint32_t max_block_size)
+operator_resource_counter setup_sort_merge_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, join_preserve_type ptype, uint32_t min_block_size)
 {
-	if(max_block_size == 0)
+	if(min_block_size == 0)
 	{
-		printf("max_block_size can not be 0 for sort_merge_join_operator\n");
+		printf("min_block_size can not be 0 for sort_merge_join_operator\n");
 		exit(-1);
 	}
 
@@ -456,17 +456,17 @@ operator_resource_counter setup_sort_merge_join_operator(operator* o, operator* 
 		.left_input_iterator = create_consumption_iterator(left_input_operator, o, NULL, NULL),
 		.left_input_tuple_def = left_input_tuple_def,
 		.left_key_element_ids = left_key_element_ids,
-		.left_side_equal_tuples_batch = get_new_interim_tuple_store(max_block_size),
+		.left_side_equal_tuples_batch = get_new_interim_tuple_store(min_block_size),
 
 		.right_input_iterator = create_consumption_iterator(right_input_operator, o, NULL, NULL),
 		.right_input_tuple_def = right_input_tuple_def,
 		.right_key_element_ids = right_key_element_ids,
-		.right_side_equal_tuples_batch = get_new_interim_tuple_store(max_block_size),
+		.right_side_equal_tuples_batch = get_new_interim_tuple_store(min_block_size),
 
 		.output_tuple_def = output_tuple_def,
 
 		.ptype = ptype,
-		.max_block_size = max_block_size,
+		.min_block_size = min_block_size,
 	};
 
 	return result;

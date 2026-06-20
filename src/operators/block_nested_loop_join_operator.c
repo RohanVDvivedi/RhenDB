@@ -15,7 +15,7 @@ struct input_values
 {
 	consumption_iterator* left_input_iterator;
 	const tuple_def* left_input_tuple_def;
-	interim_tuple_store* batched_left_side_tuples; // only ciontains last atmost max_block_size bytes of tuples
+	interim_tuple_store* batched_left_side_tuples; // only ciontains last atleast min_block_size bytes of tuples
 
 	consumption_iterator* right_input_iterator;
 	const tuple_def* right_input_tuple_def;
@@ -29,7 +29,7 @@ struct input_values
 
 	// ptype can not be PRESERVE_RIGHT or PRESERVE_BOTH
 	join_preserve_type ptype;
-	uint32_t max_block_size;
+	uint32_t min_block_size;
 };
 
 // returns 0 on error
@@ -47,7 +47,7 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 	uint64_t pairs_checked = 0;
 
 	// iterate over all the right_side_tuples
-	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(right_tuple, right_tuple_index, right_tuple_offset, (&(inputs->right_input_tuple_def->size_def)), inputs->right_side_tuples, inputs->max_block_size,
+	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(right_tuple, right_tuple_index, right_tuple_offset, (&(inputs->right_input_tuple_def->size_def)), inputs->right_side_tuples, inputs->min_block_size,
 	{
 		void* left_tuple = NULL;
 		uint64_t left_tuple_index = 0;
@@ -192,7 +192,7 @@ static void execute(operator* o)
 
 			if(tuple != NULL)
 			{
-				append_tuple_to_interim_tuple_store2(inputs->right_side_tuples, &(inputs->right_side_tuples->embed_regions[0]), tuple, &(inputs->right_input_tuple_def->size_def), inputs->max_block_size);
+				append_tuple_to_interim_tuple_store2(inputs->right_side_tuples, &(inputs->right_side_tuples->embed_regions[0]), tuple, &(inputs->right_input_tuple_def->size_def), inputs->min_block_size);
 			}
 			else
 				return;
@@ -218,9 +218,9 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
-			append_tuple_to_interim_tuple_store2(inputs->batched_left_side_tuples, &(inputs->batched_left_side_tuples->embed_regions[0]), tuple, &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+			append_tuple_to_interim_tuple_store2(inputs->batched_left_side_tuples, &(inputs->batched_left_side_tuples->embed_regions[0]), tuple, &(inputs->left_input_tuple_def->size_def), inputs->min_block_size);
 
-			if(get_total_bytes_in_interim_tuple_store(inputs->batched_left_side_tuples) > inputs->max_block_size)
+			if(get_total_bytes_in_interim_tuple_store(inputs->batched_left_side_tuples) > inputs->min_block_size)
 			{
 				if(!produce_batched_left_block_loop_over_all_right(o)) // returns 0, and fails
 				{
@@ -231,7 +231,7 @@ static void execute(operator* o)
 				unmap_all_embed_regions_in_interim_tuple_store(inputs->batched_left_side_tuples);
 				unmap_all_embed_regions_in_interim_tuple_store(inputs->right_side_tuples);
 
-				reinitialize_interim_tuple_store(inputs->batched_left_side_tuples, inputs->max_block_size);
+				reinitialize_interim_tuple_store(inputs->batched_left_side_tuples, inputs->min_block_size);
 			}
 		}
 		else
@@ -281,11 +281,11 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-operator_resource_counter setup_block_nested_loop_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, const void* join_matcher_context_p, int (*join_matcher)(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def), join_preserve_type ptype, uint32_t max_block_size)
+operator_resource_counter setup_block_nested_loop_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, const void* join_matcher_context_p, int (*join_matcher)(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def), join_preserve_type ptype, uint32_t min_block_size)
 {
-	if(max_block_size == 0)
+	if(min_block_size == 0)
 	{
-		printf("max_block_size can not be 0 for block_nested_loop_join_operator\n");
+		printf("min_block_size can not be 0 for block_nested_loop_join_operator\n");
 		exit(-1);
 	}
 
@@ -351,11 +351,11 @@ operator_resource_counter setup_block_nested_loop_join_operator(operator* o, ope
 	*((input_values*)(o->inputs)) = (input_values){
 		.left_input_iterator = create_consumption_iterator(left_input_operator, o, NULL, NULL),
 		.left_input_tuple_def = left_input_tuple_def,
-		.batched_left_side_tuples = get_new_interim_tuple_store(max_block_size),
+		.batched_left_side_tuples = get_new_interim_tuple_store(min_block_size),
 
 		.right_input_iterator = create_consumption_iterator(right_input_operator, o, NULL, NULL),
 		.right_input_tuple_def = right_input_tuple_def,
-		.right_side_tuples = get_new_interim_tuple_store(max_block_size),
+		.right_side_tuples = get_new_interim_tuple_store(min_block_size),
 
 		.output_tuple_def = output_tuple_def,
 
@@ -363,7 +363,7 @@ operator_resource_counter setup_block_nested_loop_join_operator(operator* o, ope
 		.join_matcher = join_matcher,
 
 		.ptype = ptype,
-		.max_block_size = max_block_size,
+		.min_block_size = min_block_size,
 	};
 
 	return result;
