@@ -47,9 +47,29 @@ void send_kill_signal_to_operator(operator* o, dstring kill_reason)
 	pthread_mutex_unlock(&(o->state_lock));
 }
 
+static void trigger_all_consumers_for_operator_UNSAFE(operator* o, int force_trigger)
+{
+	for(consumption_iterator* cit_p = (consumption_iterator*) get_head_of_linkedlist(&(o->output_consumers)); cit_p != NULL; cit_p = (consumption_iterator*) get_next_of_in_linkedlist(&(o->output_consumers), cit_p))
+	{
+		if(force_trigger || (cit_p->was_consumer_triggered == 0)) // either on force trigger OR the consumer was not priorly triggered, only then trigger
+		{
+			if(cit_p->notify_callback != NULL)
+				cit_p->notify_callback(cit_p->consumer, cit_p);
+
+			trigger_execution_on_operator(cit_p->consumer);
+
+			cit_p->was_consumer_triggered = 1; // mark it as already triggered, so the next consecutive produce need not trigger it
+		}
+	}
+}
+
 static void* async_clean_up_resource_wrapper(void* o_vp)
 {
 	operator* o = o_vp;
+
+	pthread_mutex_lock(&(o->output_lock));
+	trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers, this is done once, for the last time, to wake up all sleeping for data from this guy
+	pthread_mutex_unlock(&(o->output_lock));
 
 	// the operator here must be in OPERATOR_KILLED state
 	o->clean_up_resources(o);
@@ -91,22 +111,6 @@ static int process_kill_signal_if_received_for_operator_UNSAFE(operator* o)
 	return 0;
 }
 
-static void trigger_all_consumers_for_operator_UNSAFE(operator* o, int force_trigger)
-{
-	for(consumption_iterator* cit_p = (consumption_iterator*) get_head_of_linkedlist(&(o->output_consumers)); cit_p != NULL; cit_p = (consumption_iterator*) get_next_of_in_linkedlist(&(o->output_consumers), cit_p))
-	{
-		if(force_trigger || (cit_p->was_consumer_triggered == 0)) // either on force trigger OR the consumer was not priorly triggered, only then trigger
-		{
-			if(cit_p->notify_callback != NULL)
-				cit_p->notify_callback(cit_p->consumer, cit_p);
-
-			trigger_execution_on_operator(cit_p->consumer);
-
-			cit_p->was_consumer_triggered = 1; // mark it as already triggered, so the next consecutive produce need not trigger it
-		}
-	}
-}
-
 static void* internal_execute(void* o_vp)
 {
 	operator* o = o_vp;
@@ -131,12 +135,7 @@ static void* internal_execute(void* o_vp)
 		pthread_mutex_unlock(&(o->state_lock));
 
 		if(was_killed)
-		{
-			pthread_mutex_lock(&(o->output_lock));
-			trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers
-			pthread_mutex_unlock(&(o->output_lock));
 			return NULL;
-		}
 
 		if(!should_run)
 			return NULL;
@@ -163,12 +162,7 @@ static void* internal_execute(void* o_vp)
 		pthread_mutex_unlock(&(o->state_lock));
 
 		if(was_killed)
-		{
-			pthread_mutex_lock(&(o->output_lock));
-			trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers
-			pthread_mutex_unlock(&(o->output_lock));
 			return NULL;
-		}
 
 		if(!was_triggered_while_we_were_running)
 			return NULL;
@@ -204,12 +198,7 @@ void trigger_execution_on_operator(operator* o)
 	pthread_mutex_unlock(&(o->state_lock));
 
 	if(was_killed)
-	{
-		pthread_mutex_lock(&(o->output_lock));
-		trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers
-		pthread_mutex_unlock(&(o->output_lock));
 		return ;
-	}
 
 	if(!should_queue)
 		return;
@@ -253,12 +242,7 @@ static void* operator_job_wrapper_function(void* ojwp_vp)
 	pthread_mutex_unlock(&(o->state_lock));
 
 	if(was_killed)
-	{
-		pthread_mutex_lock(&(o->output_lock));
-		trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers
-		pthread_mutex_unlock(&(o->output_lock));
 		return NULL;
-	}
 
 	if(!should_run)
 		return NULL;
@@ -271,12 +255,7 @@ static void* operator_job_wrapper_function(void* ojwp_vp)
 	pthread_mutex_unlock(&(o->state_lock));
 
 	if(was_killed)
-	{
-		pthread_mutex_lock(&(o->output_lock));
-		trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers
-		pthread_mutex_unlock(&(o->output_lock));
 		return NULL;
-	}
 
 	return NULL;
 }
@@ -299,12 +278,7 @@ int run_concurrent_job_for_operator(operator* o, void* param, void (*operator_jo
 	pthread_mutex_unlock(&(o->state_lock));
 
 	if(was_killed)
-	{
-		pthread_mutex_lock(&(o->output_lock));
-		trigger_all_consumers_for_operator_UNSAFE(o, 1); // force trigger all consumers
-		pthread_mutex_unlock(&(o->output_lock));
 		return 0;
-	}
 
 	if(!should_queue)
 		return 0;
