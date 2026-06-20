@@ -86,7 +86,9 @@ static int produce_join_result(operator* o, const void* left_tuple, const void* 
 
 	if(left_tuple)
 	{
-		while(!set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(0), output_tuple, inputs->left_input_tuple_def, SELF, left_tuple, output_tuple_capacity - output_tuple_size))
+		datum left_datum;
+		get_value_from_element_from_tuple(&left_datum, inputs->left_input_tuple_def, SELF, left_tuple);
+		while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(0), output_tuple, &left_datum, output_tuple_capacity - output_tuple_size))
 		{
 			output_tuple_capacity += get_tuple_size(inputs->left_input_tuple_def, left_tuple);
 			output_tuple = realloc(output_tuple, output_tuple_capacity);
@@ -96,7 +98,9 @@ static int produce_join_result(operator* o, const void* left_tuple, const void* 
 
 	if(right_tuple)
 	{
-		while(!set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(1), output_tuple, inputs->right_input_tuple_def, SELF, right_tuple, output_tuple_capacity - output_tuple_size))
+		datum right_datum;
+		get_value_from_element_from_tuple(&right_datum, inputs->right_input_tuple_def, SELF, right_tuple);
+		while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(1), output_tuple, &right_datum, output_tuple_capacity - output_tuple_size))
 		{
 			output_tuple_capacity += get_tuple_size(inputs->right_input_tuple_def, right_tuple);
 			output_tuple = realloc(output_tuple, output_tuple_capacity);
