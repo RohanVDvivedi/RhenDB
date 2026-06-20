@@ -908,7 +908,7 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 void notify_unblocked(void* context_p, void* transaction_vp, void* task_vp)
 {
 	// rhendb provided the callback so we are the context
-	rhendb* rdb = context_p;
+	//rhendb* rdb = context_p;
 
 	// wake up the right operator, for the corresponding transaction
 	if(((uintptr_t)transaction_vp) >= 1024)
@@ -925,7 +925,7 @@ void notify_unblocked(void* context_p, void* transaction_vp, void* task_vp)
 void notify_deadlocked(void* context_p, void* transaction_vp)
 {
 	// rhendb provided the callback so we are the context
-	rhendb* rdb = context_p;
+	//rhendb* rdb = context_p;
 
 	// notify the right transaction's curr_query, for the deadlock
 	if(((uintptr_t)transaction_vp) >= 1024)
