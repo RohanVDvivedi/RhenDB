@@ -15,7 +15,7 @@ char const * const lock_result_strings[] = {
 	[MUST_BLOCK_FOR_LOCK] = "MUST_BLOCK_FOR_LOCK",
 };
 
-int abort_error = 0;
+static int abort_error = 0;
 
 // all the bplus_tree-s used are ascending ordered by their keys, so we need this global array to pass in all the bplus_tree tuple_defs
 static compare_direction all_ascending[] = {ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC};
