@@ -32,6 +32,44 @@ struct input_values
 	uint32_t min_block_size;
 };
 
+static int produce_join_result(operator* o, const void* left_tuple, const void* right_tuple)
+{
+	input_values* inputs = o->inputs;
+
+	uint32_t output_tuple_capacity = get_minimum_tuple_size(inputs->output_tuple_def);
+	uint32_t output_tuple_size = output_tuple_capacity;
+
+	void* output_tuple = malloc(output_tuple_capacity);
+
+	init_tuple(inputs->output_tuple_def, output_tuple);
+
+	if(left_tuple)
+	{
+		while(!set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(0), output_tuple, inputs->left_input_tuple_def, SELF, left_tuple, output_tuple_capacity - output_tuple_size))
+		{
+			output_tuple_capacity += get_tuple_size(inputs->left_input_tuple_def, left_tuple);
+			output_tuple = realloc(output_tuple, output_tuple_capacity);
+		}
+		output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+	}
+
+	if(right_tuple)
+	{
+		while(!set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(1), output_tuple, inputs->right_input_tuple_def, SELF, right_tuple, output_tuple_capacity - output_tuple_size))
+		{
+			output_tuple_capacity += get_tuple_size(inputs->right_input_tuple_def, right_tuple);
+			output_tuple = realloc(output_tuple, output_tuple_capacity);
+		}
+		output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+	}
+
+	// produce output_tuple
+	int produced = produce_tuple_from_operator(o, output_tuple);
+	free(output_tuple);
+
+	return produced;
+}
+
 // returns 0 on error
 static int produce_batched_left_block_loop_over_all_right(operator* o)
 {
@@ -95,17 +133,8 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 
 			if(matched)
 			{
-				uint32_t output_tuple_capacity = 32 + get_tuple_size(inputs->left_input_tuple_def, left_tuple) + get_tuple_size(inputs->right_input_tuple_def, right_tuple);
-				void* output_tuple = malloc(output_tuple_capacity);
-
-				init_tuple(inputs->output_tuple_def, output_tuple);
-
-				set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(0), output_tuple, inputs->left_input_tuple_def, SELF, left_tuple, UINT32_MAX);
-				set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(1), output_tuple, inputs->right_input_tuple_def, SELF, right_tuple, UINT32_MAX);
-
 				// produce output_tuple
-				int produced = produce_tuple_from_operator(o, output_tuple);
-				free(output_tuple);
+				int produced = produce_join_result(o, left_tuple, right_tuple);
 				if(!produced)
 				{
 					if(left_tuple_matched_bitmap != NULL)
@@ -136,16 +165,8 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 			// if this left_tuple_index never matched
 			if(get_bit(left_tuple_matched_bitmap, left_tuple_index) == 0)
 			{
-				uint32_t output_tuple_capacity = 32 + get_tuple_size(inputs->left_input_tuple_def, left_tuple);
-				void* output_tuple = malloc(output_tuple_capacity);
-
-				init_tuple(inputs->output_tuple_def, output_tuple);
-
-				set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(0), output_tuple, inputs->left_input_tuple_def, SELF, left_tuple, UINT32_MAX);
-
 				// produce output_tuple
-				int produced = produce_tuple_from_operator(o, output_tuple);
-				free(output_tuple);
+				int produced = produce_join_result(o, left_tuple, NULL);
 				if(!produced)
 				{
 					if(left_tuple_matched_bitmap != NULL)

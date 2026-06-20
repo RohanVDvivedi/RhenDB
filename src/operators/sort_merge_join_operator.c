@@ -40,17 +40,32 @@ static int produce_join_result(operator* o, const void* left_tuple, const void* 
 {
 	input_values* inputs = o->inputs;
 
-	uint32_t output_tuple_capacity = 32 + ((left_tuple != NULL) ? get_tuple_size(inputs->left_input_tuple_def, left_tuple) : 0) + ((right_tuple != NULL) ? get_tuple_size(inputs->right_input_tuple_def, right_tuple) : 0);
+	uint32_t output_tuple_capacity = get_minimum_tuple_size(inputs->output_tuple_def);
+	uint32_t output_tuple_size = output_tuple_capacity;
 
 	void* output_tuple = malloc(output_tuple_capacity);
 
 	init_tuple(inputs->output_tuple_def, output_tuple);
 
 	if(left_tuple)
-		set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(0), output_tuple, inputs->left_input_tuple_def, SELF, left_tuple, UINT32_MAX);
+	{
+		while(!set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(0), output_tuple, inputs->left_input_tuple_def, SELF, left_tuple, output_tuple_capacity - output_tuple_size))
+		{
+			output_tuple_capacity += get_tuple_size(inputs->left_input_tuple_def, left_tuple);
+			output_tuple = realloc(output_tuple, output_tuple_capacity);
+		}
+		output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+	}
 
 	if(right_tuple)
-		set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(1), output_tuple, inputs->right_input_tuple_def, SELF, right_tuple, UINT32_MAX);
+	{
+		while(!set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(1), output_tuple, inputs->right_input_tuple_def, SELF, right_tuple, output_tuple_capacity - output_tuple_size))
+		{
+			output_tuple_capacity += get_tuple_size(inputs->right_input_tuple_def, right_tuple);
+			output_tuple = realloc(output_tuple, output_tuple_capacity);
+		}
+		output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+	}
 
 	// produce output_tuple
 	int produced = produce_tuple_from_operator(o, output_tuple);
