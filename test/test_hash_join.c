@@ -32,8 +32,6 @@ uint32_t left_inputs[COUNT_LEFT];
 
 #define COUNT_RIGHT 30000
 
-#define MAX_BLOCK_SIZE 4096
-
 uint32_t right_inputs[COUNT_RIGHT];
 
 void generate_random_inputs()

@@ -32,7 +32,7 @@
 
 #define RECORD_S_KEY_ELEMENT_COUNT 1
 
-#define MAX_BLOCK_SIZE (1024 * 1024)
+#define MIN_BLOCK_SIZE (1024 * 1024)
 
 positional_accessor KEY_POS[1] = {STATIC_POSITION(2)};
 compare_direction CMP_DIR[1] = {ASC};
@@ -90,7 +90,7 @@ int main(int argc, char** argv)
 		operator* bnlj = NULL;
 		{
 			bnlj = get_new_registered_operator_for_query_plan(qp);
-			setup_block_nested_loop_join_operator(bnlj, input_operator, input_operator, &(rdb.persistent_acid_rage_engine), join_matcher, PRESERVE_NONE, MAX_BLOCK_SIZE);
+			setup_block_nested_loop_join_operator(bnlj, input_operator, input_operator, &(rdb.persistent_acid_rage_engine), join_matcher, PRESERVE_NONE, MIN_BLOCK_SIZE);
 			printf("block nested loop join operator %p\n", bnlj);
 		}
 
@@ -101,7 +101,7 @@ int main(int argc, char** argv)
 			printf("sorter for smj operator %p\n", input_sorted_operator);
 
 			smj = get_new_registered_operator_for_query_plan(qp);
-			setup_sort_merge_join_operator(smj, input_sorted_operator, KEY_POS, input_sorted_operator, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, MAX_BLOCK_SIZE);
+			setup_sort_merge_join_operator(smj, input_sorted_operator, KEY_POS, input_sorted_operator, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, MIN_BLOCK_SIZE);
 			printf("sort merge join operator %p\n", smj);
 		}
 

@@ -32,7 +32,7 @@ uint32_t left_inputs[COUNT_LEFT];
 
 #define COUNT_RIGHT 30000
 
-#define MAX_BLOCK_SIZE 4096
+#define MIN_BLOCK_SIZE 4096
 
 uint32_t right_inputs[COUNT_RIGHT];
 
@@ -158,7 +158,7 @@ int main(int argc, char** argv)
 		printf("sorter for right operator %p\n", right_sorter_operator);
 
 		operator* join_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_sort_merge_semi_join_operator(join_operator, left_sorter_operator, LEFT_KEY_POS, right_sorter_operator, RIGHT_KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, LEFT_SEMI_JOIN, MAX_BLOCK_SIZE);
+		setup_sort_merge_semi_join_operator(join_operator, left_sorter_operator, LEFT_KEY_POS, right_sorter_operator, RIGHT_KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, LEFT_SEMI_JOIN, MIN_BLOCK_SIZE);
 		printf("join operator %p\n", join_operator);
 
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
