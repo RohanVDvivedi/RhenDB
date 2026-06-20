@@ -267,7 +267,7 @@ static void execute(operator* o)
 				inputs->left_side_equal_tuples_batch->embed_uints[0] = 1;
 
 				// insert this as right tuple and mmap this first tuple in embed_regions[0]
-				append_tuple_to_interim_tuple_store2(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), inputs->right_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+				append_tuple_to_interim_tuple_store2(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), inputs->right_input_iterator->embed_ptrs[0], &(inputs->right_input_tuple_def->size_def), inputs->max_block_size);
 				inputs->right_side_equal_tuples_batch->embed_uints[0] = 1;
 
 				// embed_uints[0] = 1, implies previous tuple matched so attempt to compare it with the next
@@ -309,7 +309,7 @@ static void execute(operator* o)
 
 			if(inputs->right_side_equal_tuples_batch->embed_uints[0])
 			{
-				append_tuple_to_interim_tuple_store2(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[1]), inputs->right_input_iterator->embed_ptrs[0], &(inputs->left_input_tuple_def->size_def), inputs->max_block_size);
+				append_tuple_to_interim_tuple_store2(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[1]), inputs->right_input_iterator->embed_ptrs[0], &(inputs->right_input_tuple_def->size_def), inputs->max_block_size);
 				inputs->right_input_iterator->embed_ptrs[0] = NULL;
 			}
 
