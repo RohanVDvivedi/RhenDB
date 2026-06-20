@@ -79,7 +79,7 @@ struct input_values
 	const data_type_info** key_dtis;
 
 	// below are the properties of this operator
-	uint64_t minimum_run_size;
+	uint64_t min_run_size;
 	uint32_t N_way_sort;
 	uint32_t max_concurrent_jobs_count;
 
@@ -186,7 +186,7 @@ static void merge_into_run_job(operator* o, void* param)
 	// populate runs in mergeable_open_runs
 	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param); its_p != NULL; its_p = pop_run_from_tuple_runs(input_param))
 	{
-		if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), 0, &(inputs->record_def->size_def), inputs->minimum_run_size))
+		if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), 0, &(inputs->record_def->size_def), inputs->min_run_size))
 			delete_interim_tuple_store(its_p);
 		else
 		{
@@ -217,12 +217,12 @@ static void merge_into_run_job(operator* o, void* param)
 
 		// copy the top tuple of its_p into (append it to) output_its_p
 		decrement_tuples_down_counter(&result_counter);
-		append_tuple_to_interim_tuple_store2(output_its_p, &(output_its_p->embed_regions[0]), its_p->embed_regions[0].tuple, &(inputs->record_def->size_def), inputs->minimum_run_size);
+		append_tuple_to_interim_tuple_store2(output_its_p, &(output_its_p->embed_regions[0]), its_p->embed_regions[0].tuple, &(inputs->record_def->size_def), inputs->min_run_size);
 
 		// go next on its_p, and insert it back into mergeable_open_runs
 		{
 			uint64_t next_tuple_offset = next_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0]));
-			if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), next_tuple_offset, &(inputs->record_def->size_def), inputs->minimum_run_size))
+			if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), next_tuple_offset, &(inputs->record_def->size_def), inputs->min_run_size))
 			{
 				// implies there are no more tuples
 
@@ -285,7 +285,7 @@ static void merge_into_produce_job(operator* o, void* param)
 	// populate runs in mergeable_open_runs
 	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param); its_p != NULL; its_p = pop_run_from_tuple_runs(input_param))
 	{
-		if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), 0, &(inputs->record_def->size_def), inputs->minimum_run_size))
+		if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), 0, &(inputs->record_def->size_def), inputs->min_run_size))
 			delete_interim_tuple_store(its_p);
 		else
 		{
@@ -318,7 +318,7 @@ static void merge_into_produce_job(operator* o, void* param)
 		// go next on its_p, and insert it back into mergeable_open_runs
 		{
 			uint64_t next_tuple_offset = next_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0]));
-			if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), next_tuple_offset, &(inputs->record_def->size_def), inputs->minimum_run_size))
+			if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), next_tuple_offset, &(inputs->record_def->size_def), inputs->min_run_size))
 			{
 				// implies there are no more tuples
 
@@ -387,7 +387,7 @@ static void produce_job(operator* o, void* param)
 	for(interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param); its_p != NULL && can_decrement_tuples_down_counter(&result_counter); its_p = pop_run_from_tuple_runs(input_param))
 	{
 		{
-			FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->record_def->size_def), its_p, inputs->minimum_run_size, {
+			FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->record_def->size_def), its_p, inputs->min_run_size, {
 				if(!decrement_tuples_down_counter(&result_counter)) // try and decrement, if it fails nothing to be produced any further
 					break;
 				if(!produce_tuple_from_operator(o, tuple))
@@ -592,11 +592,11 @@ static void execute(operator* o)
 		if(tuple != NULL)
 		{
 			if(inputs->input_un_sorted_run == NULL)
-				inputs->input_un_sorted_run = get_new_interim_tuple_store(inputs->minimum_run_size);
+				inputs->input_un_sorted_run = get_new_interim_tuple_store(inputs->min_run_size);
 
-			append_tuple_to_interim_tuple_store2(inputs->input_un_sorted_run, &(inputs->input_un_sorted_run->embed_regions[0]), (void*)tuple, &(inputs->record_def->size_def), inputs->minimum_run_size);
+			append_tuple_to_interim_tuple_store2(inputs->input_un_sorted_run, &(inputs->input_un_sorted_run->embed_regions[0]), (void*)tuple, &(inputs->record_def->size_def), inputs->min_run_size);
 
-			if(get_total_bytes_in_interim_tuple_store(inputs->input_un_sorted_run) >= inputs->minimum_run_size)
+			if(get_total_bytes_in_interim_tuple_store(inputs->input_un_sorted_run) >= inputs->min_run_size)
 			{
 				// its ownership for inputs->input_un_sorted_run, is changing, so unmap it's embed_regions
 				unmap_all_embed_regions_in_interim_tuple_store(inputs->input_un_sorted_run);
@@ -667,7 +667,7 @@ static void clean_up_resources(operator* o)
 	pthread_mutex_destroy(&(inputs->runs_lock));
 }
 
-operator_resource_counter setup_external_sort_operator(operator* o, tuples_down_counter result_counter, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t minimum_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
+operator_resource_counter setup_external_sort_operator(operator* o, tuples_down_counter result_counter, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t min_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
 {
 	if(is_zero_tuples_down_counter(&result_counter))
 	{
@@ -681,9 +681,9 @@ operator_resource_counter setup_external_sort_operator(operator* o, tuples_down_
 		exit(-1);
 	}
 
-	if(minimum_run_size == 0)
+	if(min_run_size == 0)
 	{
-		printf("minimum_run_size can not be 0 for external_sort_operator\n");
+		printf("min_run_size can not be 0 for external_sort_operator\n");
 		exit(-1);
 	}
 
@@ -724,7 +724,7 @@ operator_resource_counter setup_external_sort_operator(operator* o, tuples_down_
 		.key_element_ids = key_element_ids,
 		.key_compare_direction = key_compare_direction,
 		.key_dtis = malloc(sizeof(data_type_info*) * key_element_count),
-		.minimum_run_size = minimum_run_size,
+		.min_run_size = min_run_size,
 		.N_way_sort = N_way_sort,
 		.max_concurrent_jobs_count = max_concurrent_jobs_count,
 		.result_counter = result_counter,
