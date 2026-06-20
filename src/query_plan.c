@@ -903,6 +903,8 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 	free(qp);
 }
 
+// below 2 functions get called by the lock_manager with the lock held, so we do not need to take the lock_manager_external_lock
+
 void notify_unblocked(void* context_p, void* transaction_vp, void* task_vp)
 {
 	// rhendb provided the callback so we are the context
@@ -911,14 +913,10 @@ void notify_unblocked(void* context_p, void* transaction_vp, void* task_vp)
 	// wake up the right operator, for the corresponding transaction
 	if(((uintptr_t)transaction_vp) >= 1024)
 	{
-		pthread_mutex_lock(&(rdb->lock_manager_external_lock));
-
 		transaction* tx = transaction_vp;
 		operator* o = task_vp;
 		if(o->self_query_plan->curr_tx == tx)
 			spurious_wake_up_operator(o);
-
-		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
 	}
 	else
 		printf("notify_unblocked( trx_id = %"PRIuPTR" , task_id = %"PRIuPTR" )\n\n", ((uintptr_t)transaction_vp), ((uintptr_t)task_vp));
@@ -932,12 +930,8 @@ void notify_deadlocked(void* context_p, void* transaction_vp)
 	// notify the right transaction's curr_query, for the deadlock
 	if(((uintptr_t)transaction_vp) >= 1024)
 	{
-		pthread_mutex_lock(&(rdb->lock_manager_external_lock));
-
 		transaction* tx = transaction_vp;
 		shutdown_query_plan_LOCK_TABLE_UNSAFE(tx->curr_query, get_dstring_pointing_to_literal_cstring("DEADLOCK_DETECTED"));
-
-		pthread_mutex_unlock(&(rdb->lock_manager_external_lock));
 	}
 	else
 		printf("notify_deadlocked( trx_id = %"PRIuPTR" )\n\n",  ((uintptr_t)transaction_vp));
