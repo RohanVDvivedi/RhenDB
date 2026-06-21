@@ -13,6 +13,16 @@
 #include<unistd.h>
 #include<sys/types.h>
 
+interim_tuple_store_snapshot get_interim_tuple_store_snapshot(interim_tuple_store* its_p)
+{
+	return (interim_tuple_store_snapshot) {
+		.total_size = its_p->total_size,
+		.next_tuple_offset = its_p->next_tuple_offset,
+		.tuples_count = its_p->tuples_count,
+		.fd = its_p->fd,
+	};
+}
+
 interim_tuple_store* get_new_interim_tuple_store(uint64_t initial_total_size)
 {
 	interim_tuple_store* its_p = malloc(sizeof(interim_tuple_store));
@@ -157,14 +167,25 @@ uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p
 	return get_tuple_size_using_tuple_size_def2(tpl_sz_d, &((tuple_size_getter_context){its_p->fd, tuple_offset, helper_itr_p}), read_tuple_prefix_from_file);
 }
 
+uint32_t get_tuple_size_for_interim_tuple_store_snapshot(const interim_tuple_store_snapshot* its_p, const interim_tuple_region* helper_itr_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d)
+{
+	return get_tuple_size_using_tuple_size_def2(tpl_sz_d, &((tuple_size_getter_context){its_p->fd, tuple_offset, helper_itr_p}), read_tuple_prefix_from_file);
+}
+
 int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, uint64_t offset, const tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap)
+{
+	interim_tuple_store_snapshot itss = get_interim_tuple_store_snapshot(its_p);
+	return mmap_for_reading_tuple_from_snapshot(&itss, itr_p, offset, tpl_sz_d, min_bytes_to_mmap);
+}
+
+int mmap_for_reading_tuple_from_snapshot(const interim_tuple_store_snapshot* its_p, interim_tuple_region* itr_p, uint64_t offset, const tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap)
 {
 	// offset must be withing readable file region to begin with, with enough bytes for the smallest sized tuple
 	if(offset + get_minimum_tuple_size_using_tuple_size_def(tpl_sz_d) > its_p->next_tuple_offset)
 		return 0;
 
 	uint64_t tuple_offset_start = offset;
-	uint32_t tuple_size = get_tuple_size_for_interim_tuple_store(its_p, itr_p, tuple_offset_start, tpl_sz_d);
+	uint32_t tuple_size = get_tuple_size_for_interim_tuple_store_snapshot(its_p, itr_p, tuple_offset_start, tpl_sz_d);
 	uint64_t tuple_offset_end = tuple_offset_start + tuple_size;
 
 	// tuple_offset_end <= its_p->next_tuple_offset, is a must

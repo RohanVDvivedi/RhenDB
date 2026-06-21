@@ -76,6 +76,21 @@ struct interim_tuple_store
 	interim_tuple_region embed_regions[4];
 };
 
+typedef struct interim_tuple_store_snapshot interim_tuple_store_snapshot;
+struct interim_tuple_store_snapshot
+{
+	uint64_t total_size;
+
+	uint64_t next_tuple_offset;
+
+	uint64_t tuples_count;
+
+	int fd;
+};
+
+// read-only snapshot but not owning any attributes of the interim_tuple_store
+interim_tuple_store_snapshot get_interim_tuple_store_snapshot(interim_tuple_store* its_p);
+
 // please be sure that initial_total_size will be rounded to the next page_size available
 interim_tuple_store* get_new_interim_tuple_store(uint64_t initial_total_size);
 
@@ -99,11 +114,15 @@ uint64_t get_total_bytes_in_interim_tuple_store(const interim_tuple_store* its_p
 // helper_itr_p may be NULL, but providing it helps make things quick
 uint32_t get_tuple_size_for_interim_tuple_store(const interim_tuple_store* its_p, const interim_tuple_region* helper_itr_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d);
 
+uint32_t get_tuple_size_for_interim_tuple_store_snapshot(const interim_tuple_store_snapshot* its_p, const interim_tuple_region* helper_itr_p, uint64_t tuple_offset, const tuple_size_def* tpl_sz_d);
+
 // remaps the itr_p to a new offset, if it is valid else creates a new mapping
 // it may use the same mapping, if the tuple fits in this region
 // you can have multiple reading interim_tuple_regions open
 // min_bytes_to_mmap may be 0, if you want excatly same number of bytes mmaped as the size of the tuple
 int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr_p, uint64_t offset, const tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap);
+
+int mmap_for_reading_tuple_from_snapshot(const interim_tuple_store_snapshot* its_p, interim_tuple_region* itr_p, uint64_t offset, const tuple_size_def* tpl_sz_d, uint32_t min_bytes_to_mmap);
 
 // remaps the itr_p to the current next_tuple_offset, holding as much memory as required_size
 // it may use the same mapping, if the tuple fits in this region

@@ -501,7 +501,8 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 	cit_p->curr_region = INIT_INTERIM_TUPLE_REGION;
 
 	uint64_t offset = 0;
-	int perform_mmap_for_reading = 0;
+	int perform_mmap_for_reading = 0; // flag to set, if we need to do mmap
+	interim_tuple_store_snapshot perform_mmap_for_reading_snapshot; // snapshot to mmap from, to try and avoid mmap with the output_lock held
 
 	pthread_mutex_lock(&(producer->output_lock));
 
@@ -516,6 +517,7 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 		if(clone_cit_p != NULL && !is_empty_interim_tuple_region(&(clone_cit_p->curr_region)))
 			offset = curr_tuple_offset_for_interim_tuple_region(&(clone_cit_p->curr_region));
 		perform_mmap_for_reading = 1;
+		perform_mmap_for_reading_snapshot = get_interim_tuple_store_snapshot(cit_p->curr_store);
 	}
 
 	insert_tail_in_linkedlist(&(producer->output_consumers), cit_p);
@@ -523,7 +525,7 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 	pthread_mutex_unlock(&(producer->output_lock));
 
 	if(perform_mmap_for_reading)
-		mmap_for_reading_tuple(cit_p->curr_store, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(producer)->size_def), MIN_BYTES_TO_MMAP);
+		mmap_for_reading_tuple_from_snapshot(&perform_mmap_for_reading_snapshot, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(producer)->size_def), MIN_BYTES_TO_MMAP);
 
 	return cit_p;
 }
@@ -623,7 +625,8 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 
 	// to forcefully perform the mmap outside the output_lock
 	uint64_t offset = 0;
-	int perform_mmap_for_reading = 0;
+	int perform_mmap_for_reading = 0; // flag to set, if we need to do mmap
+	interim_tuple_store_snapshot perform_mmap_for_reading_snapshot; // snapshot to mmap from, to try and avoid mmap with the output_lock held
 
 	pthread_mutex_lock(&(cit_p->producer->output_lock));
 
@@ -666,10 +669,14 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 					cit_p->curr_store = (interim_tuple_store*) get_next_of_in_singlylist(&(cit_p->producer->output_buffers), cit_p->curr_store);
 
 					perform_mmap_for_reading = 1;
+					perform_mmap_for_reading_snapshot = get_interim_tuple_store_snapshot(cit_p->curr_store);
 				}
 			}
 			else
+			{
 				perform_mmap_for_reading = 1;
+				perform_mmap_for_reading_snapshot = get_interim_tuple_store_snapshot(cit_p->curr_store);
+			}
 		}
 	}
 
@@ -684,7 +691,7 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 
 	if(perform_mmap_for_reading)
 	{
-		mmap_for_reading_tuple(cit_p->curr_store, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(cit_p->producer)->size_def), MIN_BYTES_TO_MMAP);
+		mmap_for_reading_tuple_from_snapshot(&perform_mmap_for_reading_snapshot, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(cit_p->producer)->size_def), MIN_BYTES_TO_MMAP);
 		tuple = cit_p->curr_region.tuple;
 	}
 
