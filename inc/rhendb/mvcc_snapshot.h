@@ -15,11 +15,10 @@ struct mvcc_snapshot
 
 	uint256 least_unassigned_transaction_id; // this is the next_assignable_transaction_id from transaction table, at the time of taking this snapshot
 
-	int has_self_transaction_id; // this boolean suggests if a transaction_id was assigned for this snapshot, if false, transaction_id attribiute is expected to be absent
+	int has_self_transaction_id; // this boolean suggests if a transaction_id was assigned for this snapshot, if false, self_transaction_id attribute is expected to be absent
 	uint256 self_transaction_id; // id of the transaction that this snapshot belongs to
 
-	// must condition => (self_transaction_id <= least_unassigned_transaction_id)
-	// and for any in_progress_transaction_ids <= least_unassigned_transaction_id
+	// for any in_progress_transaction_ids <= least_unassigned_transaction_id
 
 	// below is an embed_node for maintaining a global linkedlist of all active snapshots in the transaction_table
 	// having pointer to mvcc_snapshot does not mean you can access this embed_node
@@ -69,11 +68,11 @@ const uint256* get_in_progress_transaction_ids_for_mvcc_snapshot(const mvcc_snap
 	set_transaction_id_in_mvcc_snapshot(...);
 */
 
-// below function returns true, only if (transaction_id == mvccsnp_p->transaction_id)
+// below function returns true, only if (transaction_id == mvccsnp_p->self_transaction_id) and has_self_transaction_id
 int is_self_transaction_for_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint256 transaction_id);
 
 // below function returns true, only if the transaction_id provided was committed or aborted at the time of taking this snapshot
-// returns (transaction_id < mvccsnp_p->transaction_id) && (transaction_id not in mvccsnp_p->in_progress_transaction_ids)
+// returns (transaction_id < mvccsnp_p->least_unassigned_transaction_id) && (transaction_id not in mvccsnp_p->in_progress_transaction_ids)
 int was_completed_transaction_at_mvcc_snapshot(const mvcc_snapshot* mvccsnp_p, uint256 transaction_id);
 
 void delete_mvcc_snapshot(mvcc_snapshot* mvccsnp_p);
