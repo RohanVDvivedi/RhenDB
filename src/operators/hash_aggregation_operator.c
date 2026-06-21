@@ -563,9 +563,21 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 		exit(-1);
 	}
 
+	if(bucket_count_per_parttion == 0)
+	{
+		printf("bucket_count_per_parttion can not be 0 for hash_aggregation_operator\n");
+		exit(-1);
+	}
+
 	if(max_concurrent_jobs_count == 0)
 	{
 		printf("max_concurrent_jobs_count can not be 0 for hash_aggregation_operator\n");
+		exit(-1);
+	}
+
+	if(max_concurrent_jobs_queue_size == 0)
+	{
+		printf("max_concurrent_jobs_queue_size can not be 0 for hash_aggregation_operator\n");
 		exit(-1);
 	}
 
@@ -573,7 +585,7 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 	{
 		if(!(aggregate_functions[i]->is_aggregate_function))
 		{
-			printf("aggregate_function passed at %d does not have it's (is_aggregate_function = 1) for hash_aggregation_operator\n", i);
+			printf("aggregate_function passed at %"PRIu32" does not have it's (is_aggregate_function = 1) for hash_aggregation_operator\n", i);
 			exit(-1);
 		}
 	}

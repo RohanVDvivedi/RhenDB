@@ -682,6 +682,30 @@ static void free_resources(operator* o)
 
 operator_resource_counter setup_hash_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype, uint32_t partitions_count, uint32_t bucket_count_per_parttion, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
 {
+	if(partitions_count == 0)
+	{
+		printf("partitions_count can not be 0 for hash_join_operator\n");
+		exit(-1);
+	}
+
+	if(bucket_count_per_parttion == 0)
+	{
+		printf("bucket_count_per_parttion can not be 0 for hash_join_operator\n");
+		exit(-1);
+	}
+
+	if(max_concurrent_jobs_count == 0)
+	{
+		printf("max_concurrent_jobs_count can not be 0 for hash_join_operator\n");
+		exit(-1);
+	}
+
+	if(max_concurrent_jobs_queue_size == 0)
+	{
+		printf("max_concurrent_jobs_queue_size can not be 0 for hash_join_operator\n");
+		exit(-1);
+	}
+
 	const tuple_def* left_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(left_input_operator);
 	const tuple_def* right_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(right_input_operator);
 

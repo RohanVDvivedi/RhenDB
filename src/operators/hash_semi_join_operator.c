@@ -474,6 +474,30 @@ operator_resource_counter setup_hash_semi_join_operator(operator* o, operator* l
 		exit(-1);
 	}
 
+	if(partitions_count == 0)
+	{
+		printf("partitions_count can not be 0 for hash_semi_join_operator\n");
+		exit(-1);
+	}
+
+	if(bucket_count_per_parttion == 0)
+	{
+		printf("bucket_count_per_parttion can not be 0 for hash_semi_join_operator\n");
+		exit(-1);
+	}
+
+	if(max_concurrent_jobs_count == 0)
+	{
+		printf("max_concurrent_jobs_count can not be 0 for hash_semi_join_operator\n");
+		exit(-1);
+	}
+
+	if(max_concurrent_jobs_queue_size == 0)
+	{
+		printf("max_concurrent_jobs_queue_size can not be 0 for hash_semi_join_operator\n");
+		exit(-1);
+	}
+
 	const tuple_def* left_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(left_input_operator);
 	const tuple_def* right_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(right_input_operator);
 
