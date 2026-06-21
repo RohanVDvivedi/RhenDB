@@ -14,17 +14,17 @@ static data_type_info* get_sum_output_type_info(const data_type_info* input_type
 	{
 		case BIT_FIELD :
 		case UINT :
-			return LARGE_UINT_NON_NULLABLE[9];
+			return LARGE_UINT_NULLABLE[16]; // 128 bits big
 		case LARGE_UINT:
-			return LARGE_UINT_NON_NULLABLE[32];
+			return LARGE_UINT_NULLABLE[32];
 
 		case INT :
-			return LARGE_INT_NON_NULLABLE[9];
+			return LARGE_INT_NULLABLE[16]; // 128 bits big
 		case LARGE_INT:
-			return LARGE_INT_NON_NULLABLE[32];
+			return LARGE_INT_NULLABLE[32];
 
 		case FLOAT :
-			return FLOAT_double_NON_NULLABLE;
+			return FLOAT_double_NULLABLE;
 
 		default :
 			return NULL;
@@ -162,12 +162,12 @@ update_sum_state get_dedicated_update_sum_state_function(const data_type_info* i
 
 static int process_input(const rhendb_function* af_p, void** state_p, const datum inputs[])
 {
-	// always create an empty state if one does not exist yet
-	if((*state_p) == NULL)
-		(*state_p) = create_sum_state(af_p->input_type_infos[0]);
-
 	if(!is_datum_NULL(&(inputs[0])))
 	{
+		// always create an empty state if one does not exist yet
+		if((*state_p) == NULL)
+			(*state_p) = create_sum_state(af_p->input_type_infos[0]);
+
 		if(!((update_sum_state)(af_p->context_p))(state_p, inputs[0]))
 			return 0;
 	}
@@ -177,9 +177,12 @@ static int process_input(const rhendb_function* af_p, void** state_p, const datu
 
 static int produce_output(const rhendb_function* af_p, datum* output, void** state_p)
 {
-	// always create an empty state if one does not exist yet
+	// just return NULL_DATUM, no tuple/row was seen
 	if((*state_p) == NULL)
-		(*state_p) = create_sum_state(af_p->input_type_infos[0]);
+	{
+		(*output) = (*NULL_DATUM);
+		return 1;
+	}
 
 	(*output) = get_sum_from_sum_state((*state_p), af_p->input_type_infos[0]);
 	return 1;
