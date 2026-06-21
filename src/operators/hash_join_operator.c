@@ -423,6 +423,17 @@ static void start_right_side_only_probe_jobs(operator* o)
 	pthread_mutex_unlock(&(inputs->buffers_queue_lock));
 }
 
+static int should_produce_more_for_buffers_queue(operator* o)
+{
+	input_values* inputs = o->inputs;
+
+	pthread_mutex_lock(&(inputs->buffers_queue_lock));
+	int produce_more = (inputs->buffers_queue_size < inputs->max_concurrent_jobs_queue_size);
+	pthread_mutex_unlock(&(inputs->buffers_queue_lock));
+
+	return produce_more;
+}
+
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
@@ -432,6 +443,9 @@ static void execute(operator* o)
 	{
 		while(1)
 		{
+			if(!should_produce_more_for_buffers_queue(o))
+				return;
+
 			int no_more_data = 0;
 			const void* tuple = consume_for_consumption_iterator(inputs->right_input_iterator, &no_more_data);
 			if(no_more_data)
@@ -508,6 +522,9 @@ static void execute(operator* o)
 
 		while(1)
 		{
+			if(!should_produce_more_for_buffers_queue(o))
+				return;
+
 			int no_more_data = 0;
 			const void* tuple = consume_for_consumption_iterator(inputs->left_input_iterator, &no_more_data);
 			if(no_more_data)
