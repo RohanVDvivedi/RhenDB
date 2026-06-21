@@ -80,7 +80,7 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, tuples_down
 		cmp_dir,
 		ex_engine,
 	};
-	sc.key_dtis = malloc(sizeof(data_type_info) * element_count);
+	sc.key_dtis = malloc(sizeof(data_type_info*) * element_count);
 	if(sc.key_dtis == NULL)
 		exit(-1);
 	for(uint32_t j = 0; j < element_count; j++)

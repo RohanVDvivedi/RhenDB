@@ -195,7 +195,9 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 
 	rdb->persistent_acid_rage_engine = get_rage_engine_for_min_tx_engine(database_file_name, page_size_mte, page_id_width, lsn_width, bufferpool_frame_count, wale_buffer_count, page_latch_wait_us, page_lock_wait_us, checkpoint_period_us, 2 * 1000000, 200 * 1000000);
 	// modify to allow only flushing 10% of the bufferpool by periodic job at any instant
+	pthread_mutex_lock(&(((mini_transaction_engine*)(rdb->persistent_acid_rage_engine.context))->global_lock));
 	modify_periodic_flush_job_frame_count(&(((mini_transaction_engine*)(rdb->persistent_acid_rage_engine.context))->bufferpool_handle), bufferpool_frame_count * 0.1);
+	pthread_mutex_unlock(&(((mini_transaction_engine*)(rdb->persistent_acid_rage_engine.context))->global_lock));
 
 	rdb->volatile_rage_engine = get_rage_engine_for_volatile_page_store(page_size_vps, page_id_width, truncator_period_us);
 

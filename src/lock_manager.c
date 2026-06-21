@@ -563,7 +563,7 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, void* transaction, void*
 		deserialize_lock_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &le, lckmgr_p);
 
 		// if it is not the right tuple, we break out
-		if(le.resource_id_size != resource_id_size || memory_compare(le.resource_id, resource_id, resource_id_size))
+		if(le.resource_type != resource_type || le.resource_id_size != resource_id_size || memory_compare(le.resource_id, resource_id, resource_id_size))
 			break;
 
 		// skip entries for the transaction that wants this lock

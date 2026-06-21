@@ -187,7 +187,7 @@ int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 	uint64_t region_offset_start = UINT_ALIGN_DOWN(tuple_offset_start, sysconf(_SC_PAGE_SIZE));
 	// place region_offset_end right after the max of the position of tuple_offset_end OR min_bytes_to_mmap after the tuple (and ofcourse not overflowing the next_tuple_offset)
 	uint64_t region_offset_end = UINT_ALIGN_UP(min(max(tuple_offset_end, tuple_offset_start + min_bytes_to_mmap), its_p->next_tuple_offset), sysconf(_SC_PAGE_SIZE));
-	uint32_t region_size = region_offset_end - region_offset_start;
+	uint64_t region_size = region_offset_end - region_offset_start;
 
 	// map the new interim_tuple_region and return it
 	void* region_memory = mmap64(NULL, region_size, PROT_READ | PROT_WRITE, MAP_SHARED, its_p->fd, region_offset_start);
@@ -228,7 +228,7 @@ int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 	uint64_t region_offset_start = UINT_ALIGN_DOWN(tuple_offset_start, sysconf(_SC_PAGE_SIZE));
 	// place region_offset_end right after the max of the position of tuple_offset_end OR min_bytes_to_mmap after the tuple
 	uint64_t region_offset_end = UINT_ALIGN_UP(max(tuple_offset_end, tuple_offset_start + min_bytes_to_mmap), sysconf(_SC_PAGE_SIZE));
-	uint32_t region_size = region_offset_end - region_offset_start;
+	uint64_t region_size = region_offset_end - region_offset_start;
 
 	// ftruncate to extend the file, if the region_offset_end is greater than total_size
 	// we do not need to extend if region_offset_end <= total_size
