@@ -706,9 +706,9 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 		exit(-1);
 	}
 
-	if(min_build_tuple_buffer_size == 0)
+	if(min_pending_buffer_size == 0)
 	{
-		printf("min_build_tuple_buffer_size can not be 0 for hash_join_operator\n");
+		printf("min_pending_buffer_size can not be 0 for hash_join_operator\n");
 		exit(-1);
 	}
 
