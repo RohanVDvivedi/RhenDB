@@ -581,6 +581,12 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 		exit(-1);
 	}
 
+	if(min_build_tuple_buffer_size == 0)
+	{
+		printf("min_build_tuple_buffer_size can not be 0 for hash_aggregation_operator\n");
+		exit(-1);
+	}
+
 	for(uint32_t i = 0; i < aggregate_functions_count; i++)
 	{
 		if(!(aggregate_functions[i]->is_aggregate_function))
