@@ -30,8 +30,8 @@ struct transaction_id_with_hints
 {
 	// is_committed and is_aborted must have atmost 1 of them set
 	// if both of them are unset then the status of the transaction in context is unclear and must be fetched from transaction table
-	int is_committed:1;
-	int is_aborted:1;
+	unsigned int is_committed:1;
+	unsigned int is_aborted:1;
 
 	uint256 transaction_id;
 };
@@ -40,11 +40,11 @@ struct transaction_id_with_hints
 typedef struct mvcc_header mvcc_header;
 struct mvcc_header
 {
-	int is_xmin_NULL:1; // xmin makes sense if this bit is 0, if 1, this tuple is not visible and is ready for vaccum
+	unsigned int is_xmin_NULL:1; // xmin makes sense if this bit is 0, if 1, this tuple is not visible and is ready for vaccum
 
 	transaction_id_with_hints xmin;
 
-	int is_xmax_NULL:1; // xmax makes sense if this bit is 0
+	unsigned int is_xmax_NULL:1; // xmax makes sense if this bit is 0
 
 	transaction_id_with_hints xmax; // does not make sense if is_xmax_NULL is set
 };

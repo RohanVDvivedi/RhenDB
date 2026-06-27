@@ -97,8 +97,8 @@ struct operator
 	uint64_t queued_jobs_count;
 	uint64_t running_jobs_count;
 
-	int is_kill_signal_sent:1;
-	int is_trigger_signaled_on_running:1; // this flag will be set, if a trigger is signalled while the operator was in running state
+	unsigned int is_kill_signal_sent:1;
+	unsigned int is_trigger_signaled_on_running:1; // this flag will be set, if a trigger is signalled while the operator was in running state
 
 	// this kill_reason will be set/appended while sending a kill signal to the operator
 	dstring kill_reason;
