@@ -38,8 +38,8 @@ void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb)
 	init_hash_table_tuple_definitions(&(rdb->rash_httd), &(rdb->volatile_rage_engine.pam_p->pas), record_def, actual_key_positions, sizeof(actual_key_positions)/sizeof(actual_key_positions[0]), FNV_64_TUPLE_HASHER);
 }
 
-#define MAX_BLOB_STORE_INVALID_ENTRIES 64
-#define THRESHOLD_BLOB_STORE_INVALID_ENTRIES 28
+#define MAX_BLOB_STORE_INVALID_ENTRIES 56
+#define THRESHOLD_BLOB_STORE_INVALID_ENTRIES 14
 
 rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb)
 {
