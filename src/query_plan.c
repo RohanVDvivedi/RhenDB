@@ -399,9 +399,9 @@ void OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION(operator* o)
 	}
 }
 
-#define MIN_OUTPUT_BUFFER_STORE_SIZE (40 * 1024 * 1024)
-#define MAX_OUTPUT_BUFFER_COUNT 3
-#define MIN_BYTES_TO_MMAP (1024 * 1024)
+#define MIN_OUTPUT_BUFFER_STORE_SIZE (64 * 1024 * 1024)
+#define MAX_OUTPUT_BUFFER_COUNT 2
+#define MIN_BYTES_TO_MMAP (2 * 1024 * 1024)
 
 int produce_tuple_from_operator(operator* o, void* tuple)
 {
@@ -457,11 +457,15 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 
 		// append the tuple in this tail interim_tuple_store
 		append_tuple_to_interim_tuple_store2(its_p, &(its_p->embed_regions[0]), tuple, &(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers))->size_def), MIN_BYTES_TO_MMAP);
+		o->output_buffer_bytes_unnotified += get_tuple_size(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers)), tuple);
 	}
 
 	// wake up all consumers, only if we pushed
-	if(pushed)
+	if(pushed && o->output_buffer_bytes_unnotified >= MIN_BYTES_TO_MMAP)
+	{
+		o->output_buffer_bytes_unnotified = 0;
 		trigger_all_consumers_for_operator_UNSAFE(o, 0); // do not force trigger all consumers, trigger only the ones that were not triggered in the past
+	}
 
 	pthread_mutex_unlock(&(o->output_lock));
 
@@ -738,6 +742,7 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	pthread_mutex_init(&(o->output_lock), NULL);
 	initialize_singlylist(&(o->output_buffers), offsetof(interim_tuple_store, embed_node_sl));
 	o->output_buffers_count = 0;
+	o->output_buffer_bytes_unnotified = 0;
 	initialize_singlylist(&(o->free_output_buffers), offsetof(interim_tuple_store, embed_node_sl));
 	initialize_linkedlist(&(o->output_consumers), offsetof(consumption_iterator, embed_node_for_output_consumers));
 	init_tuple_transformers(&(o->output_tuple_transformers), NULL); // must initialize it again, unless it is the sink operator
@@ -849,6 +854,7 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		}
 
 		o->output_buffers_count = 0;
+		o->output_buffer_bytes_unnotified = 0;
 
 		while(NULL != get_head_of_singlylist(&(o->free_output_buffers)))
 		{
@@ -858,6 +864,8 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 		}
 
 		destroy_tuple_transformers(&(o->output_tuple_transformers));
+
+		pthread_mutex_destroy(&(o->output_lock));
 
 		pthread_mutex_destroy(&(o->state_lock));
 		pthread_cond_destroy(&(o->wait_until_completion));

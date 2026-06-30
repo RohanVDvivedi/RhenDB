@@ -72,6 +72,8 @@ struct operator
 	singlylist output_buffers;
 	uint32_t output_buffers_count; // this number does never cross 3
 
+	uint64_t output_buffer_bytes_unnotified; // this many bytes worth of tuples were pushed to output_buffer without notifing anyone yet
+
 	// freelist for the above output_buffers
 	singlylist free_output_buffers;
 
