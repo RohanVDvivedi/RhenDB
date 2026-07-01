@@ -210,7 +210,7 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 			// open rash table iterator for insertion/appending
 			rash_table_iterator rti = find_equals_in_rash_table(&(inputs->partitions[partition_id]->rth), &rtk, 0);
 
-			if(exists_in_rash_table_iterator(&rti))
+			if(rti.pointing_to_rkey) // result of exists check done above
 			{
 				if(DOES_IT_PRESERVE_RIGHT(inputs->ptype))
 					write_state_in_rash_table_iterator(&rti, 1); // we matched right with a left, so set the state flag on the right side entry to 1, NOTE: doing this without a lock is a hack

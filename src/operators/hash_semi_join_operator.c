@@ -100,7 +100,7 @@ static void build_right_side_partitions(operator* o, void* param)
 			rash_table_iterator rti = find_equals_in_rash_table(&(inputs->partitions[partition_id]->rth), &rtk, 0);
 
 			// we only insert entry, if it does not exist and no need to store the entire right_tuple like the regular join
-			if(!exists_in_rash_table_iterator(&rti))
+			if(!(rti.pointing_to_rkey)) // result of exists check done above
 			{
 				// open write iterator on this key
 				binary_write_iterator* bwi_p = open_for_writing_value_in_rash_table_iterator(&rti);
@@ -161,7 +161,7 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 			// open rash table iterator for insertion/appending
 			rash_table_iterator rti = find_equals_in_rash_table(&(inputs->partitions[partition_id]->rth), &rtk, 1);
 
-			if(exists_in_rash_table_iterator(&rti))
+			if(rti.pointing_to_rkey) // result of exists check done above
 			{
 				if(DOES_PRODUCE_MATCHED_LEFT_TUPLES(inputs->stype))
 				{
