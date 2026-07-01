@@ -277,7 +277,7 @@ rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read
 {
 	int abort_error_dummy = 0;
 
-	rash_table_iterator rti = {.rth_p = rth_p, .hti_p = NULL, .is_read_only = is_read_only, .rkey_p = NULL};
+	rash_table_iterator rti = {.rth_p = rth_p, .hti_p = NULL, .is_read_only = is_read_only, .rkey_p = NULL, .pointing_to_rkey = 0};
 
 	rti.hti_p = get_new_hash_table_iterator(&(rth_p->hth), WHOLE_BUCKET_RANGE, NULL, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, is_read_only ? NULL : rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
@@ -288,7 +288,7 @@ rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const ra
 {
 	int abort_error_dummy = 0;
 
-	rash_table_iterator rti = {.rth_p = rth_p, .hti_p = NULL, .is_read_only = is_read_only, .rkey_p = rkey_p};
+	rash_table_iterator rti = {.rth_p = rth_p, .hti_p = NULL, .is_read_only = is_read_only, .rkey_p = rkey_p, .pointing_to_rkey = 0};
 
 	rti.hti_p = get_new_hash_table_iterator(&(rth_p->hth), (bucket_range){}, rkey_p->hash_value, &(rth_p->rdb->rash_httd), rth_p->rdb->volatile_rage_engine.pam_p, is_read_only ? NULL : rth_p->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
@@ -297,7 +297,10 @@ rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const ra
 		// if exists, i.e. key compares equal is found, then break out
 		int exists = exists_in_rash_table_iterator(&rti);
 		if(exists)
+		{
+			rti.pointing_to_rkey = 1;
 			break;
+		}
 
 		// if we could not go next then also break
 		// going next only in the same bucket
@@ -348,7 +351,7 @@ int write_state_in_rash_table_iterator(rash_table_iterator* rti_p, uint64_t stat
 
 	int abort_error_dummy = 0;
 
-	if(!exists_in_rash_table_iterator(rti_p))
+	if(NULL == get_tuple_hash_table_iterator(rti_p->hti_p))
 		return 0;
 
 	return update_non_key_element_in_place_at_hash_table_iterator(rti_p->hti_p, state_position, &((const datum){.bit_field_value = state}), NULL, &abort_error_dummy);
@@ -411,7 +414,7 @@ int remove_from_rash_table_iterator(rash_table_iterator* rti_p)
 	const void* record_tuple = get_tuple_hash_table_iterator(rti_p->hti_p);
 	if(record_tuple == NULL)
 		return 0;
-	else
+
 	{
 		{
 			datum uval;
@@ -433,6 +436,7 @@ int remove_from_rash_table_iterator(rash_table_iterator* rti_p)
 
 	rti_p->rth_p->element_count--;
 	rti_p->rth_p->total_inline_size -= get_tuple_size(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, record_tuple);
+	rti_p->pointing_to_rkey = 0;
 
 	remove_from_hash_table_iterator(rti_p->hti_p, NULL, &abort_error_dummy);
 	return 1;
@@ -461,9 +465,7 @@ binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_
 
 	int abort_error_dummy = 0;
 
-	int exists = exists_in_rash_table_iterator(rti_p);
-
-	if(exists) // update call
+	if(rti_p->pointing_to_rkey) // update call
 	{
 		rti_p->perform_insert = 0;
 
@@ -579,6 +581,9 @@ void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, bi
 
 int next_in_rash_table_iterator(rash_table_iterator* rti_p)
 {
+	if(rti_p->rkey_p != NULL)
+		return 0;
+
 	int abort_error_dummy = 0;
 
 	int went_next = 1;

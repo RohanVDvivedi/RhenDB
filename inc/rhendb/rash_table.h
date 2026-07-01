@@ -114,6 +114,7 @@ struct rash_table_iterator
 
 	// this rkey_p may be NULL, if you are iterating over all the keys in the rash_table
 	const rash_table_key* rkey_p;
+	int pointing_to_rkey; // this will be set if the iterator is found to be pointing to the key rkey_p
 };
 
 rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read_only);
