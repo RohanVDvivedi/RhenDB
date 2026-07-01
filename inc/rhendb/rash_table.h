@@ -50,7 +50,7 @@ struct rash_table_handle
 		shrink if (total_inline_size / (bucket_count * PAGE_SIZE)) < MIN_LOAD_FACTOR_IN_BYTES
 	*/
 
-	tuple_def* key_tuple_defs; // array of tuple_defs, built with the handle
+	tuple_def key_tuple_def; // tuple_def for the key
 	uint32_t key_element_count;
 
 	// extended keys and values will be stored in blob_store at this root_page_id
@@ -91,9 +91,6 @@ struct rash_table_key
 
 	// to be used a key in the actual hash_table underneath rash_table
 	char hash_value[8];
-
-	// materialized key
-	materialized_key mat_key;
 };
 
 // returns true, if the rash_key initialization will succeed
@@ -123,7 +120,8 @@ rash_table_iterator find_all_in_rash_table(rash_table_handle* rth_p, int is_read
 
 rash_table_iterator find_equals_in_rash_table(rash_table_handle* rth_p, const rash_table_key* rkey_p, int is_read_only);
 
-binary_read_iterator* read_key_in_rash_table_iterator(const rash_table_iterator* rti_p);
+// returned key tuple needs to be freed
+void* read_key_in_rash_table_iterator(const rash_table_iterator* rti_p);
 
 uint64_t read_state_in_rash_table_iterator(const rash_table_iterator* rti_p);
 

@@ -190,35 +190,26 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 				// set the key from the entry into the output tuple
 				{
 					// open an iterator to read key of this entry
-					binary_read_iterator* key_bri_p = read_key_in_rash_table_iterator(&rti);
+					void* key_tuple = read_key_in_rash_table_iterator(&rti);
 
-					int abort_error_dummy = 0;
 					for(uint32_t i = 0; i < inputs->key_element_count; i++)
 					{
-						char is_valid_byte = 0;
-						read_from_binary_read_iterator(key_bri_p, &is_valid_byte, 1, NULL, &abort_error_dummy);
-
-						if(is_valid_byte)
+						datum key_val;
+						if(get_value_from_element_from_tuple(&key_val, &(inputs->partitions[partition_id]->rth.key_tuple_def), STATIC_POSITION(i), key_tuple))
 						{
-							consume_tuple_from_tuple_list(tuple, &(inputs->partitions[partition_id]->rth.key_tuple_defs[i]), key_bri_p, NULL, &abort_error_dummy, {
-								datum key_val;
-								if(get_value_from_element_from_tuple(&key_val, &(inputs->partitions[partition_id]->rth.key_tuple_defs[i]), SELF, tuple))
-								{
-									// ensure there are enough bytes in the output_tuple
-									while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &key_val, output_tuple_capacity - output_tuple_size))
-									{
-										output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
-										output_tuple = realloc(output_tuple, output_tuple_capacity);
-									}
+							// ensure there are enough bytes in the output_tuple
+							while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &key_val, output_tuple_capacity - output_tuple_size))
+							{
+								output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+								output_tuple = realloc(output_tuple, output_tuple_capacity);
+							}
 
-									// recompute tuple_size
-									output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
-								}
-							});
+							// recompute tuple_size
+							output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
 						}
 					}
 
-					delete_binary_read_iterator(key_bri_p, NULL, &abort_error_dummy);
+					free(key_tuple);
 				}
 
 				// we iterate over the values for the entry only if any aggregate functions need to be computed
