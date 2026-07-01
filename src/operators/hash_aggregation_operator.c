@@ -197,7 +197,7 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 						datum key_val;
 						if(get_value_from_element_from_tuple(&key_val, &(inputs->partitions[partition_id]->rth.key_tuple_def), STATIC_POSITION(i), key_tuple))
 						{
-							// ensure there are enough bytes in the output_tuple
+							// ensure there are enough bytes in the output_tuple, as we try to insert this datum
 							while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &key_val, output_tuple_capacity - output_tuple_size))
 							{
 								output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
@@ -276,7 +276,7 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 								failed = 1;
 							}
 
-							// ensure there are enopugh bytes in the output_tuple
+							// ensure there are enough bytes in the output_tuple, as we try to insert this datum
 							while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), output_tuple, &output_uval, output_tuple_capacity - output_tuple_size))
 							{
 								output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));

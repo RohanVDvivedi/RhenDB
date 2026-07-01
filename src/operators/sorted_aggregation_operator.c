@@ -70,15 +70,12 @@ static void execute(operator* o)
 						return ;
 					}
 
-					// ensure there are enopugh bytes in the output_tuple
-					while(!can_set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), inputs->output_tuple, &output_uval, inputs->output_tuple_capacity - inputs->output_tuple_size))
+					// ensure there are enough bytes in the output_tuple, as we try to insert this datum
+					while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), inputs->output_tuple, &output_uval, inputs->output_tuple_capacity - inputs->output_tuple_size))
 					{
 						inputs->output_tuple_capacity = min(inputs->output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
 						inputs->output_tuple = realloc(inputs->output_tuple, inputs->output_tuple_capacity);
 					}
-
-					// set output_uval in output_tuple
-					set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), inputs->output_tuple, &output_uval, inputs->output_tuple_capacity - inputs->output_tuple_size);
 
 					// recompute tuple_size
 					inputs->output_tuple_size = get_tuple_size(inputs->output_tuple_def, inputs->output_tuple);
@@ -122,15 +119,12 @@ static void execute(operator* o)
 							return ;
 						}
 
-						// ensure there are enopugh bytes in the output_tuple
-						while(!can_set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), inputs->output_tuple, &output_uval, inputs->output_tuple_capacity - inputs->output_tuple_size))
+						// ensure there are enough bytes in the output_tuple, as we try to insert this datum
+						while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), inputs->output_tuple, &output_uval, inputs->output_tuple_capacity - inputs->output_tuple_size))
 						{
 							inputs->output_tuple_capacity = min(inputs->output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
 							inputs->output_tuple = realloc(inputs->output_tuple, inputs->output_tuple_capacity);
 						}
-
-						// set output_uval in output_tuple
-						set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(j), inputs->output_tuple, &output_uval, inputs->output_tuple_capacity - inputs->output_tuple_size);
 
 						// recompute tuple_size
 						inputs->output_tuple_size = get_tuple_size(inputs->output_tuple_def, inputs->output_tuple);
@@ -173,7 +167,7 @@ static void execute(operator* o)
 					if(!get_value_from_element_from_tuple(&key_val, inputs->input_tuple_def, inputs->key_element_ids[i], tuple))
 						key_val = (*NULL_DATUM);
 
-					// ensure there are enopugh bytes in the output_tuple
+					// ensure there are enough bytes in the output_tuple, as we try to insert this datum
 					while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), inputs->output_tuple, &key_val, inputs->output_tuple_capacity - inputs->output_tuple_size))
 					{
 						inputs->output_tuple_capacity = min(inputs->output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));

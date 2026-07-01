@@ -61,15 +61,12 @@ static void execute(operator* o)
 						return ;
 					}
 
-					// ensure there are enopugh bytes in the output_tuple
-					while(!can_set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &output_uval, tuple_capacity - tuple_size))
+					// ensure there are enough bytes in the output_tuple, as we try to insert this datum
+					while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &output_uval, tuple_capacity - tuple_size))
 					{
 						tuple_capacity = min(tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
 						output_tuple = realloc(output_tuple, tuple_capacity);
 					}
-
-					// set output_uval in output_tuple
-					set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &output_uval, tuple_capacity - tuple_size);
 
 					// recompute tuple_size
 					tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
