@@ -546,10 +546,11 @@ void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, bi
 
 	// copy the tuple to be inserted or updated
 	void* tuple_to_insert = bwi_p->tupl;
+	int was_inline_OR_extended_head_modified = bwi_p->was_inline_OR_extended_head_modified;
 
 	// set the tail of the bwi_p in the tuple to be inserted, this allows us to append more valuees to it
+	char tail_of_value_tuple[sizeof(tuple_pointer)];
 	{
-		char tail_of_value_tuple[sizeof(tuple_pointer)];
 		set_tuple_pointer(tail_of_value_tuple, bwi_p->extension_tail, &(rti_p->rth_p->rdb->volatile_rage_engine.pam_p->pas));
 		set_element_in_tuple(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, tail_of_value_position, tuple_to_insert, &((const datum){.tuple_value = tail_of_value_tuple}), 0);
 	}
@@ -573,7 +574,10 @@ void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, bi
 		rti_p->rth_p->total_inline_size -= get_tuple_size(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, get_tuple_hash_table_iterator(rti_p->hti_p));
 		rti_p->rth_p->total_inline_size += get_tuple_size(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, tuple_to_insert);
 
-		update_at_hash_table_iterator(rti_p->hti_p, tuple_to_insert, NULL, &abort_error_dummy);
+		if(was_inline_OR_extended_head_modified) // update the whole tuple in place
+			update_at_hash_table_iterator(rti_p->hti_p, tuple_to_insert, NULL, &abort_error_dummy);
+		else
+			update_non_key_element_in_place_at_hash_table_iterator(rti_p->hti_p, tail_of_value_position, &((const datum){.tuple_value = tail_of_value_tuple}), NULL, &abort_error_dummy);
 	}
 
 	free(tuple_to_insert);
