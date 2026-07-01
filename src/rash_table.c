@@ -371,7 +371,11 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p)
 	int result = 1;
 
 	// key exists so compare them
-	binary_read_iterator* key_bri_p = read_key_in_rash_table_iterator(rti_p);
+	const data_type_info* dti = get_type_info_for_element_from_tuple_def(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, key_position);
+	datum uval;
+	get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, key_position, record_tuple);
+
+	binary_read_iterator* key_bri_p = get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
 
 	consume_tuple_from_tuple_list(tuple, &(rti_p->rth_p->key_tuple_def), key_bri_p, NULL, &abort_error_dummy, {
 		result = (0 == compare_tuples_rhendb(tuple, &(rti_p->rth_p->key_tuple_def), NULL, rti_p->rkey_p->record, rti_p->rkey_p->record_def, rti_p->rkey_p->key_element_ids, NULL, rti_p->rth_p->key_element_count, rti_p->rth_p->ex_engine));
