@@ -45,9 +45,9 @@ static void execute(operator* o)
 			// produce output tuple and return it
 			{
 				// generate the smallest possible tuple
-				uint32_t tuple_size = get_minimum_tuple_size(inputs->output_tuple_def);
-				uint32_t tuple_capacity = tuple_size;
-				void* output_tuple = malloc(tuple_capacity);
+				uint32_t output_tuple_size = get_minimum_tuple_size(inputs->output_tuple_def);
+				uint64_t output_tuple_capacity = output_tuple_size;
+				void* output_tuple = malloc(output_tuple_capacity);
 				init_tuple(inputs->output_tuple_def, output_tuple);
 
 				for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
@@ -62,14 +62,14 @@ static void execute(operator* o)
 					}
 
 					// ensure there are enough bytes in the output_tuple, as we try to insert this datum
-					while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &output_uval, tuple_capacity - tuple_size))
+					while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &output_uval, output_tuple_capacity - output_tuple_size))
 					{
-						tuple_capacity = min(tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
-						output_tuple = realloc(output_tuple, tuple_capacity);
+						output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+						output_tuple = realloc(output_tuple, output_tuple_capacity);
 					}
 
 					// recompute tuple_size
-					tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+					output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
 				}
 
 				// produce output_tuple

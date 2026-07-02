@@ -502,7 +502,7 @@ binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_
 
 			{
 				uint32_t key_tuple_size = get_minimum_tuple_size(&(rti_p->rth_p->key_tuple_def));
-				uint32_t key_tuple_capacity = key_tuple_size;
+				uint64_t key_tuple_capacity = key_tuple_size;
 				void* key_tuple = malloc(key_tuple_capacity);
 				init_tuple(&(rti_p->rth_p->key_tuple_def), key_tuple);
 

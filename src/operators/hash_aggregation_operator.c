@@ -183,7 +183,7 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 			{
 				// prepare the output
 				uint32_t output_tuple_size = get_minimum_tuple_size(inputs->output_tuple_def);
-				uint32_t output_tuple_capacity = output_tuple_size;
+				uint64_t output_tuple_capacity = output_tuple_size;
 				void* output_tuple = malloc(output_tuple_capacity);
 				init_tuple(inputs->output_tuple_def, output_tuple);
 

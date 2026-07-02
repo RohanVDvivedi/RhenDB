@@ -44,7 +44,7 @@ struct input_values
 	// partially prepared output_tuple
 	void* output_tuple;
 	uint32_t output_tuple_size;
-	uint32_t output_tuple_capacity;
+	uint64_t output_tuple_capacity;
 };
 
 static void execute(operator* o)

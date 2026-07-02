@@ -36,7 +36,7 @@ static int produce_join_result(operator* o, const void* left_tuple, const void* 
 {
 	input_values* inputs = o->inputs;
 
-	uint32_t output_tuple_capacity = get_minimum_tuple_size(inputs->output_tuple_def);
+	uint64_t output_tuple_capacity = get_minimum_tuple_size(inputs->output_tuple_def);
 	uint32_t output_tuple_size = output_tuple_capacity;
 
 	void* output_tuple = malloc(output_tuple_capacity);
