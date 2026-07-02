@@ -24,7 +24,7 @@ struct transaction
 	// transaction_id points to the transaction_id in the snapshot for this transaction
 	uint256* transaction_id;
 
-	// actual query plan, for the current query being executed
+	// main query plan, for the current query being executed
 	query_plan* curr_query;
 };
 
