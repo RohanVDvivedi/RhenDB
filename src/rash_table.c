@@ -509,16 +509,17 @@ binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_
 				for(uint32_t i = 0; i < rti_p->rth_p->key_element_count; i++)
 				{
 					datum uval;
-					get_value_from_element_from_tuple(&uval, rti_p->rkey_p->record_def, rti_p->rkey_p->key_element_ids[i], rti_p->rkey_p->record);
-
-					while(!set_element_in_tuple(&(rti_p->rth_p->key_tuple_def), STATIC_POSITION(i), key_tuple, &uval, key_tuple_capacity - key_tuple_size))
+					if(get_value_from_element_from_tuple(&uval, rti_p->rkey_p->record_def, rti_p->rkey_p->key_element_ids[i], rti_p->rkey_p->record))
 					{
-						key_tuple_capacity = min(key_tuple_capacity * 2, get_maximum_tuple_size(&(rti_p->rth_p->key_tuple_def)));
-						key_tuple = realloc(key_tuple, key_tuple_capacity);
-					}
+						while(!set_element_in_tuple(&(rti_p->rth_p->key_tuple_def), STATIC_POSITION(i), key_tuple, &uval, key_tuple_capacity - key_tuple_size))
+						{
+							key_tuple_capacity = min(key_tuple_capacity * 2, get_maximum_tuple_size(&(rti_p->rth_p->key_tuple_def)));
+							key_tuple = realloc(key_tuple, key_tuple_capacity);
+						}
 
-					// recompute tuple_size
-					key_tuple_size = get_tuple_size(&(rti_p->rth_p->key_tuple_def), key_tuple);
+						// recompute tuple_size
+						key_tuple_size = get_tuple_size(&(rti_p->rth_p->key_tuple_def), key_tuple);
+					}
 				}
 
 				append_to_binary_write_iterator(bwi_p, key_tuple, get_tuple_size(&(rti_p->rth_p->key_tuple_def), key_tuple), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(rti_p->rth_p->htan)), NULL, &abort_error_dummy);

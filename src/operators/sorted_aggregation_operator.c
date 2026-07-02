@@ -164,18 +164,18 @@ static void execute(operator* o)
 				for(uint32_t i = 0; i < inputs->key_element_count; i++)
 				{
 					datum key_val;
-					if(!get_value_from_element_from_tuple(&key_val, inputs->input_tuple_def, inputs->key_element_ids[i], tuple))
-						key_val = (*NULL_DATUM);
-
-					// ensure there are enough bytes in the output_tuple, as we try to insert this datum
-					while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), inputs->output_tuple, &key_val, inputs->output_tuple_capacity - inputs->output_tuple_size))
+					if(get_value_from_element_from_tuple(&key_val, inputs->input_tuple_def, inputs->key_element_ids[i], tuple))
 					{
-						inputs->output_tuple_capacity = min(inputs->output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
-						inputs->output_tuple = realloc(inputs->output_tuple, inputs->output_tuple_capacity);
-					}
+						// ensure there are enough bytes in the output_tuple, as we try to insert this datum
+						while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), inputs->output_tuple, &key_val, inputs->output_tuple_capacity - inputs->output_tuple_size))
+						{
+							inputs->output_tuple_capacity = min(inputs->output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+							inputs->output_tuple = realloc(inputs->output_tuple, inputs->output_tuple_capacity);
+						}
 
-					// recompute tuple_size
-					inputs->output_tuple_size = get_tuple_size(inputs->output_tuple_def, inputs->output_tuple);
+						// recompute tuple_size
+						inputs->output_tuple_size = get_tuple_size(inputs->output_tuple_def, inputs->output_tuple);
+					}
 				}
 			}
 
