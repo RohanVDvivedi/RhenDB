@@ -16,7 +16,7 @@ struct row_identifier_prepender_context
 // any allocation made here will be freed by the caller
 static void* process(tuple_transformer* tt_p, void* tuple)
 {
-	void* output_tuple = malloc(get_tuple_size(tt_p->input_def, tuple) + 16);
+	void* output_tuple = malloc(get_tuple_size(tt_p->input_def, tuple) + 24);
 	init_tuple(tt_p->output_def, output_tuple);
 
 	row_identifier_prepender_context* context_p = tt_p->context;
@@ -45,7 +45,7 @@ tuple_transformer* get_new_row_identifier_prepender_transformer(const tuple_def*
 		.row_identifier = row_identifier,
 	};
 
-	uint32_t output_max_size = get_maximum_tuple_size(input_def) + 16;
+	uint32_t output_max_size = get_maximum_tuple_size(input_def) + 24;
 
 	strcpy(output_dti->containees[0].field_name, "row_identifier");
 	output_dti->containees[0].al.type_info = UINT_NON_NULLABLE[8];
