@@ -15,6 +15,9 @@
 
 #include<stdlib.h>
 
+#define INIT_BUCKET_COUNT 64
+#define MAX_LOAD_FACTOR 2.5
+
 typedef struct rash_table_partition rash_table_partition;
 struct rash_table_partition
 {
@@ -53,7 +56,6 @@ struct input_values
 
 	// rash_table partitions
 	uint32_t partitions_count;
-	uint32_t bucket_count_per_parttion;
 	rash_table_partition** partitions;
 
 	pthread_mutex_t partition_to_aggregate_next_lock;
@@ -127,6 +129,10 @@ static void insert_for_build_phase_job(operator* o, void* param)
 
 			// delete the insertion iterator
 			delete_rash_table_iterator(&rti);
+
+			// if the load factor went too high then expand the bucket_count for the partition
+			if(get_load_factor_for_rash_table(&(inputs->partitions[partition_id]->rth)) > MAX_LOAD_FACTOR)
+				expand_rash_table(&(inputs->partitions[partition_id]->rth));
 
 			// release build lock on the partition
 			pthread_mutex_unlock(&(inputs->partitions[partition_id]->build_lock));
@@ -537,7 +543,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-operator_resource_counter setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, rhendb_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t bucket_count_per_parttion, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
+operator_resource_counter setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, rhendb_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
 {
 	// if key_element_count == 0 => simple aggregation
 	// if aggregate_functions_count == 0 => find distinct
@@ -551,12 +557,6 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 	if(partitions_count == 0)
 	{
 		printf("partitions_count can not be 0 for hash_aggregation_operator\n");
-		exit(-1);
-	}
-
-	if(bucket_count_per_parttion == 0)
-	{
-		printf("bucket_count_per_parttion can not be 0 for hash_aggregation_operator\n");
 		exit(-1);
 	}
 
@@ -655,7 +655,6 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 		.aggregate_input_element_ids = malloc(sizeof(positional_accessor*) * aggregate_functions_count),
 		.output_tuple_def = output_tuple_def,
 		.partitions_count = partitions_count,
-		.bucket_count_per_parttion = bucket_count_per_parttion,
 		.partitions = malloc(sizeof(rash_table_partition*) * partitions_count),
 		.partition_to_aggregate_next_lock = PTHREAD_MUTEX_INITIALIZER,
 		.partition_id_to_aggregate_next = 0,
@@ -677,7 +676,7 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 	{
 		inputs->partitions[i] = malloc(sizeof(rash_table_partition));
 		pthread_mutex_init(&(inputs->partitions[i]->build_lock), NULL);
-		inputs->partitions[i]->rth = get_new_rash_table(bucket_count_per_parttion, input_tuple_def, key_element_ids, key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), o->self_query_plan->curr_tx->db);
+		inputs->partitions[i]->rth = get_new_rash_table(INIT_BUCKET_COUNT, input_tuple_def, key_element_ids, key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), o->self_query_plan->curr_tx->db);
 	}
 
 	initialize_linkedlist(&(inputs->tuple_buffers_to_insert), offsetof(interim_tuple_store, embed_node_ll));

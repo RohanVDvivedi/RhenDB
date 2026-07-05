@@ -15,6 +15,9 @@
 
 #include<stdlib.h>
 
+#define INIT_BUCKET_COUNT 64
+#define MAX_LOAD_FACTOR 2.5
+
 typedef struct rash_table_partition rash_table_partition;
 struct rash_table_partition
 {
@@ -48,7 +51,6 @@ struct input_values
 
 	// rash_table partitions for the right side
 	uint32_t partitions_count;
-	uint32_t bucket_count_per_parttion;
 	rash_table_partition** partitions;
 
 	// to be used in the last phase to produce tuples on the right side that do not have a match on the left
@@ -160,6 +162,10 @@ static void build_right_side_partitions(operator* o, void* param)
 
 			// delete the insertion iterator
 			delete_rash_table_iterator(&rti);
+
+			// if the load factor went too high then expand the bucket_count for the partition
+			if(get_load_factor_for_rash_table(&(inputs->partitions[partition_id]->rth)) > MAX_LOAD_FACTOR)
+				expand_rash_table(&(inputs->partitions[partition_id]->rth));
 
 			// release build lock on the partition
 			pthread_mutex_unlock(&(inputs->partitions[partition_id]->build_lock));
@@ -680,7 +686,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-operator_resource_counter setup_hash_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype, uint32_t partitions_count, uint32_t bucket_count_per_parttion, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
+operator_resource_counter setup_hash_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
 {
 	if(key_element_count == 0)
 	{
@@ -691,12 +697,6 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 	if(partitions_count == 0)
 	{
 		printf("partitions_count can not be 0 for hash_join_operator\n");
-		exit(-1);
-	}
-
-	if(bucket_count_per_parttion == 0)
-	{
-		printf("bucket_count_per_parttion can not be 0 for hash_join_operator\n");
 		exit(-1);
 	}
 
@@ -802,7 +802,6 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 		.pending_buffer = NULL,
 
 		.partitions_count = partitions_count,
-		.bucket_count_per_parttion = bucket_count_per_parttion,
 		.partitions = malloc(sizeof(rash_table_partition*) * partitions_count),
 
 		.partition_to_right_only_join_next_lock = PTHREAD_MUTEX_INITIALIZER,
@@ -826,7 +825,7 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 	{
 		inputs->partitions[i] = malloc(sizeof(rash_table_partition));
 		pthread_mutex_init(&(inputs->partitions[i]->build_lock), NULL);
-		inputs->partitions[i]->rth = get_new_rash_table(bucket_count_per_parttion, right_input_tuple_def, right_key_element_ids, key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), o->self_query_plan->curr_tx->db);
+		inputs->partitions[i]->rth = get_new_rash_table(INIT_BUCKET_COUNT, right_input_tuple_def, right_key_element_ids, key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), o->self_query_plan->curr_tx->db);
 	}
 
 	initialize_linkedlist(&(inputs->buffers_queue), offsetof(interim_tuple_store, embed_node_ll));
