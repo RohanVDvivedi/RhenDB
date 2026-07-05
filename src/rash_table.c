@@ -97,6 +97,12 @@ rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_
 	return rth;
 }
 
+double get_load_factor_for_rash_table(const rash_table_handle* rth_p)
+{
+	// number of inline bytes per bucket / page_size
+	return (((double)(rth_p->total_inline_size)) / ((double)(rth_p->bucket_count))) / ((double)(rth_p->rdb->rash_httd.lpltd.pas_p->page_size));
+}
+
 int expand_rash_table(rash_table_handle* rth_p)
 {
 	int abort_error_dummy = 0;
