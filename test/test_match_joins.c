@@ -25,7 +25,6 @@
 #define N_WAY_SORT                     16
 
 #define PARTITIONS_COUNT                      64
-#define BUCKETS_PER_PARTITION                 32
 #define PARALLEL_HASH_JOIN_JOBS_COUNT         6
 #define PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE    6
 #define MIN_BUFFER_SIZE                       (1 * 1024 * 1024)
@@ -108,7 +107,7 @@ int main(int argc, char** argv)
 		operator* hj = NULL;
 		{
 			hj = get_new_registered_operator_for_query_plan(qp);
-			setup_hash_join_operator(hj, input_operator, KEY_POS, input_operator, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, PARTITIONS_COUNT, BUCKETS_PER_PARTITION, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE);
+			setup_hash_join_operator(hj, input_operator, KEY_POS, input_operator, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, PARTITIONS_COUNT, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE);
 			printf("hash join operator %p\n", hj);
 		}
 

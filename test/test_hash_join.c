@@ -86,7 +86,6 @@ void* right_generator(void* generator_context, const tuple_def* generator_tuple_
 }
 
 #define PARTITIONS_COUNT                      64
-#define BUCKETS_PER_PARTITION                 32
 #define PARALLEL_HASH_JOIN_JOBS_COUNT         6
 #define PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE    6
 #define MIN_BUFFER_SIZE                       (1 * 1024 * 1024)
@@ -155,7 +154,7 @@ int main(int argc, char** argv)
 		printf("source right operator %p\n", right_input_operator);
 
 		operator* join_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_hash_join_operator(join_operator, left_input_operator, LEFT_KEY_POS, right_input_operator, RIGHT_KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_BOTH, PARTITIONS_COUNT, BUCKETS_PER_PARTITION, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE);
+		setup_hash_join_operator(join_operator, left_input_operator, LEFT_KEY_POS, right_input_operator, RIGHT_KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_BOTH, PARTITIONS_COUNT, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE);
 		printf("join operator %p\n", join_operator);
 
 		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
