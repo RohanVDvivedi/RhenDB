@@ -55,6 +55,20 @@ struct expr_value
 	uint64_t capacity;
 };
 
+// this is what sits in sql_expr_eval_context.context_p, for now this is unused
+typedef struct rhendb_expr_eval_context rhendb_expr_eval_context;
+struct rhendb_expr_eval_context
+{
+	tuple_def** input_tuple_defs;
+
+	void** input_tuples;
+
+	uint32_t input_tuples_count;
+
+	// now owned by the context
+	void* catalog_manager;
+};
+
 /*
 	***
 	No support in the first iteration for
@@ -63,6 +77,9 @@ struct expr_value
 	nested query expressions these call backs will be added by catalog manager
 	variables will be deciphered from the input_tuple, in future
 */
-sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, void** input_tuples, uint32_t input_tuples_count);
+sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, void** input_tuples, uint32_t input_tuples_count, void* catalog_manager);
+
+// frees shallow copied input_tuple_defs and input_tuples, and the pointer itself
+void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_context* context_p);
 
 #endif
