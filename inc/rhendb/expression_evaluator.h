@@ -7,6 +7,10 @@
 #include<tuplestore/datum.h>
 #include<tuplestore/data_type_info.h>
 
+#include<tuplelargetypes/text_extended.h>
+#include<tuplelargetypes/blob_extended.h>
+#include<tuplelargetypes/numeric_extended.h>
+
 typedef enum expr_type expr_type;
 enum expr_type
 {
@@ -37,6 +41,7 @@ struct expr_type_info
 
 	// only used for TUPLE and ARRAY
 	data_type_info* dti_p;
+	int should_free_dti_p;
 };
 
 typedef struct expr_value expr_value;
