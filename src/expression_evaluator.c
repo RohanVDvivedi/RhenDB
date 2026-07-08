@@ -73,7 +73,7 @@ static void* rhendb_bit_xor(void* data1, void* data2, const sql_expr_eval_contex
 
 static void* rhendb_bit_not(void* data, const sql_expr_eval_context* ec_p, int* error_code);
 
-static void* rhendb_cast(void* data, const sql_type* to_type, const sql_expr_eval_context* ec_p, int* error_code);
+static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_context* ec_p, int* error_code);
 
 static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval_context* ec_p, int* error_code);
 
@@ -105,7 +105,7 @@ static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_
 
 static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_eval_context* ec_p, int* error_code);
 
-static int rhendb_can_cast_types(void* typ_to, void* typ_from, const sql_expr_eval_context* ec_p, int* error_code);
+static int rhendb_can_cast_types(void* typ_from, void* typ_to, const sql_expr_eval_context* ec_p, int* error_code);
 
 static void* rhendb_get_return_type_for_op_exec_callback(void* op_exec_func, void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code);
 
