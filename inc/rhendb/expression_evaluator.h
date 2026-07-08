@@ -10,6 +10,9 @@
 #include<tuplelargetypes/text_extended.h>
 #include<tuplelargetypes/blob_extended.h>
 #include<tuplelargetypes/numeric_extended.h>
+#include<tuplelargetypes/materialized_numeric.h>
+
+#include<mpdecimal.h>
 
 typedef enum expr_type expr_type;
 enum expr_type
@@ -52,7 +55,7 @@ struct expr_value
 	union
 	{
 		datum value;
-		materialized_numeric number; // only used for materialized numeric, and must be destroyed as it is always an in-memory construct
+		mpd_t numeric_value; // used only for RHENDB_NUMERIC
 	};
 
 	// on destroy buffer must be destroyed, if not NULL

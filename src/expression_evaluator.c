@@ -58,6 +58,7 @@ static void* rhendb_mod(void* data1, void* data2, const sql_expr_eval_context* e
 
 // returns sign of data1 - data2
 // uses compare_datum_rhendb() when possible, for simplyfying this function
+// for numeric_value, convert them to materialized_numeric and then compare, this allows preserving RhenDB standard of NANs being equal and greater than even positive infinity
 static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context* ec_p, int* error_code);
 
 static void* rhendb_left_shift(void* data, void* shift_amt, const sql_expr_eval_context* ec_p, int* error_code);
