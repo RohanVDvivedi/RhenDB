@@ -14,6 +14,8 @@
 
 #include<mpdecimal.h>
 
+#include<cutlery/hashmap.h>
+
 #include<rhendb/rhendb.h>
 
 typedef enum expr_type expr_type;
