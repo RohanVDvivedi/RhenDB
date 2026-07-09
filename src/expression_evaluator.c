@@ -7,6 +7,8 @@
 
 #include<rhendb/expression_evaluator.h>
 
+#include<errno.h>
+
 #include<rhendb/function_compare.h>
 
 static const expr_type_info rhendb_bool_type = {
@@ -131,7 +133,7 @@ static void rhendb_delete_type(void* typ, const sql_expr_eval_context* ec_p)
 
 
 /* ------------------------------ helpers ------------------------------ */
- 
+
 static int et_is_int(expr_type t)
 {
 	return t == RHENDB_BIT_FIELD || t == RHENDB_UINT || t == RHENDB_INT || t == RHENDB_LARGE_UINT || t == RHENDB_LARGE_INT;
@@ -152,7 +154,7 @@ static int et_is_num_or_numeric(expr_type t)
 {
 	return et_is_num(t) || t == RHENDB_NUMERIC;
 }
- 
+
 /* result type for arithmetic on two operands. NUMERIC is the most general (contagious). */
 static expr_type num_result(expr_type a, expr_type b)
 {
@@ -169,7 +171,7 @@ static expr_type num_result(expr_type a, expr_type b)
 
 	return signd ? RHENDB_INT : RHENDB_UINT;
 }
- 
+
 static expr_value* new_val(expr_type t)
 {
 	expr_value* v = calloc(1, sizeof *v);
@@ -182,7 +184,7 @@ static expr_type_info* new_type(expr_type t)
 	ti->type = t;
 	return ti;
 }
- 
+
 /* discriminators */
 static int is_materialized_numeric(const expr_value* v)
 {
@@ -212,7 +214,7 @@ static int is_sb_operand(const expr_value* v)
 		return is_text_type_info(v->type_info.dti_p) || is_blob_type_info(v->type_info.dti_p);
 	return v->type_info.type == RHENDB_STRING || v->type_info.type == RHENDB_BINARY;
 }
- 
+
 static double to_dbl(const expr_value* v){
 	switch(v->type_info.type){
 		case RHENDB_BIT_FIELD:
@@ -270,7 +272,7 @@ static int256 to_i256(const expr_value* v)
 			return get_int256(0);
 	}
 }
- 
+
 /* the engine used to read extended text/blob/numeric out of tuples */
 static rage_engine* engine_from_ctx(const sql_expr_eval_context* ec_p)
 {
@@ -278,7 +280,7 @@ static rage_engine* engine_from_ctx(const sql_expr_eval_context* ec_p)
 		return &(((rhendb_expr_eval_context*)(ec_p->context_p))->rdb->persistent_acid_rage_engine);
 	return NULL;
 }
- 
+
 /* initialize a fresh, empty, usable mpd_t whose struct is static (kept inline in an expr_value)
  * and whose coefficient buffer is heap allocated -> release with mpd_del(). */
 static int ee_mpd_new(mpd_t* m)
@@ -291,7 +293,7 @@ static int ee_mpd_new(mpd_t* m)
 	m->data = mpd_alloc(MPD_MINALLOC, sizeof(mpd_uint_t));
 	return m->data != NULL;
 }
- 
+
 /* ---- text/blob materialization : ONLY used by concat and like ---- */
 static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
 {
@@ -304,14 +306,14 @@ static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int*
 		return RHENDB_EE_OK;             /* not text/blob */
 
 	expr_type target = is_txt ? RHENDB_STRING : RHENDB_BINARY;
- 
+
 	rage_engine* eng = engine_from_ctx(ec_p);
 	if(eng == NULL)
 	{
 		*error_code = RHENDB_EE_MISSING_ENGINE;
 		return *error_code;
 	}
- 
+
 	const void* transaction_id = NULL;
 	int abort_error = 0;
 
@@ -321,7 +323,7 @@ static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int*
 		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
 		return *error_code;
 	}
- 
+
 	uint32_t cap = 64, len = 0;
 	char* buf = malloc(cap);
 	if(buf == NULL)
@@ -365,7 +367,7 @@ static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int*
 		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
 		return *error_code;
 	}
- 
+
 	if(v->type_info.should_free_dti_p && v->type_info.dti_p)
 		destroy_type_info_recursively(v->type_info.dti_p, NULL);
 	if(v->buffer)
@@ -376,7 +378,7 @@ static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int*
 	v->type_info = (expr_type_info){.type = target, .dti_p = NULL, .should_free_dti_p = 0};
 	return RHENDB_EE_OK;
 }
- 
+
 /* ---- numeric materialization : tuple numeric -> materialized_numeric -> mpd_t (RHENDB_NUMERIC) ---- */
 static int materialize_numeric(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
 {
@@ -384,14 +386,14 @@ static int materialize_numeric(expr_value* v, const sql_expr_eval_context* ec_p,
 		return RHENDB_EE_OK;                 /* already native */
 	if(!is_numeric_type_info(v->type_info.dti_p))
 		return RHENDB_EE_OK;                 /* not a numeric */
- 
+
 	rage_engine* eng = engine_from_ctx(ec_p);
 	if(eng == NULL)
 	{
 		*error_code = RHENDB_EE_MISSING_ENGINE;
 		return *error_code;
 	}
- 
+
 	const void* transaction_id = NULL;
 	int abort_error = 0;
 	numeric_reader_interface nri = init_intuple_numeric_reader_interface(v->value, v->type_info.dti_p, &(eng->bstd), eng->pam_p, transaction_id, &abort_error);
@@ -400,10 +402,10 @@ static int materialize_numeric(expr_value* v, const sql_expr_eval_context* ec_p,
 		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
 		return *error_code;
 	}
- 
+
 	numeric_sign_bits sb; int16_t exp;
 	nri.extract_sign_bits_and_exponent(&nri, &sb, &exp);
- 
+
 	materialized_numeric mn;
 	if(!initialize_materialized_numeric(&mn, 8))
 	{
@@ -412,7 +414,7 @@ static int materialize_numeric(expr_value* v, const sql_expr_eval_context* ec_p,
 		return *error_code;
 	}
 	set_sign_bits_and_exponent_for_materialized_numeric(&mn, sb, exp);
- 
+
 	if(sb == POSITIVE_NUMERIC || sb == NEGATIVE_NUMERIC)   /* only finite non-zero values carry digits */
 	{
 		uint64_t buf[64];
@@ -435,10 +437,10 @@ static int materialize_numeric(expr_value* v, const sql_expr_eval_context* ec_p,
 		}
 	}
 	nri.close_digits_stream(&nri);
- 
+
 	mpd_t d = decimal_from_materialized_numeric(&mn);   /* inline mpd_t with heap coefficient, released via mpd_del */
 	deinitialize_materialized_numeric(&mn);
- 
+
 	if(v->type_info.should_free_dti_p && v->type_info.dti_p)
 		destroy_type_info_recursively(v->type_info.dti_p, NULL);
 	if(v->buffer)
@@ -451,7 +453,7 @@ static int materialize_numeric(expr_value* v, const sql_expr_eval_context* ec_p,
 	v->numeric_value = d;                                /* overwrites .value via the union */
 	return RHENDB_EE_OK;
 }
- 
+
 /* build an mpd_t from a native number. integers up to 64 bits are exact; 256-bit and floating
  * operands go through the decimal string of a double, so they are only double-precise. */
 static int number_to_mpd(const expr_value* v, mpd_t* out)
@@ -486,7 +488,7 @@ static int number_to_mpd(const expr_value* v, mpd_t* out)
 	}
 	return 1;
 }
- 
+
 /* Resolve operand v to an mpd_t to use.
  *  - a native RHENDB_NUMERIC borrows its own mpd_t (owns=0),
  *  - a tuple-form numeric is materialized in place then borrowed (owns=0),
@@ -516,9 +518,9 @@ static mpd_t* operand_to_mpd(expr_value* v, mpd_t* scratch, int* owns, const sql
 	*error_code = err_for_bad;
 	return NULL;
 }
- 
+
 /* ------------------------------ arithmetic ------------------------------ */
- 
+
 typedef enum {
 	OP_ADD,
 	OP_SUB,
@@ -526,11 +528,11 @@ typedef enum {
 	OP_DIV,
 	OP_MOD
 } arith_op;
- 
+
 static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* a = d1; expr_value* b = d2;
- 
+
 	/* NUMERIC path: either operand is a numeric (tuple-form or already an mpd_t) */
 	if(is_numeric_operand(a) || is_numeric_operand(b))
 	{
@@ -539,7 +541,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 		if(pa == NULL) return NULL;
 		mpd_t* pb = operand_to_mpd(b, &sb, &ob, ec_p, error_code, RHENDB_EE_NON_NUMERIC_OPERAND);
 		if(pb == NULL){ if(oa) mpd_del(&sa); return NULL; }
- 
+
 		if((op == OP_DIV || op == OP_MOD) && mpd_iszero(pb))
 		{
 			if(oa)
@@ -549,7 +551,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 			*error_code = RHENDB_EE_DIVIDE_BY_ZERO;
 			return NULL;
 		}
- 
+
 		mpd_context_t ctx; mpd_maxcontext(&ctx); uint32_t st = 0;
 		mpd_t result;
 		if(!ee_mpd_new(&result)){ if(oa) mpd_del(&sa); if(ob) mpd_del(&sb); *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
@@ -564,12 +566,12 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 			mpd_del(&sa);
 		if(ob)
 			mpd_del(&sb);
- 
+
 		expr_value* v = new_val(RHENDB_NUMERIC);
 		v->numeric_value = result;
 		return v;
 	}
- 
+
 	/* non-numeric operands must be plain in-memory numbers */
 	expr_type ta = a->type_info.type, tb = b->type_info.type;
 	if(a->type_info.dti_p != NULL || b->type_info.dti_p != NULL || !et_is_num(ta) || !et_is_num(tb))
@@ -578,7 +580,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 		return NULL;
 	}
 	expr_type rt = num_result(ta, tb);
- 
+
 	if(rt == RHENDB_FLOAT){
 		double x = to_dbl(a), y = to_dbl(b), r = 0;
 		switch(op){
@@ -690,9 +692,9 @@ static void* rhendb_sub(void* d1, void* d2, const sql_expr_eval_context* ec_p, i
 static void* rhendb_mul(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_arith(d1, d2, OP_MUL, ec_p, e); }
 static void* rhendb_div(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_arith(d1, d2, OP_DIV, ec_p, e); }
 static void* rhendb_mod(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_arith(d1, d2, OP_MOD, ec_p, e); }
- 
+
 /* ------------------------------ truthiness ------------------------------ */
- 
+
 static int tuple_tb_is_empty(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	rage_engine* eng = engine_from_ctx(ec_p);
@@ -717,18 +719,18 @@ static int tuple_tb_is_empty(expr_value* v, const sql_expr_eval_context* ec_p, i
 	}
 	return got == 0;
 }
- 
+
 static void* rhendb_get_bool(void* data, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* v = data;
- 
+
 	if(is_numeric_operand(v))
 	{
 		if(materialize_numeric(v, ec_p, error_code))
 			return NULL;
 		return mpd_iszero(&(v->numeric_value)) ? ec_p->false_bool : ec_p->true_bool;   /* inf and nan are truthy */
 	}
- 
+
 	/* tuple-form text/blob: emptiness without full materialization */
 	if(v->type_info.dti_p != NULL && (is_text_type_info(v->type_info.dti_p) || is_blob_type_info(v->type_info.dti_p)))
 	{
@@ -737,7 +739,7 @@ static void* rhendb_get_bool(void* data, const sql_expr_eval_context* ec_p, int*
 			return NULL;
 		return empty ? ec_p->false_bool : ec_p->true_bool;
 	}
- 
+
 	int truthy;
 	switch(v->type_info.type){
 		case RHENDB_BIT_FIELD:
@@ -768,9 +770,9 @@ static void* rhendb_get_bool(void* data, const sql_expr_eval_context* ec_p, int*
 	}
 	return truthy ? ec_p->true_bool : ec_p->false_bool;
 }
- 
+
 /* ------------------------------ compare ------------------------------ */
- 
+
 static const data_type_info* resolve_dti(const expr_value* v)
 {
 	if(v->type_info.dti_p != NULL)
@@ -785,11 +787,11 @@ static const data_type_info* resolve_dti(const expr_value* v)
 		default: return NULL;   /* string/binary handled by a dedicated byte compare */
 	}
 }
- 
+
 static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* a = data1; expr_value* b = data2;
- 
+
 	/* NUMERIC comparison, on the mpd_t: NaN == NaN and NaN > everything; otherwise mpd_qcmp
 	 * (which already sorts -inf < finite < +inf). */
 	if(is_numeric_operand(a) || is_numeric_operand(b))
@@ -964,19 +966,86 @@ static void* rhendb_right_shift(void* d, void* s, const sql_expr_eval_context* e
 
 static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval_context* ec_p, int* error_code)
 {
+	(void)ec_p;
+
+	/* parse every byte of the literal (no truncation); a small stack buffer for the common case */
 	uint32_t n = get_char_count_dstring(data_bytes);
-	char buf[128];
-	if(n >= sizeof(buf))
-		n = sizeof(buf) - 1;
-	memory_move(buf, get_byte_array_dstring(data_bytes), n); buf[n] = 0;
-	if(strpbrk(buf, ".eE"))
+	char stackbuf[64];
+	char* buf = (n + 1 <= sizeof(stackbuf)) ? stackbuf : malloc(n + 1);
+	if(buf == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+	memory_move(buf, get_byte_array_dstring(data_bytes), n);
+	buf[n] = 0;
+
+	expr_value* v = NULL;
+
+	if(strpbrk(buf, ".eE"))   /* has a fraction or an exponent -> FLOAT */
 	{
-		expr_value* v = new_val(RHENDB_FLOAT);
+		v = new_val(RHENDB_FLOAT);
 		v->value.double_value = strtod(buf, NULL);
-		return v;
 	}
-	expr_value* v = new_val(RHENDB_INT);
-	v->value.int_value = strtoll(buf, NULL, 10);
+	else   /* an integer literal : pick the smallest type it fits into */
+	{
+		int negative = (buf[0] == '-');
+		char* end;
+
+		errno = 0;
+		long long sll = strtoll(buf, &end, 10);
+		if(errno == 0 && *end == 0)   /* fits a signed 64-bit int */
+		{
+			v = new_val(RHENDB_INT);
+			v->value.int_value = (int64_t)sll;
+		}
+		else
+		{
+			int done = 0;
+			if(!negative)   /* non-negative : try an unsigned 64-bit int next */
+			{
+				errno = 0;
+				unsigned long long ull = strtoull(buf, &end, 10);
+				if(errno == 0 && *end == 0)
+				{
+					v = new_val(RHENDB_UINT);
+					v->value.uint_value = (uint64_t)ull;
+					done = 1;
+				}
+			}
+			if(!done)   /* too big for 64 bits : accumulate the magnitude into a uint256 if it can fit */
+			{
+				const char* p = buf + (negative ? 1 : 0);
+				uint32_t digits = 0;
+				while(p[digits] >= '0' && p[digits] <= '9') digits++;
+				if(digits >= 1 && digits <= 77 && p[digits] == 0)   /* <= 77 digits always fits 256 bits */
+				{
+					uint256 mag = get_uint256(0), ten = get_uint256(10);
+					for(uint32_t k = 0; k < digits; k++)
+					{
+						mul_uint256(&mag, mag, ten);
+						add_uint256(&mag, mag, get_uint256((uint64_t)(p[k] - '0')));
+					}
+					if(negative)
+					{
+						uint256 neg;
+						sub_uint256(&neg, get_uint256(0), mag);   /* two's complement : 0 - mag */
+						v = new_val(RHENDB_LARGE_INT);
+						v->value.large_int_value = (int256){ neg };
+					}
+					else
+					{
+						v = new_val(RHENDB_LARGE_UINT);
+						v->value.large_uint_value = mag;
+					}
+				}
+				else   /* more digits than a 256-bit integer can hold -> FLOAT */
+				{
+					v = new_val(RHENDB_FLOAT);
+					v->value.double_value = strtod(buf, NULL);
+				}
+			}
+		}
+	}
+
+	if(buf != stackbuf)
+		free(buf);
 	return v;
 }
 static void* rhendb_create_string(const dstring* data_bytes, const sql_expr_eval_context* ec_p, int* error_code)
@@ -1000,21 +1069,43 @@ static void rhendb_concat(void** data1_p, void* data2, const sql_expr_eval_conte
 	int b_ok = (b->type_info.type == RHENDB_STRING || b->type_info.type == RHENDB_BINARY);
 	if(!a_ok || !b_ok){ *error_code = RHENDB_EE_NON_STRING_OPERAND; return; }
 
-	/* concat modifies the first operand in place.  a may be borrowing its bytes (e.g. a string
-	 * literal pointing into the parse tree), so allocate a fresh buffer, clone a's part into it
-	 * first, then append b's part; only afterwards release a's own old buffer (if it had one). */
+	/* concat modifies the first operand in place.  If a already owns a big enough buffer, b's bytes
+	 * are appended with no allocation; if a owns a too-small buffer it is grown (with 0.5x spare);
+	 * if a is only borrowing its bytes (buffer == NULL) a fresh buffer is allocated and a is cloned. */
 	uint32_t na = a->value.string_or_binary_size, nb = b->value.string_or_binary_size;
-	char* nbuf = malloc((na + nb) ? (na + nb) : 1);
-	if(nbuf == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return; }
-	memory_move(nbuf, a->value.string_or_binary_value, na);
-	memory_move(nbuf + na, b->value.string_or_binary_value, nb);
+	uint32_t need = na + nb;
+	const char* a_bytes = a->value.string_or_binary_value;
+	const char* b_bytes = b->value.string_or_binary_value;
 
-	if(a->buffer)
-		free(a->buffer);
+	if(a->buffer != NULL && a->capacity >= need)
+	{
+		/* a owns a large enough buffer : append b's bytes in place */
+		memory_move((char*)a->buffer + na, b_bytes, nb);
+	}
+	else if(a->buffer != NULL)
+	{
+		/* a owns a buffer but it is too small : grow it (keeping a's bytes) with 0.5x spare */
+		uint32_t cap = need + need / 2;
+		char* nbuf = realloc(a->buffer, cap ? cap : 1);
+		if(nbuf == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return; }
+		memory_move(nbuf + na, b_bytes, nb);
+		a->buffer = nbuf;
+		a->capacity = cap;
+	}
+	else
+	{
+		/* a is borrowing its bytes (buffer == NULL) : allocate with 0.5x spare, clone a then append b */
+		uint32_t cap = need + need / 2;
+		char* nbuf = malloc(cap ? cap : 1);
+		if(nbuf == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return; }
+		memory_move(nbuf, a_bytes, na);
+		memory_move(nbuf + na, b_bytes, nb);
+		a->buffer = nbuf;
+		a->capacity = cap;
+	}
 
-	a->buffer = nbuf;
-	a->capacity = na + nb;
-	a->value = (datum){.string_or_binary_value = nbuf, a->value.string_or_binary_size = na + nb};
+	a->value.string_or_binary_value = a->buffer;
+	a->value.string_or_binary_size = need;
 	a->type_info = (expr_type_info){ .type = RHENDB_STRING, .dti_p = NULL, .should_free_dti_p = 0 };
 	/* *data1_p is unchanged: a is modified in place */
 }
@@ -1049,7 +1140,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 {
 	expr_value* a = data;
 	expr_type target = ((const expr_type_info*)to_type)->type;
- 
+
 	/* numeric source : casts operate on the materialized mpd_t */
 	if(is_numeric_operand(a)){
 		if(materialize_numeric(a, ec_p, error_code)) return NULL;
@@ -1072,7 +1163,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 			default: *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL;   /* STRING/BINARY targets deferred */
 		}
 	}
- 
+
 	/* string / blob / text source -> a number type : materialize the bytes and parse them.
 	 * (BIT_FIELD is left to the emptiness rule below.)  256-bit targets are parsed via the low
 	 * 64 bits, so a value wider than 64 bits is truncated. */
@@ -1103,7 +1194,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		if(v == NULL){ *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
 		return v;
 	}
- 
+
 	switch(target){
 		case RHENDB_BIT_FIELD: {
 			int t = 0;
@@ -1128,16 +1219,13 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		default: *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL;   /* STRING/BINARY targets deferred */
 	}
 }
- 
+
 /* ------------------------------ type inference ------------------------------ */
- 
+
 static expr_type type_of_value(const expr_value* v)
 {
-	if(v->type_info.dti_p != NULL){
-		if(is_numeric_type_info(v->type_info.dti_p)) return RHENDB_NUMERIC;
-		if(is_text_type_info(v->type_info.dti_p)) return RHENDB_STRING;
-		if(is_blob_type_info(v->type_info.dti_p)) return RHENDB_BINARY;
-	}
+	/* the label already distinguishes a materialized scalar from an unmaterialized tuple-form value
+	 * (RHENDB_TUPLE + dti_p), so it is used directly. */
 	return v->type_info.type;
 }
 static void* rhendb_get_type_for_data(void* data, const sql_expr_eval_context* ec_p, int* error_code)
@@ -1162,9 +1250,34 @@ static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_e
 		default: *error_code = RHENDB_EE_UNSUPPORTED_TYPE; return NULL;
 	}
 }
+/* the scalar type an operator should see for a value/type : an unmaterialized extended numeric/
+ * text/blob (RHENDB_TUPLE + a prefixed dti) acts as its scalar kind; everything else is its own type. */
+static expr_type effective_type(const expr_type_info* ti)
+{
+	if(ti->type == RHENDB_TUPLE && ti->dti_p != NULL)
+	{
+		if(is_numeric_type_info(ti->dti_p)) return RHENDB_NUMERIC;
+		if(is_text_type_info(ti->dti_p))    return RHENDB_STRING;
+		if(is_blob_type_info(ti->dti_p))    return RHENDB_BINARY;
+	}
+	return ti->type;
+}
+
+/* two tuple-form types are compatible if they are the same extended kind, or (for plain tuples)
+ * the same declared type_name and container type -- pointer equality is not required. */
+static int same_tuple_kind(const data_type_info* d1, const data_type_info* d2)
+{
+	if(d1 == NULL || d2 == NULL) return d1 == d2;
+	if(is_numeric_type_info(d1)) return is_numeric_type_info(d2);
+	if(is_text_type_info(d1))    return is_text_type_info(d2);
+	if(is_blob_type_info(d1))    return is_blob_type_info(d2);
+	if(is_numeric_type_info(d2) || is_text_type_info(d2) || is_blob_type_info(d2)) return 0;
+	return d1->type == d2->type && strncmp(d1->type_name, d2->type_name, 64) == 0;
+}
+
 static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	expr_type a = ((expr_type_info*)typ1)->type, b = ((expr_type_info*)typ2)->type;
+	expr_type a = effective_type((expr_type_info*)typ1), b = effective_type((expr_type_info*)typ2);
 	if(et_is_num_or_numeric(a) && et_is_num_or_numeric(b)) return 1;   /* numerics compare with any number */
 	if(a==RHENDB_STRING && b==RHENDB_STRING) return 1;
 	if(a==RHENDB_BINARY && b==RHENDB_BINARY) return 1;
@@ -1172,7 +1285,7 @@ static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_
 }
 static int rhendb_can_cast_types(const void* typ_from, const void* typ_to, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	expr_type from = ((const expr_type_info*)typ_from)->type, to = ((const expr_type_info*)typ_to)->type;
+	expr_type from = effective_type((const expr_type_info*)typ_from), to = effective_type((const expr_type_info*)typ_to);
 	if(et_is_num_or_numeric(to) && et_is_num_or_numeric(from)) return 1;             /* any number <-> any number */
 	if(to==RHENDB_BIT_FIELD && (from==RHENDB_STRING || from==RHENDB_BINARY)) return 1;
 	if(to<=RHENDB_BINARY && from<=RHENDB_BINARY) return 1;                            /* primitive/string/binary */
@@ -1180,8 +1293,8 @@ static int rhendb_can_cast_types(const void* typ_from, const void* typ_to, const
 }
 static void* rhendb_get_return_type_for_op_exec_callback(void* op_exec_func, void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	expr_type a = ((expr_type_info*)typ1)->type;
-	expr_type b = (typ2 != NULL) ? ((expr_type_info*)typ2)->type : a;   /* typ2 is NULL for unary ops */
+	expr_type a = effective_type((expr_type_info*)typ1);
+	expr_type b = (typ2 != NULL) ? effective_type((expr_type_info*)typ2) : a;   /* typ2 is NULL for unary ops */
 	if(op_exec_func==(void*)ec_p->add||op_exec_func==(void*)ec_p->sub||op_exec_func==(void*)ec_p->mul||op_exec_func==(void*)ec_p->div||op_exec_func==(void*)ec_p->mod){
 		if(!et_is_num_or_numeric(a) || !et_is_num_or_numeric(b)){ *error_code = RHENDB_EE_NON_NUMERIC_OPERAND; return NULL; }
 		return new_type(num_result(a, b));
@@ -1204,7 +1317,37 @@ static void* rhendb_get_return_type_for_op_exec_callback(void* op_exec_func, voi
 }
 static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	expr_type a = ((expr_type_info*)typ1)->type, b = ((expr_type_info*)typ2)->type;
+	(void)ec_p;
+	expr_type_info* t1 = typ1; expr_type_info* t2 = typ2;
+
+	/* two tuple-form types (plain tuples, or unmaterialized extended numeric/text/blob) unify only
+	 * if they are the same kind/structure -- not necessarily the same pointer -- and stay tuple form. */
+	if(t1->type == RHENDB_TUPLE && t2->type == RHENDB_TUPLE)
+	{
+		if(t1->dti_p == t2->dti_p || same_tuple_kind(t1->dti_p, t2->dti_p))
+		{
+			expr_type_info* r = new_type(RHENDB_TUPLE);
+			r->dti_p = t1->dti_p;   /* borrowed */
+			return r;
+		}
+		*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
+		return NULL;
+	}
+	if(t1->type == RHENDB_ARRAY && t2->type == RHENDB_ARRAY)
+	{
+		if(t1->dti_p == t2->dti_p
+		   || (t1->dti_p != NULL && t2->dti_p != NULL && t1->dti_p->type == t2->dti_p->type && strncmp(t1->dti_p->type_name, t2->dti_p->type_name, 64) == 0))
+		{
+			expr_type_info* r = new_type(RHENDB_ARRAY);
+			r->dti_p = t1->dti_p;   /* borrowed */
+			return r;
+		}
+		*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
+		return NULL;
+	}
+
+	/* otherwise reconcile the effective scalar types (an unmaterialized extended value acts as its scalar) */
+	expr_type a = effective_type(t1), b = effective_type(t2);
 	if(a == b)
 		return new_type(a);
 	if(et_is_num_or_numeric(a) && et_is_num_or_numeric(b))
@@ -1212,9 +1355,9 @@ static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_cont
 	*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
 	return NULL;
 }
- 
+
 /* ------------------------------ variables (column references) ------------------------------ */
- 
+
 /* "a.b.c" is resolved once against the schema and cached; the cache lives for the life of the
  * context, so the same reference is only parsed and located once and then read every row.
  * With two or more input tuples the first component is the table name (a string, matched against
@@ -1229,7 +1372,7 @@ struct var_cache_entry
 	positional_accessor pa;            /* owns pa.positions : the located element */
 	const data_type_info* column_dti;  /* the located column's on-disk type */
 };
- 
+
 static cy_uint var_hash(const void* d)
 {
 	const var_cache_entry* e = d;
@@ -1243,7 +1386,7 @@ static int var_cmp(const void* d1, const void* d2)
 {
 	return compare_dstring(&((const var_cache_entry*)d1)->identifier, &((const var_cache_entry*)d2)->identifier);
 }
- 
+
 /* map a located column's data_type_info to the expr_type we would expose it as */
 static expr_type expr_type_for_column(const data_type_info* dti)
 {
@@ -1262,7 +1405,7 @@ static expr_type expr_type_for_column(const data_type_info* dti)
 			return RHENDB_TUPLE;
 	}
 }
- 
+
 /* a fully-numeric component is used as a direct index; returns 1 and sets *out if so */
 static int component_as_index(const char* p, uint32_t len, uint32_t* out)
 {
@@ -1273,7 +1416,7 @@ static int component_as_index(const char* p, uint32_t len, uint32_t* out)
 	*out = (uint32_t)v;
 	return 1;
 }
- 
+
 /* parse "a.b.c" (from a dstring), pick the tuple and field path, and build the positional accessor */
 static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32_t* out_tuple_index, positional_accessor* out_pa, const data_type_info** out_dti, int* error_code)
 {
@@ -1281,13 +1424,19 @@ static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32
 
 	const char* key = get_byte_array_dstring(id);
 	cy_uint klen = get_char_count_dstring(id);
- 
+
 	const char* comp_ptr[EE_MAX_PATH]; uint32_t comp_len[EE_MAX_PATH]; uint32_t ncomp = 0;
 	cy_uint i = 0;
 	while(i < klen && ncomp < EE_MAX_PATH){
 		cy_uint start = i;
 		while(i < klen && key[i] != '.') i++;
-		comp_ptr[ncomp] = key + start; comp_len[ncomp] = (uint32_t)(i - start); ncomp++;
+		uint32_t clen = (uint32_t)(i - start);
+		if(clen > 64)   /* type/field names are null-terminated strings bounded to 64 bytes */
+		{
+			*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
+			return 0;
+		}
+		comp_ptr[ncomp] = key + start; comp_len[ncomp] = clen; ncomp++;
 		if(i < klen && key[i] == '.') i++;
 	}
 	if(ncomp == 0)
@@ -1295,14 +1444,14 @@ static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32
 		*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
 		return 0;
 	}
- 
-	char name[64];
- 
+
+	char name[65];
+
 	uint32_t tuple_index = 0, field_start = 0;
 	if(ctx->input_tuples_count >= 2)
 	{
 		/* first component is the table name (always a string) */
-		uint32_t l = comp_len[0]; if(l > 63) l = 63; memory_move(name, comp_ptr[0], l); name[l] = 0;
+		uint32_t l = comp_len[0]; memory_move(name, comp_ptr[0], l); name[l] = 0;
 		int found = -1;
 		for(uint32_t t = 0; t < ctx->input_tuples_count; t++){
 			if(ctx->input_tuple_defs[t] != NULL && ctx->input_tuple_defs[t]->type_info != NULL
@@ -1322,7 +1471,7 @@ static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32
 		tuple_index = 0; field_start = 0;
 		if(ncomp >= 2 && ctx->input_tuple_defs[0] != NULL && ctx->input_tuple_defs[0]->type_info != NULL)
 		{
-			uint32_t l = comp_len[0]; if(l > 63) l = 63; memory_move(name, comp_ptr[0], l); name[l] = 0;
+			uint32_t l = comp_len[0]; memory_move(name, comp_ptr[0], l); name[l] = 0;
 			if(strncmp(ctx->input_tuple_defs[0]->type_info->type_name, name, 64) == 0) field_start = 1;
 		}
 	}
@@ -1331,14 +1480,14 @@ static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32
 		*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
 		return 0;
 	}
- 
+
 	uint32_t positions[EE_MAX_PATH]; uint32_t depth = 0;
 	data_type_info* cur = ctx->input_tuple_defs[tuple_index]->type_info;
 	for(uint32_t c = field_start; c < ncomp; c++){
 		if(!is_container_type_info(cur)){ *error_code = RHENDB_EE_UNSUPPORTED_TYPE; return 0; }
 		uint32_t idx;
 		if(!component_as_index(comp_ptr[c], comp_len[c], &idx)){   /* a field name -> look it up */
-			uint32_t l = comp_len[c]; if(l > 63) l = 63; memory_move(name, comp_ptr[c], l); name[l] = 0;
+			uint32_t l = comp_len[c]; memory_move(name, comp_ptr[c], l); name[l] = 0;
 			idx = find_containee_using_field_name_in_tuple_type_info(cur, name);
 			if(idx == UINT32_MAX){ *error_code = RHENDB_EE_UNSUPPORTED_TYPE; return 0; }   /* no such field */
 		}
@@ -1346,19 +1495,19 @@ static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32
 		cur = get_data_type_info_for_containee_of_container_without_data(cur, idx);
 		if(cur == NULL){ *error_code = RHENDB_EE_UNSUPPORTED_TYPE; return 0; }   /* index out of bounds / not a container */
 	}
- 
+
 	out_pa->positions_length = depth;
 	out_pa->positions = malloc((depth ? depth : 1) * sizeof(uint32_t));
 	if(out_pa->positions == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
 	memory_move(out_pa->positions, positions, depth * sizeof(uint32_t));
- 
+
 	*out_tuple_index = tuple_index;
 	*out_dti = cur;
 	return 1;
 
 	#undef EE_MAX_PATH
 }
- 
+
 /* find the cached resolution for id, resolving and caching it on the first miss */
 static const var_cache_entry* get_or_resolve_entry(rhendb_expr_eval_context* ctx, const dstring* id, int* error_code)
 {
@@ -1367,7 +1516,7 @@ static const var_cache_entry* get_or_resolve_entry(rhendb_expr_eval_context* ctx
 	const var_cache_entry* hit = find_equals_in_hashmap(&ctx->var_cache, &probe);
 	if(hit != NULL)
 		return hit;
- 
+
 	var_cache_entry* ne = malloc(sizeof(*ne));
 	if(ne == NULL)
 	{
@@ -1380,14 +1529,14 @@ static const var_cache_entry* get_or_resolve_entry(rhendb_expr_eval_context* ctx
 		*error_code = RHENDB_EE_OUT_OF_MEMORY;
 		return NULL;
 	}
- 
+
 	if(!resolve_into(ctx, id, &ne->tuple_index, &ne->pa, &ne->column_dti, error_code))
 	{
 		deinit_dstring(&ne->identifier);
 		free(ne);
 		return NULL;
 	}
- 
+
 	initialize_bstnode(&ne->node);
 
 	insert_in_hashmap(&ctx->var_cache, ne);
@@ -1398,17 +1547,17 @@ static const var_cache_entry* get_or_resolve_entry(rhendb_expr_eval_context* ctx
 static void* rhendb_get_variable(const dstring* identifier_bytes, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	rhendb_expr_eval_context* ctx = ec_p->context_p;
- 
+
 	const var_cache_entry* e = get_or_resolve_entry(ctx, identifier_bytes, error_code);
 	if(e == NULL)
 		return NULL;
- 
+
 	datum d;
 	if(!get_value_from_element_from_tuple(&d, ctx->input_tuple_defs[e->tuple_index], e->pa, ctx->input_tuples[e->tuple_index]))
 		return NULL;                       /* could not read : treat as SQL NULL */
 	if(is_datum_NULL(&d))
 		return NULL;             /* NULL column -> NULL pointer */
- 
+
 	const data_type_info* dti = e->column_dti;
 	expr_value* v = new_val(RHENDB_INT);
 	v->value = d;
@@ -1426,6 +1575,10 @@ static void* rhendb_get_variable(const dstring* identifier_bytes, const sql_expr
 		/* a primitive (or inline string/binary) : the datum already holds the value */
 		v->type_info.type = expr_type_for_column(dti);
 		v->type_info.dti_p = NULL;
+		/* a native FLOAT column may be stored as a 4-byte float (the reader puts it in float_value);
+		 * RHENDB_FLOAT is always a double, so promote it up to double_value. */
+		if(dti->type == FLOAT && dti->size == sizeof(float))
+			v->value.double_value = (double)v->value.float_value;
 	}
 	return v;
 }
@@ -1433,18 +1586,18 @@ static void* rhendb_get_variable(const dstring* identifier_bytes, const sql_expr
 static void* rhendb_get_type_for_variable(const dstring* identifier_bytes, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	rhendb_expr_eval_context* ctx = ec_p->context_p;
- 
+
 	const var_cache_entry* e = get_or_resolve_entry(ctx, identifier_bytes, error_code);
 	if(e == NULL)
 		return NULL;
- 
+
 	expr_type t = expr_type_for_column(e->column_dti);
 	expr_type_info* ti = new_type(t);
 	if(t == RHENDB_TUPLE || t == RHENDB_ARRAY)
 		ti->dti_p = (data_type_info*)e->column_dti;   /* borrowed */
 	return ti;
 }
- 
+
 static void notify_removal_for_cache_entry(void* resource_p, const void* data_p)
 {
 	var_cache_entry* e = (var_cache_entry*)data_p;
