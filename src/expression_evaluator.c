@@ -1128,88 +1128,176 @@ static void* rhendb_like(void* str_p, void* pattern_p, const sql_expr_eval_conte
 
 /* ------------------------------ cast ------------------------------ */
 /* to_type is the implementer's own type object (an expr_type_info*), produced by get_type_for_sql_type */
+/* ---- helpers shared by cast : full-width (256-bit) integer handling, no lossy double round-trips ---- */
+
+/* accumulate ndigits decimal digits into a 256-bit magnitude, modulo 2^256 */
+static uint256 accumulate_decimal_uint256(const char* digits, uint32_t ndigits)
+{
+	uint256 mag = get_uint256(0), ten = get_uint256(10);
+	for(uint32_t i = 0; i < ndigits; i++)
+	{
+		mul_uint256(&mag, mag, ten);
+		add_uint256(&mag, mag, get_uint256((uint64_t)(digits[i] - '0')));
+	}
+	return mag;
+}
+
+/* parse the leading optionally-signed integer of a decimal string into a 256-bit two's-complement value */
+static uint256 decimal_str_to_int_bits(const char* str)
+{
+	int negative = 0;
+	if(*str == '-'){ negative = 1; str++; }
+	else if(*str == '+') str++;
+	uint32_t nd = 0;
+	while(str[nd] >= '0' && str[nd] <= '9') nd++;
+	uint256 bits = accumulate_decimal_uint256(str, nd);
+	if(negative){ uint256 z = get_uint256(0); sub_uint256(&bits, z, bits); }   /* two's complement : 0 - mag */
+	return bits;
+}
+
+/* store a 256-bit two's-complement value into v as the requested integer target :
+ * the narrow targets keep the low 64 bits, the large targets keep all 256. */
+static void store_int_bits(expr_value* v, expr_type target, uint256 bits)
+{
+	switch(target)
+	{
+		case RHENDB_BIT_FIELD:  v->value.bit_field_value  = bits.limbs[0]; break;
+		case RHENDB_UINT:       v->value.uint_value       = bits.limbs[0]; break;
+		case RHENDB_INT:        v->value.int_value        = (int64_t)bits.limbs[0]; break;
+		case RHENDB_LARGE_UINT: v->value.large_uint_value = bits; break;
+		case RHENDB_LARGE_INT:  v->value.large_int_value  = (int256){ bits }; break;
+		default: break;
+	}
+}
+
+/* truncate a numeric toward zero and read its integer value as a 256-bit two's-complement pattern */
+static int numeric_to_int_bits(const mpd_t* m, uint256* out)
+{
+	mpd_context_t ctx; mpd_maxcontext(&ctx); uint32_t st = 0;
+	mpd_t* t = mpd_qnew();
+	if(t == NULL) return 0;
+	mpd_qtrunc(t, m, &ctx, &st);
+	char* str = mpd_qformat(t, "f", &ctx, &st);   /* fixed notation -> plain integer digits, no exponent */
+	mpd_del(t);
+	if(str == NULL) return 0;
+	*out = decimal_str_to_int_bits(str);
+	mpd_free(str);
+	return 1;
+}
+
+/* a heap null-terminated copy of a string/binary value's bytes (caller frees) */
+static char* sb_to_cstring(const expr_value* a)
+{
+	uint32_t n = a->value.string_or_binary_size;
+	char* tmp = malloc((size_t)n + 1);
+	if(tmp == NULL) return NULL;
+	if(n) memory_move(tmp, a->value.string_or_binary_value, n);
+	tmp[n] = 0;
+	return tmp;
+}
+
+/* a numeric's value as a double (double cannot hold more precision than its scientific text) */
+static double mpd_to_double(const mpd_t* m)
+{
+	char* sci = mpd_to_sci(m, 0);
+	double dv = sci ? strtod(sci, NULL) : 0;
+	if(sci) mpd_free(sci);
+	return dv;
+}
+
 static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* a = data;
 	expr_type target = ((const expr_type_info*)to_type)->type;
 
-	/* numeric source : casts operate on the materialized mpd_t */
-	if(is_numeric_operand(a)){
-		if(materialize_numeric(a, ec_p, error_code)) return NULL;
-		switch(target){
-			case RHENDB_NUMERIC: {
-				mpd_t d; if(!ee_mpd_new(&d)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-				uint32_t st = 0; mpd_qcopy(&d, &(a->numeric_value), &st);
-				expr_value* v = new_val(RHENDB_NUMERIC); v->numeric_value = d; return v;
-			}
-			case RHENDB_INT: case RHENDB_FLOAT: {
-				char* sci = mpd_to_sci(&(a->numeric_value), 0);
-				double dv = sci ? strtod(sci, NULL) : 0;
-				if(sci) mpd_free(sci);
-				if(target == RHENDB_FLOAT){ expr_value* v = new_val(RHENDB_FLOAT); v->value.double_value = dv; return v; }
-				expr_value* v = new_val(RHENDB_INT); v->value.int_value = (int64_t)dv; return v;
-			}
-			case RHENDB_BIT_FIELD: {
-				expr_value* v = new_val(RHENDB_BIT_FIELD); v->value.bit_field_value = !mpd_iszero(&(a->numeric_value)); return v;
-			}
-			default: *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL;   /* STRING/BINARY targets deferred */
-		}
-	}
+	/* bring an extended (tuple-form) numeric or text/blob source into its materialized form first */
+	if(is_numeric_operand(a)){ if(materialize_numeric(a, ec_p, error_code)) return NULL; }
+	else if(is_sb_operand(a)){ if(materialize_tb(a, ec_p, error_code)) return NULL; }
 
-	/* string / blob / text source -> a number type : materialize the bytes and parse them.
-	 * (BIT_FIELD is left to the emptiness rule below.)  256-bit targets are parsed via the low
-	 * 64 bits, so a value wider than 64 bits is truncated. */
-	if(is_sb_operand(a) && et_is_num_or_numeric(target) && target != RHENDB_BIT_FIELD){
-		if(materialize_tb(a, ec_p, error_code)) return NULL;
-		uint32_t n = a->value.string_or_binary_size;
-		char* tmp = malloc((size_t)n + 1);
-		if(tmp == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-		if(n) memory_move(tmp, a->value.string_or_binary_value, n);
-		tmp[n] = 0;
-		expr_value* v = NULL;
-		switch(target){
-			case RHENDB_NUMERIC: {
-				mpd_t d;
-				if(!ee_mpd_new(&d)){ free(tmp); *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-				mpd_context_t ctx; mpd_maxcontext(&ctx); uint32_t st = 0;
-				mpd_qset_string(&d, tmp, &ctx, &st);
-				v = new_val(RHENDB_NUMERIC); v->numeric_value = d; break;
-			}
-			case RHENDB_FLOAT:      v = new_val(RHENDB_FLOAT);      v->value.double_value     = strtod(tmp, NULL); break;
-			case RHENDB_INT:        v = new_val(RHENDB_INT);        v->value.int_value        = (int64_t)strtoll(tmp, NULL, 10); break;
-			case RHENDB_UINT:       v = new_val(RHENDB_UINT);       v->value.uint_value       = (uint64_t)strtoull(tmp, NULL, 10); break;
-			case RHENDB_LARGE_INT:  v = new_val(RHENDB_LARGE_INT);  v->value.large_int_value  = get_int256((int64_t)strtoll(tmp, NULL, 10)); break;
-			case RHENDB_LARGE_UINT: v = new_val(RHENDB_LARGE_UINT); v->value.large_uint_value = get_uint256((uint64_t)strtoull(tmp, NULL, 10)); break;
-			default: break;
+	int src_is_numeric = (a->type_info.type == RHENDB_NUMERIC);
+	int src_is_number  = (a->type_info.dti_p == NULL && et_is_num(a->type_info.type));
+	int src_is_sb      = (a->type_info.dti_p == NULL && (a->type_info.type == RHENDB_STRING || a->type_info.type == RHENDB_BINARY));
+
+	/* ---- integer targets : BIT_FIELD / UINT / INT / LARGE_UINT / LARGE_INT ----
+	 * the whole value is carried as a 256-bit two's-complement pattern and only narrowed at the end,
+	 * so nothing is routed through double and the large targets keep the full 256 bits. */
+	if(et_is_int(target))
+	{
+		uint256 bits;
+		if(src_is_numeric)
+		{
+			if(!numeric_to_int_bits(&(a->numeric_value), &bits)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
 		}
-		free(tmp);
-		if(v == NULL){ *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
+		else if(src_is_number)
+		{
+			if(a->type_info.type == RHENDB_FLOAT)   /* a float's integer part, via the decimal engine */
+			{
+				mpd_t m;
+				if(!number_to_mpd(a, &m)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+				int ok = numeric_to_int_bits(&m, &bits);
+				mpd_del(&m);
+				if(!ok){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			}
+			else                                    /* a native integer : sign-extend to 256 bits */
+				bits = to_i256(a).raw_uint_value;
+		}
+		else if(src_is_sb)
+		{
+			char* tmp = sb_to_cstring(a);
+			if(tmp == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			bits = decimal_str_to_int_bits(tmp);
+			free(tmp);
+		}
+		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
+
+		expr_value* v = new_val(target);
+		store_int_bits(v, target, bits);
 		return v;
 	}
 
-	switch(target){
-		case RHENDB_BIT_FIELD: {
-			int t = 0;
-			if(et_is_num(a->type_info.type) && a->type_info.dti_p == NULL) t = (to_dbl(a) != 0);
-			else if(a->type_info.type==RHENDB_STRING||a->type_info.type==RHENDB_BINARY) t = (a->value.string_or_binary_size != 0);
-			else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
-			expr_value* v = new_val(RHENDB_BIT_FIELD); v->value.bit_field_value = t; return v;
+	/* ---- FLOAT target ---- */
+	if(target == RHENDB_FLOAT)
+	{
+		double dv;
+		if(src_is_numeric)     dv = mpd_to_double(&(a->numeric_value));
+		else if(src_is_number) dv = to_dbl(a);
+		else if(src_is_sb)
+		{
+			char* tmp = sb_to_cstring(a);
+			if(tmp == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			dv = strtod(tmp, NULL); free(tmp);
 		}
-		case RHENDB_INT: {
-			if(a->type_info.dti_p != NULL || !et_is_num(a->type_info.type)){ *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
-			expr_value* v = new_val(RHENDB_INT); v->value.int_value = (int64_t)to_dbl(a); return v;
-		}
-		case RHENDB_FLOAT: {
-			if(a->type_info.dti_p != NULL || !et_is_num(a->type_info.type)){ *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
-			expr_value* v = new_val(RHENDB_FLOAT); v->value.double_value = to_dbl(a); return v;
-		}
-		case RHENDB_NUMERIC: {
-			if(a->type_info.dti_p != NULL || !et_is_num(a->type_info.type)){ *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
-			mpd_t d; if(!number_to_mpd(a, &d)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			expr_value* v = new_val(RHENDB_NUMERIC); v->numeric_value = d; return v;
-		}
-		default: *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL;   /* STRING/BINARY targets deferred */
+		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
+		expr_value* v = new_val(RHENDB_FLOAT); v->value.double_value = dv; return v;
 	}
+
+	/* ---- NUMERIC target ---- */
+	if(target == RHENDB_NUMERIC)
+	{
+		mpd_t d;
+		if(src_is_numeric)
+		{
+			if(!ee_mpd_new(&d)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			uint32_t st = 0; mpd_qcopy(&d, &(a->numeric_value), &st);
+		}
+		else if(src_is_number)
+		{
+			if(!number_to_mpd(a, &d)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+		}
+		else if(src_is_sb)
+		{
+			char* tmp = sb_to_cstring(a);
+			if(tmp == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			if(!ee_mpd_new(&d)){ free(tmp); *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			mpd_context_t ctx; mpd_maxcontext(&ctx); uint32_t st = 0; mpd_qset_string(&d, tmp, &ctx, &st); free(tmp);
+		}
+		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
+		expr_value* v = new_val(RHENDB_NUMERIC); v->numeric_value = d; return v;
+	}
+
+	/* STRING / BINARY targets are not yet supported */
+	*error_code = RHENDB_EE_UNSUPPORTED_CAST;
+	return NULL;
 }
 
 /* ------------------------------ type inference ------------------------------ */
@@ -1257,7 +1345,7 @@ static int same_tuple_kind(const data_type_info* d1, const data_type_info* d2)
 	if(is_text_type_info(d1))    return is_text_type_info(d2);
 	if(is_blob_type_info(d1))    return is_blob_type_info(d2);
 	if(is_numeric_type_info(d2) || is_text_type_info(d2) || is_blob_type_info(d2)) return 0;
-	return d1->type == d2->type && strncmp(d1->type_name, d2->type_name, 64) == 0;
+	return are_identical_type_info(d1, d2);   /* exact structural equality for plain tuples/arrays */
 }
 
 static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
@@ -1320,8 +1408,7 @@ static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_cont
 	}
 	if(t1->type == RHENDB_ARRAY && t2->type == RHENDB_ARRAY)
 	{
-		if(t1->dti_p == t2->dti_p
-		   || (t1->dti_p != NULL && t2->dti_p != NULL && t1->dti_p->type == t2->dti_p->type && strncmp(t1->dti_p->type_name, t2->dti_p->type_name, 64) == 0))
+		if(t1->dti_p == t2->dti_p || same_tuple_kind(t1->dti_p, t2->dti_p))
 		{
 			expr_type_info* r = new_type(RHENDB_ARRAY);
 			r->dti_p = t1->dti_p;   /* borrowed */
