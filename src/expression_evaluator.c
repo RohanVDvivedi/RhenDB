@@ -198,15 +198,7 @@ static int is_numeric_operand(const expr_value* v)
 {
 	return is_materialized_numeric(v) || is_tuple_numeric(v);
 }
-static int is_native_float(const expr_value* v, double* out)
-{
-	if(v->type_info.type == RHENDB_FLOAT)
-	{
-		*out = v->value.double_value;
-		return 1;
-	}
-	return 0;
-}
+
 /* a string/binary operand: a native RHENDB_STRING/BINARY, or a tuple-form text/blob column */
 static int is_sb_operand(const expr_value* v)
 {
