@@ -88,6 +88,25 @@ struct rhendb_expr_eval_context
 	void* catalog_manager;
 };
 
+// error codes written into *error_code by the rhendb expression-evaluation callbacks.
+// (the sqltoast evaluator only distinguishes zero from non-zero; these names are for rhendb-side diagnostics.)
+typedef enum rhendb_expr_eval_error rhendb_expr_eval_error;
+enum rhendb_expr_eval_error
+{
+	RHENDB_EE_OK                  = 0,  // no error
+	RHENDB_EE_UNSUPPORTED_TYPE    = 1,  // operand/result type not supported (TUPLE, ARRAY, unknown sql type)
+	RHENDB_EE_NON_NUMERIC_OPERAND = 2,  // arithmetic on a non-numeric operand
+	RHENDB_EE_NON_INTEGER_OPERAND = 3,  // bitwise/shift on a non-integer operand
+	RHENDB_EE_DIVIDE_BY_ZERO      = 4,  // division or modulo by exact zero
+	RHENDB_EE_INCOMPARABLE_TYPES  = 5,  // compare()/unify_types() on types that cannot be reconciled
+	RHENDB_EE_UNSUPPORTED_CAST    = 6,  // cast() to an unsupported target type
+	RHENDB_EE_NON_STRING_OPERAND  = 7,  // concat()/like() on a non string/binary operand
+	RHENDB_EE_MATERIALIZE_FAILED  = 8,  // failed while reading/materializing an extended text/blob/numeric value
+	RHENDB_EE_MISSING_ENGINE      = 9,  // no rage_engine reachable to materialize an extended value
+	RHENDB_EE_OUT_OF_MEMORY       = 10, // allocation failure
+	RHENDB_EE_NULL_OPERAND        = 11, // a required operand pointer was NULL
+};
+
 // intitialize this per instance for evaluation context of one stream of tuples of 1 type
 sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, rhendb* rdb, void* catalog_manager);
 
