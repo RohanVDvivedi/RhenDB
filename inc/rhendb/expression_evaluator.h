@@ -87,7 +87,7 @@ struct rhendb_expr_eval_context
 	void* catalog_manager;
 };
 
-// intitialize a per instance
+// intitialize this per instance for evaluation context of one stream of tuples of 1 type
 sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, rhendb* rdb, void* catalog_manager);
 
 // frees shallow copied input_tuple_defs and input_tuples, and the pointer itself
