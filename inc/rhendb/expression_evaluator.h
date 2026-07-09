@@ -14,6 +14,8 @@
 
 #include<mpdecimal.h>
 
+#include<rhendb/rhendb.h>
+
 typedef enum expr_type expr_type;
 enum expr_type
 {
@@ -69,23 +71,21 @@ struct rhendb_expr_eval_context
 {
 	tuple_def** input_tuple_defs;
 
+	// populate this by index, to set tuples for current expression evaluation
+	// these input_tuples_count number of pointers will be 0 initialized
 	void** input_tuples;
 
 	uint32_t input_tuples_count;
+
+	// for materializing the on-disk -> text, blob and numeric columns
+	rhendb* rdb;
 
 	// now owned by the context
 	void* catalog_manager;
 };
 
-/*
-	***
-	No support in the first iteration for
-	tuplelargetypes, these will be materialized into text -> RHENDB_STRING, blob -> RHENDB_BINARY, numeric -> RHENDB_NUMERIC, i.e. tuple -> RHENDB_* when it is required, and as much of it is required
-	user defined functions these call backs will be added by catalog manager
-	nested query expressions these call backs will be added by catalog manager
-	variables will be deciphered from the input_tuple, in future
-*/
-sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, void** input_tuples, uint32_t input_tuples_count, void* catalog_manager);
+// intitialize a per instance
+sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, rhendb* rdb, void* catalog_manager);
 
 // frees shallow copied input_tuple_defs and input_tuples, and the pointer itself
 void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_context* context_p);

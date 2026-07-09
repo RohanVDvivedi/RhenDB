@@ -122,7 +122,7 @@ static void rhendb_delete_type(void* typ, const sql_expr_eval_context* ec_p)
 	free(e_type_p);
 }
 
-sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, void** input_tuples, uint32_t input_tuples_count, void* catalog_manager)
+sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, rhendb* rdb, void* catalog_manager)
 {
 	sql_expr_eval_context eval_context = (sql_expr_eval_context){
 		.context_p = malloc(sizeof(rhendb_expr_eval_context)),
@@ -198,10 +198,13 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 	context_p->input_tuple_defs = malloc(sizeof(tuple_def*) * input_tuples_count);
 	memory_move(context_p->input_tuple_defs, input_tuple_defs, sizeof(tuple_def*) * input_tuples_count);
 
-	context_p->input_tuples = malloc(sizeof(void*) * input_tuples_count);
-	memory_move(context_p->input_tuples, input_tuples, sizeof(void*) * input_tuples_count);
+	context_p->input_tuples = calloc(sizeof(void*), input_tuples_count);
 
 	context_p->input_tuples_count = input_tuples_count;
+
+	context_p->rdb = rdb;
+
+	context_p->catalog_manager = catalog_manager;
 
 	return eval_context;
 }
