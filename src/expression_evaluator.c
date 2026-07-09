@@ -1214,18 +1214,11 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 
 /* ------------------------------ type inference ------------------------------ */
 
-static expr_type type_of_value(const expr_value* v)
-{
-	/* the label already distinguishes a materialized scalar from an unmaterialized tuple-form value
-	 * (RHENDB_TUPLE + dti_p), so it is used directly. */
-	return v->type_info.type;
-}
 static void* rhendb_get_type_for_data(void* data, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* v = data;
-	expr_type t = type_of_value(v);
-	expr_type_info* ti = new_type(t);
-	if((t == RHENDB_TUPLE || t == RHENDB_ARRAY) && t == v->type_info.type)
+	expr_type_info* ti = new_type(v->type_info.type);
+	if(ti->type == RHENDB_TUPLE || ti->type == RHENDB_ARRAY)
 		ti->dti_p = v->type_info.dti_p;
 	return ti;
 }
@@ -1233,7 +1226,7 @@ static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_e
 {
 	switch(type->type_name)
 	{
-		case SQL_BOOL: return new_type(RHENDB_BIT_FIELD);
+		case SQL_BOOL: return (void*)(&rhendb_bool_type);
 		case SQL_SMALLINT: case SQL_INT: case SQL_BIGINT: return new_type(RHENDB_INT);
 		case SQL_REAL: case SQL_DOUBLE: case SQL_FLOAT: return new_type(RHENDB_FLOAT);
 		case SQL_DECIMAL: case SQL_NUMERIC: return new_type(RHENDB_NUMERIC);
