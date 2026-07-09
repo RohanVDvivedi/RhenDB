@@ -78,6 +78,7 @@ struct rhendb_expr_eval_context
 	uint32_t input_tuples_count;
 
 	// variable/identifier cache that stores variable identifier to tuple_index and positional_accessor in it
+	// owned by the context; caches "a.b.c" -> (tuple index + positional accessor + type)
 	hashmap var_cache;
 
 	// for materializing the on-disk -> text, blob and numeric columns
