@@ -1,9 +1,5 @@
 PICKED TASKS
 
- * integrate with SQLtoAST
-  * implement an sql expression evaluation context, variable and sub_query stubs to be filled later
-  * make a function to convert from sql type to rhendb_type
-
 DESIGN CATALOG TABLES
  LOCKING IS EXTERNAL USING LOCK TABLES
 
