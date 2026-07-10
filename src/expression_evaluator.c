@@ -11,6 +11,15 @@
 
 #include<rhendb/function_compare.h>
 
+/* Working precision (in significant decimal digits) used to round a NUMERIC division whose exact
+ * quotient does not terminate (e.g. 1/3).  Add/sub/mul are always exact and use unbounded precision;
+ * only non-terminating division needs a bound.  Kept generous (exceeds decimal128/decimal256 and the
+ * DECIMAL maxima of common SQL engines) and value-dependent rather than representation-dependent.
+ * Tune to taste for a stricter DECIMAL(p,s) policy. */
+#ifndef RHENDB_EE_DIV_PREC
+#define RHENDB_EE_DIV_PREC 100
+#endif
+
 static const expr_type_info rhendb_bool_type = {
 	.type = RHENDB_BIT_FIELD,
 	.dti_p = NULL,
@@ -551,7 +560,20 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 			case OP_ADD: mpd_qadd(&result, pa, pb, &ctx, &st); break;
 			case OP_SUB: mpd_qsub(&result, pa, pb, &ctx, &st); break;
 			case OP_MUL: mpd_qmul(&result, pa, pb, &ctx, &st); break;
-			case OP_DIV: mpd_qdiv(&result, pa, pb, &ctx, &st); break;
+			case OP_DIV:
+				mpd_qdiv(&result, pa, pb, &ctx, &st);
+				/* maxcontext (prec ~ MPD_MAX_PREC) attempts an EXACT quotient; a non-terminating
+				 * division would need unbounded digits and fails (NaN, Malloc_error/Division_impossible).
+				 * Fall back to a bounded precision so the quotient rounds to a finite value, the way a
+				 * real DECIMAL engine does, instead of silently yielding NaN. */
+				if(mpd_isnan(&result) && !mpd_isnan(pa) && !mpd_isnan(pb))
+				{
+					mpd_context_t dctx = ctx;
+					dctx.prec = RHENDB_EE_DIV_PREC;   /* fixed working precision (value-, not representation-, dependent) */
+					st = 0;
+					mpd_qdiv(&result, pa, pb, &dctx, &st);
+				}
+				break;
 			case OP_MOD: mpd_qrem(&result, pa, pb, &ctx, &st); break;
 		}
 		if(oa)
@@ -645,11 +667,11 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				r = x * y; break;
 			case OP_DIV:
 				if(y == 0){ *error_code = RHENDB_EE_DIVIDE_BY_ZERO; return NULL; }
-				r = x / y;
+				r = (x == INT64_MIN && y == -1) ? INT64_MIN : (x / y);   /* guard 2's-complement overflow (INT64_MIN/-1 is UB -> SIGFPE) */
 				break;
 			case OP_MOD:
 				if(y == 0){ *error_code = RHENDB_EE_DIVIDE_BY_ZERO; return NULL; }
-				r = x % y;
+				r = (x == INT64_MIN && y == -1) ? 0 : (x % y);           /* INT64_MIN % -1 is UB in C */
 				break;
 		}
 		expr_value* v = new_val(RHENDB_INT);
@@ -770,14 +792,29 @@ static const data_type_info* resolve_dti(const expr_value* v)
 	if(v->type_info.dti_p != NULL)
 		return v->type_info.dti_p;
 	switch(v->type_info.type){
-		case RHENDB_BIT_FIELD: return BIT_FIELD_NON_NULLABLE[64];
-		case RHENDB_UINT: return UINT_NON_NULLABLE[8];
-		case RHENDB_INT: return INT_NON_NULLABLE[8];
-		case RHENDB_FLOAT: return FLOAT_double_NON_NULLABLE;
-		case RHENDB_LARGE_UINT: return LARGE_UINT_NON_NULLABLE[32];
-		case RHENDB_LARGE_INT: return LARGE_INT_NON_NULLABLE[32];
+		case RHENDB_BIT_FIELD: return BIT_FIELD_NULLABLE[64];
+		case RHENDB_UINT: return UINT_NULLABLE[8];
+		case RHENDB_INT: return INT_NULLABLE[8];
+		case RHENDB_FLOAT: return FLOAT_double_NULLABLE;
+		case RHENDB_LARGE_UINT: return LARGE_UINT_NULLABLE[32];
+		case RHENDB_LARGE_INT: return LARGE_INT_NULLABLE[32];
 		default: return NULL;   /* string/binary handled by a dedicated byte compare */
 	}
+}
+
+/* Wrap an in-memory string/binary operand in a plain variable-length dti so it can be fed to
+ * compare_datum_rhendb (whose text/blob path reads every operand through a binary_read_iterator).
+ * This lets us compare an on-disk extended text/blob against an in-memory one WITHOUT materializing
+ * the extended side.  The scratch dti is caller-owned and lives only for the compare call. */
+static const data_type_info* plain_sb_dti(const expr_value* v, data_type_info* scratch)
+{
+	uint32_t n = v->value.string_or_binary_size;
+	if(v->type_info.type == RHENDB_STRING)
+		*scratch = get_variable_length_string_type("s", n + 8);
+	else
+		*scratch = get_variable_length_binary_type("b", n + 8);
+	finalize_type_info(scratch);
+	return scratch;
 }
 
 static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context* ec_p, int* error_code)
@@ -788,6 +825,20 @@ static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context*
 	 * (which already sorts -inf < finite < +inf). */
 	if(is_numeric_operand(a) || is_numeric_operand(b))
 	{
+		/* both operands are on-disk extended numerics: stream-compare through the tuplestore
+		 * (sign/exponent/inline first, overflow digits only if needed) with no mpd materialization.
+		 * We fall back to materializing both to mpd_t only when at least one side is already an
+		 * in-memory numeric/number. */
+		if(is_tuple_numeric(a) && is_tuple_numeric(b))
+		{
+			if(!can_compare_datum_rhendb(a->type_info.dti_p, b->type_info.dti_p))
+			{
+				*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
+				return 0;
+			}
+			return compare_datum_rhendb(&a->value, a->type_info.dti_p, &b->value, b->type_info.dti_p, engine_from_ctx(ec_p));
+		}
+
 		mpd_t sa, sb; int oa = 0, ob = 0;
 		mpd_t* pa = operand_to_mpd(a, &sa, &oa, ec_p, error_code, RHENDB_EE_INCOMPARABLE_TYPES);
 		if(pa == NULL) return 0;
@@ -810,17 +861,24 @@ static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context*
 	/* string / blob comparison */
 	int a_sb = is_sb_operand(a), b_sb = is_sb_operand(b);
 	if(a_sb && b_sb){
-		/* both on-disk text/blob columns: stream-compare, no materialization */
-		if(a->type_info.dti_p != NULL && b->type_info.dti_p != NULL)
+		rage_engine* eng = engine_from_ctx(ec_p);
+		int a_ext = (a->type_info.dti_p != NULL), b_ext = (b->type_info.dti_p != NULL);
+		if(eng != NULL && (a_ext || b_ext))
 		{
-			if(!can_compare_datum_rhendb(a->type_info.dti_p, b->type_info.dti_p))
+			/* at least one on-disk extended text/blob: stream-compare through read-iterators,
+			 * never materializing the extended side.  An in-memory operand is wrapped in a plain
+			 * variable-length dti; compare_datum_rhendb reads both via binary_read_iterators. */
+			data_type_info scratch;
+			const data_type_info* da = a_ext ? a->type_info.dti_p : plain_sb_dti(a, &scratch);
+			const data_type_info* db = b_ext ? b->type_info.dti_p : plain_sb_dti(b, &scratch);
+			if(!can_compare_datum_rhendb(da, db))
 			{
 				*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
 				return 0;
 			}
-			return compare_datum_rhendb(&a->value, a->type_info.dti_p, &b->value, b->type_info.dti_p, engine_from_ctx(ec_p));
+			return compare_datum_rhendb(&a->value, da, &b->value, db, eng);
 		}
-		/* at least one is an in-memory string/binary: bring the other in-memory and compare bytes */
+		/* both already in memory (or no engine available): plain byte compare, no engine needed */
 		if(materialize_tb(a, ec_p, error_code)) return 0;
 		if(materialize_tb(b, ec_p, error_code)) return 0;
 		uint32_t na = a->value.string_or_binary_size, nb = b->value.string_or_binary_size;
