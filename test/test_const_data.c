@@ -69,7 +69,7 @@ int main(int argc, char** argv)
 		filter_expr_sql = parse_sql(&strm, &error);
 		if(error || filter_expr_sql->type != EXPR)
 		{
-			printf("ERROR PARSING SQL %s\n", ((filter_expr_sql->type == EXPR) ? "EXPR" : "not EXPR"));
+			printf("ERROR PARSING SQL %s\n", (((!error) && filter_expr_sql->type == EXPR) ? "EXPR" : "not EXPR"));
 			exit(-1);
 		}
 		if(has_sub_query_in_sql_exp(filter_expr_sql->expr))
