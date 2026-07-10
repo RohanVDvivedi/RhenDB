@@ -11,6 +11,8 @@
 
 #include<rhendb/function_compare.h>
 
+#include<cutlery/cutlery_math.h>
+
 /* Working precision (in significant decimal digits) used to round a NUMERIC division whose exact
  * quotient does not terminate (e.g. 1/3).  Add/sub/mul are always exact and use unbounded precision;
  * only non-terminating division needs a bound.  Kept generous (exceeds decimal128/decimal256 and the
@@ -1131,6 +1133,8 @@ static void rhendb_concat(void** data1_p, void* data2, const sql_expr_eval_conte
 	 * are appended with no allocation; if a owns a too-small buffer it is grown (with 0.5x spare);
 	 * if a is only borrowing its bytes (buffer == NULL) a fresh buffer is allocated and a is cloned. */
 	uint32_t na = a->value.string_or_binary_size, nb = b->value.string_or_binary_size;
+	/* the result size is held in a uint32_t : refuse to build a string whose length would not fit */
+	if(will_unsigned_sum_overflow(uint32_t, na, nb)){ *error_code = RHENDB_EE_STRING_TOO_LONG; return; }
 	uint32_t need = na + nb;
 	const char* a_bytes = a->value.string_or_binary_value;
 	const char* b_bytes = b->value.string_or_binary_value;
@@ -1143,7 +1147,7 @@ static void rhendb_concat(void** data1_p, void* data2, const sql_expr_eval_conte
 	else if(a->buffer != NULL)
 	{
 		/* a owns a buffer but it is too small : grow it (keeping a's bytes) with 0.5x spare */
-		uint32_t cap = need + need / 2;
+		uint64_t cap = min((((uint64_t)need) + (need / 2)), UINT32_MAX);
 		char* nbuf = realloc(a->buffer, cap ? cap : 1);
 		if(nbuf == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return; }
 		memory_move(nbuf + na, b_bytes, nb);
@@ -1153,7 +1157,7 @@ static void rhendb_concat(void** data1_p, void* data2, const sql_expr_eval_conte
 	else
 	{
 		/* a is borrowing its bytes (buffer == NULL) : allocate with 0.5x spare, clone a then append b */
-		uint32_t cap = need + need / 2;
+		uint64_t cap = min((((uint64_t)need) + (need / 2)), UINT32_MAX);
 		char* nbuf = malloc(cap ? cap : 1);
 		if(nbuf == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return; }
 		memory_move(nbuf, a_bytes, na);
