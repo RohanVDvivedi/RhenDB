@@ -25,7 +25,7 @@ CC:=gcc
 # compiler flags
 CFLAGS:=-Wall -O3 -flto -I${INC_DIR}
 # linker flags, this will used to compile the binary
-LFLAGS:=-L${LIB_DIR} -l${PROJECT_NAME} -lsqltoast -lmintxengine -lvolatilepagestore -ltuplelargetypes -lmpdec -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lz
+LFLAGS:=-L${LIB_DIR} -l${PROJECT_NAME} -lsqltoast -lmintxengine -lvolatilepagestore -ltuplelargetypes -lmpdec -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lm -lz
 # Archiver
 AR:=ar rcs
 
