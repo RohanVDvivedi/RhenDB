@@ -60,7 +60,7 @@ int main(int argc, char** argv)
 	}
 
 	sql* filter_expr_sql = NULL;
-	if(argc > 2)
+	if(argc >= 2)
 	{
 		dstring filter_expr = get_dstring_pointing_to_cstring(argv[1]);
 		stream strm;
