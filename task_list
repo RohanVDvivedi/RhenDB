@@ -1,6 +1,6 @@
 PICKED TASKS
 
-* projection_operator
+
 
 DESIGN CATALOG TABLES
  LOCKING IS EXTERNAL USING LOCK TABLES
@@ -72,6 +72,10 @@ PRIORITY 1 CATALOG
 
 
 
+* projection_operator
+
+
+
 
 
 PRIORITY 1 SIMPLE OPERATORS SOURCE/SINK
@@ -102,30 +106,19 @@ DB acess operators
 
 
 
-PRIORITY HIGH LEVEL TASKS (not yet prioritizwd)
+PRIORITY HIGH LEVEL TASKS (not yet prioritized)
 
- * make a function to convert a sql expression from SQLtoAST into a tuple transformer
- * need expression evaluation function for expression of type provided by SQLtoAST
-
+* preloaded functions and mechanism to call them like length of string/array/blob/binary, trigonometery, max, min with variable lengths inputs
+ * implement function NOW(), to get current epoch
+ * implement a function to get i-th element from an array, tuple, string, blob, binary
+ * implement a function to convert a byte to it's ascii value, can also allow type cast to do it
  * implement lcm, gcd like aggregate functions
  * implement get date, time, with timezone, and time in string to unix epoch -> rhendb_function (with is_aggregate_function = 0)
  * implement concat and substring -> rhendb_functions (with is_aggregate_function = 0)
- * implement double fucntions, sin, cos, tan, asin, acos, atan, log, expr -> rhendb_function (with is_aggregate_function = 0)
+ * implement double/numeric funtions, sin, cos, tan, asin, acos, atan, log, expr -> rhendb_function (with is_aggregate_function = 0)
  * implement type casting functions to large_uint, large_int, uint, int, string to numbers -> rhendb_function (with is_aggregate_function = 0)
 
 FUTURE TASKS
-
- 1*
-  * expression evaluation using JIT
-  * implement various types of default runtime functions
-   * boolean(convert NULL and ZERO to false and rest everything is true)
-   * sign(negatives to -1, 0 to 0, and positives to 1)
-   * compare(for comparing any types)
-   * add, sub, mul, divide, mod, gcd, lcm, pow, sin, cos, multiplicate inverse, additive inverse
-   * strings and blobs to be concatenated, substring with from and to
-   * unix epoch to date, day, month, year, second, millisecond, microsecond, with timezones
-   * build more complex functions transformers with local variables and bytecode stored in context
-   * length of string, blob, array, tuple, etc
 
  2.* maintain the inserts and deletes log as a stack in volatile page store and allow save points (*future)
    * savepoints will flip the is_xmin_NULL bit to 1 to undo an insert
