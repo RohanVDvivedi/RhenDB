@@ -1,5 +1,11 @@
 PICKED TASKS
 
+* discard catalog_manager from params in expression_evaluator constructor params
+
+* selection_operator
+
+* projection_operator
+
 DESIGN CATALOG TABLES
  LOCKING IS EXTERNAL USING LOCK TABLES
 
