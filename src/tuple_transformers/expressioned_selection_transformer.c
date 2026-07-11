@@ -48,7 +48,7 @@ tuple_transformer* get_new_expressioned_selection_transformer(const tuple_def* i
 	selection_context* sc_p = malloc(sizeof(selection_context));
 	sc_p->expr = expr;
 
-	sc_p->ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_def), 1, rdb, NULL);
+	sc_p->ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_def), 1, rdb);
 
 	int error_code = 0;
 	void* res_type = infer_type_sql_expr(sc_p->expr, &(sc_p->ec), &error_code);

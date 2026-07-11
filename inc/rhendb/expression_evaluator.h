@@ -84,10 +84,8 @@ struct rhendb_expr_eval_context
 	hashmap var_cache;
 
 	// for materializing the on-disk -> text, blob and numeric columns
+	// and to access the catalog_manager, for user defined types and functions
 	rhendb* rdb;
-
-	// now owned by the context
-	void* catalog_manager;
 };
 
 // error codes written into *error_code by the rhendb expression-evaluation callbacks.
@@ -111,7 +109,7 @@ enum rhendb_expr_eval_error
 };
 
 // intitialize this per instance for evaluation context of one stream of tuples of 1 type
-sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, rhendb* rdb, void* catalog_manager);
+sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, rhendb* rdb);
 
 // frees shallow copied input_tuple_defs and input_tuples, and the pointer itself
 void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_context* context_p);

@@ -1758,7 +1758,7 @@ static void notify_removal_for_cache_entry(void* resource_p, const void* data_p)
 
 /* ------------------------------ context ------------------------------ */
 
-sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, rhendb* rdb, void* catalog_manager)
+sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, rhendb* rdb)
 {
 	sql_expr_eval_context eval_context = (sql_expr_eval_context){
 		.context_p = malloc(sizeof(rhendb_expr_eval_context)),
@@ -1841,8 +1841,6 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 	initialize_hashmap(&(context_p->var_cache), ELEMENTS_AS_RED_BLACK_BST, 64, &simple_hasher(var_hash), &simple_comparator(var_cmp), offsetof(var_cache_entry, node));
 
 	context_p->rdb = rdb;
-
-	context_p->catalog_manager = catalog_manager;
 
 	return eval_context;
 }
