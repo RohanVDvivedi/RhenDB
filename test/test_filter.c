@@ -35,10 +35,9 @@ int main(int argc, char** argv)
 {
 	dstring filter_expr = get_dstring_pointing_to_literal_cstring("true");
 	if(argc >= 2)
-		dstring filter_expr = get_dstring_pointing_to_cstring(argv[1]);
+		filter_expr = get_dstring_pointing_to_cstring(argv[1]);
 	sql* filter_expr_sql = NULL;
 	{
-		dstring filter_expr = get_dstring_pointing_to_cstring(argv[1]);
 		stream strm;
 		initialize_dstring_stream(&strm, &filter_expr);
 		int error = 0;
@@ -53,8 +52,6 @@ int main(int argc, char** argv)
 	stream rs, ws;
 	initialize_stream_for_fd(&rs, 0);
 	initialize_stream_for_fd(&ws, 1);
-
-	stream out_file_stream;
 
 	signal(SIGINT, intHandler);
 
