@@ -70,7 +70,8 @@ PRIORITY 1 CATALOG
 
 
 
-
+* free list for expr_val struct in the expression_valuator's context struct per context
+* constant folding to be done in sqltoast, by storing a pointer at every expression node, which is non NULL if the expression evaluates to a constant
 
 * projection_operator
 
