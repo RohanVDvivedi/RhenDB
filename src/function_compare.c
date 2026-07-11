@@ -29,7 +29,7 @@ int can_compare_datum_rhendb(const data_type_info* dti1, const data_type_info* d
 				return 0;
 		return 1;
 	}
-	else // else it is not identical inline tuple, and they can not be compared directly
+	else // else fail
 		return 0;
 
 	return 0;

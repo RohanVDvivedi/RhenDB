@@ -8,10 +8,10 @@
 
 int do_these_types_on_being_equal_hash_to_same_value(const data_type_info* dti1, const data_type_info* dti2)
 {
-	if(are_identical_type_info(dti1, dti2))
+	if(dti1 == dti2)
 		return 1;
 	else if(!is_container_type_info(dti1) && !is_container_type_info(dti2)) // non container types, primitive numbers: bit_field, uint, int, large_uint, large_int, float, they hash to same value only if they are same type and size
-		return are_identical_type_info(dti1, dti2);
+		return are_hashably_equivalent(dti1, dti2);
 	else if((is_text_type_info(dti1) || is_blob_type_info(dti1)) && (is_text_type_info(dti2) || is_blob_type_info(dti2))) // both are text or blob
 		return 1;
 	else if(is_numeric_type_info(dti1) && is_numeric_type_info(dti2)) // both are numeric
@@ -20,7 +20,16 @@ int do_these_types_on_being_equal_hash_to_same_value(const data_type_info* dti1,
 		return 0;
 	else if((dti1->type == STRING || dti1->type == BINARY || dti1->type == ARRAY) && (dti2->type == STRING || dti2->type == BINARY || dti2->type == ARRAY)) // STRING, BINARY and ARRAY are internally comparable, if their containee types are comparable
 		return do_these_types_on_being_equal_hash_to_same_value(dti1->containee, dti2->containee); // recursive call, so 2 inline arrays of extended-text types are comparable
-	else // else it is not identical inline tuple, and they can not be compared directly
+	else if(dti1->type == TUPLE && dti2->type == TUPLE)
+	{
+		if(dti1->element_count != dti2->element_count)
+			return 0;
+		for(uint32_t i = 0; i < dti1->element_count; i++)
+			if(!do_these_types_on_being_equal_hash_to_same_value(get_data_type_info_for_containee_of_container_without_data(dti1, i), get_data_type_info_for_containee_of_container_without_data(dti2, i)))
+				return 0;
+		return 1;
+	}
+	else // else fail
 		return 0;
 
 	return 0;
