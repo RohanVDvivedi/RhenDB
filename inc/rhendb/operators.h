@@ -71,4 +71,9 @@ operator_resource_counter setup_sort_merge_semi_join_operator(operator* o, opera
 
 operator_resource_counter setup_hash_semi_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, uint32_t key_element_count, semi_join_type stype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size);
 
+#include<sqltoast/sql_expression.h>
+
+// selection operator
+operator_resource_counter setup_selection_operator(operator* o, operator* input_operator, sql_expression* expr);
+
 #endif
