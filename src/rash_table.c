@@ -243,7 +243,7 @@ int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_de
 
 	for(uint32_t i = 0; i < key_element_count; i++)
 	{
-		if(!are_identical_type_info(rth_p->key_tuple_def.type_info->containees[i].al.type_info, get_type_info_for_element_from_tuple_def(record_def, key_element_ids[i])))
+		if(!do_these_types_on_being_equal_hash_to_same_value(rth_p->key_tuple_def.type_info->containees[i].al.type_info, get_type_info_for_element_from_tuple_def(record_def, key_element_ids[i])))
 			return 0;
 	}
 
