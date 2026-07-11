@@ -111,6 +111,10 @@ enum rhendb_expr_eval_error
 // intitialize this per instance for evaluation context of one stream of tuples of 1 type
 sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, rhendb* rdb);
 
+// must be called, only after you infer the output_type of the corresponding expressions that you want to process with this context
+// returns true only if any of the var_cache points to an extended type
+int has_reference_to_extended_type_from_expression(const rhendb_expr_eval_context* context_p);
+
 // frees shallow copied input_tuple_defs and input_tuples, and the pointer itself
 void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_context* context_p);
 

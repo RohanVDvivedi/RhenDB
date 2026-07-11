@@ -107,7 +107,7 @@ operator_resource_counter setup_selection_operator(operator* o, operator* input_
 		exit(-1);
 	}
 
-	int has_reference_to_extended_type = 1;
+	int has_reference_to_extended_type = has_reference_to_extended_type_from_expression(ec.context_p);
 
 	operator_resource_counter result = {.buffer_counter = has_reference_to_extended_type, .job_counter = 1};
 	if(o == NULL)
