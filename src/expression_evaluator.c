@@ -1413,6 +1413,18 @@ static int same_tuple_kind(const data_type_info* d1, const data_type_info* d2)
 	return are_identical_type_info(d1, d2);
 }
 
+/* two ARRAY types unify if their CONTAINEE types are identical -- the arrays themselves need NOT be
+ * identical: they may differ in element_count, in being fixed or variable element counted, in max_size
+ * or in their declared type_name. it is the element type that has to line up. */
+static int same_array_containee(const data_type_info* d1, const data_type_info* d2)
+{
+	if(d1 == NULL || d2 == NULL) return d1 == d2;
+	if(d1 == d2) return 1;
+	if(d1->containee == NULL || d2->containee == NULL) return d1->containee == d2->containee;
+	if(d1->containee == d2->containee) return 1;
+	return are_identical_type_info(d1->containee, d2->containee);
+}
+
 static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_type a = effective_type((expr_type_info*)typ1), b = effective_type((expr_type_info*)typ2);
@@ -1473,7 +1485,8 @@ static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_cont
 	}
 	if(t1->type == RHENDB_ARRAY && t2->type == RHENDB_ARRAY)
 	{
-		if(t1->dti_p == t2->dti_p || same_tuple_kind(t1->dti_p, t2->dti_p))
+		/* identical CONTAINEES, not identical arrays */
+		if(t1->dti_p == t2->dti_p || same_array_containee(t1->dti_p, t2->dti_p))
 		{
 			expr_type_info* r = new_type(RHENDB_ARRAY);
 			r->dti_p = t1->dti_p;   /* borrowed */
