@@ -109,7 +109,7 @@ operator_resource_counter setup_selection_operator(operator* o, operator* input_
 
 	int has_reference_to_extended_type = has_reference_to_extended_type_from_expression(ec.context_p);
 
-	operator_resource_counter result = {.buffer_counter = has_reference_to_extended_type, .job_counter = 1};
+	operator_resource_counter result = {.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
 	if(o == NULL)
 	{
 		delete_context_p_for_sql_expr_eval_context_for_rhendb(ec.context_p);
