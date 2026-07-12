@@ -93,6 +93,14 @@ int main(int argc, char** argv)
 	positional_accessor O_KEY_POS[2] = {STATIC_POSITION(0,0), STATIC_POSITION(1,0)};
 	compare_direction O_CMP_DIR[2] = {ASC, ASC};
 
+	const char* field_names_input_operator2[] = {
+		"num", "order", "num_in_words", "digits", "value_in_string"
+	};
+
+	positional_accessor* projections_input_operator2[] = {
+		&(STATIC_POSITION(0)), &(STATIC_POSITION(1)), &(STATIC_POSITION(2)), &(STATIC_POSITION(3)), &(STATIC_POSITION(4))
+	};
+
 	printf("Building pipeline :\n");
 	{
 		operator* input_operator = get_new_registered_operator_for_query_plan(qp);
@@ -104,7 +112,7 @@ int main(int argc, char** argv)
 			// input_operator2 is just a rename to record2
 			operator* input_operator2 = get_new_registered_operator_for_query_plan(qp);
 			setup_identity_operator(input_operator2, input_operator);
-			append_tuple_transformer(&(input_operator2->output_tuple_transformers), get_new_simple_projection_transformer("record2", get_tuple_def_for_tuples_to_be_consumed_from(input_operator2), 5, (positional_accessor* []){&(STATIC_POSITION(0)), &(STATIC_POSITION(1)), &(STATIC_POSITION(2)), &(STATIC_POSITION(3)), &(STATIC_POSITION(4))}, (const char* []){"num", "order", "num_in_words", "digits", "value_in_string"}));
+			append_tuple_transformer(&(input_operator2->output_tuple_transformers), get_new_simple_projection_transformer("record2", get_tuple_def_for_tuples_to_be_consumed_from(input_operator2), 5, projections_input_operator2, field_names_input_operator2));
 			printf("source operator2 only for bnlj %p\n", input_operator2);
 
 			bnlj = get_new_registered_operator_for_query_plan(qp);
