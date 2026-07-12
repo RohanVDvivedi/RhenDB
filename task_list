@@ -13,7 +13,7 @@ DESIGN CATALOG TABLES
   * default and primitive types are created at the database start up in the first mini transaction
 
  db_attributes (heap_table)
-  => mvcc_hdr, id, name, owner_id, owner_part_id, rel_pos_in_type, attribute_type_id, count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, default_value, derived_from_expression(for derived columns of table and index expressions, referencing rel_pos_info)
+  => mvcc_hdr, owner_id, owner_part_id, rel_pos_in_type, attribute_name, attribute_type_id, count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, default_value, derived_from_expression(for derived columns of table and index expressions, referencing rel_pos_info)
   * owner_id can be any one of type, table or index
 
  db_tables (heap_table)
