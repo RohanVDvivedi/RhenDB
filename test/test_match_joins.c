@@ -48,11 +48,6 @@ void intHandler(int dummy)
 	shutdown_query_plan(qp, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
 }
 
-int join_matcher(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def)
-{
-	return (0 == compare_tuples_rhendb(left_tuple, left_tuple_def, KEY_POS, right_tuple, right_tuple_def, KEY_POS, NULL, RECORD_S_KEY_ELEMENT_COUNT, (rage_engine*)join_match_context_p));
-}
-
 int main(int argc, char** argv)
 {
 	dstring join_expr = get_dstring_pointing_to_literal_cstring("record.num_in_words = record2.num_in_words2");
