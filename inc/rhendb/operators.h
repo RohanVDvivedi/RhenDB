@@ -5,11 +5,11 @@
 
 #include<rhendb/operator_resource_counter.h>
 
-// generates fixed set of tuples from constant_dataset_p havuing tuple_def of record_def
-operator_resource_counter setup_constant_dataset_operator(operator* o, interim_tuple_store* constant_dataset_p, const tuple_def* record_def);
-
 // if o = NULL, in the following functions, then operator is not initialized, but a valid operator_resource_counter is still returned
 // generator() and consumer() are considered to be not part of the query_plan and you must take care of their resources externally
+
+// generates fixed set of tuples from constant_dataset_p havuing tuple_def of record_def
+operator_resource_counter setup_constant_dataset_operator(operator* o, interim_tuple_store* constant_dataset_p, const tuple_def* record_def);
 
 operator_resource_counter setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def);
 
@@ -55,8 +55,7 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 
 // DOES_IT_PRESERVE_RIGHT(ptype) must be 0
 // we can not do right size preserving joins
-// if join_matcher == NULL, this becomes a cross join operator
-// join_matcher must return -1 on error
+// if join_expr == NULL, this becomes a cross join operator
 operator_resource_counter setup_block_nested_loop_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, sql_expression* join_expr, join_preserve_type ptype, uint32_t min_block_size);
 
 // equi join for sort merge join

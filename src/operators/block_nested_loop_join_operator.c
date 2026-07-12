@@ -365,7 +365,10 @@ operator_resource_counter setup_block_nested_loop_join_operator(operator* o, ope
 
 	operator_resource_counter result = {.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
 	if(o == NULL)
+	{
+		delete_context_p_for_sql_expr_eval_context_for_rhendb(ec.context_p);
 		return result;
+	}
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
