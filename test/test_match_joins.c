@@ -4,12 +4,16 @@
 #include<rhendb/operators.h>
 #include<rhendb/tuple_transformers.h>
 
+#include<sqltoast/sqltoast.h>
+#include<sqltoast/sql_expression_eval.h>
+
 #include<rhendb/function_compare.h>
 
 #include<test_dataset_tuple_def.h>
 #include<test_dataset_2_tuple_def.h>
 
 #include<cutlery/stream_for_file_descriptor.h>
+#include<cutlery/stream_for_dstring.h>
 
 #include<string.h>
 #include<stdio.h>

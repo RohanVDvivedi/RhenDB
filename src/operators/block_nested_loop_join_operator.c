@@ -29,7 +29,7 @@ struct input_values
 
 	// it becomes a cross join if the join_expr is NULL
 	sql_expr_eval_context ec;
-	sql_expression* join_expr;
+	sql_expression* join_expr; // not owned
 
 	// ptype can not be PRESERVE_RIGHT or PRESERVE_BOTH
 	join_preserve_type ptype;
@@ -313,6 +313,8 @@ static void clean_up_resources(operator* o)
 		delete_interim_tuple_store(inputs->right_side_tuples);
 		inputs->right_side_tuples = NULL;
 	}
+
+	delete_context_p_for_sql_expr_eval_context_for_rhendb(inputs->ec.context_p);
 }
 
 static void free_resources(operator* o)

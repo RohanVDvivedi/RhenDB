@@ -4,10 +4,14 @@
 #include<rhendb/operators.h>
 #include<rhendb/tuple_transformers.h>
 
+#include<sqltoast/sqltoast.h>
+#include<sqltoast/sql_expression_eval.h>
+
 #include<test_dataset_tuple_def.h>
 #include<test_dataset_2_tuple_def.h>
 
 #include<cutlery/stream_for_file_descriptor.h>
+#include<cutlery/stream_for_dstring.h>
 
 #include<string.h>
 #include<stdio.h>
@@ -112,6 +116,20 @@ int join_matcher(const void* join_match_context_p, const void* left_tuple, const
 
 int main(int argc, char** argv)
 {
+	dstring join_expr = get_dstring_pointing_to_literal_cstring("case when (record.num >= record2.num2) then (record.num - record2.num2 <= 3) else (record2.num2 - record.num <= 3) end");
+	sql* join_expr_sql = NULL;
+	{
+		stream strm;
+		initialize_dstring_stream(&strm, &join_expr);
+		int error = 0;
+		join_expr_sql = parse_sql(&strm, &error);
+		if(error || join_expr_sql->type != EXPR)
+		{
+			printf("ERROR PARSING SQL %s\n", (((!error) && join_expr_sql->type == EXPR) ? "EXPR" : "not EXPR"));
+			exit(-1);
+		}
+	}
+
 	stream rs, ws;
 	initialize_stream_for_fd(&rs, 0);
 	initialize_stream_for_fd(&ws, 1);
@@ -151,7 +169,7 @@ int main(int argc, char** argv)
 		printf("source right operator %p\n", right_input_operator);
 
 		operator* join_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_block_nested_loop_join_operator(join_operator, left_input_operator, right_input_operator, NULL, join_matcher, PRESERVE_LEFT, MIN_BLOCK_SIZE);
+		setup_block_nested_loop_join_operator(join_operator, left_input_operator, right_input_operator, join_expr_sql->expr, PRESERVE_LEFT, MIN_BLOCK_SIZE);
 		printf("join operator %p\n", join_operator);
 
 		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
