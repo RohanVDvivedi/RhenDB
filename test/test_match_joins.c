@@ -50,7 +50,7 @@ void intHandler(int dummy)
 
 int main(int argc, char** argv)
 {
-	dstring join_expr = get_dstring_pointing_to_literal_cstring("record.num_in_words = record2.num_in_words2");
+	dstring join_expr = get_dstring_pointing_to_literal_cstring("record.num_in_words = record2.num_in_words");
 	sql* join_expr_sql = NULL;
 	{
 		stream strm;
@@ -101,8 +101,14 @@ int main(int argc, char** argv)
 
 		operator* bnlj = NULL;
 		{
+			// input_operator2 is just a rename to record2
+			operator* input_operator2 = get_new_registered_operator_for_query_plan(qp);
+			setup_identity_operator(input_operator2, input_operator);
+			append_tuple_transformer(&(i1->output_tuple_transformers), get_new_simple_projection_transformer("record2", get_tuple_def_for_tuples_to_be_consumed_from(i1), 5, (positional_accessor* []){&(STATIC_POSITION(0)), &(STATIC_POSITION(1)), &(STATIC_POSITION(2)), &(STATIC_POSITION(3)), &(STATIC_POSITION(4))}, (char* []){"num", "order", "num_in_words", "digits", "value_in_string"}));
+			printf("source operator2 only for bnlj %p\n", input_operator2);
+
 			bnlj = get_new_registered_operator_for_query_plan(qp);
-			setup_block_nested_loop_join_operator(bnlj, input_operator, input_operator, join_expr_sql->expr, PRESERVE_NONE, MIN_BLOCK_SIZE);
+			setup_block_nested_loop_join_operator(bnlj, input_operator, input_operator2, join_expr_sql->expr, PRESERVE_NONE, MIN_BLOCK_SIZE);
 			printf("block nested loop join operator %p\n", bnlj);
 		}
 
