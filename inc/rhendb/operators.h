@@ -22,7 +22,7 @@ operator_resource_counter setup_result_match_operator(operator* o, operator* inp
 
 operator_resource_counter setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count);
 
-#include<rhendb/rhendb_functions.h>
+#include<rhendb/aggregate_functions.h>
 
 // the data_type_infos pointed to by the aggregate_input_element_ids, must be the same as the output from the input_operator and the input of the corresponding aggregate_functions
 operator_resource_counter setup_simple_aggregation_operator(operator* o, operator* input_operator, uint32_t aggregate_functions_count, rhendb_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids);
