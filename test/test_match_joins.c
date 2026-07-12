@@ -55,6 +55,20 @@ int join_matcher(const void* join_match_context_p, const void* left_tuple, const
 
 int main(int argc, char** argv)
 {
+	dstring join_expr = get_dstring_pointing_to_literal_cstring("record.num_in_words = record2.num_in_words2");
+	sql* join_expr_sql = NULL;
+	{
+		stream strm;
+		initialize_dstring_stream(&strm, &join_expr);
+		int error = 0;
+		join_expr_sql = parse_sql(&strm, &error);
+		if(error || join_expr_sql->type != EXPR)
+		{
+			printf("ERROR PARSING SQL %s\n", (((!error) && join_expr_sql->type == EXPR) ? "EXPR" : "not EXPR"));
+			exit(-1);
+		}
+	}
+
 	stream rs, ws;
 	initialize_stream_for_fd(&rs, 0);
 	initialize_stream_for_fd(&ws, 1);
@@ -157,6 +171,8 @@ int main(int argc, char** argv)
 	printf_dstring(&kill_reasons);
 	deinit_dstring(&kill_reasons);
 	printf("\n\nKILL REASONS END\n\n");
+
+	delete_sql(join_expr_sql);
 
 	deinitialize_transaction(&tx);
 

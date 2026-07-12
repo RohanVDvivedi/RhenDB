@@ -198,6 +198,8 @@ int main(int argc, char** argv)
 	deinit_dstring(&kill_reasons);
 	printf("\n\nKILL REASONS END\n\n");
 
+	delete_sql(join_expr_sql);
+
 	deinitialize_transaction(&tx);
 
 	deinitialize_tuple_defs();
