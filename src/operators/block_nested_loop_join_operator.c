@@ -349,13 +349,16 @@ operator_resource_counter setup_block_nested_loop_join_operator(operator* o, ope
 
 	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, left_input_operator->self_query_plan->curr_tx->db);
 
-	int error_code = 0;
-	void* res_type = infer_type_sql_expr(join_expr, &ec, &error_code);
-	delete_type(res_type, &ec);
-	if(error_code)
+	if(join_expr != NULL)
 	{
-		printf("type inference errored for block_nested_loop_join_operator : %d\n", error_code);
-		exit(-1);
+		int error_code = 0;
+		void* res_type = infer_type_sql_expr(join_expr, &ec, &error_code);
+		delete_type(res_type, &ec);
+		if(error_code)
+		{
+			printf("type inference errored for block_nested_loop_join_operator : %d\n", error_code);
+			exit(-1);
+		}
 	}
 
 	int has_reference_to_extended_type = has_reference_to_extended_type_from_expression(ec.context_p);
