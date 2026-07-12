@@ -2,6 +2,10 @@
 
 #include<rhendb/operator_resource_counter.h>
 
+#include<rhendb/transaction.h>
+
+#include<rhendb/expression_evaluator.h>
+
 #include<rhendb/interim_tuple_store.h>
 
 #include<rhendb/join_type.h>
@@ -21,9 +25,9 @@ struct input_values
 	const tuple_def* right_input_tuple_def;
 	interim_tuple_store* right_side_tuples; // contains all the tuples
 
-	// it becomes a cross join if the join_matcher is NULL
-	const void* join_matcher_context_p;
-	int (*join_matcher)(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def);
+	// it becomes a cross join if the join_expr is NULL
+	sql_expr_eval_context ec;
+	sql_expression* join_expr;
 
 	semi_join_type stype;
 	uint32_t min_block_size;
@@ -60,7 +64,7 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 				// region used for the outer loop
 				unmap_for_interim_tuple_region(&_temp_tuple_region);
 
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("block_nested_loop_join_killed_abruptly"));
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("block_nested_loop_semi_join_killed_abruptly"));
 				return 0;
 			}pairs_checked++;
 
@@ -73,23 +77,41 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 			// if this left side tuple not already matched, then only process it
 			if(get_bit(left_tuple_matched_bitmap, left_tuple_index) == 0)
 			{
-				int matched = 1;
-				if(inputs->join_matcher != NULL)
-					matched = inputs->join_matcher(inputs->join_matcher_context_p, left_tuple, inputs->left_input_tuple_def, right_tuple, inputs->right_input_tuple_def);
+				void* join_expr_result = NULL;
+				int error_code = 0;
+				if(inputs->join_expr != NULL)
+				{
+					// set the input tuples
+					((rhendb_expr_eval_context*)(inputs->ec.context_p))->input_tuples[0] = ((void*)left_tuple);
+					((rhendb_expr_eval_context*)(inputs->ec.context_p))->input_tuples[1] = ((void*)right_tuple);
 
-				if(matched == -1)
+					// evaluate the join expression
+					void* res = evaluate_sql_expr(inputs->join_expr, &(inputs->ec), &error_code);
+					if(error_code)
+						goto EXIT_ON_ERROR_FROM_JOIN_EXPR;
+
+					// get boolean out of the expression result
+					join_expr_result = get_bool(res, &(inputs->ec), &error_code);
+					delete_data(res, &(inputs->ec));
+					if(error_code)
+						goto EXIT_ON_ERROR_FROM_JOIN_EXPR;
+
+					EXIT_ON_ERROR_FROM_JOIN_EXPR:;
+				}
+
+				if(error_code)
 				{
 					free(left_tuple_matched_bitmap);
 
 					// region used for the outer loop
 					unmap_for_interim_tuple_region(&_temp_tuple_region);
 
-					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("block_nested_loop_join_matcher_errored"));
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("block_nested_loop_semi_join_matcher_errored"));
 					return 0;
 				}
 
 				// mark this left_tuple matched, so we could skip it next time
-				if(matched)
+				if(inputs->join_expr == NULL || join_expr_result == inputs->ec.true_bool)
 				{
 					set_bit(left_tuple_matched_bitmap, left_tuple_index);
 					left_tuples_matched_count++;
@@ -249,7 +271,7 @@ static void clean_up_resources(operator* o)
 	}
 }
 
-operator_resource_counter setup_block_nested_loop_semi_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, const void* join_matcher_context_p, int (*join_matcher)(const void* join_match_context_p, const void* left_tuple, const tuple_def* left_tuple_def, const void* right_tuple, const tuple_def* right_tuple_def), semi_join_type stype, uint32_t min_block_size)
+operator_resource_counter setup_block_nested_loop_semi_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, sql_expression* join_expr, semi_join_type stype, uint32_t min_block_size)
 {
 	if(min_block_size == 0)
 	{
@@ -257,7 +279,23 @@ operator_resource_counter setup_block_nested_loop_semi_join_operator(operator* o
 		exit(-1);
 	}
 
-	operator_resource_counter result = {.job_counter = 1};
+	const tuple_def* left_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(left_input_operator);
+	const tuple_def* right_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(right_input_operator);
+
+	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, left_input_operator->self_query_plan->curr_tx->db);
+
+	int error_code = 0;
+	void* res_type = infer_type_sql_expr(join_expr, &ec, &error_code);
+	delete_type(res_type, &ec);
+	if(error_code)
+	{
+		printf("type inference errored for block_nested_loop_join_operator : %d\n", error_code);
+		exit(-1);
+	}
+
+	int has_reference_to_extended_type = has_reference_to_extended_type_from_expression(ec.context_p);
+
+	operator_resource_counter result = {.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
 	if(o == NULL)
 		return result;
 
@@ -265,9 +303,6 @@ operator_resource_counter setup_block_nested_loop_semi_join_operator(operator* o
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->clean_up_resources = clean_up_resources;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
-
-	const tuple_def* left_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(left_input_operator);
-	const tuple_def* right_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(right_input_operator);
 
 	init_tuple_transformers(&(o->output_tuple_transformers), left_input_tuple_def);
 
@@ -281,8 +316,8 @@ operator_resource_counter setup_block_nested_loop_semi_join_operator(operator* o
 		.right_input_tuple_def = right_input_tuple_def,
 		.right_side_tuples = get_new_interim_tuple_store(min_block_size),
 
-		.join_matcher_context_p = join_matcher_context_p,
-		.join_matcher = join_matcher,
+		.ec = ec,
+		.join_expr = join_expr,
 
 		.stype = stype,
 		.min_block_size = min_block_size,
