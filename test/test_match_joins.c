@@ -102,7 +102,7 @@ int main(int argc, char** argv)
 		operator* bnlj = NULL;
 		{
 			bnlj = get_new_registered_operator_for_query_plan(qp);
-			setup_block_nested_loop_join_operator(bnlj, input_operator, input_operator, &(rdb.persistent_acid_rage_engine), join_matcher, PRESERVE_NONE, MIN_BLOCK_SIZE);
+			setup_block_nested_loop_join_operator(bnlj, input_operator, input_operator, join_expr_sql->expr, PRESERVE_NONE, MIN_BLOCK_SIZE);
 			printf("block nested loop join operator %p\n", bnlj);
 		}
 
