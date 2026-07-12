@@ -1,11 +1,11 @@
-#include<rhendb/rhendb_functions.h>
+#include<rhendb/aggregate_functions.h>
 
 #include<tuplestore/tuple_def.h>
 #include<tuplestore/tuple.h>
 
 #include<stdlib.h>
 
-static int process_input(const rhendb_function* af_p, void** state_p, const datum inputs[])
+static int process_input(const aggregate_function* af_p, void** state_p, const datum inputs[])
 {
 	if((*state_p) == NULL)
 		(*state_p) = calloc(sizeof(uint64_t), 1);
@@ -16,7 +16,7 @@ static int process_input(const rhendb_function* af_p, void** state_p, const datu
 	return 1;
 }
 
-static int produce_output(const rhendb_function* af_p, datum* output, void** state_p)
+static int produce_output(const aggregate_function* af_p, datum* output, void** state_p)
 {
 	(*output) = (datum){.uint_value = 0};
 
@@ -26,7 +26,7 @@ static int produce_output(const rhendb_function* af_p, datum* output, void** sta
 	return 1;
 }
 
-static void destroy_state(const rhendb_function* af_p, void** state_p)
+static void destroy_state(const aggregate_function* af_p, void** state_p)
 {
 	// NOP if the state_p is already NULL
 	if((*state_p) == NULL)
@@ -36,18 +36,16 @@ static void destroy_state(const rhendb_function* af_p, void** state_p)
 	(*state_p) = NULL;
 }
 
-static void destroy_rhendb_function(rhendb_function* af_p)
+static void destroy_aggregate_function(aggregate_function* af_p)
 {
 	free(af_p);
 }
 
-rhendb_function* get_count_aggregate_function(const data_type_info* input_type_info)
+aggregate_function* get_count_aggregate_function(const data_type_info* input_type_info)
 {
-	rhendb_function* af_p = malloc(size_of_rhendb_function(1));
+	aggregate_function* af_p = malloc(size_of_aggregate_function(1));
 
 	af_p->context_p = NULL;
-
-	af_p->is_aggregate_function = 1;
 
 	af_p->process_input = process_input;
 
@@ -55,7 +53,7 @@ rhendb_function* get_count_aggregate_function(const data_type_info* input_type_i
 
 	af_p->destroy_state = destroy_state;
 
-	af_p->destroy_rhendb_function = destroy_rhendb_function;
+	af_p->destroy_aggregate_function = destroy_aggregate_function;
 
 	af_p->output_type_info = UINT_NON_NULLABLE[8];
 

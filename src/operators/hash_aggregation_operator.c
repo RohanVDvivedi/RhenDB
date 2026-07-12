@@ -7,7 +7,7 @@
 #include<rhendb/rash_table.h>
 #include<rhendb/interim_tuple_store.h>
 
-#include<rhendb/rhendb_functions.h>
+#include<rhendb/aggregate_functions.h>
 
 #include<rhendb/function_compare.h>
 
@@ -41,7 +41,7 @@ struct input_values
 	const positional_accessor* key_element_ids;
 
 	uint32_t aggregate_functions_count;
-	rhendb_function** aggregate_functions;
+	aggregate_function** aggregate_functions;
 
 	// maximum number of input parameters to any of the aggregation functions
 	uint32_t max_of_aggregation_function_input_params_count;
@@ -530,7 +530,7 @@ static void free_resources(operator* o)
 	input_values* inputs = o->inputs;
 
 	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
-		inputs->aggregate_functions[i]->destroy_rhendb_function(inputs->aggregate_functions[i]);
+		inputs->aggregate_functions[i]->destroy_aggregate_function(inputs->aggregate_functions[i]);
 
 	free(inputs->aggregate_functions);
 
@@ -543,14 +543,11 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-operator_resource_counter setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, rhendb_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
+operator_resource_counter setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
 {
-	// if key_element_count == 0 => simple aggregation
-	// if aggregate_functions_count == 0 => find distinct
-	// but if both are 0, it is a bug
-	if(key_element_count == 0 && aggregate_functions_count == 0)
+	if(key_element_count == 0)
 	{
-		printf("key_element_count && aggregate_functions_count are both zeroes in hash_aggregation_operator\n");
+		printf("key_element_count must not be 0 for hash_aggregation_operator\n");
 		exit(-1);
 	}
 
@@ -578,19 +575,10 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 		exit(-1);
 	}
 
-	for(uint32_t i = 0; i < aggregate_functions_count; i++)
-	{
-		if(!(aggregate_functions[i]->is_aggregate_function))
-		{
-			printf("aggregate_function passed at %"PRIu32" does not have it's (is_aggregate_function = 1) for hash_aggregation_operator\n", i);
-			exit(-1);
-		}
-	}
-
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
 	// there are max_concurrent_jobs_count additional jobs, each one first hashing the key, then comparing it and finally aggregating into one entry
-	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * max(2 * has_extended_type_info3(input_tuple_def, key_element_count, key_element_ids), get_max_buffers_count_for_all_rhendb_functions(aggregate_functions_count, (rhendb_function const * const *) aggregate_functions)), .job_counter = max_concurrent_jobs_count + 1};
+	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * max(2 * has_extended_type_info3(input_tuple_def, key_element_count, key_element_ids), get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions)), .job_counter = max_concurrent_jobs_count + 1};
 	if(o == NULL)
 		return result;
 
@@ -650,7 +638,7 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 		.key_element_count = key_element_count,
 		.key_element_ids = key_element_ids,
 		.aggregate_functions_count = aggregate_functions_count,
-		.aggregate_functions = malloc(sizeof(rhendb_function*) * aggregate_functions_count),
+		.aggregate_functions = malloc(sizeof(aggregate_function*) * aggregate_functions_count),
 		.max_of_aggregation_function_input_params_count = input_datums_count,
 		.aggregate_input_element_ids = malloc(sizeof(positional_accessor*) * aggregate_functions_count),
 		.output_tuple_def = output_tuple_def,
@@ -668,7 +656,7 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 		.pending_build_buffer = NULL,
 	};
 
-	memory_move(inputs->aggregate_functions, aggregate_functions, sizeof(rhendb_function*) * aggregate_functions_count);
+	memory_move(inputs->aggregate_functions, aggregate_functions, sizeof(aggregate_function*) * aggregate_functions_count);
 
 	memory_move(inputs->aggregate_input_element_ids, aggregate_input_element_ids, sizeof(positional_accessor*) * aggregate_functions_count);
 

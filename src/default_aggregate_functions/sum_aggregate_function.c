@@ -1,4 +1,4 @@
-#include<rhendb/rhendb_functions.h>
+#include<rhendb/aggregate_functions.h>
 
 #include<tuplestore/tuple_def.h>
 #include<tuplestore/tuple.h>
@@ -160,7 +160,7 @@ update_sum_state get_dedicated_update_sum_state_function(const data_type_info* i
 	}
 }
 
-static int process_input(const rhendb_function* af_p, void** state_p, const datum inputs[])
+static int process_input(const aggregate_function* af_p, void** state_p, const datum inputs[])
 {
 	if(!is_datum_NULL(&(inputs[0])))
 	{
@@ -175,7 +175,7 @@ static int process_input(const rhendb_function* af_p, void** state_p, const datu
 	return 1;
 }
 
-static int produce_output(const rhendb_function* af_p, datum* output, void** state_p)
+static int produce_output(const aggregate_function* af_p, datum* output, void** state_p)
 {
 	// just return NULL_DATUM, no tuple/row was seen
 	if((*state_p) == NULL)
@@ -188,7 +188,7 @@ static int produce_output(const rhendb_function* af_p, datum* output, void** sta
 	return 1;
 }
 
-static void destroy_state(const rhendb_function* af_p, void** state_p)
+static void destroy_state(const aggregate_function* af_p, void** state_p)
 {
 	// NOP if the state_p is already NULL
 	if((*state_p) == NULL)
@@ -198,14 +198,14 @@ static void destroy_state(const rhendb_function* af_p, void** state_p)
 	(*state_p) = NULL;
 }
 
-static void destroy_rhendb_function(rhendb_function* af_p)
+static void destroy_aggregate_function(aggregate_function* af_p)
 {
 	free(af_p);
 }
 
-rhendb_function* get_sum_aggregate_function(const data_type_info* input_type_info)
+aggregate_function* get_sum_aggregate_function(const data_type_info* input_type_info)
 {
-	rhendb_function* af_p = malloc(size_of_rhendb_function(1));
+	aggregate_function* af_p = malloc(size_of_aggregate_function(1));
 
 	af_p->context_p = get_dedicated_update_sum_state_function(input_type_info);
 	if(af_p->context_p == NULL)
@@ -214,15 +214,13 @@ rhendb_function* get_sum_aggregate_function(const data_type_info* input_type_inf
 		exit(-1);
 	}
 
-	af_p->is_aggregate_function = 1;
-
 	af_p->process_input = process_input;
 
 	af_p->produce_output = produce_output;
 
 	af_p->destroy_state = destroy_state;
 
-	af_p->destroy_rhendb_function = destroy_rhendb_function;
+	af_p->destroy_aggregate_function = destroy_aggregate_function;
 
 	af_p->output_type_info = get_sum_output_type_info(input_type_info);
 	if(af_p->output_type_info == NULL)

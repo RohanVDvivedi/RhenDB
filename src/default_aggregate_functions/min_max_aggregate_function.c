@@ -1,4 +1,4 @@
-#include<rhendb/rhendb_functions.h>
+#include<rhendb/aggregate_functions.h>
 
 #include<rhendb/function_compare.h>
 
@@ -104,7 +104,7 @@ struct min_max_context
 	int is_min;
 };
 
-static int process_input(const rhendb_function* af_p, void** state_p, const datum inputs[])
+static int process_input(const aggregate_function* af_p, void** state_p, const datum inputs[])
 {
 	if((*state_p) == NULL)
 	{
@@ -136,7 +136,7 @@ static int process_input(const rhendb_function* af_p, void** state_p, const datu
 	return 1;
 }
 
-static int produce_output(const rhendb_function* af_p, datum* output, void** state_p)
+static int produce_output(const aggregate_function* af_p, datum* output, void** state_p)
 {
 	(*output) = (*NULL_DATUM);
 
@@ -146,7 +146,7 @@ static int produce_output(const rhendb_function* af_p, datum* output, void** sta
 	return 1;
 }
 
-static void destroy_state(const rhendb_function* af_p, void** state_p)
+static void destroy_state(const aggregate_function* af_p, void** state_p)
 {
 	// NOP if the state_p is already NULL
 	if((*state_p) == NULL)
@@ -158,7 +158,7 @@ static void destroy_state(const rhendb_function* af_p, void** state_p)
 	(*state_p) = NULL;
 }
 
-static void destroy_rhendb_function(rhendb_function* af_p)
+static void destroy_aggregate_function(aggregate_function* af_p)
 {
 	// if a new output_tuple_info was allocated to make it nullable then free it
 	if(af_p->output_type_info != af_p->input_type_infos[0])
@@ -168,16 +168,14 @@ static void destroy_rhendb_function(rhendb_function* af_p)
 	free(af_p);
 }
 
-rhendb_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_info* input_type_info, int is_min)
+aggregate_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_info* input_type_info, int is_min)
 {
-	rhendb_function* af_p = malloc(size_of_rhendb_function(1));
+	aggregate_function* af_p = malloc(size_of_aggregate_function(1));
 
 	// context stores rdb here, for this aggregate function
 	af_p->context_p = malloc(sizeof(min_max_context));
 	((min_max_context*)(af_p->context_p))->persistent_acid_rage_engine = &(rdb->persistent_acid_rage_engine);
 	((min_max_context*)(af_p->context_p))->is_min = is_min;
-
-	af_p->is_aggregate_function = 1;
 
 	af_p->process_input = process_input;
 
@@ -185,7 +183,7 @@ rhendb_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_inf
 
 	af_p->destroy_state = destroy_state;
 
-	af_p->destroy_rhendb_function = destroy_rhendb_function;
+	af_p->destroy_aggregate_function = destroy_aggregate_function;
 
 	// if no data is present, the aggregate function returns NULL_DATUM, so here try to make the input_type_info's shallow copy to handle null values
 	if(is_nullable_type_info(input_type_info))

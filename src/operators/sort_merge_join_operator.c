@@ -400,6 +400,12 @@ static void free_resources(operator* o)
 
 operator_resource_counter setup_sort_merge_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, join_preserve_type ptype, uint32_t min_block_size)
 {
+	if(key_element_count == 0)
+	{
+		printf("key_element_count must not be 0 for sort_merge_join_operator\n");
+		exit(-1);
+	}
+
 	if(min_block_size == 0)
 	{
 		printf("min_block_size can not be 0 for sort_merge_join_operator\n");
