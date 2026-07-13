@@ -86,15 +86,22 @@ static void* create_sum_state(const data_type_info* input_type_info)
 		{
 			if(is_numeric_type_info(input_type_info))
 			{
+				// init context to maxcontext
 				numeric_sum_state* sum_state = malloc(sizeof(numeric_sum_state));
 				mpd_maxcontext(&(sum_state->ctx));
 				sum_state->ctx.traps = 0;
 
-				mpd_init(&(sum_state->sum));
-
-				uint32_t status = 0;
-				mpd_qresize(&(sum_state->sum), 1, &status);
-				mpd_set_i32(&(sum_state->sum), 0, &(sum_state->ctx));
+				// initialize sum to 0
+				{
+					sum_state->sum.flags = MPD_STATIC;
+					sum_state->sum.exp = 0;
+					sum_state->sum.digits = 0;
+					sum_state->sum.len = MPD_MINALLOC;
+					sum_state->sum.alloc = MPD_MINALLOC;
+					sum_state->sum.data = mpd_alloc(MPD_MINALLOC, sizeof(mpd_uint_t));
+					if(sum_state->sum.data == NULL)
+						exit(-1);
+				}
 
 				sum_state->output_buffer = NULL;
 
