@@ -148,8 +148,8 @@ void construct_record(void* buffer, uint64_t num, int order, char* value)
 		set_element_in_tuple(&record_def, STATIC_POSITION(5,2), buffer, EMPTY_DATUM, UINT32_MAX);
 		expand_element_count_for_element_in_tuple(&record_def, STATIC_POSITION(5,2), buffer, 0, 3, UINT32_MAX);
 		set_element_in_tuple(&record_def, STATIC_POSITION(5,2,0), buffer, &(datum){.uint_value = num % 1000000000000ULL}, UINT32_MAX);
-		set_element_in_tuple(&record_def, STATIC_POSITION(5,2,0), buffer, &(datum){.uint_value = (((uint64_t)num) * num) % 1000000000000ULL}, UINT32_MAX);
-		set_element_in_tuple(&record_def, STATIC_POSITION(5,2,0), buffer, &(datum){.uint_value = (((uint64_t)num) * num * num) % 1000000000000ULL}, UINT32_MAX);
+		set_element_in_tuple(&record_def, STATIC_POSITION(5,2,1), buffer, &(datum){.uint_value = (((uint64_t)num) * num) % 1000000000000ULL}, UINT32_MAX);
+		set_element_in_tuple(&record_def, STATIC_POSITION(5,2,2), buffer, &(datum){.uint_value = (((uint64_t)num) * num * num) % 1000000000000ULL}, UINT32_MAX);
 	}
 
 	set_element_in_tuple(&record_def, STATIC_POSITION(6), buffer, &(datum){.float_value = (((float)num)/100) * ((num & 1) ? -1 : 1)}, UINT32_MAX);
