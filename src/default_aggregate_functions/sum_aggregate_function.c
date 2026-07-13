@@ -36,7 +36,11 @@ static data_type_info* get_sum_output_type_info(const data_type_info* input_type
 		case TUPLE :
 		{
 			if(is_numeric_type_info(input_type_info))
-				return get_numeric_inline_type_info(MAX_NUMERIC_BYTES + 12);
+			{
+				data_type_info* output_type_info = get_numeric_inline_type_info(MAX_NUMERIC_BYTES + 12);
+				finalize_type_info(output_type_info);
+				return output_type_info;
+			}
 			return NULL;
 		}
 
