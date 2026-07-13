@@ -117,13 +117,14 @@ void construct_record(void* buffer, uint64_t num, int order, char* value)
 	set_element_in_tuple(&record_def, STATIC_POSITION(2), buffer, &(datum){.string_value = temp, .string_size = strlen(temp)}, UINT32_MAX);
 
 	{
+		uint32_t temp = num;
 		set_element_in_tuple(&record_def, STATIC_POSITION(3), buffer, EMPTY_DATUM, UINT32_MAX);
 		uint32_t size = 0;
 		uint32_t digits[64];
-		while(num > 0)
+		while(temp > 0)
 		{
-			digits[size++] = num % 10;
-			num = num / 10;
+			digits[size++] = temp % 10;
+			temp = temp / 10;
 		}
 		expand_element_count_for_element_in_tuple(&record_def, STATIC_POSITION(3), buffer, 0, size, UINT32_MAX);
 		for(uint32_t i = 0; i < size; i++)
