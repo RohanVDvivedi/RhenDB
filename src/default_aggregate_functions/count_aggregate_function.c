@@ -55,7 +55,7 @@ aggregate_function* get_count_aggregate_function(const data_type_info* input_typ
 
 	af_p->destroy_aggregate_function = destroy_aggregate_function;
 
-	af_p->output_type_info = UINT_NON_NULLABLE[12];
+	af_p->output_type_info = UINT_NON_NULLABLE[8];
 
 	af_p->buffers_resource_count = 0;
 
