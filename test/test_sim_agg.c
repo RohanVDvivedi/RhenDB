@@ -76,7 +76,7 @@ int main(int argc, char** argv)
 		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[5].al.type_info, 1),
 		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[5].al.type_info, 0),
 
-		/*get_sum_aggregate_function(&rdb, record_def.type_info->containees[5].al.type_info),*/
+		get_sum_aggregate_function(&rdb, record_def.type_info->containees[5].al.type_info),
 
 		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[6].al.type_info, 1),
 		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[6].al.type_info, 0),
@@ -120,7 +120,7 @@ int main(int argc, char** argv)
 		aggregate_input_positions_5,
 		aggregate_input_positions_5,
 
-		/*aggregate_input_positions_5,*/
+		aggregate_input_positions_5,
 
 		aggregate_input_positions_6,
 		aggregate_input_positions_6,
