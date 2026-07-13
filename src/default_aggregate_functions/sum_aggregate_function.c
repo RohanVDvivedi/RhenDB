@@ -239,10 +239,53 @@ struct sum_context
 
 static int NUMERIC_update_sum_state(void** state_p, const datum input, const aggregate_function* af_p)
 {
-	rage_engine* persistent_acid_rage_engine = ((const sum_context*)(af_p->context_p))->persistent_acid_rage_engine;
+	rage_engine* eng = ((const sum_context*)(af_p->context_p))->persistent_acid_rage_engine;
 	numeric_sum_state* sum_state = (*state_p);
 
 	// convert innput to input_mpd_t, i.e. materialize it
+	mpd_t input_mpd_t;
+	{
+		const void* transaction_id = NULL;
+		int abort_error = 0;
+		numeric_reader_interface nri = init_intuple_numeric_reader_interface(input, af_p->input_type_infos[0], &(eng->bstd), eng->pam_p, transaction_id, &abort_error);
+		if(abort_error)
+		{
+			printf("experienced abort_error while sum aggregating extended numeric type\n");
+			exit(-1);
+		}
+
+		numeric_sign_bits sb; int16_t exp;
+		nri.extract_sign_bits_and_exponent(&nri, &sb, &exp);
+
+		materialized_numeric mn;
+		if(!initialize_materialized_numeric(&mn, 8))
+			exit(-1);
+		set_sign_bits_and_exponent_for_materialized_numeric(&mn, sb, exp);
+
+		if(sb == POSITIVE_NUMERIC || sb == NEGATIVE_NUMERIC)   /* only finite non-zero values carry digits */
+		{
+			uint64_t buf[128];
+			while(1)
+			{
+				int err = 0;
+				uint32_t got = nri.read_digits_as_stream(&nri, buf, 128, &err);
+				if(err)
+				{
+					printf("experienced abort_error while sum aggregating extended numeric type\n");
+					exit(-1);
+				}
+				if(got == 0)
+					break;
+				/* digits stream MSD-first; push_lsd appends, keeping the MSD at the front */
+				for(uint32_t i = 0; i < got; i++)
+					push_lsd_in_materialized_numeric(&mn, buf[i]);
+			}
+		}
+		nri.close_digits_stream(&nri);
+
+		input_mpd_t = decimal_from_materialized_numeric(&mn);
+		deinitialize_materialized_numeric(&mn);
+	}
 
 	uint32_t status = 0;
 	mpd_qadd(&(sum_state->sum), &(sum_state->sum), &input_mpd_t, &(sum_state->ctx), &status);
