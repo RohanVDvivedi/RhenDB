@@ -6,7 +6,14 @@
 #include<serint/large_uints.h>
 #include<serint/large_ints.h>
 
+#include<mpdecimal.h>
+#include<tuplelargetypes/numeric_extended.h>
+
 #include<stdlib.h>
+
+#define MAX_NUMERIC_DIGITS_IN_BASE_10_pow_12     6500 // number of digits in base 12 number
+#define MAX_NUMERIC_DIGITS_IN_BASE_10           (MAX_NUMERIC_DIGITS_IN_BASE_10_pow_12 * 12)
+#define MAX_NUMERIC_BYTES                       (MAX_NUMERIC_DIGITS_IN_BASE_10_pow_12 * 5)
 
 static data_type_info* get_sum_output_type_info(const data_type_info* input_type_info)
 {
@@ -26,10 +33,26 @@ static data_type_info* get_sum_output_type_info(const data_type_info* input_type
 		case FLOAT :
 			return FLOAT_double_NULLABLE;
 
+		case TUPLE :
+		{
+			if(is_numeric_type_info(input_type_info))
+				return get_numeric_inline_type_info(MAX_NUMERIC_BYTES + 12);
+			return NULL;
+		}
+
 		default :
 			return NULL;
 	}
 }
+
+typedef struct numeric_sum_state numeric_sum_state;
+struct numeric_sum_state
+{
+	mpd_context_t ctx;
+
+	mpd_t sum;
+	void* output_buffer;
+};
 
 static void* create_sum_state(const data_type_info* input_type_info)
 {
@@ -59,12 +82,71 @@ static void* create_sum_state(const data_type_info* input_type_info)
 			return sum_state;
 		}
 
+		case TUPLE :
+		{
+			if(is_numeric_type_info(input_type_info))
+			{
+				numeric_sum_state* sum_state = malloc(sizeof(numeric_sum_state));
+				mpd_maxcontext(&(sum_state->ctx));
+				sum_state->ctx.traps = 0;
+
+				mpd_init(&(sum_state->sum));
+
+				uint32_t status = 0;
+				mpd_qresize(&(sum_state->sum), 1, &status);
+				mpd_set_i32(&(sum_state->sum), 0, &(sum_state->ctx));
+
+				sum_state->output_buffer = NULL;
+
+				return sum_state;
+			}
+			return NULL;
+		}
+
 		default :
 			return NULL;
 	}
 }
 
-static datum get_sum_from_sum_state(const void* state, const data_type_info* input_type_info)
+static void destroy_sum_state(void** state_p, const data_type_info* input_type_info)
+{
+	switch(input_type_info->type)
+	{
+		case BIT_FIELD :
+		case UINT :
+		case LARGE_UINT :
+		case INT :
+		case LARGE_INT:
+		case FLOAT :
+		{
+			free(*state_p);
+			(*state_p) = NULL;
+			return ;
+		}
+
+		case TUPLE :
+		{
+			if(is_numeric_type_info(input_type_info))
+			{
+				numeric_sum_state* sum_state = (*state_p);
+
+				mpd_del(&(sum_state->sum));
+
+				if(sum_state->output_buffer)
+					free(sum_state->output_buffer);
+
+				free(*state_p);
+				(*state_p) = NULL;
+				return ;
+			}
+		}
+
+		default :
+			return ;
+	}
+}
+
+static datum get_sum_from_sum_state(void* state, const data_type_info* input_type_info, const data_type_info* output_type_info)
 {
 	switch(input_type_info->type)
 	{
@@ -84,6 +166,23 @@ static datum get_sum_from_sum_state(const void* state, const data_type_info* inp
 		case FLOAT :
 		{
 			return (datum){.double_value = *((const double*)state)};
+		}
+
+		case TUPLE :
+		{
+			if(is_numeric_type_info(input_type_info))
+			{
+				numeric_sum_state* sum_state = state;
+
+				if(sum_state->output_buffer == NULL) // it must be NULL here
+				{
+					// convert sum_state->sum to numeric tuple in buffer, with enough bytes allocated as an output_type_info
+				}
+
+				return (datum){.tuple_value = sum_state->output_buffer};
+			}
+
+			return (*NULL_DATUM);
 		}
 
 		default :
@@ -130,6 +229,23 @@ static int DOUBLE_update_sum_state(void** state_p, const datum input)
 	return 1;
 }
 
+static int NUMERIC_update_sum_state(void** state_p, const datum input)
+{
+	numeric_sum_state* sum_state = (*state_p);
+
+	// convert innput to input_mpd_t, i.e. materialize it
+
+	uint32_t status = 0;
+	mpd_qadd(&(sum_state->sum), &(sum_state->sum), &input_mpd_t, &(sum_state->ctx), &status);
+
+	mpd_del(&input_mpd_t);
+
+	if(status & MPD_Malloc_error)
+		return 0;
+
+	return 1;
+}
+
 update_sum_state get_dedicated_update_sum_state_function(const data_type_info* input_type_info)
 {
 	switch(input_type_info->type)
@@ -153,6 +269,12 @@ update_sum_state get_dedicated_update_sum_state_function(const data_type_info* i
 				return DOUBLE_update_sum_state;
 			else
 				return NULL;
+		}
+
+		case TUPLE :
+		{
+			if(is_numeric_type_info(input_type_info))
+				return NUMERIC_update_sum_state;
 		}
 
 		default :
@@ -184,7 +306,7 @@ static int produce_output(const aggregate_function* af_p, datum* output, void** 
 		return 1;
 	}
 
-	(*output) = get_sum_from_sum_state((*state_p), af_p->input_type_infos[0]);
+	(*output) = get_sum_from_sum_state((*state_p), af_p->input_type_infos[0], af_p->output_type_info);
 	return 1;
 }
 
@@ -194,12 +316,14 @@ static void destroy_state(const aggregate_function* af_p, void** state_p)
 	if((*state_p) == NULL)
 		return;
 
-	free(*state_p);
-	(*state_p) = NULL;
+	destroy_sum_state(state_p, af_p->input_type_infos[0]);
 }
 
 static void destroy_aggregate_function(aggregate_function* af_p)
 {
+	if(is_numeric_type_info(af_p->output_type_info))
+		destroy_type_info_recursively((void*)(af_p->output_type_info), NULL);
+
 	free(af_p);
 }
 
