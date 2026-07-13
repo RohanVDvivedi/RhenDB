@@ -112,7 +112,7 @@ int main(int argc, char** argv)
 			// input_operator2 is just a rename to record2
 			operator* input_operator2 = get_new_registered_operator_for_query_plan(qp);
 			setup_identity_operator(input_operator2, input_operator);
-			append_tuple_transformer(&(input_operator2->output_tuple_transformers), get_new_simple_projection_transformer("record2", get_tuple_def_for_tuples_to_be_consumed_from(input_operator2), 5, projections_input_operator2, field_names_input_operator2));
+			append_tuple_transformer(&(input_operator2->output_tuple_transformers), get_new_simple_projection_transformer("record2", get_tuple_def_for_tuples_to_be_consumed_from(input_operator2), 7, projections_input_operator2, field_names_input_operator2));
 			printf("source operator2 only for bnlj %p\n", input_operator2);
 
 			bnlj = get_new_registered_operator_for_query_plan(qp);
