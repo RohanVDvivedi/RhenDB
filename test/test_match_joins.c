@@ -94,11 +94,11 @@ int main(int argc, char** argv)
 	compare_direction O_CMP_DIR[2] = {ASC, ASC};
 
 	const char* field_names_input_operator2[] = {
-		"num", "order", "num_in_words", "digits", "value_in_string"
+		"num", "order", "num_in_words", "digits", "value_in_string", "some_numeric", "some_float"
 	};
 
 	positional_accessor* projections_input_operator2[] = {
-		&(STATIC_POSITION(0)), &(STATIC_POSITION(1)), &(STATIC_POSITION(2)), &(STATIC_POSITION(3)), &(STATIC_POSITION(4))
+		&(STATIC_POSITION(0)), &(STATIC_POSITION(1)), &(STATIC_POSITION(2)), &(STATIC_POSITION(3)), &(STATIC_POSITION(4)), &(STATIC_POSITION(5)), &(STATIC_POSITION(6))
 	};
 
 	printf("Building pipeline :\n");

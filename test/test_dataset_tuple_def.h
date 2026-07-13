@@ -28,6 +28,12 @@ void initialize_tuple_defs()
 	strcpy(record_type_info->containees[4].field_name, "value_in_string");
 	record_type_info->containees[4].al.type_info = &value_string_type_info;
 
+	strcpy(record_type_info->containees[5].field_name, "some_numeric");
+	record_type_info->containees[5].al.type_info = get_numeric_inline_type_info(64);
+
+	strcpy(record_type_info->containees[6].field_name, "some_float");
+	record_type_info->containees[6].al.type_info = FLOAT_float_NULLABLE;
+
 	initialize_tuple_def(&record_def, record_type_info);
 
 	print_tuple_def(&record_def);
@@ -36,6 +42,8 @@ void initialize_tuple_defs()
 
 void deinitialize_tuple_defs()
 {
+	free(record_type_info->containees[5].al.type_info->containees[2].al.type_info);
+	free(record_type_info->containees[5].al.type_info);
 	free(record_type_info);
 }
 
@@ -124,4 +132,22 @@ void construct_record(void* buffer, uint64_t num, int order, char* value)
 		set_element_in_tuple(&record_def, STATIC_POSITION(4), buffer, NULL_DATUM, UINT32_MAX);
 	else
 		set_element_in_tuple(&record_def, STATIC_POSITION(4), buffer, &(datum){.string_value = value, .string_size = strlen(value)}, UINT32_MAX);
+
+	set_element_in_tuple(&record_def, STATIC_POSITION(5), buffer, EMPTY_DATUM, UINT32_MAX);
+	if(num == 0)
+		set_sign_bits_and_exponent_for_numeric(ZERO_NUMERIC, 0, buffer, &record_def, STATIC_POSITION(5));
+	else if(num & 1)
+		set_sign_bits_and_exponent_for_numeric(NEGATIVE_NUMERIC, 2, buffer, &record_def, STATIC_POSITION(5));
+	else
+		set_sign_bits_and_exponent_for_numeric(POSITIVE_NUMERIC, 2, buffer, &record_def, STATIC_POSITION(5));
+	if(num != 0)
+	{
+		set_element_in_tuple(&record_def, STATIC_POSITION(5,2), buffer, EMPTY_DATUM, UINT32_MAX);
+		expand_element_count_for_element_in_tuple(&record_def, STATIC_POSITION(5,2), buffer, 0, 3, UINT32_MAX);
+		set_element_in_tuple(&record_def, STATIC_POSITION(5,2,0), buffer, &(datum){.uint_value = num % 1000000000000ULL}, UINT32_MAX);
+		set_element_in_tuple(&record_def, STATIC_POSITION(5,2,0), buffer, &(datum){.uint_value = (((uint64_t)num) * num) % 1000000000000ULL}, UINT32_MAX);
+		set_element_in_tuple(&record_def, STATIC_POSITION(5,2,0), buffer, &(datum){.uint_value = (((uint64_t)num) * num * num) % 1000000000000ULL}, UINT32_MAX);
+	}
+
+	set_element_in_tuple(&record_def, STATIC_POSITION(6), buffer, &(datum){.float_value = (((float)num)/100) * ((num & 1) ? -1 : 1)}, UINT32_MAX);
 }
