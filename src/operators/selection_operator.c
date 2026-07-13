@@ -100,12 +100,12 @@ operator_resource_counter setup_selection_operator(operator* o, operator* input_
 
 	int error_code = 0;
 	void* res_type = infer_type_sql_expr(expr, &ec, &error_code);
-	delete_type(res_type, &ec);
 	if(error_code)
 	{
 		printf("type inference errored for selection_operator : %d\n", error_code);
 		exit(-1);
 	}
+	delete_type(res_type, &ec);
 
 	int has_reference_to_extended_type = has_reference_to_extended_type_from_expression(ec.context_p);
 

@@ -290,12 +290,12 @@ operator_resource_counter setup_block_nested_loop_semi_join_operator(operator* o
 	{
 		int error_code = 0;
 		void* res_type = infer_type_sql_expr(join_expr, &ec, &error_code);
-		delete_type(res_type, &ec);
 		if(error_code)
 		{
 			printf("type inference errored for block_nested_loop_semi_join_operator : %d\n", error_code);
 			exit(-1);
 		}
+		delete_type(res_type, &ec);
 	}
 
 	int has_reference_to_extended_type = has_reference_to_extended_type_from_expression(ec.context_p);

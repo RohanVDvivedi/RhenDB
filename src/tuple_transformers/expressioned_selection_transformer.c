@@ -52,14 +52,13 @@ tuple_transformer* get_new_expressioned_selection_transformer(const tuple_def* i
 
 	int error_code = 0;
 	void* res_type = infer_type_sql_expr(sc_p->expr, &(sc_p->ec), &error_code);
-	delete_type(res_type, &(sc_p->ec));
-
 	if(error_code)
 	{
 		delete_context_p_for_sql_expr_eval_context_for_rhendb(sc_p->ec.context_p);
 		free(sc_p);
 		return NULL;
 	}
+	delete_type(res_type, &(sc_p->ec));
 
 	if(has_reference_to_extended_type_from_expression(sc_p->ec.context_p))
 	{
