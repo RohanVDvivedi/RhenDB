@@ -14,12 +14,12 @@ static data_type_info* get_sum_output_type_info(const data_type_info* input_type
 	{
 		case BIT_FIELD :
 		case UINT :
-			return LARGE_UINT_NULLABLE[16]; // 128 bits big
+			return LARGE_UINT_NULLABLE[20];
 		case LARGE_UINT:
 			return LARGE_UINT_NULLABLE[32];
 
 		case INT :
-			return LARGE_INT_NULLABLE[16]; // 128 bits big
+			return LARGE_INT_NULLABLE[20];
 		case LARGE_INT:
 			return LARGE_INT_NULLABLE[32];
 
