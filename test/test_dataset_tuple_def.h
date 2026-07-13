@@ -9,8 +9,8 @@ tuple_def record_def;
 
 void initialize_tuple_defs()
 {
-	record_type_info = malloc(sizeof_tuple_data_type_info(5));
-	initialize_tuple_data_type_info(record_type_info, "record", 0, 900, 5);
+	record_type_info = malloc(sizeof_tuple_data_type_info(7));
+	initialize_tuple_data_type_info(record_type_info, "record", 0, 900, 7);
 
 	strcpy(record_type_info->containees[0].field_name, "num");
 	record_type_info->containees[0].al.type_info = UINT_NON_NULLABLE[8];
