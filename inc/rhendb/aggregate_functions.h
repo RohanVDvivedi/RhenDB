@@ -68,7 +68,7 @@ aggregate_function* get_count_aggregate_function(const data_type_info* input_typ
 
 aggregate_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_info* input_type_info, int is_min);
 
-aggregate_function* get_sum_aggregate_function(const data_type_info* input_type_info);
+aggregate_function* get_sum_aggregate_function(rhendb* rdb, const data_type_info* input_type_info);
 
 static inline uint64_t get_max_buffers_count_for_all_aggregate_functions(uint32_t rfs_count, aggregate_function const * const * rfs_p)
 {

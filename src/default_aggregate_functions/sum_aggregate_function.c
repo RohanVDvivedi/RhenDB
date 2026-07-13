@@ -191,46 +191,55 @@ static datum get_sum_from_sum_state(void* state, const data_type_info* input_typ
 }
 
 // return of 0 implies overflow or underflow
-typedef int (*update_sum_state)(void** state_p, const datum input);
+typedef int (*update_sum_state)(void** state_p, const datum input, const aggregate_function* af_p);
 
-static int BIT_FIELD_and_UINT_update_sum_state(void** state_p, const datum input)
+static int BIT_FIELD_and_UINT_update_sum_state(void** state_p, const datum input, const aggregate_function* af_p)
 {
 	add_uint256(*state_p, **(const uint256**)state_p, get_uint256(input.uint_value));
 	return 1;
 }
 
-static int LARGE_UINT_update_sum_state(void** state_p, const datum input)
+static int LARGE_UINT_update_sum_state(void** state_p, const datum input, const aggregate_function* af_p)
 {
 	add_uint256(*state_p, **(const uint256**)state_p, input.large_uint_value);
 	return 1;
 }
 
-static int INT_update_sum_state(void** state_p, const datum input)
+static int INT_update_sum_state(void** state_p, const datum input, const aggregate_function* af_p)
 {
 	add_int256(*state_p, **(const int256**)state_p, get_int256(input.int_value));
 	return 1;
 }
 
-static int LARGE_INT_update_sum_state(void** state_p, const datum input)
+static int LARGE_INT_update_sum_state(void** state_p, const datum input, const aggregate_function* af_p)
 {
 	add_int256(*state_p, **(const int256**)state_p, input.large_int_value);
 	return 1;
 }
 
-static int FLOAT_update_sum_state(void** state_p, const datum input)
+static int FLOAT_update_sum_state(void** state_p, const datum input, const aggregate_function* af_p)
 {
 	(**((double**)state_p)) += input.float_value;
 	return 1;
 }
 
-static int DOUBLE_update_sum_state(void** state_p, const datum input)
+static int DOUBLE_update_sum_state(void** state_p, const datum input, const aggregate_function* af_p)
 {
 	(**((double**)state_p)) += input.double_value;
 	return 1;
 }
 
-static int NUMERIC_update_sum_state(void** state_p, const datum input)
+typedef struct sum_context sum_context;
+struct sum_context
 {
+	rage_engine* persistent_acid_rage_engine;
+
+	update_sum_state update_sum_state_callback;
+};
+
+static int NUMERIC_update_sum_state(void** state_p, const datum input, const aggregate_function* af_p)
+{
+	rage_engine* persistent_acid_rage_engine = ((const sum_context*)(af_p->context_p))->persistent_acid_rage_engine;
 	numeric_sum_state* sum_state = (*state_p);
 
 	// convert innput to input_mpd_t, i.e. materialize it
@@ -290,7 +299,7 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 		if((*state_p) == NULL)
 			(*state_p) = create_sum_state(af_p->input_type_infos[0]);
 
-		if(!((update_sum_state)(af_p->context_p))(state_p, inputs[0]))
+		if(!(((sum_context*)(af_p->context_p))->update_sum_state_callback)(state_p, inputs[0], af_p))
 			return 0;
 	}
 
@@ -324,19 +333,24 @@ static void destroy_aggregate_function(aggregate_function* af_p)
 	if(is_numeric_type_info(af_p->output_type_info))
 		destroy_type_info_recursively((void*)(af_p->output_type_info), NULL);
 
+	free((void*)af_p->context_p);
 	free(af_p);
 }
 
-aggregate_function* get_sum_aggregate_function(const data_type_info* input_type_info)
+aggregate_function* get_sum_aggregate_function(rhendb* rdb, const data_type_info* input_type_info)
 {
 	aggregate_function* af_p = malloc(size_of_aggregate_function(1));
 
-	af_p->context_p = get_dedicated_update_sum_state_function(input_type_info);
-	if(af_p->context_p == NULL)
+	if(get_dedicated_update_sum_state_function(input_type_info) == NULL)
 	{
 		printf("incompatible input_type_info for sum_aggregate_function\n");
 		exit(-1);
 	}
+
+	// context stores persistent_rage_engine here, for this aggregate function
+	af_p->context_p = malloc(sizeof(sum_context));
+	((sum_context*)(af_p->context_p))->persistent_acid_rage_engine = &(rdb->persistent_acid_rage_engine);
+	((sum_context*)(af_p->context_p))->update_sum_state_callback = get_dedicated_update_sum_state_function(input_type_info);
 
 	af_p->process_input = process_input;
 

@@ -172,7 +172,7 @@ aggregate_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_
 {
 	aggregate_function* af_p = malloc(size_of_aggregate_function(1));
 
-	// context stores rdb here, for this aggregate function
+	// context stores persistent_rage_engine here, for this aggregate function
 	af_p->context_p = malloc(sizeof(min_max_context));
 	((min_max_context*)(af_p->context_p))->persistent_acid_rage_engine = &(rdb->persistent_acid_rage_engine);
 	((min_max_context*)(af_p->context_p))->is_min = is_min;
