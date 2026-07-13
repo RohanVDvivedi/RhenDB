@@ -203,7 +203,7 @@ aggregate_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_
 		af_p->output_type_info = output_type_info;
 	}
 
-	af_p->buffers_resource_count = has_extended_type_info(input_type_info);
+	af_p->buffers_resource_count = has_extended_type_info(input_type_info) * 2; // we may need to compare any 2 extended types
 
 	af_p->input_type_infos_count = 1;
 	af_p->input_type_infos[0] = input_type_info;

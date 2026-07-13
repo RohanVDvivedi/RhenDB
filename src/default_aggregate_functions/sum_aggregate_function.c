@@ -229,7 +229,7 @@ aggregate_function* get_sum_aggregate_function(const data_type_info* input_type_
 		exit(-1);
 	}
 
-	af_p->buffers_resource_count = 0;
+	af_p->buffers_resource_count = has_extended_type_info(input_type_info); // only the case with extended numeric to be added
 
 	af_p->input_type_infos_count = 1;
 	af_p->input_type_infos[0] = input_type_info;
