@@ -118,7 +118,15 @@ static void rhendb_delete_data(void* data, const sql_expr_eval_context* ec_p)
 			free(val_p->buffer);
 	}
 
-	free(val_p);
+	/* recycle onto the context's free list instead of returning it to malloc (no lock : single thread) */
+	rhendb_expr_eval_context* ctx = (ec_p != NULL) ? ec_p->context_p : NULL;
+	if(ctx != NULL)
+	{
+		*((void**)val_p) = ctx->free_list_for_expr_value;   /* push : next ptr goes inside the dead block */
+		ctx->free_list_for_expr_value = val_p;
+	}
+	else
+		free(val_p);
 }
 
 static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code);
@@ -183,11 +191,40 @@ static expr_type num_result(expr_type a, expr_type b)
 	return signd ? RHENDB_INT : RHENDB_UINT;
 }
 
-static expr_value* new_val(expr_type t)
+/* pop a recycled expr_value off the context's free list, else calloc() a fresh one.
+ * the free list is a plain LIFO stack whose "next" pointer lives in the first bytes of the DEAD block,
+ * so being on the list costs an expr_value nothing. the block is zeroed before it is handed back, so it
+ * is byte-identical to what calloc() would have returned.
+ * NO LOCK : a context belongs to exactly one thread (see the header). */
+static expr_value* new_val(expr_type t, const sql_expr_eval_context* ec_p)
 {
-	expr_value* v = calloc(1, sizeof *v);
-	v->type_info.type = t;
+	rhendb_expr_eval_context* ctx = (ec_p != NULL) ? ec_p->context_p : NULL;
+	expr_value* v = NULL;
+
+	if(ctx != NULL && ctx->free_list_for_expr_value != NULL)
+	{
+		v = ctx->free_list_for_expr_value;
+		ctx->free_list_for_expr_value = *((void**)v);   /* pop : next ptr is stored inside the dead block */
+		memory_set(v, 0, sizeof *v);
+	}
+	else
+		v = calloc(1, sizeof *v);
+
+	if(v != NULL)
+		v->type_info.type = t;
 	return v;
+}
+
+/* release every expr_value still on the free list.
+ * this is the ONLY place the free list gives memory back -- it is uncapped and never shrinks otherwise. */
+static void drain_free_list_for_expr_value(rhendb_expr_eval_context* ctx)
+{
+	while(ctx->free_list_for_expr_value != NULL)
+	{
+		void* nxt = *((void**)(ctx->free_list_for_expr_value));
+		free(ctx->free_list_for_expr_value);
+		ctx->free_list_for_expr_value = nxt;
+	}
 }
 static expr_type_info* new_type(expr_type t)
 {
@@ -583,7 +620,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 		if(ob)
 			mpd_del(&sb);
 
-		expr_value* v = new_val(RHENDB_NUMERIC);
+		expr_value* v = new_val(RHENDB_NUMERIC, ec_p);
 		v->numeric_value = result;
 		return v;
 	}
@@ -612,7 +649,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				r = fmod(x, y);
 				break;
 		}
-		expr_value* v = new_val(RHENDB_FLOAT);
+		expr_value* v = new_val(RHENDB_FLOAT, ec_p);
 		v->value.double_value = r;
 		return v;
 	}
@@ -631,7 +668,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				{ int256 q; r = div_int256(&q, x, y);}
 				break;
 		}
-		expr_value* v = new_val(RHENDB_LARGE_INT);
+		expr_value* v = new_val(RHENDB_LARGE_INT, ec_p);
 		v->value.large_int_value = r;
 		return v;
 	}
@@ -653,7 +690,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				{ uint256 q; r = div_uint256(&q, x, y);}
 				break;
 		}
-		expr_value* v = new_val(RHENDB_LARGE_UINT);
+		expr_value* v = new_val(RHENDB_LARGE_UINT, ec_p);
 		v->value.large_uint_value = r;
 		return v;
 	}
@@ -676,7 +713,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				r = (x == INT64_MIN && y == -1) ? 0 : (x % y);           /* INT64_MIN % -1 is UB in C */
 				break;
 		}
-		expr_value* v = new_val(RHENDB_INT);
+		expr_value* v = new_val(RHENDB_INT, ec_p);
 		v->value.int_value = r;
 		return v;
 	}
@@ -698,7 +735,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				r = x % y;
 				break;
 		}
-		expr_value* v = new_val(RHENDB_UINT);
+		expr_value* v = new_val(RHENDB_UINT, ec_p);
 		v->value.uint_value = r;
 		return v;
 	}
@@ -916,7 +953,7 @@ typedef enum
 	B_XOR
 } bit_op;
 
-static void* do_bitlogic(void* d1, void* d2, bit_op op, int* error_code)
+static void* do_bitlogic(void* d1, void* d2, bit_op op, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* a = d1;
 	expr_value* b = d2;
@@ -933,7 +970,7 @@ static void* do_bitlogic(void* d1, void* d2, bit_op op, int* error_code)
 	{
 		uint256 x = to_u256(a), y = to_u256(b), r;
 		r = (op == B_AND) ? bitwise_and_uint256(x, y) : ((op == B_OR) ? bitwise_or_uint256(x, y) : bitwise_xor_uint256(x, y));
-		expr_value* v = new_val(rt);
+		expr_value* v = new_val(rt, ec_p);
 		if(rt == RHENDB_LARGE_INT)
 			v->value.large_int_value = (int256){r};
 		else
@@ -943,16 +980,16 @@ static void* do_bitlogic(void* d1, void* d2, bit_op op, int* error_code)
 
 	uint64_t x = to_u64(a), y = to_u64(b), r;
 	r = (op == B_AND) ? (x & y) : ((op == B_OR) ? (x | y) : (x ^ y));
-	expr_value* v = new_val(rt);
+	expr_value* v = new_val(rt, ec_p);
 	if(rt == RHENDB_INT)
 		v->value.int_value = (int64_t)r;
 	else
 		v->value.uint_value = r;
 	return v;
 }
-static void* rhendb_bit_and(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ (void)ec_p; return do_bitlogic(d1,d2,B_AND,e); }
-static void* rhendb_bit_or (void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ (void)ec_p; return do_bitlogic(d1,d2,B_OR ,e); }
-static void* rhendb_bit_xor(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ (void)ec_p; return do_bitlogic(d1,d2,B_XOR,e); }
+static void* rhendb_bit_and(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_bitlogic(d1,d2,B_AND,ec_p,e); }
+static void* rhendb_bit_or (void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_bitlogic(d1,d2,B_OR ,ec_p,e); }
+static void* rhendb_bit_xor(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_bitlogic(d1,d2,B_XOR,ec_p,e); }
 static void* rhendb_bit_not(void* data, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* a = data;
@@ -963,7 +1000,7 @@ static void* rhendb_bit_not(void* data, const sql_expr_eval_context* ec_p, int* 
 		return NULL;
 	}
 
-	expr_value* v = new_val(t);
+	expr_value* v = new_val(t, ec_p);
 	switch(t)
 	{
 		case RHENDB_LARGE_UINT:
@@ -981,7 +1018,7 @@ static void* rhendb_bit_not(void* data, const sql_expr_eval_context* ec_p, int* 
 	}
 	return v;
 }
-static void* do_shift(void* data, void* shift_amt, int left, int* error_code)
+static void* do_shift(void* data, void* shift_amt, int left, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* a = data;
 	expr_value* s = shift_amt;
@@ -993,7 +1030,7 @@ static void* do_shift(void* data, void* shift_amt, int left, int* error_code)
 	}
 
 	uint32_t amt = (uint32_t)to_u64(s);
-	expr_value* v = new_val(t);
+	expr_value* v = new_val(t, ec_p);
 	switch(t)
 	{
 		case RHENDB_LARGE_UINT:
@@ -1011,8 +1048,8 @@ static void* do_shift(void* data, void* shift_amt, int left, int* error_code)
 	}
 	return v;
 }
-static void* rhendb_left_shift (void* d, void* s, const sql_expr_eval_context* ec_p, int* e){ (void)ec_p; return do_shift(d,s,1,e); }
-static void* rhendb_right_shift(void* d, void* s, const sql_expr_eval_context* ec_p, int* e){ (void)ec_p; return do_shift(d,s,0,e); }
+static void* rhendb_left_shift (void* d, void* s, const sql_expr_eval_context* ec_p, int* e){ return do_shift(d,s,1,ec_p,e); }
+static void* rhendb_right_shift(void* d, void* s, const sql_expr_eval_context* ec_p, int* e){ return do_shift(d,s,0,ec_p,e); }
 
 /* ------------------------------ literals ------------------------------ */
 
@@ -1032,7 +1069,7 @@ static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval
 
 	if(strpbrk(buf, "eE"))   /* an exponent -> approximate FLOAT (SQL approximate-numeric literal) */
 	{
-		v = new_val(RHENDB_FLOAT);
+		v = new_val(RHENDB_FLOAT, ec_p);
 		v->value.double_value = strtod(buf, NULL);
 	}
 	else if(strchr(buf, '.'))   /* a fraction, no exponent -> exact NUMERIC (SQL exact-numeric literal) */
@@ -1041,7 +1078,7 @@ static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval
 		if(!ee_mpd_new(&d)){ if(buf != stackbuf) free(buf); *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
 		mpd_context_t ctx; mpd_maxcontext(&ctx); uint32_t st = 0;
 		mpd_qset_string(&d, buf, &ctx, &st);
-		v = new_val(RHENDB_NUMERIC); v->numeric_value = d;
+		v = new_val(RHENDB_NUMERIC, ec_p); v->numeric_value = d;
 	}
 	else   /* an integer literal : pick the smallest type it fits into */
 	{
@@ -1052,7 +1089,7 @@ static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval
 		long long sll = strtoll(buf, &end, 10);
 		if(errno == 0 && *end == 0)   /* fits a signed 64-bit int */
 		{
-			v = new_val(RHENDB_INT);
+			v = new_val(RHENDB_INT, ec_p);
 			v->value.int_value = (int64_t)sll;
 		}
 		else
@@ -1064,7 +1101,7 @@ static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval
 				unsigned long long ull = strtoull(buf, &end, 10);
 				if(errno == 0 && *end == 0)
 				{
-					v = new_val(RHENDB_UINT);
+					v = new_val(RHENDB_UINT, ec_p);
 					v->value.uint_value = (uint64_t)ull;
 					done = 1;
 				}
@@ -1086,18 +1123,18 @@ static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval
 					{
 						uint256 neg;
 						sub_uint256(&neg, get_uint256(0), mag);   /* two's complement : 0 - mag */
-						v = new_val(RHENDB_LARGE_INT);
+						v = new_val(RHENDB_LARGE_INT, ec_p);
 						v->value.large_int_value = (int256){ neg };
 					}
 					else
 					{
-						v = new_val(RHENDB_LARGE_UINT);
+						v = new_val(RHENDB_LARGE_UINT, ec_p);
 						v->value.large_uint_value = mag;
 					}
 				}
 				else   /* more digits than a 256-bit integer can hold -> FLOAT */
 				{
-					v = new_val(RHENDB_FLOAT);
+					v = new_val(RHENDB_FLOAT, ec_p);
 					v->value.double_value = strtod(buf, NULL);
 				}
 			}
@@ -1111,7 +1148,7 @@ static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval
 static void* rhendb_create_string(const dstring* data_bytes, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	/* point straight at the bytes owned by the parse tree; no allocation, buffer stays NULL */
-	expr_value* v = new_val(RHENDB_STRING);
+	expr_value* v = new_val(RHENDB_STRING, ec_p);
 	v->value.string_value = get_byte_array_dstring(data_bytes);
 	v->value.string_size = get_char_count_dstring(data_bytes);
 	v->buffer = NULL;
@@ -1320,7 +1357,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		}
 		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
 
-		expr_value* v = new_val(target);
+		expr_value* v = new_val(target, ec_p);
 		store_int_bits(v, target, bits);
 		return v;
 	}
@@ -1333,7 +1370,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		else if(src_is_number) d = to_dbl(a);
 		else if(src_is_sb){ char* s = sb_to_cstring(a); if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; } d = strtod(s, NULL); free(s); }
 		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
-		expr_value* v = new_val(RHENDB_FLOAT); v->value.double_value = d; return v;
+		expr_value* v = new_val(RHENDB_FLOAT, ec_p); v->value.double_value = d; return v;
 	}
 
 	/* NUMERIC target */
@@ -1359,7 +1396,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 			free(s);
 		}
 		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
-		expr_value* v = new_val(RHENDB_NUMERIC); v->numeric_value = d; return v;
+		expr_value* v = new_val(RHENDB_NUMERIC, ec_p); v->numeric_value = d; return v;
 	}
 
 	*error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL;   /* STRING/BINARY targets not implemented yet */
@@ -1517,24 +1554,48 @@ typedef struct var_cache_entry var_cache_entry;
 struct var_cache_entry
 {
 	bstnode node;                      /* embedded cutlery hashmap node (red-black bst buckets) */
-	dstring identifier;                /* owned clone of the variable name; the cache key */
+
+	/* the cache KEY is the identifier's bytes in memory : (address, length).
+	 * the dstring handed to get_variable()/get_type_for_variable() points INTO the AST node, so these
+	 * bytes are stable for the life of the expression. hashing/comparing an address+length is O(1) and
+	 * costs no FNV pass and no memory_compare() over the identifier on every single evaluation.
+	 * two AST nodes naming the same column at different addresses simply get two entries -- accepted. */
+	const char* key_bytes;
+	cy_uint key_length;
+
+	dstring identifier;                /* owned clone of the variable name (diagnostics only) */
 	uint32_t tuple_index;              /* which input tuple it lives in */
 	positional_accessor pa;            /* owns pa.positions : the located element */
 	const data_type_info* column_dti;  /* the located column's on-disk type */
 };
 
+/* hash the identifier's LOCATION (address + length), not its contents.
+ * key_bytes is only ever treated as an integer here -- it is NEVER dereferenced -- so it is safe even if
+ * the AST that owned those bytes has since been freed. this removes the FNV pass over the identifier
+ * string from every single variable reference of every single evaluation. */
 static cy_uint var_hash(const void* d)
 {
 	const var_cache_entry* e = d;
-	const char* b = get_byte_array_dstring(&e->identifier);
-	cy_uint n = get_char_count_dstring(&e->identifier);
-	cy_uint h = (cy_uint)1469598103934665603ULL;   /* FNV-1a over the identifier bytes */
-	for(cy_uint i = 0; i < n; i++){ h ^= (unsigned char)b[i]; h *= (cy_uint)1099511628211ULL; }
-	return h;
+	uintptr_t p = (uintptr_t)(e->key_bytes);
+	uintptr_t h = p ^ (p >> 17) ^ (((uintptr_t)(e->key_length)) << 7);
+	h *= (uintptr_t)1099511628211ULL;
+	return (cy_uint)(h ^ (h >> 29));
 }
+/* order by (address, length) first -- both cheap integers -- and only then verify the actual bytes.
+ * the verification is ESSENTIAL and must not be dropped : a context may outlive the expression it cached
+ * (the differential fuzzers do exactly this), the AST's identifier bytes are freed, and a later AST's
+ * identifier can land at the SAME address with the SAME length while naming a DIFFERENT column. keying on
+ * the address alone hands back that stale entry -- silently resolving the wrong column.
+ * the compare reads each side's OWNED clone, so no freed memory is ever dereferenced. */
 static int var_cmp(const void* d1, const void* d2)
 {
-	return compare_dstring(&((const var_cache_entry*)d1)->identifier, &((const var_cache_entry*)d2)->identifier);
+	const var_cache_entry* a = d1;
+	const var_cache_entry* b = d2;
+	if(a->key_bytes != b->key_bytes)
+		return (a->key_bytes > b->key_bytes) ? 1 : -1;
+	if(a->key_length != b->key_length)
+		return (a->key_length > b->key_length) ? 1 : -1;
+	return 0;   /* identical bytes at an identical address -> the same identifier */
 }
 
 /* map a located column's data_type_info to the expr_type we would expose it as */
@@ -1662,7 +1723,8 @@ static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32
 static const var_cache_entry* get_or_resolve_entry(rhendb_expr_eval_context* ctx, const dstring* id, int* error_code)
 {
 	var_cache_entry probe;
-	probe.identifier = get_dstring_pointing_to(get_byte_array_dstring(id), get_char_count_dstring(id));   /* non-owning probe key */
+	probe.key_bytes  = get_byte_array_dstring(id);   /* the identifier's actual bytes in memory */
+	probe.key_length = get_char_count_dstring(id);
 	const var_cache_entry* hit = find_equals_in_hashmap(&ctx->var_cache, &probe);
 	if(hit != NULL)
 		return hit;
@@ -1673,6 +1735,8 @@ static const var_cache_entry* get_or_resolve_entry(rhendb_expr_eval_context* ctx
 		*error_code = RHENDB_EE_OUT_OF_MEMORY;
 		return NULL;
 	}
+	ne->key_bytes  = get_byte_array_dstring(id);
+	ne->key_length = get_char_count_dstring(id);
 	if(!init_dstring(&ne->identifier, get_byte_array_dstring(id), get_char_count_dstring(id)))
 	{
 		free(ne);
@@ -1690,6 +1754,16 @@ static const var_cache_entry* get_or_resolve_entry(rhendb_expr_eval_context* ctx
 	initialize_bstnode(&ne->node);
 
 	insert_in_hashmap(&ctx->var_cache, ne);
+
+	/* buckets are red-black trees, so a long chain is not fatal, but keeping the load factor low still
+	 * shortens every probe. expand by 1.3x once we average more than 4 entries per bucket.
+	 * expand_hashmap() failing is harmless -- the map simply stays as it is. */
+	{
+		cy_uint buckets = get_bucket_count_hashmap(&ctx->var_cache);
+		cy_uint elements = get_element_count_hashmap(&ctx->var_cache);
+		if(buckets > 0 && elements > (buckets * 4))
+			expand_hashmap(&ctx->var_cache, 1.3f);   /* no-op on failure */
+	}
 
 	return ne;
 }
@@ -1709,7 +1783,7 @@ static void* rhendb_get_variable(const dstring* identifier_bytes, const sql_expr
 		return NULL;             /* NULL column -> NULL pointer */
 
 	const data_type_info* dti = e->column_dti;
-	expr_value* v = new_val(RHENDB_INT);
+	expr_value* v = new_val(RHENDB_INT, ec_p);
 	v->value = d;
 	v->buffer = NULL;
 	v->capacity = 0;
@@ -1840,6 +1914,8 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 
 	initialize_hashmap(&(context_p->var_cache), ELEMENTS_AS_RED_BLACK_BST, 64, &simple_hasher(var_hash), &simple_comparator(var_cmp), offsetof(var_cache_entry, node));
 
+	context_p->free_list_for_expr_value = NULL;
+
 	context_p->rdb = rdb;
 
 	return eval_context;
@@ -1858,6 +1934,8 @@ int has_reference_to_extended_type_from_expression(const rhendb_expr_eval_contex
 void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_context* context_p)
 {
 	remove_all_from_hashmap(&(context_p->var_cache), &((notifier_interface){NULL, notify_removal_for_cache_entry}));
+	drain_free_list_for_expr_value(context_p);          /* the ONLY place the free list is released */
+
 	deinitialize_hashmap(&(context_p->var_cache));
 	free(context_p->input_tuple_defs);
 	free(context_p->input_tuples);

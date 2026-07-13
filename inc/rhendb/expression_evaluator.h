@@ -86,6 +86,24 @@ struct rhendb_expr_eval_context
 	// for materializing the on-disk -> text, blob and numeric columns
 	// and to access the catalog_manager, for user defined types and functions
 	rhendb* rdb;
+
+	// FREE LIST OF RECYCLED expr_value-s, owned by this context.
+	//
+	// every AST node of an expression allocates one expr_value and frees it again, so evaluating a
+	// predicate over N rows means ~(nodes * N) malloc()/free() pairs -- and in a multi threaded query
+	// plan that means hammering malloc()'s arena lock. Instead of returning a dead expr_value to
+	// malloc(), rhendb_delete_data() pushes it here, and new_val() pops it back off.
+	//
+	// It is a plain LIFO stack (push-front / pop-front), which is all a free list ever needs:
+	//   free_list_for_expr_value  ->  expr_value -> expr_value -> ... -> NULL
+	// the "next" pointer is written into the first bytes of the DEAD block itself, so an expr_value
+	// costs no extra bytes to be on the list. A recycled block is memory_set() to 0 before it is handed
+	// back out, so it is byte-identical to what calloc() would have returned.
+	//
+	// It is UNCAPPED and NEVER SHRINKS -- it is only drained when the context itself is destroyed.
+	// There is NO LOCK on it, because a context is owned by exactly ONE thread
+	// (see the THREADING note above get_sql_expr_eval_context_for_rhendb()).
+	void* free_list_for_expr_value;
 };
 
 // error codes written into *error_code by the rhendb expression-evaluation callbacks.
@@ -107,6 +125,33 @@ enum rhendb_expr_eval_error
 	RHENDB_EE_NULL_OPERAND        = 11, // a required operand pointer was NULL
 	RHENDB_EE_STRING_TOO_LONG     = 12, // concat result size would not fit in the uint32_t size field
 };
+
+// ===================================================================================================
+// (1) THREADING -- ONE CONTEXT PER THREAD. A CONTEXT MUST NOT BE SHARED BETWEEN THREADS.
+//
+// the context is deliberately unsynchronized: its expr_value free list and its variable cache are both
+// plain, lock-free structures, and evaluate_sql_expr() writes into context_p->input_tuples[] before
+// every evaluation. Two threads driving the same context would corrupt all three.
+// If an operator runs its expression on N threads, it must build N contexts.
+//
+// (2) LIFETIME -- THE EXPRESSIONS MUST OUTLIVE THE CONTEXT.
+//
+//     build the sql_expression(s)
+//       -> get_sql_expr_eval_context_for_rhendb(...)
+//       -> infer_type_sql_expr() / evaluate_sql_expr(), as many times, on as many expressions, as you like
+//       -> delete_context_p_for_sql_expr_eval_context_for_rhendb(...)
+//       -> delete_sql_expr(...)
+//
+// the variable cache keys its entries on the identifier's BYTES IN MEMORY (address + length), taken
+// straight from the dstring inside the AST node -- that is what makes a variable lookup O(1) with no
+// string hashing and no memcmp on every evaluation. So an expression must NOT be destroyed while a
+// context that has evaluated (or type-inferred) it is still alive: freeing the AST frees those
+// identifier bytes, and a later allocation landing on the same address would produce a stale cache hit
+// for a DIFFERENT column -- a wrong answer, not merely a wasted entry.
+//
+// NOTE: flatten_similar_associative_operators_in_sql_expression() DESTROYS the tree it is handed and
+// returns a new one, so it counts as destroying an expression: rebuild the context around it.
+// ===================================================================================================
 
 // intitialize this per instance for evaluation context of one stream of tuples of 1 type
 sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, rhendb* rdb);
