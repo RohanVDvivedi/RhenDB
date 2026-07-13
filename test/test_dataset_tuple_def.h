@@ -5,6 +5,8 @@ data_type_info value_string_type_info;
 data_type_info* record_type_info;
 tuple_def record_def;
 
+#include<tuplelargetypes/numeric_extended.h>
+
 void initialize_tuple_defs()
 {
 	record_type_info = malloc(sizeof_tuple_data_type_info(5));
