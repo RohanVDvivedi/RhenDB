@@ -183,7 +183,36 @@ static datum get_sum_from_sum_state(void* state, const data_type_info* input_typ
 
 				if(sum_state->output_buffer == NULL) // it must be NULL here
 				{
-					// convert sum_state->sum to numeric tuple in buffer, with enough bytes allocated as an output_type_info
+					int exponent_too_big = 0;
+					materialized_numeric mn = decimal_to_materialized_numeric(&(sum_state->sum), &exponent_too_big);
+
+					tuple_def output_tuple_def;
+					initialize_tuple_def(&output_tuple_def, (data_type_info*)output_type_info);
+					uint32_t output_tuple_size = get_minimum_tuple_size(&output_tuple_def);
+					uint32_t output_buffer_capacity = output_tuple_size;
+					sum_state->output_buffer = malloc(output_buffer_capacity);
+					init_tuple(&output_tuple_def, sum_state->output_buffer);
+
+					set_sign_bits_and_exponent_for_numeric(mn.sign_bits, mn.exponent, sum_state->output_buffer, &output_tuple_def, SELF);
+					if(mn.sign_bits == POSITIVE_NUMERIC || mn.sign_bits == NEGATIVE_NUMERIC)
+					{
+						uint32_t digits_to_be_written = min(MAX_NUMERIC_DIGITS_IN_BASE_10_pow_12, get_digits_count_for_materialized_numeric(&mn));
+						output_buffer_capacity += digits_to_be_written * 5 + 4;
+						sum_state->output_buffer = realloc(sum_state->output_buffer, output_buffer_capacity);
+
+						set_element_in_tuple(&output_tuple_def, STATIC_POSITION(2), sum_state->output_buffer, EMPTY_DATUM, output_buffer_capacity - output_tuple_size);
+						output_tuple_size = get_tuple_size(&output_tuple_def, sum_state->output_buffer);
+						expand_element_count_for_element_in_tuple(&output_tuple_def, STATIC_POSITION(2), sum_state->output_buffer, 0, digits_to_be_written, output_buffer_capacity - output_tuple_size);
+						output_tuple_size = get_tuple_size(&output_tuple_def, sum_state->output_buffer);
+
+						for(uint32_t i = 0; i < digits_to_be_written; i++)
+						{
+							uint64_t digit = get_nth_digit_from_materialized_numeric(&mn, i);
+							set_element_in_tuple(&output_tuple_def, STATIC_POSITION(2, i), sum_state->output_buffer, &((datum){.uint_value = digit}), output_buffer_capacity - output_tuple_size);
+						}
+					}
+
+					deinitialize_materialized_numeric(&mn);
 				}
 
 				return (datum){.tuple_value = sum_state->output_buffer};
