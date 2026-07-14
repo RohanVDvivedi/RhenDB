@@ -205,13 +205,29 @@ static expr_value* new_val(expr_type t, const sql_expr_eval_context* ec_p)
 	{
 		v = ctx->free_list_for_expr_value;
 		ctx->free_list_for_expr_value = *((void**)v);   /* pop : next ptr is stored inside the dead block */
-		memory_set(v, 0, sizeof *v);
 	}
 	else
-		v = calloc(1, sizeof *v);
+		v = malloc(sizeof *v);
 
-	if(v != NULL)
-		v->type_info.type = t;
+	if(v == NULL)
+		return NULL;
+
+	// DO NOT zero the whole expr_value. it is 88 bytes (the mpd_t in the union makes it fat), and an
+	// int node only ever needs a couple of fields -- yet this runs once per AST node per row.
+	// only these five are ever READ before the caller writes them:
+	//   - type_info.type              : switched on everywhere, and by rhendb_delete_data()
+	//   - type_info.dti_p             : rhendb_delete_data() tests it
+	//   - type_info.should_free_dti_p : rhendb_delete_data() tests it
+	//   - buffer                      : rhendb_delete_data() frees it if non-NULL
+	//   - capacity                    : rhendb_concat() reads it alongside buffer
+	// the `value` / `numeric_value` union is ALWAYS written by the caller before it is read.
+	v->type_info.type = t;
+	v->type_info.dti_p = NULL;
+	v->type_info.should_free_dti_p = 0;
+	v->buffer = NULL;
+	v->capacity = 0;
+	v->value.is_NULL = 0;      // datum carries a NULL flag -- garbage here makes values vanish
+
 	return v;
 }
 
