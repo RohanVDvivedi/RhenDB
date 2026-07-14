@@ -99,12 +99,14 @@ static void* create_sum_state(const data_type_info* input_type_info)
 				{
 					sum_state->sum.flags = MPD_STATIC;
 					sum_state->sum.exp = 0;
-					sum_state->sum.digits = 0;
-					sum_state->sum.len = 0;
 					sum_state->sum.alloc = MPD_MINALLOC;
 					sum_state->sum.data = mpd_alloc(MPD_MINALLOC, sizeof(mpd_uint_t));
 					if(sum_state->sum.data == NULL)
 						exit(-1);
+
+					sum_state->sum.digits = 1;
+					sum_state->sum.len = 1;
+					sum_state->sum.data[0] = 0;
 				}
 
 				sum_state->output_buffer = NULL;
