@@ -43,8 +43,8 @@ struct catalog_manager
 	uint64_t db_indices_root_page_id;
 	// mvcc_hdr, id, part_id, name, table_id, root_page_id
 
-	heap_table_tuple_defs db_functions_tuple_defs;
-	uint64_t db_functions_root_page_id;
+	// heap_table_tuple_defs db_functions_tuple_defs;
+	// uint64_t db_functions_root_page_id;
 
 	// ---------------- INDICES ON SCHEMA TABLE
 
@@ -88,7 +88,7 @@ uint64_t create_type(catalog_manager* catmgr_p, char* name);
 void drop_type(catalog_manager* catmgr_p, uint64_t id);
 
 // returns id of created function
-uint64_t create_function(catalog_manager* catmgr_p, char* name);
-void drop_function(catalog_manager* catmgr_p, uint64_t id);
+// uint64_t create_function(catalog_manager* catmgr_p, char* name);
+// void drop_function(catalog_manager* catmgr_p, uint64_t id);
 
 #endif
