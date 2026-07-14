@@ -63,10 +63,11 @@ struct catalog_manager
 // here the root_page_id is an in-out parameter, pass it as NULL_PAGE_ID to create a new transaction table, or an existing one to open that particular transaction_table
 void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine);
 
-// returns id of created table
+// returns id of created table, it will always start with no indices and a single partition_id of 0
 uint64_t create_table(catalog_manager* catmgr_p, char* name);
 
-// returns new partition_id, and also creates new partitions of existing indices of the table
+// returns new partition_id, and also creates new partitions of existing indices on the table for this partition
+// and drops indices that reference the dropped column
 uint64_t alter_table(catalog_manager* catmgr_p, uint64_t id);
 
 // drops all it's partitions, and all indices and their partitions
