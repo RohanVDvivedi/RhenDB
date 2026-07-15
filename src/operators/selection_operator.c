@@ -39,30 +39,22 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
-			// set the input tuple
-			((rhendb_expr_eval_context*)(inputs->ec.context_p))->input_tuples[0] = ((void*)tuple);
-
+			int selection_match = 0;
 			int error_code = 0;
 
-			// evaluate the selection/filter expression
-			void* res = evaluate_sql_expr(inputs->expr, &(inputs->ec), &error_code);
-			if(error_code)
-			{
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("errored_from_selection_exprerssion"));
-				return ;
-			}
+			// set the input tuples
+			set_input_tuples_in_context_for_rhendb_v(&(inputs->ec), 1, tuple);
 
-			// get boolean out of the expression result
-			void* log_res = get_bool(res, &(inputs->ec), &error_code);
-			delete_data(res, &(inputs->ec));
+			// evaluate the selection/filter expression
+			selection_match = select_using_evaluate_sql_expr_for_rhendb(inputs->expr, &(inputs->ec), &error_code);
 			if(error_code)
 			{
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("errored_from_selection_booling_exprerssion"));
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("errored_from_selection_booling_expression"));
 				return ;
 			}
 
 			// if bool os result says true, produce the tuple
-			if(log_res == inputs->ec.true_bool)
+			if(selection_match)
 			{
 				int produced = produce_tuple_from_operator(o, (void*)tuple);
 				if(!produced)

@@ -14,20 +14,16 @@ static void* process(tuple_transformer* tt_p, void* tuple)
 {
 	selection_context* sc_p = tt_p->context;
 
-	((rhendb_expr_eval_context*)(sc_p->ec.context_p))->input_tuples[0] = tuple;
-
+	int selection_match = 0;
 	int error_code = 0;
 
-	void* res = evaluate_sql_expr(sc_p->expr, &(sc_p->ec), &error_code);
+	set_input_tuples_in_context_for_rhendb_v(&(sc_p->ec), 1, tuple);
+
+	selection_match = select_using_evaluate_sql_expr_for_rhendb(sc_p->expr, &(sc_p->ec), &error_code);
 	if(error_code)
 		return NULL;
 
-	void* log_res = get_bool(res, &(sc_p->ec), &error_code);
-	delete_data(res, &(sc_p->ec));
-	if(error_code)
-		return NULL;
-
-	if(log_res == sc_p->ec.true_bool)
+	if(selection_match)
 		return tuple;
 	else
 		return NULL;
