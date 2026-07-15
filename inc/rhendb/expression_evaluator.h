@@ -1,6 +1,8 @@
 #ifndef EXPRESSION_EVALUATOR_H
 #define EXPRESSION_EVALUATOR_H
 
+#include<stdarg.h>
+
 #include<sqltoast/sqltoast.h>
 #include<sqltoast/sql_expression_eval.h>
 
@@ -162,5 +164,20 @@ int has_reference_to_extended_type_from_expression(const rhendb_expr_eval_contex
 
 // frees shallow copied input_tuple_defs and input_tuples, and the pointer itself
 void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_context* context_p);
+
+// set the input tuples used by the next evaluate/infer on this context.
+// copies min(input_tuples_count, context's input_tuples_count) pointers by SHALLOW reference --
+// the context does not take ownership of the tuples.
+void set_input_tuples_in_context_for_rhendb(sql_expr_eval_context* ec_p, void** input_tuples, uint32_t input_tuples_count);
+
+// variadic form : pass the tuples directly, in index order.
+//   set_input_tuples_in_context_for_rhendb_v(&ec, 2, left_tuple, right_tuple);
+void set_input_tuples_in_context_for_rhendb_v(sql_expr_eval_context* ec_p, uint32_t input_tuples_count, ...);
+
+// evaluate `expr` as a WHERE/filter predicate under `ec` and return the boolean directly, so the caller
+// no longer has to call get_bool() and then delete_data() on the intermediate result itself.
+//   returns 1 if the expression evaluates to TRUE, 0 otherwise (FALSE, or UNKNOWN/NULL).
+//   on an evaluation or bool-conversion error, *error_code is set non-zero and 0 is returned.
+int select_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
 
 #endif

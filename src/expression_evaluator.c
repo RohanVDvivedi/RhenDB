@@ -1957,3 +1957,41 @@ void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_cont
 	free(context_p->input_tuples);
 	free(context_p);
 }
+
+void set_input_tuples_in_context_for_rhendb(sql_expr_eval_context* ec_p, void** input_tuples, uint32_t input_tuples_count)
+{
+	rhendb_expr_eval_context* ctx = ec_p->context_p;
+	// only copy what the context can actually hold (mismatched counts are a caller error)
+	uint32_t n = (input_tuples_count < ctx->input_tuples_count) ? input_tuples_count : ctx->input_tuples_count;
+	for(uint32_t i = 0; i < n; i++)
+		ctx->input_tuples[i] = input_tuples[i];
+}
+
+void set_input_tuples_in_context_for_rhendb_v(sql_expr_eval_context* ec_p, uint32_t input_tuples_count, ...)
+{
+	rhendb_expr_eval_context* ctx = ec_p->context_p;
+	uint32_t n = (input_tuples_count < ctx->input_tuples_count) ? input_tuples_count : ctx->input_tuples_count;
+	va_list args;
+	va_start(args, input_tuples_count);
+	for(uint32_t i = 0; i < n; i++)
+		ctx->input_tuples[i] = va_arg(args, void*);
+	va_end(args);
+}
+
+int select_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code)
+{
+	(*error_code) = 0;
+
+	void* res = evaluate_sql_expr(expr, ec_p, error_code);
+	if((*error_code))
+		return 0;
+
+	// collapse to a boolean; get_bool() returns one of the static singletons
+	// (true_bool / false_bool / unknown_bool), which must NOT be freed.
+	void* log_res = get_bool(res, ec_p, error_code);
+	delete_data(res, ec_p);
+	if((*error_code))
+		return 0;
+
+	return (log_res == ec_p->true_bool) ? 1 : 0;
+}
