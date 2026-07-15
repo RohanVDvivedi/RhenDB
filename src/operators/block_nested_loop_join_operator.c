@@ -115,26 +115,15 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 
 			left_tuple = inputs->batched_left_side_tuples->embed_regions[0].tuple;
 
-			void* join_expr_result = NULL;
+			int join_match = 0;
 			int error_code = 0;
 			if(inputs->join_expr != NULL)
 			{
 				// set the input tuples
-				((rhendb_expr_eval_context*)(inputs->ec.context_p))->input_tuples[0] = ((void*)left_tuple);
-				((rhendb_expr_eval_context*)(inputs->ec.context_p))->input_tuples[1] = ((void*)right_tuple);
+				set_input_tuples_in_context_for_rhendb_v(&(inputs->ec), 2, left_tuple, right_tuple);
 
 				// evaluate the join expression
-				void* res = evaluate_sql_expr(inputs->join_expr, &(inputs->ec), &error_code);
-				if(error_code)
-					goto EXIT_ON_ERROR_FROM_JOIN_EXPR;
-
-				// get boolean out of the expression result
-				join_expr_result = get_bool(res, &(inputs->ec), &error_code);
-				delete_data(res, &(inputs->ec));
-				if(error_code)
-					goto EXIT_ON_ERROR_FROM_JOIN_EXPR;
-
-				EXIT_ON_ERROR_FROM_JOIN_EXPR:;
+				join_match = select_using_evaluate_sql_expr_for_rhendb(inputs->join_expr, &(inputs->ec), &error_code);
 			}
 
 			if(error_code)
@@ -149,7 +138,7 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 				return 0;
 			}
 
-			if(inputs->join_expr == NULL || join_expr_result == inputs->ec.true_bool)
+			if(inputs->join_expr == NULL || join_match)
 			{
 				if(left_tuple_matched_bitmap != NULL)
 				{
@@ -157,7 +146,7 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 				}
 			}
 
-			if(inputs->join_expr == NULL || join_expr_result == inputs->ec.true_bool)
+			if(inputs->join_expr == NULL || join_match)
 			{
 				// produce output_tuple
 				int produced = produce_join_result(o, left_tuple, right_tuple);
