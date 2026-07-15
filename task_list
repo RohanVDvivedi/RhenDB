@@ -10,6 +10,7 @@ PICKED TASKS
 * returns NULL on non extended types
 * on extended types returns accessor to persistent_acid_engine and NULL_PAGE_ID for extension_type = P
 * else for extension_type = V returns the volatile engine, with corresponding pointer to temp_blob_store
+* if extension_head_page_id is already NULL, do not take the lock while accessing the blob_store
 
 * refactor rhendb compare and hash functions to use this distinction and take a read lock on the blob_store for the volatile engine
 * buffers count are calculated only on the basis of the P extension_type
