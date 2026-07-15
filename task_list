@@ -1,8 +1,6 @@
 PICKED TASKS
 
-* set context input_tuples to set new input tuples, make 2 versions of this function variable params and array of void* with count
 * custom eval_sql_expr_rhendb and infer_sql_expr_rhendb function in expression_evaluator
-* custom select_using_sql_expr_rhendb(), to easily support selection in other functions
 * custom project_using_sql_expr_rhendb(), to easily implement projection operator
 
 * use extension_type from tuplelargetypes to store P or V, for persistent or volatile engine
