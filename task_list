@@ -1,9 +1,16 @@
 PICKED TASKS
 
-* custom eval_sql_expr_rhendb and infer_sql_expr_rhendb function in expression_evaluator
-* custom project_using_sql_expr_rhendb(), to easily implement projection operator
-
 * use extension_type from tuplelargetypes to store P or V, for persistent or volatile engine
+
+* make struct temp_blob_store{uint64_t blob_store_root_page_id; rwlock blob_store_lock;}
+* query_plan has array of size N, volatile blob partitions
+* pointer to this struct and a pointer to the rage_engine is returned
+  * get_extension_access_using_query_plan
+* hashes the prefix and finds the bucket it should go into
+* returns NULL on non extended types
+* on extended types returns accessor to persistent_acid_engine and NULL_PAGE_ID for extension_type = P
+* else for extension_type = V returns the volatile engine, with corresponding pointer to temp_blob_store
+
 * refactor rhendb compare and hash functions to use this distinction and take a read lock on the blob_store for the volatile engine
 * buffers count are calculated only on the basis of the P extension_type
 
@@ -11,8 +18,18 @@ PICKED TASKS
 * compare and hash function will take the read lock before evaluating
 * expression will too do that before materializing
 
+
+
+* make expr_val and it's type store dti mandatorily, this will help with projection
+
+
 * aggregate functions and expressions materialize but then use volatile page store to store their large intermediates
 
+
+* custom eval_sql_expr_rhendb and infer_sql_expr_rhendb function in expression_evaluator
+* eval, the outermost function will convert into extension_type = V version if needed by taking appropriate write lock
+
+* custom project_using_sql_expr_rhendb(), to easily implement projection operator
 * projection_operator
 
 
