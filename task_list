@@ -1,5 +1,28 @@
 PICKED TASKS
 
+* custom eval_sql_expr_rhendb and infer_sql_expr_rhendb function in expression_evaluator
+* custom select_using_sql_expr_rhendb(), to easily support selection in other functions
+* custom project_using_sql_expr_rhendb(), to easily implement projection operator
+
+* use extension_type from tuplelargetypes to store P or V, for persistent or volatile engine
+* refactor rhendb compare and hash functions to use this distinction and take a read lock on the blob_store for the volatile engine
+* buffers count are calculated only on the basis of the P extension_type
+
+* each query_plan will have N (= 32) blob_stores, and N read write calls, and things will be appended there and the data will reside in the hash of the prefix
+* compare and hash function will take the read lock before evaluating
+* expression will too do that before materializing
+
+* aggregate functions and expressions materialize but then use volatile page store to store their large intermediates
+
+* projection_operator
+
+
+
+
+
+
+
+
 
 
 DESIGN CATALOG TABLES
@@ -73,11 +96,16 @@ PRIORITY 1 CATALOG
 
 
 
+
+
+
+
 * constant folding to be done in sqltoast, by storing a pointer at every expression node, which is non NULL if the expression evaluates to a constant
 
 
 
-* projection_operator
+
+
 
 
 
