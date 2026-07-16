@@ -39,7 +39,7 @@ static int compare_consumption_iterators(const void* context_p, const void* cit1
 	const consumption_iterator* cit1_p = cit1_vp;
 	const consumption_iterator* cit2_p = cit2_vp;
 
-	return compare_datums3_rhendb(cit1_p->embed_ptrs[1], cit2_p->embed_ptrs[1], inputs->key_dtis, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
+	return compare_datums3_rhendb(cit1_p->embed_ptrs[1], cit2_p->embed_ptrs[1], inputs->key_dtis, inputs->key_compare_direction, inputs->key_element_count, o->self_query_plan->curr_tx);
 }
 
 // we materialize, the keys in cit_p->embed_ptrs[1], using it as datum[] having inputs->key_element_count elements long
@@ -178,7 +178,7 @@ operator_resource_counter setup_merge_sorted_inputs_operator(operator* o, operat
 		}
 	}
 
-	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids), .job_counter = 1};
+	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
 	if(o == NULL)
 		return result;
 
