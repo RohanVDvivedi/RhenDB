@@ -139,7 +139,7 @@ static void build_right_side_partitions(operator* o, void* param)
 		// insert all to the right partition
 		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->right_input_tuple_def->size_def), its_p, get_total_bytes_in_interim_tuple_store(its_p), {
 			// create rash table key
-			rash_table_key rtk = get_new_rash_table_key(tuple, inputs->right_input_tuple_def, inputs->right_key_element_ids, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
+			rash_table_key rtk = get_new_rash_table_key(tuple, inputs->right_input_tuple_def, inputs->right_key_element_ids, inputs->key_element_count, o->self_query_plan->curr_tx);
 
 			// find the parttion this key goes into
 			uint32_t partition_id = get_hash_value_for_rash_table_key(&rtk) % inputs->partitions_count;
@@ -208,7 +208,7 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 		// probe all left_tuple-s to the right partition if one exists
 		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->left_input_tuple_def->size_def), its_p, get_total_bytes_in_interim_tuple_store(its_p), {
 			// create rash table key
-			rash_table_key rtk = get_new_rash_table_key(tuple, inputs->left_input_tuple_def, inputs->left_key_element_ids, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
+			rash_table_key rtk = get_new_rash_table_key(tuple, inputs->left_input_tuple_def, inputs->left_key_element_ids, inputs->key_element_count, o->self_query_plan->curr_tx);
 
 			// find the parttion this key goes into
 			uint32_t partition_id = get_hash_value_for_rash_table_key(&rtk) % inputs->partitions_count;
@@ -730,8 +730,8 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 		}
 	}
 
-	uint64_t left_side_buffers = has_extended_type_info3(left_input_tuple_def, key_element_count, left_key_element_ids);
-	uint64_t right_side_buffers = has_extended_type_info3(right_input_tuple_def, key_element_count, right_key_element_ids);
+	uint64_t left_side_buffers = has_extended_type_info3(left_input_tuple_def, key_element_count, left_key_element_ids, PERSISTENT_EXT_SUB_TYPE);
+	uint64_t right_side_buffers = has_extended_type_info3(right_input_tuple_def, key_element_count, right_key_element_ids, PERSISTENT_EXT_SUB_TYPE);
 
 	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * (max(2 * right_side_buffers, left_side_buffers + right_side_buffers)), .job_counter = max_concurrent_jobs_count + 1};
 	if(o == NULL)
@@ -825,7 +825,7 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 	{
 		inputs->partitions[i] = malloc(sizeof(rash_table_partition));
 		pthread_mutex_init(&(inputs->partitions[i]->build_lock), NULL);
-		inputs->partitions[i]->rth = get_new_rash_table(INIT_BUCKET_COUNT, right_input_tuple_def, right_key_element_ids, key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), o->self_query_plan->curr_tx->db);
+		inputs->partitions[i]->rth = get_new_rash_table(INIT_BUCKET_COUNT, right_input_tuple_def, right_key_element_ids, key_element_count, o->self_query_plan->curr_tx, o->self_query_plan->curr_tx->rdb);
 	}
 
 	initialize_linkedlist(&(inputs->buffers_queue), offsetof(interim_tuple_store, embed_node_ll));
