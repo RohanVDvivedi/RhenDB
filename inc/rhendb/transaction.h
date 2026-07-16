@@ -36,6 +36,8 @@ struct temporary_extension_store
 // this is the number of temporary extension stores that any 1 particular transaction will maintain
 #define TEMPORARY_EXTENSION_STORE_COUNT 64
 
+typedef struct query_plan query_plan;
+
 typedef struct transaction transaction;
 struct transaction
 {
@@ -47,6 +49,9 @@ struct transaction
 
 	// transaction_id points to the transaction_id in the snapshot for this transaction
 	uint256* transaction_id;
+
+	// curr_query is the parent most query being run, hels up kill the whole query when needed
+	query_plan* curr_query;
 
 	// the array that holds these temporary extension blobs, access them by the hash of the prefix
 	temporary_extension_store temp_ext_stores[TEMPORARY_EXTENSION_STORE_COUNT];

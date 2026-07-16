@@ -100,7 +100,7 @@ static void destroy_min_max_state(min_max_state* ms)
 typedef struct min_max_context min_max_context;
 struct min_max_context
 {
-	rage_engine* persistent_acid_rage_engine;
+	transaction* tx;
 	int is_min;
 };
 
@@ -121,7 +121,7 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 			must_replace = 1;
 		else
 		{
-			int compare = compare_datum_rhendb(&((*((min_max_state**)state_p))->min_max_value), af_p->output_type_info, &(inputs[0]), af_p->input_type_infos[0], ((min_max_context*)(af_p->context_p))->persistent_acid_rage_engine);
+			int compare = compare_datum_rhendb(&((*((min_max_state**)state_p))->min_max_value), af_p->output_type_info, &(inputs[0]), af_p->input_type_infos[0], ((min_max_context*)(af_p->context_p))->tx);
 
 			if(((min_max_context*)(af_p->context_p))->is_min)
 				must_replace = (compare > 0);
@@ -168,13 +168,13 @@ static void destroy_aggregate_function(aggregate_function* af_p)
 	free(af_p);
 }
 
-aggregate_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_info* input_type_info, int is_min)
+aggregate_function* get_min_max_aggregate_function(transaction* tx, const data_type_info* input_type_info, int is_min)
 {
 	aggregate_function* af_p = malloc(size_of_aggregate_function(1));
 
 	// context stores persistent_rage_engine here, for this aggregate function
 	af_p->context_p = malloc(sizeof(min_max_context));
-	((min_max_context*)(af_p->context_p))->persistent_acid_rage_engine = &(rdb->persistent_acid_rage_engine);
+	((min_max_context*)(af_p->context_p))->tx = tx;
 	((min_max_context*)(af_p->context_p))->is_min = is_min;
 
 	af_p->process_input = process_input;
@@ -203,7 +203,7 @@ aggregate_function* get_min_max_aggregate_function(rhendb* rdb, const data_type_
 		af_p->output_type_info = output_type_info;
 	}
 
-	af_p->buffers_resource_count = has_extended_type_info(input_type_info) * 2; // we may need to compare any 2 extended types
+	af_p->buffers_resource_count = has_extended_type_info(input_type_info, PERSISTENT_EXT_SUB_TYPE) * 2; // we may need to compare any 2 extended types
 
 	af_p->input_type_infos_count = 1;
 	af_p->input_type_infos[0] = input_type_info;

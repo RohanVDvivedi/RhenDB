@@ -35,7 +35,7 @@ int do_these_types_on_being_equal_hash_to_same_value(const data_type_info* dti1,
 	return 0;
 }
 
-uint64_t hash_datum_rhendb(const datum* uval, const data_type_info* dti, tuple_hasher* th, rage_engine* ex_engine)
+uint64_t hash_datum_rhendb(const datum* uval, const data_type_info* dti, tuple_hasher* th, transaction* tx)
 {
 	if(is_datum_NULL(uval))
 		return th->hash;
@@ -66,13 +66,13 @@ uint64_t hash_datum_rhendb(const datum* uval, const data_type_info* dti, tuple_h
 			datum child_value;
 			if(!get_containee_from_datum(&child_value, &child_dti, uval, dti, i))
 				continue;
-			hash_datum_rhendb(&child_value, child_dti, th, ex_engine); // nestedly hash it using the very same function
+			hash_datum_rhendb(&child_value, child_dti, th, tx); // nestedly hash it using the very same function
 		}
 		return th->hash;
 	}
 }
 
-uint64_t hash_tuple_rhendb(const void* tup, const tuple_def* tpl_d, const positional_accessor* element_ids, tuple_hasher* th, uint32_t element_count, rage_engine* ex_engine)
+uint64_t hash_tuple_rhendb(const void* tup, const tuple_def* tpl_d, const positional_accessor* element_ids, tuple_hasher* th, uint32_t element_count, transaction* tx)
 {
 	for(uint32_t i = 0; i < element_count; i++)
 	{
@@ -81,7 +81,7 @@ uint64_t hash_tuple_rhendb(const void* tup, const tuple_def* tpl_d, const positi
 		if(!get_value_from_element_from_tuple(&uval, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup))
 			uval = (*NULL_DATUM);
 
-		hash_datum_rhendb(&uval, dti, th, ex_engine);
+		hash_datum_rhendb(&uval, dti, th, tx);
 	}
 
 	return th->hash;

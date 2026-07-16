@@ -98,7 +98,7 @@ static int process_kill_signal_if_received_for_operator_UNSAFE(operator* o)
 		o->state = OPERATOR_KILLED;
 
 		// push this operator's clean_up_resources function to the global thread pool
-		if(!submit_job_executor(o->self_query_plan->curr_tx->db->operator_thread_pool, (void* (*)(void*))(async_clean_up_resource_wrapper), o, NULL, NULL, BLOCKING))
+		if(!submit_job_executor(o->self_query_plan->curr_tx->rdb->operator_thread_pool, (void* (*)(void*))(async_clean_up_resource_wrapper), o, NULL, NULL, BLOCKING))
 		{
 			printf("ISSUE in query_plan : COULD NOT PUSH A OPERATOR'S CLEAN_UP JOB TO QUEUE IT\n");
 			exit(-1);
@@ -203,7 +203,7 @@ void trigger_execution_on_operator(operator* o)
 	if(!should_queue)
 		return;
 
-	if(!submit_job_executor(o->self_query_plan->curr_tx->db->operator_thread_pool, (void* (*)(void*))(internal_execute), o, NULL, NULL, BLOCKING))
+	if(!submit_job_executor(o->self_query_plan->curr_tx->rdb->operator_thread_pool, (void* (*)(void*))(internal_execute), o, NULL, NULL, BLOCKING))
 	{
 		printf("ISSUE in query_plan : COULD NOT PUSH A OPERATOR'S JOB TO QUEUE IT\n");
 		exit(-1);
@@ -292,7 +292,7 @@ int run_concurrent_job_for_operator(operator* o, void* param, void (*operator_jo
 	};
 
 	// and push it to thread pool for execution in a concurrent threadpool
-	if(!submit_job_executor(o->self_query_plan->curr_tx->db->operator_thread_pool, (void* (*)(void*))(operator_job_wrapper_function), ojwp_p, NULL, NULL, BLOCKING))
+	if(!submit_job_executor(o->self_query_plan->curr_tx->rdb->operator_thread_pool, (void* (*)(void*))(operator_job_wrapper_function), ojwp_p, NULL, NULL, BLOCKING))
 	{
 		printf("ISSUE in query_plan : COULD NOT PUSH A PAUSED OPERATOR TO RUN IT\n");
 		exit(-1);
@@ -324,12 +324,12 @@ int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, 
 	int latches_released = 0;
 	int non_blocking = (timeout_in_microseconds == NON_BLOCKING);
 
-	pthread_mutex_lock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
+	pthread_mutex_lock(&(o->self_query_plan->curr_tx->rdb->lock_manager_external_lock));
 
 	int wait_error = 0;
 	while(!can_not_proceed_for_execution_operator(o) && !(wait_error))
 	{
-		lock_result locking_result = acquire_lock_with_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), o->self_query_plan->curr_tx, o, resource_type, resource_id, resource_id_size, new_lock_mode, non_blocking);
+		lock_result locking_result = acquire_lock_with_lock_manager(&(o->self_query_plan->curr_tx->rdb->lck_table), o->self_query_plan->curr_tx, o, resource_type, resource_id, resource_id_size, new_lock_mode, non_blocking);
 
 		if(locking_result == LOCK_ACQUIRED || locking_result == LOCK_TRANSITIONED || locking_result == LOCK_ALREADY_HELD)
 		{
@@ -356,10 +356,10 @@ int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, 
 				latches_released = 1;
 			}
 
-			wait_error = pthread_cond_timedwait_for_microseconds(&(o->wait_on_lock_table_for_lock), &(o->self_query_plan->curr_tx->db->lock_manager_external_lock), &timeout_in_microseconds);
+			wait_error = pthread_cond_timedwait_for_microseconds(&(o->wait_on_lock_table_for_lock), &(o->self_query_plan->curr_tx->rdb->lock_manager_external_lock), &timeout_in_microseconds);
 
 			// we just came out from wait, so make the lock_manager discard our wait entries
-			discard_all_wait_entries_for_task_in_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), o->self_query_plan->curr_tx, o);
+			discard_all_wait_entries_for_task_in_lock_manager(&(o->self_query_plan->curr_tx->rdb->lck_table), o->self_query_plan->curr_tx, o);
 
 			// if a kill signal was sent while we were waiting then break, and return -1
 			if(can_not_proceed_for_execution_operator(o))
@@ -372,18 +372,18 @@ int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, 
 		}
 	}
 
-	pthread_mutex_unlock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
+	pthread_mutex_unlock(&(o->self_query_plan->curr_tx->rdb->lock_manager_external_lock));
 
 	return result;
 }
 
 void release_lock_on_resource_from_operator(operator* o, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
 {
-	pthread_mutex_lock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
+	pthread_mutex_lock(&(o->self_query_plan->curr_tx->rdb->lock_manager_external_lock));
 
-	release_lock_with_lock_manager(&(o->self_query_plan->curr_tx->db->lck_table), o->self_query_plan->curr_tx, o, resource_type, resource_id, resource_id_size);
+	release_lock_with_lock_manager(&(o->self_query_plan->curr_tx->rdb->lck_table), o->self_query_plan->curr_tx, o, resource_type, resource_id, resource_id_size);
 
-	pthread_mutex_unlock(&(o->self_query_plan->curr_tx->db->lock_manager_external_lock));
+	pthread_mutex_unlock(&(o->self_query_plan->curr_tx->rdb->lock_manager_external_lock));
 }
 
 void OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION(operator* o){}
@@ -782,13 +782,13 @@ void shutdown_query_plan(query_plan* qp, dstring kill_reason)
 	}
 
 	// spurious wake up all operators waiting on the lock tables
-	pthread_mutex_lock(&(qp->curr_tx->db->lock_manager_external_lock));
+	pthread_mutex_lock(&(qp->curr_tx->rdb->lock_manager_external_lock));
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
 	{
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
 		spurious_wake_up_operator(o);
 	}
-	pthread_mutex_unlock(&(qp->curr_tx->db->lock_manager_external_lock));
+	pthread_mutex_unlock(&(qp->curr_tx->rdb->lock_manager_external_lock));
 }
 
 static void shutdown_query_plan_LOCK_TABLE_UNSAFE(query_plan* qp, dstring kill_reason)
