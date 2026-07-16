@@ -16,7 +16,7 @@ struct sorting_context
 
 	const compare_direction* key_cmp_dirs;
 
-	rage_engine* ex_engine;
+	transaction* tx;
 };
 
 typedef struct sortable_tuple_reference sortable_tuple_reference;
@@ -34,7 +34,7 @@ static int compare_tuples_for_interim_tuple_store_sort(const void* sc_vp, const 
 	const sortable_tuple_reference* ref1 = ref1_vp;
 	const sortable_tuple_reference* ref2 = ref2_vp;
 
-	return compare_datums3_rhendb(ref1->keys, ref2->keys, sc_p->key_dtis, sc_p->key_cmp_dirs, sc_p->element_count, sc_p->ex_engine);
+	return compare_datums3_rhendb(ref1->keys, ref2->keys, sc_p->key_dtis, sc_p->key_cmp_dirs, sc_p->element_count, sc_p->tx);
 }
 
 data_definitions_value_arraylist(sortable_tuple_references, sortable_tuple_reference)
@@ -42,7 +42,7 @@ declarations_value_arraylist(sortable_tuple_references, sortable_tuple_reference
 #define EXPANSION_FACTOR 1.5
 function_definitions_value_arraylist(sortable_tuple_references, sortable_tuple_reference, static inline)
 
-interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, tuples_down_counter result_counter, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, rage_engine* ex_engine)
+interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, tuples_down_counter result_counter, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, transaction* tx)
 {
 	// if the its_p is empty, OR if no result is expected, then return immediately
 	if(its_p->tuples_count == 0 || is_zero_tuples_down_counter(&result_counter))
@@ -78,7 +78,7 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, tuples_down
 		element_count,
 		NULL,
 		cmp_dir,
-		ex_engine,
+		tx,
 	};
 	sc.key_dtis = malloc(sizeof(data_type_info*) * element_count);
 	if(sc.key_dtis == NULL)
