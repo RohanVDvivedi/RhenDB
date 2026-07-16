@@ -23,10 +23,10 @@ void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb)
 	record_type_info->containees[0].al.type_info = UINT_NON_NULLABLE[8];
 
 	strcpy(record_type_info->containees[1].field_name, "key");
-	record_type_info->containees[1].al.type_info = get_tuple_list_extended_type_info(EXTENDED_TYPE_MAX_SIZE_FOR_KEY, PREFIX_BYTES_FOR_KEY + 4, &(rdb->volatile_rage_engine.pam_p->pas));
+	record_type_info->containees[1].al.type_info = get_tuple_list_extended_type_info(NULL,EXTENDED_TYPE_MAX_SIZE_FOR_KEY, PREFIX_BYTES_FOR_KEY + 4, &(rdb->volatile_rage_engine.pam_p->pas));
 
 	strcpy(record_type_info->containees[2].field_name, "value");
-	record_type_info->containees[2].al.type_info = get_blob_extended_type_info(EXTENDED_TYPE_MAX_SIZE_FOR_VALUE, get_blob_inline_type_info(PREFIX_BYTES_FOR_VALUE + 4), &(rdb->volatile_rage_engine.pam_p->pas));
+	record_type_info->containees[2].al.type_info = get_blob_extended_type_info(NULL, EXTENDED_TYPE_MAX_SIZE_FOR_VALUE, get_blob_inline_type_info(PREFIX_BYTES_FOR_VALUE + 4), &(rdb->volatile_rage_engine.pam_p->pas));
 
 	strcpy(record_type_info->containees[3].field_name, "tail_of_value");
 	record_type_info->containees[3].al.type_info = &(rdb->volatile_rage_engine.pam_p->pas.tuple_pointer_type_info);
@@ -45,7 +45,7 @@ void initialize_hash_table_tuple_defs_for_using_rash_table(rhendb* rdb)
 
 #include<rhendb/max_intermediate_tuple_size.h>
 
-rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb)
+rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, transaction* tx, rhendb* rdb)
 {
 	int abort_error_dummy = 0;
 
@@ -61,7 +61,7 @@ rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_
 
 		.blob_store_root_page_id = get_new_blob_store(&(rdb->volatile_rage_engine.bstd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy),
 
-		.ex_engine = ex_engine,
+		.tx = tx,
 
 		.rdb = rdb,
 	};
@@ -196,7 +196,7 @@ void print_rash_table(rash_table_handle* rth_p, void (*print_value)(binary_read_
 				datum uval;
 				get_value_from_element_from_tuple(&uval, rth_p->rdb->rash_httd.lpltd.record_def, key_position, entry);
 
-				binary_read_iterator* key_bri_p = get_new_binary_read_iterator(&uval, dti, &(rth_p->rdb->volatile_rage_engine.bstd), rth_p->rdb->volatile_rage_engine.pam_p);
+				binary_read_iterator* key_bri_p = get_new_binary_read_iterator(&uval, dti, &(rth_p->rdb->volatile_rage_engine.bstd), rth_p->rdb->volatile_rage_engine.pam_p, NULL);
 				{
 					consume_tuple_from_tuple_list(tuple, &(rth_p->key_tuple_def), key_bri_p, NULL, &abort_error_dummy, {
 						printf("\t\t\t");print_tuple(tuple, &(rth_p->key_tuple_def));
@@ -212,8 +212,8 @@ void print_rash_table(rash_table_handle* rth_p, void (*print_value)(binary_read_
 				datum uval;
 				get_value_from_element_from_tuple(&uval, rth_p->rdb->rash_httd.lpltd.record_def, value_position, entry);
 
-				binary_read_iterator* value_bri_p = get_new_binary_read_iterator(&uval, dti, &(rth_p->rdb->volatile_rage_engine.bstd), rth_p->rdb->volatile_rage_engine.pam_p);
-				
+				binary_read_iterator* value_bri_p = get_new_binary_read_iterator(&uval, dti, &(rth_p->rdb->volatile_rage_engine.bstd), rth_p->rdb->volatile_rage_engine.pam_p, NULL);
+
 				print_value(value_bri_p);
 
 				delete_binary_read_iterator(value_bri_p, NULL, &abort_error_dummy);
@@ -233,12 +233,12 @@ void print_rash_table(rash_table_handle* rth_p, void (*print_value)(binary_read_
 	}
 }
 
-int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine)
+int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, transaction* tx)
 {
 	if(rth_p->key_element_count != key_element_count)
 		return 0;
 
-	if(rth_p->ex_engine != ex_engine)
+	if(rth_p->tx != tx)
 		return 0;
 
 	for(uint32_t i = 0; i < key_element_count; i++)
@@ -250,7 +250,7 @@ int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_de
 	return 1;
 }
 
-rash_table_key get_new_rash_table_key(const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine)
+rash_table_key get_new_rash_table_key(const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, transaction* tx)
 {
 	rash_table_key rkey = {
 		.record = record,
@@ -258,12 +258,12 @@ rash_table_key get_new_rash_table_key(const void* record, const tuple_def* recor
 		.key_element_ids = key_element_ids,
 		.key_element_count = key_element_count,
 
-		.ex_engine = ex_engine,
+		.tx = tx,
 
 		.hash_value = {},
 	};
 
-	uint64_t hash_value = hash_tuple_rhendb(record, record_def, key_element_ids, FNV_64_TUPLE_HASHER, key_element_count, ex_engine);
+	uint64_t hash_value = hash_tuple_rhendb(record, record_def, key_element_ids, FNV_64_TUPLE_HASHER, key_element_count, tx);
 
 	serialize_uint64(rkey.hash_value, 8, hash_value);
 
@@ -329,7 +329,7 @@ void* read_key_in_rash_table_iterator(const rash_table_iterator* rti_p)
 	datum uval;
 	get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, key_position, record_tuple);
 
-	binary_read_iterator* key_bri_p = get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
+	binary_read_iterator* key_bri_p = get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, NULL);
 
 	void* key_tuple = read_tuple_from_binary_read_iterator(key_bri_p, &(rti_p->rth_p->key_tuple_def), NULL, &abort_error_dummy);
 
@@ -384,10 +384,10 @@ int exists_in_rash_table_iterator(const rash_table_iterator* rti_p)
 	datum uval;
 	get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, key_position, record_tuple);
 
-	binary_read_iterator* key_bri_p = get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
+	binary_read_iterator* key_bri_p = get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, NULL);
 
 	consume_tuple_from_tuple_list(tuple, &(rti_p->rth_p->key_tuple_def), key_bri_p, NULL, &abort_error_dummy, {
-		result = (0 == compare_tuples_rhendb(tuple, &(rti_p->rth_p->key_tuple_def), NULL, rti_p->rkey_p->record, rti_p->rkey_p->record_def, rti_p->rkey_p->key_element_ids, NULL, rti_p->rth_p->key_element_count, rti_p->rth_p->ex_engine));
+		result = (0 == compare_tuples_rhendb(tuple, &(rti_p->rth_p->key_tuple_def), NULL, rti_p->rkey_p->record, rti_p->rkey_p->record_def, rti_p->rkey_p->key_element_ids, NULL, rti_p->rth_p->key_element_count, rti_p->rth_p->tx));
 	});
 
 	delete_binary_read_iterator(key_bri_p, NULL, &abort_error_dummy);
@@ -458,7 +458,7 @@ binary_read_iterator* read_value_in_rash_table_iterator(const rash_table_iterato
 	datum uval;
 	get_value_from_element_from_tuple(&uval, rti_p->rth_p->rdb->rash_httd.lpltd.record_def, value_position, record_tuple);
 
-	return get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p);
+	return get_new_binary_read_iterator(&uval, dti, &(rti_p->rth_p->rdb->volatile_rage_engine.bstd), rti_p->rth_p->rdb->volatile_rage_engine.pam_p, NULL);
 }
 
 binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p)

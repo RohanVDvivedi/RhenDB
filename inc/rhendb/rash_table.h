@@ -60,13 +60,13 @@ struct rash_table_handle
 	heap_table_accumulative_notifier htan;
 
 	// to read contents of extended types, to hash and compare them
-	rage_engine* ex_engine;
+	transaction* tx;
 
 	// this is where we use volatile_engine and httd for storing and maintaining rash table
 	rhendb* rdb;
 };
 
-rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine, rhendb* rdb);
+rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, transaction* tx, rhendb* rdb);
 
 // returns number of pages being used per bucket
 // higher this number higher the actual time complexity
@@ -92,16 +92,16 @@ struct rash_table_key
 	uint32_t key_element_count;
 
 	// for hashing and comparing extended types in this record
-	rage_engine* ex_engine;
+	transaction* tx;
 
 	// to be used a key in the actual hash_table underneath rash_table
 	char hash_value[8];
 };
 
 // returns true, if the rash_key initialization will succeed
-int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine);
+int can_initialize_rash_table_key(const rash_table_handle* rth_p, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, transaction* tx);
 
-rash_table_key get_new_rash_table_key(const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, rage_engine* ex_engine);
+rash_table_key get_new_rash_table_key(const void* record, const tuple_def* record_def, const positional_accessor* key_element_ids, uint32_t key_element_count, transaction* tx);
 
 uint64_t get_hash_value_for_rash_table_key(const rash_table_key* rkey_p);
 
