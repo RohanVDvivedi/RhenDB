@@ -121,7 +121,7 @@ static void sort_job(operator* o, void* param)
 		interim_tuple_store* its_p = pop_run_from_tuple_runs(input_param);
 
 		// sort it into a new run
-		interim_tuple_store* ots_p = sort_interim_tuples(its_p, result_counter, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
+		interim_tuple_store* ots_p = sort_interim_tuples(its_p, result_counter, inputs->record_def, inputs->key_element_ids, inputs->key_compare_direction, inputs->key_element_count, o->self_query_plan->curr_tx);
 
 		// delete the input run
 		delete_interim_tuple_store(its_p);
@@ -163,7 +163,7 @@ static int compare_interim_tuple_stores_for_pheap_runs(const void* o_vp, const v
 	const interim_tuple_store* its1_p = its1_vp;
 	const interim_tuple_store* its2_p = its2_vp;
 
-	return compare_datums3_rhendb(its1_p->embed_ptrs[0], its2_p->embed_ptrs[0], inputs->key_dtis, inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
+	return compare_datums3_rhendb(its1_p->embed_ptrs[0], its2_p->embed_ptrs[0], inputs->key_dtis, inputs->key_compare_direction, inputs->key_element_count, o->self_query_plan->curr_tx);
 }
 
 static void merge_into_run_job(operator* o, void* param)
@@ -702,7 +702,7 @@ operator_resource_counter setup_external_sort_operator(operator* o, tuples_down_
 	const tuple_def* record_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
 	// there are max_concurrent_jobs_count number of additional jobs each one doing atmost 1 comparison
-	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids) * max_concurrent_jobs_count, .job_counter = max_concurrent_jobs_count + 1};
+	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE) * max_concurrent_jobs_count, .job_counter = max_concurrent_jobs_count + 1};
 	if(o == NULL)
 		return result;
 

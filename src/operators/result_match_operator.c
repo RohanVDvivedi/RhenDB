@@ -65,7 +65,7 @@ static void execute(operator* o)
 			return ;
 		}
 
-		int compare = compare_tuples_rhendb(inputs->tuples[0], inputs->input_defs[0], NULL, inputs->tuples[1], inputs->input_defs[1], NULL, NULL, inputs->element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
+		int compare = compare_tuples_rhendb(inputs->tuples[0], inputs->input_defs[0], NULL, inputs->tuples[1], inputs->input_defs[1], NULL, NULL, inputs->element_count, o->self_query_plan->curr_tx);
 		inputs->tuple_processed++;
 		if(compare != 0)
 		{
@@ -134,7 +134,7 @@ operator_resource_counter setup_result_match_operator(operator* o, operator* inp
 		}
 	}
 
-	operator_resource_counter result = {.buffer_counter = has_extended_type_info2(input_defs[0], SELF) + has_extended_type_info2(input_defs[1], SELF), .job_counter = 1};
+	operator_resource_counter result = {.buffer_counter = has_extended_type_info2(input_defs[0], SELF, PERSISTENT_EXT_SUB_TYPE) + has_extended_type_info2(input_defs[1], SELF, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
 	if(o == NULL)
 		return result;
 

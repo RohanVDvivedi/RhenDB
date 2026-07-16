@@ -102,7 +102,7 @@ static void insert_for_build_phase_job(operator* o, void* param)
 		FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(tuple, tuple_index, tuple_offset, &(inputs->input_tuple_def->size_def), its_p, get_total_bytes_in_interim_tuple_store(its_p), {
 
 			// create rash table key
-			rash_table_key rtk = get_new_rash_table_key(tuple, inputs->input_tuple_def, inputs->key_element_ids, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
+			rash_table_key rtk = get_new_rash_table_key(tuple, inputs->input_tuple_def, inputs->key_element_ids, inputs->key_element_count, o->self_query_plan->curr_tx);
 
 			// find the parttion this key goes into
 			uint32_t partition_id = get_hash_value_for_rash_table_key(&rtk) % inputs->partitions_count;
@@ -578,7 +578,7 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
 	// there are max_concurrent_jobs_count additional jobs, each one first hashing the key, then comparing it and finally aggregating into one entry
-	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * max(2 * has_extended_type_info3(input_tuple_def, key_element_count, key_element_ids), get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions)), .job_counter = max_concurrent_jobs_count + 1};
+	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * max(2 * has_extended_type_info3(input_tuple_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE), get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions)), .job_counter = max_concurrent_jobs_count + 1};
 	if(o == NULL)
 		return result;
 
@@ -664,7 +664,7 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 	{
 		inputs->partitions[i] = malloc(sizeof(rash_table_partition));
 		pthread_mutex_init(&(inputs->partitions[i]->build_lock), NULL);
-		inputs->partitions[i]->rth = get_new_rash_table(INIT_BUCKET_COUNT, input_tuple_def, key_element_ids, key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine), o->self_query_plan->curr_tx->db);
+		inputs->partitions[i]->rth = get_new_rash_table(INIT_BUCKET_COUNT, input_tuple_def, key_element_ids, key_element_count, o->self_query_plan->curr_tx, o->self_query_plan->curr_tx->rdb);
 	}
 
 	initialize_linkedlist(&(inputs->tuple_buffers_to_insert), offsetof(interim_tuple_store, embed_node_ll));
