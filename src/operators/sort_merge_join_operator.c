@@ -424,7 +424,7 @@ operator_resource_counter setup_sort_merge_join_operator(operator* o, operator* 
 		}
 	}
 
-	operator_resource_counter result = {.buffer_counter = has_extended_type_info3(left_input_tuple_def, key_element_count, left_key_element_ids) + has_extended_type_info3(right_input_tuple_def, key_element_count, right_key_element_ids), .job_counter = 1};
+	operator_resource_counter result = {.buffer_counter = has_extended_type_info3(left_input_tuple_def, key_element_count, left_key_element_ids, PERSISTENT_EXT_SUB_TYPE) + has_extended_type_info3(right_input_tuple_def, key_element_count, right_key_element_ids, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
 	if(o == NULL)
 		return result;
 

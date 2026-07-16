@@ -104,7 +104,7 @@ static void execute(operator* o)
 			// if a prepared output_tuple exists then we may need to match it's key with tuple to ensure that this tuple falls into same group or not
 			if(inputs->output_tuple != NULL)
 			{
-				int same_group = (0 == compare_tuples_rhendb(inputs->output_tuple, inputs->output_tuple_def, NULL, tuple, inputs->input_tuple_def, inputs->key_element_ids, NULL, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine)));
+				int same_group = (0 == compare_tuples_rhendb(inputs->output_tuple, inputs->output_tuple_def, NULL, tuple, inputs->input_tuple_def, inputs->key_element_ids, NULL, inputs->key_element_count, o->self_query_plan->curr_tx));
 
 				// if tuple does not belong to the same group, then produce output tuple
 				if(!same_group)
@@ -261,7 +261,7 @@ operator_resource_counter setup_sorted_aggregation_operator(operator* o, operato
 
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
-	operator_resource_counter result = {.buffer_counter = max(2 * has_extended_type_info3(input_tuple_def, key_element_count, key_element_ids), get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions)), .job_counter = 1};
+	operator_resource_counter result = {.buffer_counter = max(2 * has_extended_type_info3(input_tuple_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE), get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions)), .job_counter = 1};
 	if(o == NULL)
 		return result;
 

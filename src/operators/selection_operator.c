@@ -88,7 +88,7 @@ operator_resource_counter setup_selection_operator(operator* o, operator* input_
 {
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
-	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, input_operator->self_query_plan->curr_tx->db);
+	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, input_operator->self_query_plan->curr_tx->rdb);
 
 	int error_code = 0;
 	void* res_type = infer_type_sql_expr(expr, &ec, &error_code);
