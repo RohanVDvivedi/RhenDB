@@ -2,6 +2,7 @@
 #define RHENDB_TYPES_H
 
 #include<rhendb/rhendb.h>
+#include<rhendb/transaction.h>
 
 #include<tuplestore/data_type_info.h>
 
