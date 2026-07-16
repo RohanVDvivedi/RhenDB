@@ -1,5 +1,7 @@
 #include<rhendb/transaction.h>
 
+#include<tuplelargetypes/common_extended.h>
+
 transaction initialize_transaction(rhendb* rdb)
 {
 	transaction tx = {
@@ -28,6 +30,69 @@ void reset_temp_ext_stores_in_transaction(transaction* tx)
 		destroy_blob_store(tx->temp_ext_stores[i].blob_store_root_page_id, &(tx->rdb->volatile_rage_engine.bstd), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
 		tx->temp_ext_stores[i].blob_store_root_page_id = get_new_blob_store(&(tx->rdb->volatile_rage_engine.bstd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
 	}
+}
+
+static void extension_blob_read_begin_event(extension_reader_iterator_callback* callback, const datum* uval, const data_type_info* dti, const page_access_methods* pam_p)
+{
+	transaction* tx = callback->context;
+
+	datum uval_c;
+	const data_type_info* dti_c;
+	if(!get_nested_containee_from_datum(&uval_c, &dti_c, uval, dti, EXTENDED_PREFIX_POS_ACC))
+		uval_c = (*NULL_DATUM);
+
+	uint64_t hash = hash_datum(&uval_c, dti_c, FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT;
+
+	// now place lock pointer in the contest
+	callback->context = &(tx->temp_ext_stores[hash].blob_store_lock);
+
+	read_lock(((rwlock*)(callback->context)), READ_PREFERRING, BLOCKING);
+}
+
+static void extension_blob_read_ended_event(extension_reader_iterator_callback* callback, const datum* uval, const data_type_info* dti, const page_access_methods* pam_p)
+{
+	// release the lock and make the context now NULL
+	read_unlock(((rwlock*)(callback->context)));
+
+	callback->context = NULL;
+}
+
+extension_reader_iterator_callback* get_callback_and_engine_for_extended_type(transaction* tx, data_type_info* dti_p, rage_engine** ex_engine, extension_reader_iterator_callback* pass_through)
+{
+	if(!is_extended_type_info(dti_p))
+	{
+		(*ex_engine) = NULL;
+		return NULL;
+	}
+
+	uint32_t ext_sub_type_len = 0;
+	const char* ext_sub_type = get_extension_sub_type_for_extended_type(dti_p, &ext_sub_type_len);
+
+	if(ext_sub_type_len != 1)
+	{
+		(*ex_engine) = NULL;
+		return NULL;
+	}
+
+	if(ext_sub_type[0] == PERSISTENT_EXT_SUB_TYPE[0])
+	{
+		(*ex_engine) = &(tx->rdb->persistent_acid_rage_engine);
+		return NULL;
+	}
+
+	if(ext_sub_type[0] == VOLATILE_EXT_SUB_TYPE[0])
+	{
+		(*ex_engine) = &(tx->rdb->volatile_rage_engine);
+		(*pass_through) = (extension_reader_iterator_callback){
+			.context = tx,
+			.extension_blob_read_begin_event = extension_blob_read_begin_event,
+			.extension_blob_read_ended_event = extension_blob_read_ended_event,
+		};
+		return pass_through;
+	}
+
+	(*ex_engine) = NULL;
+	return NULL;
 }
 
 void deinitialize_transaction(transaction* tx)

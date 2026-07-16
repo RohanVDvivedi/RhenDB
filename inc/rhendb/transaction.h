@@ -6,6 +6,10 @@
 
 #include<lockking/rwlock.h>
 
+#include<tuplestore/data_type_info.h>
+
+#include<tuplelargetypes/extension_reader_iterator_callback.h>
+
 // the transaction struct only consists of pointers to already created structs, and need to be managed by you
 // it is basically a place holder for you (the user), and noone else, the application will not be handling or initializing it for you
 
@@ -52,6 +56,11 @@ transaction initialize_transaction(rhendb* rdb);
 
 // deletes the old temp_ext_stores and creates new blobs for them
 void reset_temp_ext_stores_in_transaction(transaction* tx);
+
+// if dti_p is not extended then both the attributes are NULL,
+// for persistent store only callback returned is NULL
+// and for volatile_rage_engine based temp_ext_stores, everything both the return values are present
+extension_reader_iterator_callback* get_callback_and_engine_for_extended_type(transaction* tx, data_type_info* dti_p, rage_engine** ex_engine, extension_reader_iterator_callback* pass_through);
 
 void deinitialize_transaction(transaction* tx);
 
