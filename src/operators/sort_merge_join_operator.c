@@ -238,7 +238,7 @@ static void execute(operator* o)
 			{
 				int cmp = compare_tuples_rhendb(inputs->left_input_iterator->embed_ptrs[0], inputs->left_input_tuple_def, inputs->left_key_element_ids,
 												inputs->right_input_iterator->embed_ptrs[0], inputs->right_input_tuple_def, inputs->right_key_element_ids,
-							inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
+							inputs->key_compare_direction, inputs->key_element_count, o->self_query_plan->curr_tx);
 
 				if(cmp == -1)
 				{
@@ -306,7 +306,7 @@ static void execute(operator* o)
 				else
 					inputs->left_side_equal_tuples_batch->embed_uints[0] = (0 == compare_tuples2_rhendb(inputs->left_input_iterator->embed_ptrs[0], inputs->left_side_equal_tuples_batch->embed_regions[0].tuple,
 															inputs->left_input_tuple_def, inputs->left_key_element_ids,
-							inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine)));
+							inputs->key_compare_direction, inputs->key_element_count, o->self_query_plan->curr_tx));
 			}
 
 			if(inputs->right_side_equal_tuples_batch->embed_uints[0])
@@ -316,7 +316,7 @@ static void execute(operator* o)
 				else
 					inputs->right_side_equal_tuples_batch->embed_uints[0] = (0 == compare_tuples2_rhendb(inputs->right_input_iterator->embed_ptrs[0], inputs->right_side_equal_tuples_batch->embed_regions[0].tuple,
 															inputs->right_input_tuple_def, inputs->right_key_element_ids,
-							inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine)));
+							inputs->key_compare_direction, inputs->key_element_count, o->self_query_plan->curr_tx));
 			}
 
 			if(inputs->left_side_equal_tuples_batch->embed_uints[0])

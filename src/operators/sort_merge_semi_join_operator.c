@@ -117,7 +117,7 @@ static void execute(operator* o)
 			{
 				int cmp = compare_tuples_rhendb(inputs->left_input_iterator->embed_ptrs[0], inputs->left_input_tuple_def, inputs->left_key_element_ids,
 												inputs->right_input_iterator->embed_ptrs[0], inputs->right_input_tuple_def, inputs->right_key_element_ids,
-							inputs->key_compare_direction, inputs->key_element_count, &(o->self_query_plan->curr_tx->db->persistent_acid_rage_engine));
+							inputs->key_compare_direction, inputs->key_element_count, o->self_query_plan->curr_tx);
 
 				if(cmp == -1)
 				{
