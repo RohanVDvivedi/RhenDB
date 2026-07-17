@@ -34,27 +34,35 @@ void reset_temp_ext_stores_in_transaction(transaction* tx)
 
 static void extension_blob_read_begin_event(extension_reader_iterator_callback* callback, const datum* uval, const data_type_info* dti, const page_access_methods* pam_p)
 {
-	transaction* tx = callback->context;
+	transaction* tx = callback->context1;
+	rwlock* lk = callback->context2;
 
-	datum uval_c;
-	const data_type_info* dti_c;
-	if(!get_nested_containee_from_datum(&uval_c, &dti_c, uval, dti, EXTENDED_PREFIX_POS_ACC))
-		uval_c = (*NULL_DATUM);
+	if(lk == NULL)
+	{
+		// find the lock
+		datum uval_c;
+		const data_type_info* dti_c;
+		if(!get_nested_containee_from_datum(&uval_c, &dti_c, uval, dti, EXTENDED_PREFIX_POS_ACC))
+			uval_c = (*NULL_DATUM);
 
-	uint64_t hash = hash_datum(&uval_c, dti_c, FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT;
+		uint64_t hash = hash_datum(&uval_c, dti_c, FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT;
 
-	// now place lock pointer in the contest
-	callback->context = &(tx->temp_ext_stores[hash].blob_store_lock);
+		lk = &(tx->temp_ext_stores[hash].blob_store_lock);
 
-	read_lock(((rwlock*)(callback->context)), READ_PREFERRING, BLOCKING);
+		// now place lock pointer in the contest
+		callback->context2 = lk;
+	}
+
+	read_lock(lk, READ_PREFERRING, BLOCKING);
 }
 
 static void extension_blob_read_ended_event(extension_reader_iterator_callback* callback, const datum* uval, const data_type_info* dti, const page_access_methods* pam_p)
 {
-	// release the lock and make the context now NULL
-	read_unlock(((rwlock*)(callback->context)));
+	//transaction* tx = callback->context1;
+	rwlock* lk = callback->context2;
 
-	callback->context = NULL;
+	// release the lock
+	read_unlock(lk);
 }
 
 extension_reader_iterator_callback* get_callback_and_engine_for_extended_type(transaction* tx, const data_type_info* dti_p, rage_engine** ex_engine, extension_reader_iterator_callback* pass_through)
@@ -84,7 +92,8 @@ extension_reader_iterator_callback* get_callback_and_engine_for_extended_type(tr
 	{
 		(*ex_engine) = &(tx->rdb->volatile_rage_engine);
 		(*pass_through) = (extension_reader_iterator_callback){
-			.context = tx,
+			.context1 = tx,
+			.context2 = NULL, // we do not yet know which lock needs to be freed
 			.extension_blob_read_begin_event = extension_blob_read_begin_event,
 			.extension_blob_read_ended_event = extension_blob_read_ended_event,
 		};
