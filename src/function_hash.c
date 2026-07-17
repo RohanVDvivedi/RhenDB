@@ -47,7 +47,11 @@ uint64_t hash_datum_rhendb(const datum* uval, const data_type_info* dti, tuple_h
 		const void* transaction_id = NULL;
 		int abort_error = 0;
 
-		uint64_t hash_value = hash_tbn(uval, dti, th, &(ex_engine->bstd), ex_engine->pam_p, transaction_id, &abort_error);
+		extension_reader_iterator_callback temp;
+		rage_engine* ex_engine;
+		extension_reader_iterator_callback* callbacks = get_callback_and_engine_for_extended_type(tx, dti, &ex_engine, &temp);
+
+		uint64_t hash_value = hash_tbn(uval, dti, th, ex_engine ? &(ex_engine->bstd) : NULL, ex_engine ? ex_engine->pam_p : NULL, transaction_id, &abort_error, callbacks);
 		if(abort_error)
 		{
 			printf("experienced abort_error while hashing extended types\n");

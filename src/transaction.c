@@ -57,7 +57,7 @@ static void extension_blob_read_ended_event(extension_reader_iterator_callback* 
 	callback->context = NULL;
 }
 
-extension_reader_iterator_callback* get_callback_and_engine_for_extended_type(transaction* tx, data_type_info* dti_p, rage_engine** ex_engine, extension_reader_iterator_callback* pass_through)
+extension_reader_iterator_callback* get_callback_and_engine_for_extended_type(transaction* tx, const data_type_info* dti_p, rage_engine** ex_engine, extension_reader_iterator_callback* pass_through)
 {
 	if(!is_extended_type_info(dti_p))
 	{
