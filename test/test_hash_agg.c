@@ -70,10 +70,10 @@ int main(int argc, char** argv)
 		get_count_aggregate_function(record_def.type_info),
 		get_count_aggregate_function(record_def.type_info->containees[4].al.type_info),
 
-		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[0].al.type_info, 1), // 1 is min
-		get_min_max_aggregate_function(&rdb, record_def.type_info->containees[0].al.type_info, 0), // 0 as last param means max
+		get_min_max_aggregate_function(&tx, record_def.type_info->containees[0].al.type_info, 1), // 1 is min
+		get_min_max_aggregate_function(&tx, record_def.type_info->containees[0].al.type_info, 0), // 0 as last param means max
 
-		get_sum_aggregate_function(&rdb, record_def.type_info->containees[0].al.type_info),
+		get_sum_aggregate_function(&tx, record_def.type_info->containees[0].al.type_info),
 	};
 
 	const positional_accessor aggregate_input_positions_SELF[] = {SELF};

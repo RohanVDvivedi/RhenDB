@@ -97,7 +97,7 @@ int main(int argc, char** argv)
 		setup_constant_dataset_operator(source, its_p, &record_def);
 		printf("source operator %p\n", source);
 		if(filter_expr_sql != NULL)
-			append_tuple_transformer(&(source->output_tuple_transformers), get_new_expressioned_selection_transformer(get_tuple_def_for_tuples_to_be_consumed_from(source), &rdb, filter_expr_sql->expr));
+			append_tuple_transformer(&(source->output_tuple_transformers), get_new_expressioned_selection_transformer(get_tuple_def_for_tuples_to_be_consumed_from(source), &tx, filter_expr_sql->expr));
 		append_tuple_transformer(&(source->output_tuple_transformers), get_new_row_identifier_prepender_transformer(get_tuple_def_for_tuples_to_be_consumed_from(source), 7));
 		append_tuple_transformer(&(source->output_tuple_transformers), get_new_row_number_prepender_transformer(get_tuple_def_for_tuples_to_be_consumed_from(source), 1));
 		append_tuple_transformer(&(source->output_tuple_transformers), get_new_simple_projection_transformer("output", get_tuple_def_for_tuples_to_be_consumed_from(source), sizeof(field_names)/sizeof(field_names[0]), projections, field_names));

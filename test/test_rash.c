@@ -1,4 +1,6 @@
 #include<rhendb/rhendb.h>
+
+#include<rhendb/transaction.h>
 #include<rhendb/rash_table.h>
 
 #include<string.h>
@@ -191,7 +193,7 @@ void insert_rth(rash_table_handle* rth_p, uint32_t v)
 	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rth_p->rdb->persistent_acid_rage_engine));
+	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, rth_p->tx);
 
 	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 0);
 
@@ -214,7 +216,7 @@ int remove_rth(rash_table_handle* rth_p, uint32_t v)
 	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rth_p->rdb->persistent_acid_rage_engine));
+	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, rth_p->tx);
 
 	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 0);
 
@@ -232,7 +234,7 @@ void find_and_print(rash_table_handle* rth_p, uint32_t v)
 	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rth_p->rdb->persistent_acid_rage_engine));
+	rash_table_key rtk = get_new_rash_table_key(record, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, rth_p->tx);
 
 	rash_table_iterator rti = find_equals_in_rash_table(rth_p, &rtk, 1);
 
@@ -276,8 +278,10 @@ int main()
 
 	initialize_tuple_defs();
 
+	transaction tx = initialize_transaction(&rdb);
+
 	// create rash table
-	rash_table_handle rth = get_new_rash_table(BUCKET_COUNT, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &(rdb.persistent_acid_rage_engine), &rdb);
+	rash_table_handle rth = get_new_rash_table(BUCKET_COUNT, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &tx, &rdb);
 
 	// print all
 	#ifdef DEBUG_PRINT
