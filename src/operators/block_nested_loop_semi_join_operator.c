@@ -273,7 +273,7 @@ operator_resource_counter setup_block_nested_loop_semi_join_operator(operator* o
 	const tuple_def* left_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(left_input_operator);
 	const tuple_def* right_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(right_input_operator);
 
-	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, left_input_operator->self_query_plan->curr_tx->rdb);
+	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, left_input_operator->self_query_plan->curr_tx);
 
 	if(join_expr != NULL)
 	{

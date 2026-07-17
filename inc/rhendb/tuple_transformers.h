@@ -17,6 +17,6 @@ tuple_transformer* get_new_row_identifier_prepender_transformer(const tuple_def*
 
 #include<sqltoast/sql_expression.h>
 
-tuple_transformer* get_new_expressioned_selection_transformer(const tuple_def* input_def, rhendb* rdb, sql_expression* expr);
+tuple_transformer* get_new_expressioned_selection_transformer(const tuple_def* input_def, transaction* tx, sql_expression* expr);
 
 #endif

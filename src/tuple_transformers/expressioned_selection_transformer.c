@@ -36,7 +36,7 @@ static void destroy(tuple_transformer* tt_p)
 	free(sc_p);
 }
 
-tuple_transformer* get_new_expressioned_selection_transformer(const tuple_def* input_def, rhendb* rdb, sql_expression* expr)
+tuple_transformer* get_new_expressioned_selection_transformer(const tuple_def* input_def, transaction* tx, sql_expression* expr)
 {
 	if(has_sub_query_in_sql_exp(expr))
 		return NULL;
@@ -44,7 +44,7 @@ tuple_transformer* get_new_expressioned_selection_transformer(const tuple_def* i
 	selection_context* sc_p = malloc(sizeof(selection_context));
 	sc_p->expr = expr;
 
-	sc_p->ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_def), 1, rdb);
+	sc_p->ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_def), 1, tx);
 
 	int error_code = 0;
 	void* res_type = infer_type_sql_expr(sc_p->expr, &(sc_p->ec), &error_code);

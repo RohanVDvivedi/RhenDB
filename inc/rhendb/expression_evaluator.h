@@ -18,7 +18,7 @@
 
 #include<cutlery/hashmap.h>
 
-#include<transaction/transaction.h>
+#include<rhendb/transaction.h>
 
 typedef enum expr_type expr_type;
 enum expr_type
