@@ -1491,15 +1491,27 @@ static expr_type effective_type(const expr_type_info* ti)
 	return ti->type;
 }
 
+/* an extended (blob-backed) text/blob/numeric type. these read through an engine; two of them are only
+ * interchangeable-in-tuple-form when they are byte-for-byte the same type (same sub_type/name, same
+ * max_size, same inline prefix, same containees) -- i.e. are_identical_type_info. */
+static int is_extended_kind(const data_type_info* d)
+{
+	return d != NULL && is_extended_type_info(d);
+}
+
 /* two tuple-form types are compatible if they are the same extended kind, or (for plain tuples)
  * the same declared type_name and container type -- pointer equality is not required. */
 static int same_tuple_kind(const data_type_info* d1, const data_type_info* d2)
 {
 	if(d1 == NULL || d2 == NULL) return d1 == d2;
-	if(is_numeric_type_info(d1)) return is_numeric_type_info(d2);
-	if(is_text_type_info(d1))    return is_text_type_info(d2);
-	if(is_blob_type_info(d1))    return is_blob_type_info(d2);
-	if(is_numeric_type_info(d2) || is_text_type_info(d2) || is_blob_type_info(d2)) return 0;
+	/* extended text/blob/numeric stay in (unmaterialized) tuple form through a binary op ONLY when the
+	 * two sides are the exact same extended type. two extended types of the same scalar family but with
+	 * a different sub_type, max_size, prefix or table-derived name are NOT interchangeable: the caller
+	 * (rhendb_unify_types) then promotes them to the materialized scalar (RHENDB_STRING/BINARY/NUMERIC).
+	 * this keeps all differing extended text types -- and a plain RHENDB_STRING -- behaving identically. */
+	if(is_extended_kind(d1) || is_extended_kind(d2))
+		return is_extended_kind(d1) && is_extended_kind(d2) && are_identical_type_info(d1, d2);
+	/* plain (inline-container) tuples: same declared structure */
 	return are_identical_type_info(d1, d2);
 }
 
@@ -1564,14 +1576,22 @@ static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_cont
 	 * if they are the same kind/structure -- not necessarily the same pointer -- and stay tuple form. */
 	if(t1->type == RHENDB_TUPLE && t2->type == RHENDB_TUPLE)
 	{
+		/* identical extended types (or identical plain tuples) stay in tuple form -- the reader will
+		 * pull them straight from their engine without a full materialization. */
 		if(t1->dti_p == t2->dti_p || same_tuple_kind(t1->dti_p, t2->dti_p))
 		{
 			expr_type_info* r = new_type(RHENDB_TUPLE);
 			r->dti_p = t1->dti_p;   /* borrowed */
 			return r;
 		}
-		*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
-		return NULL;
+		/* two DIFFERENT extended text/blob/numeric types (different engine, sub_type, max_size, name):
+		 * fall through to reconcile their materialized scalar kinds below (RHENDB_STRING/BINARY/NUMERIC),
+		 * so the expression result is a materialized value. only genuinely unrelated plain tuples error. */
+		if(!(is_extended_kind(t1->dti_p) || is_extended_kind(t2->dti_p)))
+		{
+			*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
+			return NULL;
+		}
 	}
 	if(t1->type == RHENDB_ARRAY && t2->type == RHENDB_ARRAY)
 	{
