@@ -281,7 +281,7 @@ struct sum_context
 
 static int NUMERIC_update_sum_state(void** state_p, const datum input, const aggregate_function* af_p)
 {
-	rage_engine* eng = ((const sum_context*)(af_p->context_p))->persistent_acid_rage_engine;
+	transaction* tx = ((const sum_context*)(af_p->context_p))->tx;
 	numeric_sum_state* sum_state = (*state_p);
 
 	// convert innput to input_mpd_t, i.e. materialize it
@@ -289,7 +289,12 @@ static int NUMERIC_update_sum_state(void** state_p, const datum input, const agg
 	{
 		const void* transaction_id = NULL;
 		int abort_error = 0;
-		numeric_reader_interface nri = init_intuple_numeric_reader_interface(input, af_p->input_type_infos[0], &(eng->bstd), eng->pam_p, transaction_id, &abort_error);
+
+		extension_reader_iterator_callback temp;
+		rage_engine* ex_engine;
+		extension_reader_iterator_callback* callbacks = get_callback_and_engine_for_extended_type(tx, af_p->input_type_infos[0], &ex_engine, &temp);
+
+		numeric_reader_interface nri = init_intuple_numeric_reader_interface(input, af_p->input_type_infos[0], ex_engine ? &(ex_engine->bstd) : NULL, ex_engine ? ex_engine->pam_p : NULL, callbacks, transaction_id, &abort_error);
 		if(abort_error)
 		{
 			printf("experienced abort_error while sum aggregating extended numeric type\n");
