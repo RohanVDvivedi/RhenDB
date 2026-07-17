@@ -8,6 +8,8 @@
 
 #include<tuplestore/data_type_info.h>
 
+#include<tupleindexer/utils/heap_table_accumulative_notifier.h>
+
 #include<tuplelargetypes/extension_reader_iterator_callback.h>
 
 // the transaction struct only consists of pointers to already created structs, and need to be managed by you
@@ -30,8 +32,14 @@ struct temporary_extension_store
 {
 	uint64_t blob_store_root_page_id;
 
+	// heap table notifier to notifier for the unused_space fixing in the blob_store
+	// note: you must fix with write_lock held
+	heap_table_accumulative_notifier htan;
+
 	rwlock blob_store_lock;
 };
+
+#define MAX_ENTRIES_IN_VOL_BLOBS_HTAN 56 // threshold should be something like 20 to 24 for fixing the accumulated entries
 
 // this is the number of temporary extension stores that any 1 particular transaction will maintain
 #define TEMPORARY_EXTENSION_STORE_COUNT 64

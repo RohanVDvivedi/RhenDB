@@ -15,6 +15,7 @@ transaction initialize_transaction(rhendb* rdb)
 		const void* transaction_id = NULL;
 		int abort_error_dummy = 0;
 		tx.temp_ext_stores[i].blob_store_root_page_id = get_new_blob_store(&(rdb->volatile_rage_engine.bstd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		initialize_heap_table_accumulative_notifier(&(tx.temp_ext_stores[i].htan), MAX_ENTRIES_IN_VOL_BLOBS_HTAN);
 		initialize_rwlock(&(tx.temp_ext_stores[i].blob_store_lock), NULL);
 	}
 
@@ -28,7 +29,10 @@ void reset_temp_ext_stores_in_transaction(transaction* tx)
 		const void* transaction_id = NULL;
 		int abort_error_dummy = 0;
 		destroy_blob_store(tx->temp_ext_stores[i].blob_store_root_page_id, &(tx->rdb->volatile_rage_engine.bstd), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
+		deinitialize_heap_table_accumulative_notifier(&(tx->temp_ext_stores[i].htan));
+
 		tx->temp_ext_stores[i].blob_store_root_page_id = get_new_blob_store(&(tx->rdb->volatile_rage_engine.bstd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		initialize_heap_table_accumulative_notifier(&(tx->temp_ext_stores[i].htan), MAX_ENTRIES_IN_VOL_BLOBS_HTAN);
 	}
 }
 
@@ -111,6 +115,7 @@ void deinitialize_transaction(transaction* tx)
 		const void* transaction_id = NULL;
 		int abort_error_dummy = 0;
 		destroy_blob_store(tx->temp_ext_stores[i].blob_store_root_page_id, &(tx->rdb->volatile_rage_engine.bstd), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
+		deinitialize_heap_table_accumulative_notifier(&(tx->temp_ext_stores[i].htan));
 		deinitialize_rwlock(&(tx->temp_ext_stores[i].blob_store_lock));
 	}
 
