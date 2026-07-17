@@ -18,7 +18,7 @@
 
 #include<cutlery/hashmap.h>
 
-#include<rhendb/rhendb.h>
+#include<transaction/transaction.h>
 
 typedef enum expr_type expr_type;
 enum expr_type
@@ -85,9 +85,9 @@ struct rhendb_expr_eval_context
 	// owned by the context; caches "a.b.c" -> (tuple index + positional accessor + type)
 	hashmap var_cache;
 
-	// for materializing the on-disk -> text, blob and numeric columns
+	// for materializing the on-disk, and extended volatile store -> text, blob and numeric columns
 	// and to access the catalog_manager, for user defined types and functions
-	rhendb* rdb;
+	transaction* tx;
 
 	// FREE LIST OF RECYCLED expr_value-s, owned by this context.
 	//
@@ -156,7 +156,7 @@ enum rhendb_expr_eval_error
 // ===================================================================================================
 
 // intitialize this per instance for evaluation context of one stream of tuples of 1 type
-sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, rhendb* rdb);
+sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, transaction* tx);
 
 // must be called, only after you infer the output_type of the corresponding expressions that you want to process with this context
 // returns true only if any of the var_cache points to an extended type
