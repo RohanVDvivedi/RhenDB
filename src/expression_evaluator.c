@@ -10,6 +10,17 @@
 #include<errno.h>
 
 #include<rhendb/function_compare.h>
+#include<rhendb/transaction.h>
+
+#include<tuplelargetypes/common_extended.h>
+#include<tuplelargetypes/binary_read_iterator.h>
+#include<tuplelargetypes/binary_write_iterator.h>
+#include<tuplelargetypes/digit_write_iterator.h>
+
+#include<tupleindexer/blob_store/blob_store.h>
+#include<tupleindexer/utils/heap_table_accumulative_notifier.h>
+
+#include<lockking/rwlock.h>
 
 #include<cutlery/cutlery_math.h>
 
@@ -2051,4 +2062,440 @@ int select_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eva
 		return 0;
 
 	return (log_res == ec_p->true_bool) ? 1 : 0;
+}
+
+// ===================================================================================================
+// projection
+// ===================================================================================================
+
+int is_valid_using_infer_sql_expr_for_rhendb(sql_expr_eval_context* ec_p, sql_expression* expr)
+{
+	int error_code = 0;
+	void* t = infer_type_sql_expr(expr, ec_p, &error_code);
+	if(t != NULL)
+		delete_type(t, ec_p);
+	return (error_code == 0) ? 1 : 0;
+}
+
+// the inline prefix budget of a projected extended value, and the total inline max_size (leaving room after
+// the prefix for the blob pointer (page id up to 8+4 bytes), a 4-byte offset, the inline array size header
+// and a few spare bytes). for numeric the prefix holds floor(90 / BYTES_PER_NUMERIC_DIGIT) radix-10^12
+// digit slots.
+#define PROJECTION_PREFIX_BYTES   90
+#define PROJECTION_MAX_SIZE       128
+// once this many wrong-unused-space notifications have accumulated in a store's htan, drain them
+#define PROJECTION_HTAN_FIX_THRESHOLD  20
+
+// build the data_type_info a scalar result of kind `scalar` is projected into. string/binary/numeric become
+// volatile-store extended types (freshly allocated); native scalars map to their default type_info. the
+// result is always safe for destroy_type_info_recursively() (defaults are is_static). NULL for tuple/array
+// or a missing transaction.
+static data_type_info* build_projection_type_for_scalar(expr_type scalar, const sql_expr_eval_context* ec_p)
+{
+	switch(scalar)
+	{
+		// native scalars : matching default (nullable, so a projected NULL fits too). these are is_static,
+		// hence destroy_type_info_recursively() on them is a safe no-op.
+		case RHENDB_BIT_FIELD:  return BIT_FIELD_NULLABLE[8];
+		case RHENDB_UINT:       return UINT_NULLABLE[8];
+		case RHENDB_INT:        return INT_NULLABLE[8];
+		case RHENDB_FLOAT:      return FLOAT_double_NULLABLE;
+		case RHENDB_LARGE_UINT: return LARGE_UINT_NULLABLE[32];
+		case RHENDB_LARGE_INT:  return LARGE_INT_NULLABLE[32];
+		default: break;
+	}
+
+	transaction* tx = tx_from_ctx(ec_p);
+	if(tx == NULL)
+		return NULL;
+	const page_access_specs* vpas = &(tx->rdb->volatile_rage_engine.pam_p->pas);
+
+	if(scalar == RHENDB_STRING)
+	{
+		data_type_info* inl = get_text_inline_type_info(PROJECTION_PREFIX_BYTES);
+		return inl ? get_text_extended_type_info(VOLATILE_EXT_SUB_TYPE, PROJECTION_MAX_SIZE, inl, vpas) : NULL;
+	}
+	if(scalar == RHENDB_BINARY)
+	{
+		data_type_info* inl = get_blob_inline_type_info(PROJECTION_PREFIX_BYTES);
+		return inl ? get_blob_extended_type_info(VOLATILE_EXT_SUB_TYPE, PROJECTION_MAX_SIZE, inl, vpas) : NULL;
+	}
+	if(scalar == RHENDB_NUMERIC)
+	{
+		data_type_info* inl = get_numeric_inline_type_info(PROJECTION_PREFIX_BYTES);
+		return inl ? get_numeric_extended_type_info(VOLATILE_EXT_SUB_TYPE, PROJECTION_MAX_SIZE, inl, vpas) : NULL;
+	}
+	return NULL;   // RHENDB_TUPLE / RHENDB_ARRAY
+}
+
+data_type_info* infer_projected_type_sql_expr_for_rhendb(sql_expr_eval_context* ec_p, sql_expression* expr, int* error_code)
+{
+	*error_code = 0;
+	expr_type_info* t = infer_type_sql_expr(expr, ec_p, error_code);
+	if((*error_code) || t == NULL)
+	{
+		if(t != NULL) delete_type(t, ec_p);
+		return NULL;
+	}
+	expr_type scalar = effective_type(t);    // an unmaterialized extended large-type acts as its scalar
+
+	// a genuine tuple / array result (one that is NOT an extended text/blob/numeric large type) is projected
+	// AS-IS: the projected type is that very data_type_info -- exactly as a tuple/array column would be
+	// stored. clone it so the returned type is owned by the caller (safe to destroy) and does not alias the
+	// inferred-type object we are about to delete.
+	if((scalar == RHENDB_TUPLE || scalar == RHENDB_ARRAY) && t->dti_p != NULL)
+	{
+		int ae = 0;
+		data_type_info* proj = clone_type_info_recursively(t->dti_p, &ae, NULL, NULL);
+		delete_type(t, ec_p);
+		if(ae || proj == NULL)
+		{
+			*error_code = RHENDB_EE_OUT_OF_MEMORY;
+			return NULL;
+		}
+		return proj;
+	}
+	delete_type(t, ec_p);
+
+	data_type_info* proj = build_projection_type_for_scalar(scalar, ec_p);
+	if(proj == NULL)
+		*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
+	return proj;
+}
+
+// drain a store's accumulated wrong-unused-space notifications back into the blob store, but only once they
+// cross the threshold (or when forced at the end of a write).
+static void project_fix_unused_space(transaction* tx, temporary_extension_store* store, int force)
+{
+	uint32_t pending = get_notification_count_for_heap_table_accumulative_notifier(&(store->htan));
+	if(pending == 0 || (!force && pending < PROJECTION_HTAN_FIX_THRESHOLD))
+		return;
+	rage_engine* VE = &(tx->rdb->volatile_rage_engine);
+	int ae = 0; uint64_t root, page; uint32_t unused;
+	while(pop_from_heap_table_accumulative_notifier(&(store->htan), &root, &unused, &page))
+		fix_unused_space_in_heap_table(root, unused, page, &(VE->bstd.httd), VE->pam_p, VE->pmm_p, NULL, &ae);
+}
+
+// pick the temporary extension store for an already-written prefix (in `holder`, of type `proj`).
+static temporary_extension_store* project_pick_store(transaction* tx, void* holder, data_type_info* proj)
+{
+	datum prefix_c; const data_type_info* prefix_dti;
+	datum whole = (datum){ .is_NULL = 0, .tuple_value = holder };
+	if(!get_nested_containee_from_datum(&prefix_c, &prefix_dti, &whole, proj, EXTENDED_PREFIX_POS_ACC))
+		prefix_c = (*NULL_DATUM);
+	uint64_t h = hash_datum(&prefix_c, prefix_dti, FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT;
+	return &(tx->temp_ext_stores[h]);
+}
+
+// project a RHENDB_STRING/BINARY value into a volatile extended text/blob:
+//   read the evaluated bytes via a read iterator (peeking, no copy), streaming them into a write iterator.
+//   the first PROJECTION_PREFIX_BYTES land in the inline prefix (dummy root); if any bytes remain we hash
+//   the finished prefix, point the write iterator at the chosen store (root + its htan) and continue under
+//   that store's write lock.
+static int project_write_sb_to_volatile(transaction* tx, data_type_info* proj, expr_value* v,
+	const sql_expr_eval_context* ec_p, datum* out_datum, void** out_buf, int* error_code)
+{
+	rage_engine* VE = &(tx->rdb->volatile_rage_engine);
+	const page_access_specs* pas = &(VE->pam_p->pas);
+
+	// a reader over the source value. a materialized RHENDB_STRING/BINARY is read as an inline datum with
+	// dti = NULL; an unmaterialized extended value is read via its own dti + engine + lock callback.
+	int src_extended = (v->type_info.dti_p != NULL);
+	extension_reader_iterator_callback cbs; extension_reader_iterator_callback* cb = NULL;
+	rage_engine* seng = NULL;
+	const data_type_info* sdti = NULL;
+	datum sval;
+	if(src_extended)
+	{
+		sdti = v->type_info.dti_p;
+		seng = engine_and_callback_from_ctx(ec_p, sdti, &cbs, &cb);
+		sval = v->value;
+	}
+	else
+	{
+		// inline: reader treats {string_value,string_size} as the whole value (dti = NULL)
+		sval = v->value;
+	}
+
+	int abort_error = 0;
+	void* holder = malloc(pas->page_size);
+	if(holder == NULL) { *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
+	tuple_def td; initialize_tuple_def(&td, proj);
+	init_tuple(&td, holder);
+	set_element_in_tuple(&td, SELF, holder, EMPTY_DATUM, pas->page_size);
+
+	binary_read_iterator* rd = get_new_binary_read_iterator(&sval, sdti,
+		seng ? &(seng->bstd) : NULL, seng ? seng->pam_p : NULL, cb);
+	// write iterator starts with a DUMMY root; we fill ONLY the inline prefix first (no blob store touched).
+	binary_write_iterator* wr = get_new_binary_write_iterator(holder, &td, SELF, 0 /*dummy root*/,
+		get_NULL_tuple_pointer(pas), PROJECTION_PREFIX_BYTES, &(VE->bstd), VE->pam_p, VE->pmm_p);
+
+	temporary_extension_store* store = NULL;   // chosen (and locked) only once the prefix is full
+
+	// ---- phase 1 : fill the inline prefix. give at most the remaining prefix budget per step so the writer
+	// never overflows into the (still dummy-rooted) blob store. ----
+	while(wr->bytes_written_to_prefix < wr->bytes_to_be_written_to_prefix)
+	{
+		uint32_t avail = 0;
+		const char* chunk = peek_in_binary_read_iterator(rd, &avail, NULL, &abort_error);
+		if(abort_error || avail == 0) break;   // source no longer than the prefix : no overflow needed
+		uint32_t room = wr->bytes_to_be_written_to_prefix - wr->bytes_written_to_prefix;
+		uint32_t give = avail < room ? avail : room;
+		uint32_t wrote = append_to_binary_write_iterator(wr, chunk, give, NULL, NULL, &abort_error);
+		if(abort_error || wrote == 0) break;
+		char sink[128]; uint32_t left = wrote;
+		while(left > 0 && !abort_error)
+		{
+			uint32_t take = left < sizeof(sink) ? left : (uint32_t)sizeof(sink);
+			uint32_t got = read_from_binary_read_iterator(rd, sink, take, NULL, &abort_error);
+			if(got == 0) break;
+			left -= got;
+		}
+		if(abort_error) break;
+	}
+
+	// ---- phase 2 : if source bytes remain, hash the finished prefix, pick + lock the store, repoint the
+	// write iterator at that store's real root, and stream the remainder into it under the write lock. ----
+	if(!abort_error)
+	{
+		uint32_t avail = 0;
+		const char* chunk = peek_in_binary_read_iterator(rd, &avail, NULL, &abort_error);
+		if(!abort_error && avail > 0)
+		{
+			store = project_pick_store(tx, holder, proj);
+			write_lock(&(store->blob_store_lock), BLOCKING);
+			wr->blob_store_root_page_id = store->blob_store_root_page_id;
+			const heap_table_notifier* notify = &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(store->htan));
+
+			while(!abort_error)
+			{
+				if(avail == 0)
+				{
+					chunk = peek_in_binary_read_iterator(rd, &avail, NULL, &abort_error);
+					if(abort_error || avail == 0) break;
+				}
+				uint32_t wrote = append_to_binary_write_iterator(wr, chunk, avail, notify, NULL, &abort_error);
+				if(abort_error || wrote == 0) { if(!abort_error) abort_error = 1; break; }
+				char sink[512]; uint32_t left = wrote;
+				while(left > 0 && !abort_error)
+				{
+					uint32_t take = left < sizeof(sink) ? left : (uint32_t)sizeof(sink);
+					uint32_t got = read_from_binary_read_iterator(rd, sink, take, NULL, &abort_error);
+					if(got == 0) break;
+					left -= got;
+				}
+				avail = 0;
+				project_fix_unused_space(tx, store, 0);   // opportunistic threshold-based drain while writing
+			}
+		}
+	}
+
+	delete_binary_write_iterator(wr, NULL, &abort_error);
+	delete_binary_read_iterator(rd, NULL, &abort_error);
+
+	if(store != NULL)
+	{
+		project_fix_unused_space(tx, store, 1);       // force-drain the remainder before releasing the lock
+		write_unlock(&(store->blob_store_lock));
+	}
+
+	int ok = !abort_error;
+	if(ok)
+	{
+		uint32_t sz = get_tuple_size(&td, holder);
+		void* copy = malloc(sz ? sz : 1);
+		if(copy == NULL) { ok = 0; *error_code = RHENDB_EE_OUT_OF_MEMORY; }
+		else { memcpy(copy, holder, sz); *out_buf = copy; *out_datum = (datum){ .is_NULL = 0, .tuple_value = copy }; }
+	}
+	if(!ok && (*error_code) == 0) *error_code = RHENDB_EE_MATERIALIZE_FAILED;
+	free(holder);
+	return ok;
+}
+
+// project a numeric value (as an mpd_t) into a volatile extended numeric. same prefix-then-hash-then-lock
+// discipline; digits are written in one bulk append rather than one at a time.
+static int project_write_numeric_to_volatile(transaction* tx, data_type_info* proj, const mpd_t* d,
+	datum* out_datum, void** out_buf, int* error_code)
+{
+	rage_engine* VE = &(tx->rdb->volatile_rage_engine);
+	const page_access_specs* pas = &(VE->pam_p->pas);
+
+	int exp_too_big = 0;
+	materialized_numeric mn = decimal_to_materialized_numeric(d, &exp_too_big);
+	if(exp_too_big) { *error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION; return 0; }
+	numeric_sign_bits sb; int16_t ex; get_sign_bits_and_exponent_for_materialized_numeric(&mn, &sb, &ex);
+	uint32_t nd = get_digits_count_for_materialized_numeric(&mn);
+
+	// gather the digits into one contiguous array so they can be appended in bulk
+	uint64_t* digits = malloc((nd ? nd : 1) * sizeof(uint64_t));
+	if(digits == NULL) { deinitialize_materialized_numeric(&mn); *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
+	for(uint32_t i = 0; i < nd; i++) digits[i] = get_nth_digit_from_materialized_numeric(&mn, i);
+
+	int abort_error = 0;
+	void* holder = malloc(pas->page_size);
+	if(holder == NULL) { free(digits); deinitialize_materialized_numeric(&mn); *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
+	tuple_def td; initialize_tuple_def(&td, proj);
+	init_tuple(&td, holder);
+	set_element_in_tuple(&td, SELF, holder, EMPTY_DATUM, pas->page_size);
+	set_sign_bits_and_exponent_for_numeric(sb, ex, holder, &td, SELF);
+
+	digit_write_iterator* wr = get_new_digit_write_iterator(holder, &td, SELF, 0 /*dummy root*/,
+		get_NULL_tuple_pointer(pas), PROJECTION_PREFIX_BYTES / BYTES_PER_NUMERIC_DIGIT, &(VE->bstd), VE->pam_p, VE->pmm_p);
+
+	temporary_extension_store* store = NULL;
+	uint32_t off = 0;
+
+	// ---- phase 1 : write only the prefix digits (dummy root, no blob store touched). the iterator caps its
+	// own prefix capacity by the available inline space, so drive the loop by digits_to_be_written_to_prefix
+	// and never hand it more than the remaining prefix room in a single append. ----
+	while(off < nd && wr->digits_written_to_prefix < wr->digits_to_be_written_to_prefix && !abort_error)
+	{
+		uint32_t room = wr->digits_to_be_written_to_prefix - wr->digits_written_to_prefix;
+		uint32_t give = (nd - off) < room ? (nd - off) : room;
+		uint32_t wrote = append_to_digit_write_iterator(wr, digits + off, give, NULL, NULL, &abort_error);
+		if(abort_error || wrote == 0) { if(!abort_error) abort_error = 1; break; }
+		off += wrote;
+	}
+
+	// ---- phase 2 : if digits remain, hash the finished prefix, pick + lock the store, repoint the iterator
+	// at that store's real root, and stream the remaining digits in bulk under the write lock. ----
+	if(!abort_error && off < nd)
+	{
+		store = project_pick_store(tx, holder, proj);
+		write_lock(&(store->blob_store_lock), BLOCKING);
+		wr->blob_store_root_page_id = store->blob_store_root_page_id;
+		const heap_table_notifier* notify = &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(store->htan));
+		while(off < nd && !abort_error)
+		{
+			uint32_t wrote = append_to_digit_write_iterator(wr, digits + off, nd - off, notify, NULL, &abort_error);
+			if(abort_error || wrote == 0) { if(!abort_error) abort_error = 1; break; }
+			off += wrote;
+			project_fix_unused_space(tx, store, 0);
+		}
+	}
+
+	delete_digit_write_iterator(wr, NULL, &abort_error);
+	if(store != NULL)
+	{
+		project_fix_unused_space(tx, store, 1);
+		write_unlock(&(store->blob_store_lock));
+	}
+
+	int ok = !abort_error;
+	if(ok)
+	{
+		uint32_t sz = get_tuple_size(&td, holder);
+		void* copy = malloc(sz ? sz : 1);
+		if(copy == NULL) { ok = 0; *error_code = RHENDB_EE_OUT_OF_MEMORY; }
+		else { memcpy(copy, holder, sz); *out_buf = copy; *out_datum = (datum){ .is_NULL = 0, .tuple_value = copy }; }
+	}
+	if(!ok && (*error_code) == 0) *error_code = RHENDB_EE_MATERIALIZE_FAILED;
+	free(holder); free(digits);
+	deinitialize_materialized_numeric(&mn);
+	return ok;
+}
+
+datum project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, data_type_info* projection_type_info, void** buffer_to_free, int* error_code)
+{
+	*error_code = 0;
+	*buffer_to_free = NULL;
+	datum err_datum = (datum){ .is_NULL = 1 };   // returned (with *error_code set) on any failure
+
+	// projection only ever produces a VOLATILE extended type; a persistent target is rejected outright.
+	if(has_extended_type_info(projection_type_info, PERSISTENT_EXT_SUB_TYPE))
+	{
+		*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
+		return err_datum;
+	}
+
+	transaction* tx = tx_from_ctx(ec_p);
+
+	// the target is a type we ourselves returned from inference, so its kind already matches the result;
+	// classify it directly.
+	int to_ext_num  = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_numeric_type_info(projection_type_info);
+	int to_ext_text = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_text_type_info(projection_type_info);
+	int to_ext_blob = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_blob_type_info(projection_type_info);
+
+	expr_value* v = evaluate_sql_expr(expr, ec_p, error_code);
+	if(*error_code)
+		return err_datum;
+	if(v == NULL)             // a NULL result with no error : the projected value is SQL NULL
+		return (*NULL_DATUM);
+
+	// ---- extended volatile numeric target ----
+	if(to_ext_num)
+	{
+		mpd_t scratch = (mpd_t){0}; int owns = 0;
+		mpd_t* dp = operand_to_mpd(v, &scratch, &owns, ec_p, error_code, RHENDB_EE_INCOMPATIBLE_PROJECTION);
+		if(dp == NULL) { rhendb_delete_data(v, ec_p); return err_datum; }
+		datum od; void* ob = NULL;
+		int ok = project_write_numeric_to_volatile(tx, projection_type_info, dp, &od, &ob, error_code);
+		if(owns) mpd_del(&scratch);
+		rhendb_delete_data(v, ec_p);
+		if(!ok) return err_datum;
+		*buffer_to_free = ob;
+		return od;
+	}
+
+	// ---- extended volatile text / blob target ----
+	if(to_ext_text || to_ext_blob)
+	{
+		datum od; void* ob = NULL;
+		int ok = project_write_sb_to_volatile(tx, projection_type_info, v, ec_p, &od, &ob, error_code);
+		rhendb_delete_data(v, ec_p);
+		if(!ok) return err_datum;
+		*buffer_to_free = ob;
+		return od;
+	}
+
+	// ---- tuple / array target : project the container value AS-IS into a caller-owned copy ----
+	if(projection_type_info != NULL && is_container_type_info(projection_type_info) && !is_extended_type_info(projection_type_info))
+	{
+		if(v->type_info.dti_p == NULL || !are_identical_type_info(v->type_info.dti_p, projection_type_info))
+		{
+			rhendb_delete_data(v, ec_p);
+			*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
+			return err_datum;
+		}
+		const void* bytes = v->value.tuple_value;   // tuple_value / array_value are the same union member
+		if(bytes == NULL)   // an empty / minimally-initialized container
+		{
+			datum out = (datum){ .is_NULL = v->value.is_NULL, .tuple_value = NULL };
+			rhendb_delete_data(v, ec_p);
+			return out;
+		}
+		uint32_t sz = get_size_for_type_info(projection_type_info, bytes);
+		void* copy = malloc(sz ? sz : 1);
+		if(copy == NULL) { rhendb_delete_data(v, ec_p); *error_code = RHENDB_EE_OUT_OF_MEMORY; return err_datum; }
+		memcpy(copy, bytes, sz);
+		rhendb_delete_data(v, ec_p);
+		*buffer_to_free = copy;
+		return (datum){ .is_NULL = 0, .tuple_value = copy };
+	}
+
+	// ---- native scalar target : hand back the value directly, preserving its full width ----
+	if(projection_type_info != NULL && !is_extended_type_info(projection_type_info))
+	{
+		datum out = (datum){ .is_NULL = 0 };
+		switch(projection_type_info->type)
+		{
+			case FLOAT:      out.double_value     = to_dbl(v);  break;
+			case BIT_FIELD:
+			case UINT:       out.uint_value       = to_u64(v);  break;
+			case INT:        out.int_value        = to_i64(v);  break;
+			// large uint/int are 256-bit (32 bytes) : never truncate through a 64-bit path
+			case LARGE_UINT: out.large_uint_value = to_u256(v); break;
+			case LARGE_INT:  out.large_int_value  = to_i256(v); break;
+			default:
+				rhendb_delete_data(v, ec_p);
+				*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
+				return err_datum;
+		}
+		rhendb_delete_data(v, ec_p);
+		return out;
+	}
+
+	rhendb_delete_data(v, ec_p);
+	*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
+	return err_datum;
 }
