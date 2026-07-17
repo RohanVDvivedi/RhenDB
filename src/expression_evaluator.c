@@ -329,12 +329,39 @@ static int256 to_i256(const expr_value* v)
 	}
 }
 
-/* the engine used to read extended text/blob/numeric out of tuples */
-static rage_engine* engine_from_ctx(const sql_expr_eval_context* ec_p)
+/* the transaction backing this evaluation context (multi-blob-store refactor). */
+static transaction* tx_from_ctx(const sql_expr_eval_context* ec_p)
 {
-	if(((rhendb_expr_eval_context*)(ec_p->context_p))->rdb)
-		return &(((rhendb_expr_eval_context*)(ec_p->context_p))->rdb->persistent_acid_rage_engine);
-	return NULL;
+	return ((rhendb_expr_eval_context*)(ec_p->context_p))->tx;
+}
+
+/* the engine + lock callback used to read one extended text/blob/numeric COLUMN out of a tuple.
+ * The correct engine (persistent vs volatile temporary store) and, for the volatile stores, the
+ * begin/end lock callback are chosen from the transaction by the column's extension sub-type.
+ * `dti` is the column's own data_type_info; `cb_storage` supplies backing storage for the callback.
+ *   returns the engine (NULL if not extended / no tx / unknown sub-type); *callback_out is the
+ *   pass-through callback (NULL for the persistent store and for inline types). */
+static rage_engine* engine_and_callback_from_ctx(const sql_expr_eval_context* ec_p, const data_type_info* dti,
+	extension_reader_iterator_callback* cb_storage, extension_reader_iterator_callback** callback_out)
+{
+	transaction* tx = tx_from_ctx(ec_p);
+	if(tx == NULL)
+	{
+		(*callback_out) = NULL;
+		return NULL;
+	}
+	rage_engine* eng = NULL;
+	(*callback_out) = get_callback_and_engine_for_extended_type(tx, dti, &eng, cb_storage);
+	return eng;
+}
+
+/* True only if `dti` is an EXTENDED (blob-backed) text/blob/numeric type, i.e. one that actually needs an
+ * engine + (for volatile) a lock callback to be read. An INLINE text/blob/numeric column is read through
+ * the same iterator APIs but with bstd = pam_p = callback = NULL, so a NULL engine is NOT an error for it.
+ * Only an extended type with no resolvable engine (e.g. no transaction, or an unknown sub-type) is. */
+static int dti_needs_engine(const data_type_info* dti)
+{
+	return dti != NULL && is_extended_type_info(dti);
 }
 
 /* initialize a fresh, empty, usable mpd_t whose struct is static (kept inline in an expr_value)
@@ -363,8 +390,12 @@ static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int*
 
 	expr_type target = is_txt ? RHENDB_STRING : RHENDB_BINARY;
 
-	rage_engine* eng = engine_from_ctx(ec_p);
-	if(eng == NULL)
+	extension_reader_iterator_callback cb_storage;
+	extension_reader_iterator_callback* callback = NULL;
+	rage_engine* eng = engine_and_callback_from_ctx(ec_p, dti, &cb_storage, &callback);
+	/* inline text/blob is read with bstd = pam_p = callback = NULL; only an EXTENDED type must have an
+	 * engine. so a NULL engine is an error only when the type actually needs one. */
+	if(eng == NULL && dti_needs_engine(dti))
 	{
 		*error_code = RHENDB_EE_MISSING_ENGINE;
 		return *error_code;
@@ -373,7 +404,7 @@ static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int*
 	const void* transaction_id = NULL;
 	int abort_error = 0;
 
-	binary_read_iterator* bri = get_new_binary_read_iterator(&(v->value), dti, &(eng->bstd), eng->pam_p);
+	binary_read_iterator* bri = get_new_binary_read_iterator(&(v->value), dti, eng ? &(eng->bstd) : NULL, eng ? eng->pam_p : NULL, callback);
 	if(bri == NULL)
 	{
 		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
@@ -443,8 +474,11 @@ static int materialize_numeric(expr_value* v, const sql_expr_eval_context* ec_p,
 	if(!is_numeric_type_info(v->type_info.dti_p))
 		return RHENDB_EE_OK;                 /* not a numeric */
 
-	rage_engine* eng = engine_from_ctx(ec_p);
-	if(eng == NULL)
+	extension_reader_iterator_callback cb_storage;
+	extension_reader_iterator_callback* callback = NULL;
+	rage_engine* eng = engine_and_callback_from_ctx(ec_p, v->type_info.dti_p, &cb_storage, &callback);
+	/* inline numeric is read with bstd = pam_p = callback = NULL; only an EXTENDED numeric needs an engine. */
+	if(eng == NULL && dti_needs_engine(v->type_info.dti_p))
 	{
 		*error_code = RHENDB_EE_MISSING_ENGINE;
 		return *error_code;
@@ -452,7 +486,7 @@ static int materialize_numeric(expr_value* v, const sql_expr_eval_context* ec_p,
 
 	const void* transaction_id = NULL;
 	int abort_error = 0;
-	numeric_reader_interface nri = init_intuple_numeric_reader_interface(v->value, v->type_info.dti_p, &(eng->bstd), eng->pam_p, transaction_id, &abort_error);
+	numeric_reader_interface nri = init_intuple_numeric_reader_interface(v->value, v->type_info.dti_p, eng ? &(eng->bstd) : NULL, eng ? eng->pam_p : NULL, callback, transaction_id, &abort_error);
 	if(abort_error)
 	{
 		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
@@ -766,14 +800,17 @@ static void* rhendb_mod(void* d1, void* d2, const sql_expr_eval_context* ec_p, i
 
 static int tuple_tb_is_empty(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	rage_engine* eng = engine_from_ctx(ec_p);
-	if(eng == NULL)
+	extension_reader_iterator_callback cb_storage;
+	extension_reader_iterator_callback* callback = NULL;
+	rage_engine* eng = engine_and_callback_from_ctx(ec_p, v->type_info.dti_p, &cb_storage, &callback);
+	/* inline text/blob is read with bstd = pam_p = callback = NULL; only an EXTENDED type needs an engine. */
+	if(eng == NULL && dti_needs_engine(v->type_info.dti_p))
 	{
 		*error_code = RHENDB_EE_MISSING_ENGINE;
 		return 0;
 	}
 	const void* transaction_id = NULL; int abort_error = 0;
-	binary_read_iterator* bri = get_new_binary_read_iterator(&(v->value), v->type_info.dti_p, &(eng->bstd), eng->pam_p);
+	binary_read_iterator* bri = get_new_binary_read_iterator(&(v->value), v->type_info.dti_p, eng ? &(eng->bstd) : NULL, eng ? eng->pam_p : NULL, callback);
 	if(bri == NULL)
 	{
 		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
@@ -891,7 +928,7 @@ static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context*
 				*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
 				return 0;
 			}
-			return compare_datum_rhendb(&a->value, a->type_info.dti_p, &b->value, b->type_info.dti_p, engine_from_ctx(ec_p));
+			return compare_datum_rhendb(&a->value, a->type_info.dti_p, &b->value, b->type_info.dti_p, tx_from_ctx(ec_p));
 		}
 
 		mpd_t sa, sb; int oa = 0, ob = 0;
@@ -916,9 +953,9 @@ static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context*
 	/* string / blob comparison */
 	int a_sb = is_sb_operand(a), b_sb = is_sb_operand(b);
 	if(a_sb && b_sb){
-		rage_engine* eng = engine_from_ctx(ec_p);
+		transaction* tx = tx_from_ctx(ec_p);
 		int a_ext = (a->type_info.dti_p != NULL), b_ext = (b->type_info.dti_p != NULL);
-		if(eng != NULL && (a_ext || b_ext))
+		if(tx != NULL && (a_ext || b_ext))
 		{
 			/* at least one on-disk extended text/blob: stream-compare through read-iterators,
 			 * never materializing the extended side.  An in-memory operand is wrapped in a plain
@@ -931,7 +968,7 @@ static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context*
 				*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
 				return 0;
 			}
-			return compare_datum_rhendb(&a->value, da, &b->value, db, eng);
+			return compare_datum_rhendb(&a->value, da, &b->value, db, tx);
 		}
 		/* both already in memory (or no engine available): plain byte compare, no engine needed */
 		if(materialize_tb(a, ec_p, error_code)) return 0;
@@ -957,7 +994,7 @@ static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context*
 		*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
 		return 0;
 	}
-	return compare_datum_rhendb(&a->value, d1, &b->value, d2, engine_from_ctx(ec_p)); // NAN ordering on floats already handled here
+	return compare_datum_rhendb(&a->value, d1, &b->value, d2, tx_from_ctx(ec_p)); // NAN ordering on floats already handled here
 }
 
 /* ------------------------------ bitwise / shifts ------------------------------ */
@@ -1848,7 +1885,7 @@ static void notify_removal_for_cache_entry(void* resource_p, const void* data_p)
 
 /* ------------------------------ context ------------------------------ */
 
-sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, rhendb* rdb)
+sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, transaction* tx)
 {
 	sql_expr_eval_context eval_context = (sql_expr_eval_context){
 		.context_p = malloc(sizeof(rhendb_expr_eval_context)),
@@ -1932,7 +1969,7 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 
 	context_p->free_list_for_expr_value = NULL;
 
-	context_p->rdb = rdb;
+	context_p->tx = tx;
 
 	return eval_context;
 }
@@ -1942,7 +1979,7 @@ int has_reference_to_extended_type_from_expression(const rhendb_expr_eval_contex
 	int is_some_variable_extended = 0;
 	for(const var_cache_entry* e = get_first_of_in_hashmap(&(context_p->var_cache), FIRST_OF_HASHMAP); e != NULL && (is_some_variable_extended == 0); e = get_next_of_in_hashmap(&(context_p->var_cache), e, ANY_IN_HASHMAP))
 	{
-		is_some_variable_extended = has_extended_type_info(e->column_dti);
+		is_some_variable_extended = has_extended_type_info(e->column_dti, NULL);
 	}
 	return is_some_variable_extended;
 }
