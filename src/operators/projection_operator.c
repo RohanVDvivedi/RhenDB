@@ -52,7 +52,57 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
-			int produced = produce_tuple_from_operator(o, (void*)tuple);
+			// set the input tuples
+			set_input_tuples_in_context_for_rhendb_v(&(inputs->ec), 1, tuple);
+
+			// generate the smallest possible tuple
+			uint32_t output_tuple_size = get_minimum_tuple_size(inputs->output_tuple_def);
+			uint64_t output_tuple_capacity = output_tuple_size;
+			void* output_tuple = malloc(output_tuple_capacity);
+			init_tuple(inputs->output_tuple_def, output_tuple);
+
+			for(uint32_t i = 0, e = 0; i < inputs->projection_descriptions_count; i++)
+			{
+				datum output_uval;
+
+				projected_value temp_proj_uval;
+				if(inputs->projection_descriptions[i].type == PROJECT_EXPRESSION)
+				{
+					int error_code = 0;
+					temp_proj_uval = project_using_evaluate_sql_expr_for_rhendb(inputs->projection_descriptions[i].expr, &(inputs->ec), inputs->projected_expression_type_infos[e], &error_code);
+					if(error_code)
+					{
+						free(output_tuple);
+						kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("errored_from_projection_expression"));
+						return ;
+					}
+					output_uval = temp_proj_uval.value;
+				}
+				else
+				{
+					if(!get_value_from_element_from_tuple(&output_uval, inputs->input_tuple_def, inputs->projection_descriptions[i].pa, tuple))
+						output_uval = (*NULL_DATUM);
+				}
+
+				// ensure there are enough bytes in the output_tuple, as we try to insert this datum
+				while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &output_uval, output_tuple_capacity - output_tuple_size))
+				{
+					output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+					output_tuple = realloc(output_tuple, output_tuple_capacity);
+				}
+
+				// recompute tuple_size
+				output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+
+				if(inputs->projection_descriptions[i].type == PROJECT_EXPRESSION)
+				{
+					destroy_projected_value(temp_proj_uval);
+					e++;
+				}
+			}
+
+			int produced = produce_tuple_from_operator(o, output_tuple);
+			free(output_tuple);
 			if(!produced)
 			{
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
