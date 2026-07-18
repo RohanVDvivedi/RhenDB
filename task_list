@@ -1,7 +1,7 @@
 PICKED TASKS
 
 
-* make sum aggregate function to use extended return type for the result
+* make sum aggregate function to use extended volatile return type for the result, change output returned type and  returned value must be serialized into a volatile extended type
 
 
 
