@@ -26,21 +26,27 @@ enum expr_type
 	RHENDB_BIT_FIELD  = 0,
 	RHENDB_UINT	      = 1,
 	RHENDB_INT 	      = 2,
+
+	// RHENDB_FLOAT is the 4-byte IEEE type, RHENDB_DOUBLE the 8-byte one. both keep their value in
+	// datum.double_value while being computed; the kind records the declared width, which decides how
+	// wide the value is finally stored.
 	RHENDB_FLOAT      = 3,
+	RHENDB_DOUBLE     = 4,
 
-	RHENDB_LARGE_UINT = 4,
-	RHENDB_LARGE_INT  = 5,
+	RHENDB_LARGE_UINT = 5,
+	RHENDB_LARGE_INT  = 6,
 
-	RHENDB_STRING     = 6,
-	RHENDB_BINARY     = 7,
+	RHENDB_STRING     = 7,
+	RHENDB_BINARY     = 8,
 
-	// below two attributes are the only ones that need data_type_info* dti_p;
-	RHENDB_TUPLE      = 8,
-	RHENDB_ARRAY      = 9,
+	// TUPLE and ARRAY REQUIRE dti_p. every native scalar above MAY also carry a dti_p, used purely to
+	// remember its declared width (bits for BIT_FIELD, bytes otherwise) so that results are not widened to
+	// the maximum. that dti_p is always static or owned by an input tuple, hence never freed.
+	RHENDB_TUPLE      = 9,
+	RHENDB_ARRAY      = 10,
 
-	// not yet supported by the system
 	// points a valid materialized numeric
-	RHENDB_NUMERIC    = 10,
+	RHENDB_NUMERIC    = 11,
 };
 
 typedef struct expr_type_info expr_type_info;

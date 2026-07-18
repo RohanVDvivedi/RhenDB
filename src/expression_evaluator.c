@@ -168,9 +168,13 @@ static int et_is_int(expr_type t)
 {
 	return t == RHENDB_BIT_FIELD || t == RHENDB_UINT || t == RHENDB_INT || t == RHENDB_LARGE_UINT || t == RHENDB_LARGE_INT;
 }
+static int et_is_float(expr_type t)
+{
+	return t == RHENDB_FLOAT || t == RHENDB_DOUBLE;
+}
 static int et_is_num(expr_type t)
 {
-	return et_is_int(t) || t == RHENDB_FLOAT;
+	return et_is_int(t) || et_is_float(t);
 }
 static int et_is_large(expr_type t)
 {
@@ -186,13 +190,24 @@ static int et_is_num_or_numeric(expr_type t)
 }
 
 /* result type for arithmetic on two operands. NUMERIC is the most general (contagious). */
+/* forward declarations : the width helpers and effective_type() are defined further down */
+static expr_type_info* new_type_sized(expr_type t, uint32_t width);
+static uint32_t combined_width_bytes(const expr_type_info* a, const expr_type_info* b);
+static expr_type effective_type(const expr_type_info* ti);
+
 static expr_type num_result(expr_type a, expr_type b)
 {
 	if(a == RHENDB_NUMERIC || b == RHENDB_NUMERIC)
 		return RHENDB_NUMERIC;
 
-	if(a == RHENDB_FLOAT || b == RHENDB_FLOAT)
-		return RHENDB_FLOAT;
+	/* float-ness wins. a 4-byte float result is only kept when BOTH sides are 4-byte floats; mixing a
+	 * float with an integer (of any width) yields a double, since a 4-byte float cannot represent the
+	 * wider integers exactly. */
+	if(et_is_float(a) || et_is_float(b))
+	{
+		if(a == RHENDB_FLOAT && b == RHENDB_FLOAT) return RHENDB_FLOAT;
+		return RHENDB_DOUBLE;
+	}
 
 	int signd = et_is_signed(a) || et_is_signed(b);
 
@@ -200,6 +215,33 @@ static expr_type num_result(expr_type a, expr_type b)
 		return signd ? RHENDB_LARGE_INT : RHENDB_LARGE_UINT;
 
 	return signd ? RHENDB_INT : RHENDB_UINT;
+}
+
+/* the full width-preserving result of combining two operand TYPES. the result kind follows num_result();
+ * the width is the wider of the two operands, expressed in the result kind's own unit. */
+static expr_type_info* num_result_sized(const expr_type_info* ta, const expr_type_info* tb)
+{
+	expr_type a = effective_type(ta);
+	expr_type b = (tb != NULL) ? effective_type(tb) : a;
+	expr_type res = num_result(a, b);
+
+	if(res == RHENDB_NUMERIC || et_is_float(res))
+		return new_type_sized(res, 0);          /* numeric has no width; float width is implied by the kind */
+
+	uint32_t w = combined_width_bytes(ta, tb);  /* 0 -> unspecified -> widest, i.e. the old behaviour */
+
+	if(res == RHENDB_BIT_FIELD)
+	{
+		/* stays a bit-field only when both operands are bit-fields : take the wider bit count */
+		uint32_t ba = (ta && ta->dti_p && ta->dti_p->type==BIT_FIELD) ? ta->dti_p->bit_field_size : 0;
+		uint32_t bb = (tb && tb->dti_p && tb->dti_p->type==BIT_FIELD) ? tb->dti_p->bit_field_size : 0;
+		uint32_t bits = (ba > bb) ? ba : bb;
+		if(ba == 0 || (tb != NULL && bb == 0)) bits = 0;
+		return new_type_sized(RHENDB_BIT_FIELD, bits);
+	}
+
+	/* a small int combined with a large one keeps the LARGE kind, but only needs the wider byte count */
+	return new_type_sized(res, w);
 }
 
 /* pop a recycled expr_value off the context's free list, else calloc() a fresh one.
@@ -260,6 +302,98 @@ static expr_type_info* new_type(expr_type t)
 	return ti;
 }
 
+/* ===================================================================================================
+ * WIDTH-PRESERVING NATIVE TYPES
+ *
+ * a native scalar type may carry a dti_p that records its declared width, so that combining values does
+ * not immediately widen everything to the maximum (8-byte int / 32-byte large / 64-bit bit-field).
+ * uint(3 bytes) + uint(4 bytes) is a uint of 4 bytes, not of 8.
+ *
+ * every dti_p used here is either one of the static defaults or a type owned by an input tuple, so it is
+ * never freed (should_free_dti_p stays 0) and can never leak.
+ *
+ * dti_p == NULL simply means "width unspecified" -- literals and booleans leave it NULL -- and is treated
+ * as the widest form of that type, which is exactly the old behaviour.
+ * =================================================================================================== */
+
+/* declared width of a native type, in BITS for a bit-field and in BYTES otherwise; 0 when unspecified */
+static uint32_t native_width(const expr_type_info* ti)
+{
+	if(ti == NULL || ti->dti_p == NULL) return 0;
+	const data_type_info* d = ti->dti_p;
+	switch(d->type)
+	{
+		case BIT_FIELD:  return d->bit_field_size;
+		case UINT: case INT: case LARGE_UINT: case LARGE_INT: case FLOAT: return d->size;
+		default: return 0;
+	}
+}
+
+/* bit-field bits -> whole bytes, so a bit-field can be width-compared against the integer types */
+static uint32_t bits_to_bytes(uint32_t bits){ return (bits + 7u) / 8u; }
+
+/* the static default data_type_info of a given native type and width. width 0 (unspecified) yields the
+ * widest form, matching the previous behaviour. always static, hence never freed. */
+static data_type_info* static_dti_for(expr_type t, uint32_t width)
+{
+	switch(t)
+	{
+		case RHENDB_BIT_FIELD:
+			if(width == 0 || width > 64) width = 64;
+			return BIT_FIELD_NULLABLE[width];
+		case RHENDB_UINT:
+			if(width == 0 || width > 8) width = 8;
+			return UINT_NULLABLE[width];
+		case RHENDB_INT:
+			if(width == 0 || width > 8) width = 8;
+			return INT_NULLABLE[width];
+		case RHENDB_LARGE_UINT:
+			if(width == 0 || width > 32) width = 32;
+			return LARGE_UINT_NULLABLE[width];
+		case RHENDB_LARGE_INT:
+			if(width == 0 || width > 32) width = 32;
+			return LARGE_INT_NULLABLE[width];
+		case RHENDB_FLOAT:  return FLOAT_float_NULLABLE;
+		case RHENDB_DOUBLE: return FLOAT_double_NULLABLE;
+		default: return NULL;
+	}
+}
+
+/* a new type object carrying a width (via a borrowed static dti) */
+static expr_type_info* new_type_sized(expr_type t, uint32_t width)
+{
+	expr_type_info* ti = new_type(t);
+	ti->dti_p = static_dti_for(t, width);      /* static : never freed */
+	ti->should_free_dti_p = 0;
+	return ti;
+}
+
+/* a new type object that borrows an existing (static or tuple-owned) dti verbatim */
+static expr_type_info* new_type_borrowing(expr_type t, data_type_info* dti)
+{
+	expr_type_info* ti = new_type(t);
+	ti->dti_p = dti;
+	ti->should_free_dti_p = 0;
+	return ti;
+}
+
+/* width of a native type expressed in BYTES (bit-fields rounded up), 0 when unspecified */
+static uint32_t native_width_bytes(const expr_type_info* ti)
+{
+	if(ti == NULL || ti->dti_p == NULL) return 0;
+	if(ti->dti_p->type == BIT_FIELD) return bits_to_bytes(ti->dti_p->bit_field_size);
+	return native_width(ti);
+}
+
+/* the resulting width for combining two native operands : the wider of the two, and unspecified as soon
+ * as either side is unspecified (an unspecified operand may be arbitrarily wide) */
+static uint32_t combined_width_bytes(const expr_type_info* a, const expr_type_info* b)
+{
+	uint32_t wa = native_width_bytes(a), wb = native_width_bytes(b);
+	if(wa == 0 || wb == 0) return 0;
+	return (wa > wb) ? wa : wb;
+}
+
 /* discriminators */
 static int is_materialized_numeric(const expr_value* v)
 {
@@ -267,19 +401,43 @@ static int is_materialized_numeric(const expr_value* v)
 }
 static int is_tuple_numeric(const expr_value* v)
 {
-	return v->type_info.dti_p != NULL && is_numeric_type_info(v->type_info.dti_p);
+	return v->type_info.type == RHENDB_TUPLE && v->type_info.dti_p != NULL && is_numeric_type_info(v->type_info.dti_p);
 }
 static int is_numeric_operand(const expr_value* v)
 {
 	return is_materialized_numeric(v) || is_tuple_numeric(v);
 }
 
+/* is this value still in its on-disk container form (an extended text/blob/numeric, or a tuple/array)?
+ *
+ * this used to be written as simply "dti_p != NULL". native scalars now carry a dti_p as well -- purely to
+ * record their declared width -- so the discriminator has to be the expr_type. RHENDB_TUPLE / RHENDB_ARRAY
+ * are the only kinds ever used for a value that is not already a plain in-memory scalar. */
+static int is_tuple_form(const expr_value* v)
+{
+	return v->type_info.type == RHENDB_TUPLE || v->type_info.type == RHENDB_ARRAY;
+}
+
 /* a string/binary operand: a native RHENDB_STRING/BINARY, or a tuple-form text/blob column */
 static int is_sb_operand(const expr_value* v)
 {
-	if(v->type_info.dti_p != NULL)
+	if(is_tuple_form(v) && v->type_info.dti_p != NULL)
 		return is_text_type_info(v->type_info.dti_p) || is_blob_type_info(v->type_info.dti_p);
 	return v->type_info.type == RHENDB_STRING || v->type_info.type == RHENDB_BINARY;
+}
+
+/* the two float kinds are genuinely distinct in storage:
+ *   RHENDB_FLOAT  -> datum.float_value  (4 bytes, dti FLOAT_float_NULLABLE)
+ *   RHENDB_DOUBLE -> datum.double_value (8 bytes, dti FLOAT_double_NULLABLE)
+ * read/write them only through these two helpers so no site can pick the wrong member. */
+static double read_flt(const expr_value* v)
+{
+	return (v->type_info.type == RHENDB_FLOAT) ? (double)v->value.float_value : v->value.double_value;
+}
+static void write_flt(expr_value* v, expr_type kind, double d)
+{
+	if(kind == RHENDB_FLOAT) v->value.float_value = (float)d;
+	else                     v->value.double_value = d;
 }
 
 static double to_dbl(const expr_value* v){
@@ -290,7 +448,8 @@ static double to_dbl(const expr_value* v){
 		case RHENDB_INT:
 			return (double)v->value.int_value;
 		case RHENDB_FLOAT:
-			return v->value.double_value;
+		case RHENDB_DOUBLE:
+			return read_flt(v);
 		case RHENDB_LARGE_UINT:
 			return convert_to_double_uint256(v->value.large_uint_value);
 		case RHENDB_LARGE_INT:
@@ -301,10 +460,12 @@ static double to_dbl(const expr_value* v){
 }
 static uint64_t to_u64(const expr_value* v)
 {
+	if(et_is_float(v->type_info.type)) return (uint64_t)read_flt(v);   /* by value, never a bit reinterpret */
 	return (v->type_info.type == RHENDB_INT) ? (uint64_t)v->value.int_value : v->value.uint_value;
 }
 static int64_t to_i64(const expr_value* v)
 {
+	if(et_is_float(v->type_info.type)) return (int64_t)read_flt(v);    /* by value, never a bit reinterpret */
 	return (v->type_info.type == RHENDB_INT) ? v->value.int_value : (int64_t)v->value.uint_value;
 }
 static uint256  to_u256(const expr_value* v)
@@ -319,6 +480,8 @@ static uint256  to_u256(const expr_value* v)
 			return v->value.large_uint_value;
 		case RHENDB_LARGE_INT:
 			return v->value.large_int_value.raw_uint_value;
+		case RHENDB_FLOAT: case RHENDB_DOUBLE:
+			return get_uint256((uint64_t)read_flt(v));   /* by value, from the member the kind uses */
 		default:
 			return get_uint256(0);
 	}
@@ -335,6 +498,8 @@ static int256 to_i256(const expr_value* v)
 			return (int256){ v->value.large_uint_value };
 		case RHENDB_LARGE_INT:
 			return v->value.large_int_value;
+		case RHENDB_FLOAT: case RHENDB_DOUBLE:
+			return get_int256((int64_t)read_flt(v));     /* by value, from the member the kind uses */
 		default:
 			return get_int256(0);
 	}
@@ -480,7 +645,7 @@ static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int*
 /* ---- numeric materialization : tuple numeric -> materialized_numeric -> mpd_t (RHENDB_NUMERIC) ---- */
 static int materialize_numeric(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	if(v->type_info.dti_p == NULL)
+	if(!is_tuple_form(v))
 		return RHENDB_EE_OK;                 /* already native */
 	if(!is_numeric_type_info(v->type_info.dti_p))
 		return RHENDB_EE_OK;                 /* not a numeric */
@@ -572,7 +737,8 @@ static int number_to_mpd(const expr_value* v, mpd_t* out)
 		case RHENDB_INT:
 			mpd_qset_i64(out, v->value.int_value, &ctx, &st); break;
 		case RHENDB_FLOAT:
-			snprintf(b, sizeof(b), "%.17g", v->value.double_value);
+		case RHENDB_DOUBLE:
+			snprintf(b, sizeof(b), "%.17g", read_flt(v));
 			mpd_qset_string(out, b, &ctx, &st);
 			break;
 		case RHENDB_LARGE_UINT:
@@ -606,7 +772,7 @@ static mpd_t* operand_to_mpd(expr_value* v, mpd_t* scratch, int* owns, const sql
 			return NULL;
 		return &(v->numeric_value);
 	}
-	if(et_is_num(v->type_info.type) && v->type_info.dti_p == NULL)
+	if(et_is_num(v->type_info.type) && !is_tuple_form(v))
 	{
 		if(!number_to_mpd(v, scratch))
 		{
@@ -688,14 +854,14 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 
 	/* non-numeric operands must be plain in-memory numbers */
 	expr_type ta = a->type_info.type, tb = b->type_info.type;
-	if(a->type_info.dti_p != NULL || b->type_info.dti_p != NULL || !et_is_num(ta) || !et_is_num(tb))
+	if(is_tuple_form(a) || is_tuple_form(b) || !et_is_num(ta) || !et_is_num(tb))
 	{
 		*error_code = RHENDB_EE_NON_NUMERIC_OPERAND;
 		return NULL;
 	}
 	expr_type rt = num_result(ta, tb);
 
-	if(rt == RHENDB_FLOAT){
+	if(et_is_float(rt)){
 		double x = to_dbl(a), y = to_dbl(b), r = 0;
 		switch(op){
 			case OP_ADD: r = x + y; break;
@@ -710,8 +876,9 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				r = fmod(x, y);
 				break;
 		}
-		expr_value* v = new_val(RHENDB_FLOAT, ec_p);
-		v->value.double_value = r;
+		expr_value* v = new_val(rt, ec_p);
+		/* a FLOAT result is a genuine 4-byte float : rounding happens here, not only at storage time */
+		write_flt(v, rt, r);
 		return v;
 	}
 	if(rt == RHENDB_LARGE_INT){
@@ -867,7 +1034,8 @@ static void* rhendb_get_bool(void* data, const sql_expr_eval_context* ec_p, int*
 			truthy = (v->value.int_value != 0);
 			break;
 		case RHENDB_FLOAT:
-			truthy = (v->value.double_value != 0);   /* NaN != 0 -> true */
+		case RHENDB_DOUBLE:
+			truthy = (read_flt(v) != 0);   /* NaN != 0 -> true */
 			break;
 		case RHENDB_LARGE_UINT:
 			truthy = !is_zero_uint256(v->value.large_uint_value);
@@ -892,13 +1060,18 @@ static void* rhendb_get_bool(void* data, const sql_expr_eval_context* ec_p, int*
 
 static const data_type_info* resolve_dti(const expr_value* v)
 {
-	if(v->type_info.dti_p != NULL)
+	/* a tuple-form value is compared through its own type. a native scalar always lives in memory at full
+	 * width (uint_value / double_value / ...) no matter how narrow its DECLARED width is, so it must be
+	 * compared with the full-width default below, not with its width-recording dti. */
+	if(is_tuple_form(v))
 		return v->type_info.dti_p;
 	switch(v->type_info.type){
 		case RHENDB_BIT_FIELD: return BIT_FIELD_NULLABLE[64];
 		case RHENDB_UINT: return UINT_NULLABLE[8];
 		case RHENDB_INT: return INT_NULLABLE[8];
-		case RHENDB_FLOAT: return FLOAT_double_NULLABLE;
+		/* each float kind is compared through the layout it actually occupies */
+		case RHENDB_FLOAT: return FLOAT_float_NULLABLE;
+		case RHENDB_DOUBLE: return FLOAT_double_NULLABLE;
 		case RHENDB_LARGE_UINT: return LARGE_UINT_NULLABLE[32];
 		case RHENDB_LARGE_INT: return LARGE_INT_NULLABLE[32];
 		default: return NULL;   /* string/binary handled by a dedicated byte compare */
@@ -965,7 +1138,7 @@ static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context*
 	int a_sb = is_sb_operand(a), b_sb = is_sb_operand(b);
 	if(a_sb && b_sb){
 		transaction* tx = tx_from_ctx(ec_p);
-		int a_ext = (a->type_info.dti_p != NULL), b_ext = (b->type_info.dti_p != NULL);
+		int a_ext = is_tuple_form(a), b_ext = is_tuple_form(b);
 		if(tx != NULL && (a_ext || b_ext))
 		{
 			/* at least one on-disk extended text/blob: stream-compare through read-iterators,
@@ -1023,7 +1196,7 @@ static void* do_bitlogic(void* d1, void* d2, bit_op op, const sql_expr_eval_cont
 	expr_value* b = d2;
 	expr_type ta = a->type_info.type, tb = b->type_info.type;
 
-	if(a->type_info.dti_p != NULL || b->type_info.dti_p != NULL || !et_is_int(ta) || !et_is_int(tb))
+	if(is_tuple_form(a) || is_tuple_form(b) || !et_is_int(ta) || !et_is_int(tb))
 	{
 		*error_code = RHENDB_EE_NON_INTEGER_OPERAND;
 		return NULL;
@@ -1058,7 +1231,7 @@ static void* rhendb_bit_not(void* data, const sql_expr_eval_context* ec_p, int* 
 {
 	expr_value* a = data;
 	expr_type t = a->type_info.type;
-	if(a->type_info.dti_p != NULL || !et_is_int(t))
+	if(is_tuple_form(a) || !et_is_int(t))
 	{
 		*error_code = RHENDB_EE_NON_INTEGER_OPERAND;
 		return NULL;
@@ -1087,7 +1260,7 @@ static void* do_shift(void* data, void* shift_amt, int left, const sql_expr_eval
 	expr_value* a = data;
 	expr_value* s = shift_amt;
 	expr_type t = a->type_info.type;
-	if(a->type_info.dti_p != NULL || s->type_info.dti_p != NULL || !et_is_int(t) || !et_is_int(s->type_info.type))
+	if(is_tuple_form(a) || is_tuple_form(s) || !et_is_int(t) || !et_is_int(s->type_info.type))
 	{
 		*error_code = RHENDB_EE_NON_INTEGER_OPERAND;
 		return NULL;
@@ -1133,7 +1306,7 @@ static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval
 
 	if(strpbrk(buf, "eE"))   /* an exponent -> approximate FLOAT (SQL approximate-numeric literal) */
 	{
-		v = new_val(RHENDB_FLOAT, ec_p);
+		v = new_val(RHENDB_DOUBLE, ec_p);
 		v->value.double_value = strtod(buf, NULL);
 	}
 	else if(strchr(buf, '.'))   /* a fraction, no exponent -> exact NUMERIC (SQL exact-numeric literal) */
@@ -1196,9 +1369,9 @@ static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval
 						v->value.large_uint_value = mag;
 					}
 				}
-				else   /* more digits than a 256-bit integer can hold -> FLOAT */
+				else   /* more digits than a 256-bit integer can hold -> approximate double */
 				{
-					v = new_val(RHENDB_FLOAT, ec_p);
+					v = new_val(RHENDB_DOUBLE, ec_p);
 					v->value.double_value = strtod(buf, NULL);
 				}
 			}
@@ -1387,7 +1560,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 	else if(is_sb_operand(a)){ if(materialize_tb(a, ec_p, error_code)) return NULL; }
 
 	int src_is_numeric = (a->type_info.type == RHENDB_NUMERIC);
-	int src_is_number  = (a->type_info.dti_p == NULL && et_is_num(a->type_info.type));   /* native bit/int/float */
+	int src_is_number  = (!is_tuple_form(a) && et_is_num(a->type_info.type));   /* native bit/int/float */
 	int src_is_sb      = (a->type_info.type == RHENDB_STRING || a->type_info.type == RHENDB_BINARY);
 
 	/* integer targets : carry the value as a 256-bit two's-complement pattern, then narrow to width.
@@ -1401,7 +1574,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		}
 		else if(src_is_number)
 		{
-			if(a->type_info.type == RHENDB_FLOAT)
+			if(et_is_float(a->type_info.type))
 			{
 				mpd_t d;
 				if(!number_to_mpd(a, &d)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
@@ -1426,15 +1599,15 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		return v;
 	}
 
-	/* FLOAT target */
-	if(target == RHENDB_FLOAT)
+	/* FLOAT / DOUBLE target */
+	if(et_is_float(target))
 	{
 		double d;
 		if(src_is_numeric)     d = mpd_to_double(&(a->numeric_value));
 		else if(src_is_number) d = to_dbl(a);
 		else if(src_is_sb){ char* s = sb_to_cstring(a); if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; } d = strtod(s, NULL); free(s); }
 		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
-		expr_value* v = new_val(RHENDB_FLOAT, ec_p); v->value.double_value = d; return v;
+		expr_value* v = new_val(target, ec_p); write_flt(v, target, d); return v;
 	}
 
 	/* NUMERIC target */
@@ -1472,8 +1645,10 @@ static void* rhendb_get_type_for_data(void* data, const sql_expr_eval_context* e
 {
 	expr_value* v = data;
 	expr_type_info* ti = new_type(v->type_info.type);
-	if(ti->type == RHENDB_TUPLE || ti->type == RHENDB_ARRAY)
-		ti->dti_p = v->type_info.dti_p;
+	/* forward the value's dti verbatim : containers need it, and native scalars carry their declared
+	 * width in it. it is always static or owned by an input tuple, so it is borrowed, never freed. */
+	ti->dti_p = v->type_info.dti_p;
+	ti->should_free_dti_p = 0;
 	return ti;
 }
 static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_eval_context* ec_p, int* error_code)
@@ -1482,7 +1657,9 @@ static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_e
 	{
 		case SQL_BOOL: return (void*)(&rhendb_bool_type);
 		case SQL_SMALLINT: case SQL_INT: case SQL_BIGINT: return new_type(RHENDB_INT);
-		case SQL_REAL: case SQL_DOUBLE: case SQL_FLOAT: return new_type(RHENDB_FLOAT);
+		/* REAL is the 4-byte approximate type; FLOAT and DOUBLE PRECISION are 8-byte, as in common SQL */
+		case SQL_REAL: return new_type_sized(RHENDB_FLOAT, 0);
+		case SQL_FLOAT: case SQL_DOUBLE: return new_type_sized(RHENDB_DOUBLE, 0);
 		case SQL_DECIMAL: case SQL_NUMERIC: return new_type(RHENDB_NUMERIC);
 		case SQL_TEXT: case SQL_CHAR: case SQL_VARCHAR: case SQL_STRING: case SQL_CLOB: return new_type(RHENDB_STRING);
 		case SQL_BINARY: case SQL_BLOB: return new_type(RHENDB_BINARY);
@@ -1558,21 +1735,24 @@ static void* rhendb_get_return_type_for_op_exec_callback(void* op_exec_func, voi
 {
 	expr_type a = effective_type((expr_type_info*)typ1);
 	expr_type b = (typ2 != NULL) ? effective_type((expr_type_info*)typ2) : a;   /* typ2 is NULL for unary ops */
+	const expr_type_info* ta = (const expr_type_info*)typ1;
+	const expr_type_info* tb = (const expr_type_info*)typ2;
 	if(op_exec_func==(void*)ec_p->add||op_exec_func==(void*)ec_p->sub||op_exec_func==(void*)ec_p->mul||op_exec_func==(void*)ec_p->div||op_exec_func==(void*)ec_p->mod){
 		if(!et_is_num_or_numeric(a) || !et_is_num_or_numeric(b)){ *error_code = RHENDB_EE_NON_NUMERIC_OPERAND; return NULL; }
-		return new_type(num_result(a, b));
+		return num_result_sized(ta, tb);
 	}
 	if(op_exec_func==(void*)ec_p->bit_and||op_exec_func==(void*)ec_p->bit_or||op_exec_func==(void*)ec_p->bit_xor){
 		if(!et_is_int(a) || !et_is_int(b)){ *error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL; }
-		return new_type(num_result(a, b));
+		return num_result_sized(ta, tb);
 	}
 	if(op_exec_func==(void*)ec_p->left_shift||op_exec_func==(void*)ec_p->right_shift){
+		/* a shift keeps the LEFT operand's kind and width : shifting by a wider count cannot widen it */
 		if(!et_is_int(a) || !et_is_int(b)){ *error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL; }
-		return new_type(a);
+		return new_type_borrowing(a, ta ? ta->dti_p : NULL);
 	}
 	if(op_exec_func==(void*)ec_p->bit_not){
 		if(!et_is_int(a)){ *error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL; }
-		return new_type(a);
+		return new_type_borrowing(a, ta ? ta->dti_p : NULL);
 	}
 	if(op_exec_func==(void*)ec_p->concat) return new_type(RHENDB_STRING);
 	if(op_exec_func==(void*)ec_p->like)   return new_type(RHENDB_BIT_FIELD);
@@ -1620,9 +1800,16 @@ static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_cont
 	/* otherwise reconcile the effective scalar types (an unmaterialized extended value acts as its scalar) */
 	expr_type a = effective_type(t1), b = effective_type(t2);
 	if(a == b)
+	{
+		/* same kind : keep the wider of the two declared widths rather than jumping to the maximum */
+		if(et_is_num(a) && !et_is_float(a))
+			return new_type_sized(a, combined_width_bytes(t1, t2));
+		if(et_is_float(a))
+			return new_type_sized(a, 0);
 		return new_type(a);
+	}
 	if(et_is_num_or_numeric(a) && et_is_num_or_numeric(b))
-		return new_type(num_result(a, b));
+		return num_result_sized(t1, t2);
 	*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
 	return NULL;
 }
@@ -1690,7 +1877,7 @@ static expr_type expr_type_for_column(const data_type_info* dti)
 		case BIT_FIELD: return RHENDB_BIT_FIELD;
 		case UINT: return RHENDB_UINT;
 		case INT: return RHENDB_INT;
-		case FLOAT: return RHENDB_FLOAT;
+		case FLOAT: return (dti->size == sizeof(float)) ? RHENDB_FLOAT : RHENDB_DOUBLE;
 		case LARGE_UINT: return RHENDB_LARGE_UINT;
 		case LARGE_INT: return RHENDB_LARGE_INT;
 		case STRING: return RHENDB_STRING;
@@ -1882,11 +2069,19 @@ static void* rhendb_get_variable(const dstring* identifier_bytes, const sql_expr
 	{
 		/* a primitive (or inline string/binary) : the datum already holds the value */
 		v->type_info.type = expr_type_for_column(dti);
-		v->type_info.dti_p = NULL;
-		/* a native FLOAT column may be stored as a 4-byte float (the reader puts it in float_value);
-		 * RHENDB_FLOAT is always a double, so promote it up to double_value. */
-		if(dti->type == FLOAT && dti->size == sizeof(float))
-			v->value.double_value = (double)v->value.float_value;
+		/* native scalars now keep the column's own data_type_info, purely to remember their declared
+		 * width so results are not widened to the maximum. it is owned by the input tuple's schema, so
+		 * it is borrowed and never freed. inline string/binary keep dti_p NULL as before. */
+		if(et_is_num(v->type_info.type))
+		{
+			v->type_info.dti_p = (data_type_info*)dti;
+			v->type_info.should_free_dti_p = 0;
+		}
+		else
+			v->type_info.dti_p = NULL;
+		/* a 4-byte FLOAT column is read into float_value and STAYS there : RHENDB_FLOAT means the value
+		 * genuinely lives in float_value. an 8-byte column is RHENDB_DOUBLE in double_value. nothing is
+		 * promoted here -- read_flt()/write_flt() pick the right member everywhere else. */
 	}
 	return v;
 }
@@ -1901,8 +2096,14 @@ static void* rhendb_get_type_for_variable(const dstring* identifier_bytes, const
 
 	expr_type t = expr_type_for_column(e->column_dti);
 	expr_type_info* ti = new_type(t);
-	if(t == RHENDB_TUPLE || t == RHENDB_ARRAY)
+	/* containers need their dti; native scalars carry it too, to remember the column's declared width so
+	 * that inference does not widen every result to the maximum. it belongs to the input tuple's schema,
+	 * so it is borrowed and never freed. */
+	if(t == RHENDB_TUPLE || t == RHENDB_ARRAY || et_is_num(t))
+	{
 		ti->dti_p = (data_type_info*)e->column_dti;   /* borrowed */
+		ti->should_free_dti_p = 0;
+	}
 	return ti;
 }
 
@@ -2096,19 +2297,20 @@ int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval
 //                     projected type" fast path in project_using_evaluate.
 // returns NULL for tuple/array (the caller borrows the inferred type instead) or when there is no
 // transaction to supply the volatile page specs.
-static data_type_info* build_projection_type_for_scalar(expr_type scalar, const sql_expr_eval_context* ec_p, int* should_free)
+static data_type_info* build_projection_type_for_scalar(expr_type scalar, const expr_type_info* src,
+	const sql_expr_eval_context* ec_p, int* should_free)
 {
 	*should_free = 0;
-	switch(scalar)
+	if(et_is_num(scalar))
 	{
-		// NOTE: BIT_FIELD_NULLABLE is indexed by BIT width (0..64); the arrays below are byte-indexed
-		case RHENDB_BIT_FIELD:  return BIT_FIELD_NULLABLE[64];
-		case RHENDB_UINT:       return UINT_NULLABLE[8];
-		case RHENDB_INT:        return INT_NULLABLE[8];
-		case RHENDB_FLOAT:      return FLOAT_double_NULLABLE;
-		case RHENDB_LARGE_UINT: return LARGE_UINT_NULLABLE[32];
-		case RHENDB_LARGE_INT:  return LARGE_INT_NULLABLE[32];
-		default: break;
+		/* store the result no wider than it was declared to be : a uint of 3 bytes projects into a 3-byte
+		 * uint, not an 8-byte one. an unspecified width falls back to the widest form. these are all
+		 * static defaults, so the projected type is borrowed and never freed.
+		 * NOTE: BIT_FIELD_NULLABLE is indexed by BIT width (0..64); the others are byte-indexed. */
+		uint32_t w = 0;
+		if(src != NULL && src->dti_p != NULL)
+			w = (scalar == RHENDB_BIT_FIELD) ? src->dti_p->bit_field_size : native_width(src);
+		return static_dti_for(scalar, w);
 	}
 
 	transaction* tx = tx_from_ctx(ec_p);
@@ -2181,10 +2383,10 @@ projected_type_info infer_projected_type_sql_expr_for_rhendb(sql_expression* exp
 		delete_type(t, ec_p);
 		return res;
 	}
-	delete_type(t, ec_p);
-
+	/* build the projected type BEFORE releasing the inferred one : the builder reads its declared width */
 	int should_free = 0;
-	data_type_info* proj = build_projection_type_for_scalar(scalar, ec_p, &should_free);
+	data_type_info* proj = build_projection_type_for_scalar(scalar, t, ec_p, &should_free);
+	delete_type(t, ec_p);
 	if(proj == NULL)
 	{
 		*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
@@ -2487,7 +2689,11 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 		datum out = (datum){ .is_NULL = 0 };
 		switch(projection_type_info->type)
 		{
-			case FLOAT:      out.double_value     = to_dbl(v);  break;
+			case FLOAT:
+				/* a 4-byte FLOAT target stores into float_value, an 8-byte one into double_value */
+				if(projection_type_info->size == sizeof(float)) out.float_value = (float)to_dbl(v);
+				else                                            out.double_value = to_dbl(v);
+				break;
 			case BIT_FIELD:
 			case UINT:       out.uint_value       = to_u64(v);  break;
 			case INT:        out.int_value        = to_i64(v);  break;
