@@ -340,17 +340,13 @@ operator_resource_counter setup_block_nested_loop_join_operator(operator* o, ope
 
 	if(join_expr != NULL)
 	{
-		int error_code = 0;
-		void* res_type = infer_type_sql_expr(join_expr, &ec, &error_code);
-		if(error_code)
+		if(!is_valid_using_infer_sql_expr_for_rhendb(&ec, join_expr))
 		{
-			printf("type inference errored for block_nested_loop_join_operator : %d\n", error_code);
+			printf("type validation errored for block_nested_loop_join_operator : %d\n", error_code);
 			exit(-1);
 		}
-		delete_type(res_type, &ec);
 	}
-
-	int has_reference_to_extended_type = has_reference_to_extended_type_from_expression(ec.context_p);
+	int has_reference_to_extended_type = has_reference_to_extended_type_from_expression(ec.context_p); // must be called only after validation/inference of type of the expr
 
 	operator_resource_counter result = {.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
 	if(o == NULL)
