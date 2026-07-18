@@ -2005,7 +2005,7 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 	return eval_context;
 }
 
-int has_reference_to_extended_type_from_expression(const rhendb_expr_eval_context* context_p)
+int has_reference_to_persistent_extended_type_from_expression(const rhendb_expr_eval_context* context_p)
 {
 	int is_some_variable_extended = 0;
 	for(const var_cache_entry* e = get_first_of_in_hashmap(&(context_p->var_cache), FIRST_OF_HASHMAP); e != NULL && (is_some_variable_extended == 0); e = get_next_of_in_hashmap(&(context_p->var_cache), e, ANY_IN_HASHMAP))

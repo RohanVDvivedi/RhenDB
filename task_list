@@ -1,8 +1,6 @@
 PICKED TASKS
 
 
-* refactor to use is_valid and not infer in all the bnlj, bnlj_semi, selection operators and tuple transformers
-
 * projection_operator
 
 * make sum aggregate function to use extended return type for the result
