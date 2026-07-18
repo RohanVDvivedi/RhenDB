@@ -161,7 +161,7 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 
 // must be called, only after you infer the output_type of the corresponding expressions that you want to process with this context
 // returns true only if any of the var_cache points to an extended type
-int has_reference_to_extended_type_from_expression(const rhendb_expr_eval_context* context_p);
+int has_reference_to_persistent_extended_type_from_expression(const rhendb_expr_eval_context* context_p);
 
 // frees shallow copied input_tuple_defs and input_tuples, and the pointer itself
 void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_context* context_p);

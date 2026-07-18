@@ -53,7 +53,7 @@ tuple_transformer* get_new_expressioned_selection_transformer(const tuple_def* i
 		return NULL;
 	}
 
-	if(has_reference_to_extended_type_from_expression(sc_p->ec.context_p)) // must be called only after validation/inference of type of the expr
+	if(has_reference_to_persistent_extended_type_from_expression(sc_p->ec.context_p)) // must be called only after validation/inference of type of the expr
 	{
 		delete_context_p_for_sql_expr_eval_context_for_rhendb(sc_p->ec.context_p);
 		free(sc_p);

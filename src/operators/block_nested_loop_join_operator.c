@@ -346,7 +346,7 @@ operator_resource_counter setup_block_nested_loop_join_operator(operator* o, ope
 			exit(-1);
 		}
 	}
-	int has_reference_to_extended_type = has_reference_to_extended_type_from_expression(ec.context_p); // must be called only after validation/inference of type of the expr
+	int has_reference_to_extended_type = has_reference_to_persistent_extended_type_from_expression(ec.context_p); // must be called only after validation/inference of type of the expr
 
 	operator_resource_counter result = {.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
 	if(o == NULL)

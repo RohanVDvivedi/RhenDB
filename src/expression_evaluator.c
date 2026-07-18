@@ -2010,7 +2010,7 @@ int has_reference_to_extended_type_from_expression(const rhendb_expr_eval_contex
 	int is_some_variable_extended = 0;
 	for(const var_cache_entry* e = get_first_of_in_hashmap(&(context_p->var_cache), FIRST_OF_HASHMAP); e != NULL && (is_some_variable_extended == 0); e = get_next_of_in_hashmap(&(context_p->var_cache), e, ANY_IN_HASHMAP))
 	{
-		is_some_variable_extended = has_extended_type_info(e->column_dti, NULL);
+		is_some_variable_extended = has_extended_type_info(e->column_dti, PERSISTENT_EXT_SUB_TYPE);
 	}
 	return is_some_variable_extended;
 }
