@@ -75,4 +75,9 @@ operator_resource_counter setup_hash_semi_join_operator(operator* o, operator* l
 // selection operator
 operator_resource_counter setup_selection_operator(operator* o, operator* input_operator, sql_expression* expr);
 
+#include<rhendb/projection_type.h>
+
+// projection operator
+operator_resource_counter setup_projection_operator(operator* o, operator* input_operator, projection_description* projection_descriptions, uint32_t projection_descriptions_count);
+
 #endif
