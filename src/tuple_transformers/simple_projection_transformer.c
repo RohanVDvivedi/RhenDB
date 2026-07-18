@@ -7,6 +7,8 @@
 
 #include<rhendb/max_intermediate_tuple_size.h>
 
+#include<rhendb/nullable_type_info_maker.h>
+
 // any allocation made here will be freed by the caller
 static void* process(tuple_transformer* tt_p, void* tuple)
 {
@@ -21,12 +23,16 @@ static void* process(tuple_transformer* tt_p, void* tuple)
 
 	for(uint32_t i = 0; i < element_count; i++)
 	{
-		while(!set_element_in_tuple_from_tuple(tt_p->output_def, STATIC_POSITION(i), output_tuple, tt_p->input_def, *(projections[i]), tuple, output_tuple_capacity - output_tuple_size))
+		datum output_uval;
+		if(get_value_from_element_from_tuple(&output_uval, tt_p->input_def, *(projections[i]), tuple))
 		{
-			output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(tt_p->output_def));
-			output_tuple = realloc(output_tuple, output_tuple_capacity);
+			while(!set_element_in_tuple(tt_p->output_def, STATIC_POSITION(i), output_tuple, &output_uval, output_tuple_capacity - output_tuple_size))
+			{
+				output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(tt_p->output_def));
+				output_tuple = realloc(output_tuple, output_tuple_capacity);
+			}
+			output_tuple_size = get_tuple_size(tt_p->output_def, output_tuple);
 		}
-		output_tuple_size = get_tuple_size(tt_p->output_def, output_tuple);
 	}
 
 	return output_tuple;
@@ -34,8 +40,12 @@ static void* process(tuple_transformer* tt_p, void* tuple)
 
 static void destroy(tuple_transformer* tt_p)
 {
+	uint32_t element_count = tt_p->output_def->type_info->element_count;
+	for(uint32_t i = 0; i < element_count; i++)
+		free((data_type_info*)(tt_p->output_def->type_info->containees[i].al.type_info));
 	free(tt_p->output_def->type_info);
 	free((void*)(tt_p->output_def));
+
 	free(tt_p->context);
 }
 
@@ -50,7 +60,7 @@ tuple_transformer* get_new_simple_projection_transformer(const char* output_tabl
 
 	for(uint32_t i = 0; i < projections_count; i++)
 	{
-		data_type_info* input_dti = (data_type_info*) get_type_info_for_element_from_tuple_def(input_def, *projections[i]);
+		data_type_info* input_dti = shallow_clone_into_nullable_type((data_type_info*) get_type_info_for_element_from_tuple_def(input_def, *projections[i]));
 
 		strcpy(output_dti->containees[i].field_name, field_names[i]);
 		output_dti->containees[i].al.type_info = input_dti;
