@@ -80,19 +80,26 @@ int main(int argc, char** argv)
 		setup_stream_input_operator(input_operator, &rs, &record_def);
 		printf("source operator %p\n", input_operator);
 
-		uint32_t count1 = 1;
-		uint32_t count2 = get_tuple_def_for_tuples_to_be_consumed_from(input_operator)->type_info->element_count;
-		uint32_t count3 = argc - 1;
-		projection_description* pd = alloca(sizeof(projection_description) * (count1 + count2 + count3));
+		uint32_t count1 = 11;
+		uint32_t count2 = argc - 1;
+		projection_description* pd = alloca(sizeof(projection_description) * (count1 + count2));
 		uint32_t p = 0;
 		pd[p++] = project_from(SELF);
+		pd[p++] = project_from(STATIC_POSITION(0));
+		pd[p++] = project_from(STATIC_POSITION(1));
+		pd[p++] = project_from(STATIC_POSITION(2));
+		pd[p++] = project_from(STATIC_POSITION(3));
+		pd[p++] = project_from(STATIC_POSITION(4));
+		pd[p++] = project_from(STATIC_POSITION(5));
+		pd[p++] = project_from(STATIC_POSITION(6));
+		pd[p++] = project_from(STATIC_POSITION(2,0));
+		pd[p++] = project_from(STATIC_POSITION(2,1));
+		pd[p++] = project_from(STATIC_POSITION(2,2));
 		for(; p < count1 + count2; p++)
-			pd[p] = project_from(STATIC_POSITION(p-count1));
-		for(; p < count1 + count2 + count3; p++)
-			pd[p] = project_using(proj_expr_sql[p-count1-count2]->expr);
+			pd[p] = project_using(proj_expr_sql[p-count1]->expr);
 
 		operator* projection_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_projection_operator(projection_operator, input_operator, pd, (count1 + count2 + count3));
+		setup_projection_operator(projection_operator, input_operator, pd, (count1 + count2));
 		printf("projection operator %p\n", projection_operator);
 
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
