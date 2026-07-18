@@ -46,7 +46,8 @@ tuple_transformer* get_new_expressioned_selection_transformer(const tuple_def* i
 
 	sc_p->ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_def), 1, tx);
 
-	if(!is_valid_using_infer_sql_expr_for_rhendb(&(sc_p->ec), sc_p->expr))
+	int error_code = 0;
+	if(!is_valid_using_infer_sql_expr_for_rhendb(sc_p->expr, &(sc_p->ec), &error_code))
 	{
 		delete_context_p_for_sql_expr_eval_context_for_rhendb(sc_p->ec.context_p);
 		free(sc_p);

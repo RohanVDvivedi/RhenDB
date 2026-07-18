@@ -90,7 +90,8 @@ operator_resource_counter setup_selection_operator(operator* o, operator* input_
 
 	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, input_operator->self_query_plan->curr_tx);
 
-	if(!is_valid_using_infer_sql_expr_for_rhendb(&ec, expr))
+	int error_code = 0;
+	if(!is_valid_using_infer_sql_expr_for_rhendb(expr, &ec, &error_code))
 	{
 		printf("type validation errored for selection_operator : %d\n", error_code);
 		exit(-1);

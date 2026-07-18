@@ -340,7 +340,8 @@ operator_resource_counter setup_block_nested_loop_join_operator(operator* o, ope
 
 	if(join_expr != NULL)
 	{
-		if(!is_valid_using_infer_sql_expr_for_rhendb(&ec, join_expr))
+		int error_code = 0;
+		if(!is_valid_using_infer_sql_expr_for_rhendb(join_expr, &ec, &error_code))
 		{
 			printf("type validation errored for block_nested_loop_join_operator : %d\n", error_code);
 			exit(-1);

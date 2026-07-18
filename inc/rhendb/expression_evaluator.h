@@ -183,7 +183,7 @@ int select_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eva
 
 // run infer_type_sql_expr() on `expr`; return 1 iff inference produced no error. the inferred type object
 // is deleted internally, so the caller must not free it.
-int is_valid_using_infer_sql_expr_for_rhendb(sql_expr_eval_context* ec_p, sql_expression* expr);
+int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
 
 // infer the scalar result kind of `expr` and return a data_type_info describing how it would be PROJECTED.
 // string / binary / arbitrary-precision-numeric results map to a volatile-store extended type (sub_type =
@@ -192,7 +192,7 @@ int is_valid_using_infer_sql_expr_for_rhendb(sql_expr_eval_context* ec_p, sql_ex
 // ALWAYS safe to pass to destroy_type_info_recursively() (defaults are is_static, extended types are freshly
 // allocated) and is owned by the caller -- it is never owned by the expression or its inputs. returns NULL
 // (and sets *error_code) only for an unprojectable kind (tuple/array) or if inference failed.
-data_type_info* infer_projected_type_sql_expr_for_rhendb(sql_expr_eval_context* ec_p, sql_expression* expr, int* error_code);
+data_type_info* infer_projected_type_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
 
 // evaluate `expr` and PROJECT the result into `projection_type_info`, which must be a type previously
 // returned by infer_projected_type_sql_expr_for_rhendb() (so no cast is needed -- the kinds already match).

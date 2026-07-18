@@ -2068,13 +2068,13 @@ int select_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eva
 // projection
 // ===================================================================================================
 
-int is_valid_using_infer_sql_expr_for_rhendb(sql_expr_eval_context* ec_p, sql_expression* expr)
+int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code)
 {
-	int error_code = 0;
-	void* t = infer_type_sql_expr(expr, ec_p, &error_code);
+	(*error_code) = 0;
+	void* t = infer_type_sql_expr(expr, ec_p, error_code);
 	if(t != NULL)
 		delete_type(t, ec_p);
-	return (error_code == 0) ? 1 : 0;
+	return ((*error_code) == 0) ? 1 : 0;
 }
 
 // the inline prefix budget of a projected extended value, and the total inline max_size (leaving room after
@@ -2128,7 +2128,7 @@ static data_type_info* build_projection_type_for_scalar(expr_type scalar, const 
 	return NULL;   // RHENDB_TUPLE / RHENDB_ARRAY
 }
 
-data_type_info* infer_projected_type_sql_expr_for_rhendb(sql_expr_eval_context* ec_p, sql_expression* expr, int* error_code)
+data_type_info* infer_projected_type_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code)
 {
 	*error_code = 0;
 	expr_type_info* t = infer_type_sql_expr(expr, ec_p, error_code);
