@@ -185,26 +185,78 @@ int select_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eva
 // is deleted internally, so the caller must not free it.
 int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
 
-// infer the scalar result kind of `expr` and return a data_type_info describing how it would be PROJECTED.
-// string / binary / arbitrary-precision-numeric results map to a volatile-store extended type (sub_type =
-// VOLATILE_EXT_SUB_TYPE, ~90-byte inline prefix, 128-byte max_size); every native scalar (bit-field / uint
-// / int / float / large uint / large int) maps to its matching default type_info. the returned pointer is
-// ALWAYS safe to pass to destroy_type_info_recursively() (defaults are is_static, extended types are freshly
-// allocated) and is owned by the caller -- it is never owned by the expression or its inputs. returns NULL
-// (and sets *error_code) only for an unprojectable kind (tuple/array) or if inference failed.
-data_type_info* infer_projected_type_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
+// ===================================================================================================
+// PROJECTION
+//
+// a projected type and a projected value each carry their own ownership, so both can BORROW from the
+// expression evaluator instead of forcing a copy:
+//
+//   projected_type_info : the data_type_info to project into, plus the bit saying whether this struct owns
+//                         it. a native scalar borrows a static default (bit 0); a tuple/array borrows the
+//                         inferred container type directly -- no clone (bit copied from the inferred type);
+//                         only a text/blob/numeric result allocates a fresh volatile extended type (bit 1).
+//   projected_value     : the projected datum, plus the bulk buffer that backs it (NULL when the datum is
+//                         self-contained or was borrowed as-is).
+//
+// lifetimes follow the operator: the projected_type_info is destroyed once, when the projection operator
+// finishes; a projected_value is destroyed after each use of the expression (i.e. per row).
+// ===================================================================================================
 
-// evaluate `expr` and PROJECT the result into `projection_type_info`, which must be a type previously
-// returned by infer_projected_type_sql_expr_for_rhendb() (so no cast is needed -- the kinds already match).
-// a RHENDB_STRING/BINARY result is stored into the transaction's volatile blob store as an extended value
-// (its prefix is written, hashed to pick one of the 64 temporary_extension_stores, then the remainder is
-// written into that store under its WRITE lock); a numeric result is stored as an extended numeric the same
-// way; a native-scalar result is returned directly at full width (including 256-bit large uint/int); a
-// tuple/array result is copied out as-is. the projected datum is returned BY VALUE. any bulk buffer backing
-// that datum (an extended value, or the copied container bytes) is returned via *buffer_to_free (NULL if
-// none) and must be free()d by the caller. a NULL (no-error) evaluation result yields NULL_DATUM. a
-// PERSISTENT projection type, or a value/target mismatch, yields a NULL datum with
-// *error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION.
-datum project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, data_type_info* projection_type_info, void** buffer_to_free, int* error_code);
+typedef struct projected_type_info projected_type_info;
+struct projected_type_info
+{
+	// the type to project into. NULL if inference failed.
+	data_type_info* projected_type_info;
+
+	// set only when this struct owns projected_type_info and must destroy it. borrowed types (static
+	// defaults, and container types owned by the expression's inputs) leave this at 0.
+	int should_free_projected_type_info;
+};
+
+typedef struct projected_value projected_value;
+struct projected_value
+{
+	// the projected value. is_NULL is set for a SQL NULL result and on any error.
+	datum value;
+
+	// the heap buffer backing `value` (the extended value's bytes, or bytes taken over from the evaluated
+	// expr_value). NULL when the datum is self-contained (a native scalar) or borrowed from a live tuple.
+	void* buffer_to_free;
+};
+
+// run infer_type_sql_expr() on `expr`; return 1 iff inference produced no error. the inferred type object
+// is deleted internally, so the caller must not free it.
+int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
+
+// infer the result kind of `expr` and describe how it would be PROJECTED:
+//   - native scalar (bit-field / uint / int / float / large uint / large int) -> the matching default
+//     type_info, BORROWED (is_static, never freed);
+//   - string / binary / arbitrary-precision numeric -> a freshly built, finalized volatile-store extended
+//     type (sub_type = VOLATILE_EXT_SUB_TYPE, ~90-byte inline prefix, 128-byte max_size), OWNED;
+//   - tuple / array -> the inferred container type itself, borrowed or taken over exactly as the inferred
+//     type held it (no clone).
+// on failure the returned struct has a NULL type and *error_code is set.
+// destroy the result with destroy_projected_type_info() -- a no-op when the type is borrowed.
+projected_type_info infer_projected_type_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
+
+// release a projected_type_info : destroys the type only if this struct owns it.
+void destroy_projected_type_info(projected_type_info pti);
+
+// evaluate `expr` and PROJECT the result into `pti`, which must be what
+// infer_projected_type_sql_expr_for_rhendb() returned for this expression (so no cast is needed -- the kinds
+// already match).
+//   - if the evaluated value ALREADY has the projected type, its datum is handed back untouched;
+//   - a RHENDB_STRING/BINARY result is materialized and written into the transaction's volatile blob store
+//     as an extended value (prefix written, hashed to pick one of the 64 temporary_extension_stores, then
+//     the remainder appended into that store under its WRITE lock);
+//   - a numeric result is stored as an extended numeric the same way;
+//   - a native scalar is returned directly at full width (including 256-bit large uint/int).
+// a NULL (no-error) evaluation result yields a NULL datum. a PERSISTENT projection type, or a value/target
+// mismatch, sets *error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION.
+// destroy the result with destroy_projected_value() once the value has been consumed.
+projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, projected_type_info pti, int* error_code);
+
+// release a projected_value : frees the backing buffer if there is one.
+void destroy_projected_value(projected_value pv);
 
 #endif
