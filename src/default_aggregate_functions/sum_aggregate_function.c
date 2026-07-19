@@ -13,8 +13,8 @@
 
 #include<stdlib.h>
 
-#define PROJECTION_PREFIX_BYTES        90
-#define PROJECTION_MAX_SIZE           128
+#define RESULT_PREFIX_BYTES        90
+#define RESULT_MAX_SIZE           128
 
 static data_type_info* get_sum_output_type_info(const data_type_info* input_type_info, transaction* tx)
 {
@@ -38,7 +38,7 @@ static data_type_info* get_sum_output_type_info(const data_type_info* input_type
 		{
 			if(is_numeric_type_info(input_type_info))
 			{
-				data_type_info* output_type_info = get_numeric_extended_type_info(VOLATILE_EXT_SUB_TYPE, PROJECTION_MAX_SIZE, get_numeric_inline_type_info(PROJECTION_MAX_SIZE), &(tx->rdb->volatile_rage_engine.pam_p->pas));
+				data_type_info* output_type_info = get_numeric_extended_type_info(VOLATILE_EXT_SUB_TYPE, RESULT_MAX_SIZE, get_numeric_inline_type_info(RESULT_MAX_SIZE), &(tx->rdb->volatile_rage_engine.pam_p->pas));
 				finalize_type_info(output_type_info);
 				return output_type_info;
 			}
@@ -195,7 +195,7 @@ static datum get_sum_from_sum_state(void* state, const data_type_info* input_typ
 
 					tuple_def output_tuple_def;
 					initialize_tuple_def(&output_tuple_def, (data_type_info*)output_type_info);
-					sum_state->output_buffer = malloc(PROJECTION_MAX_SIZE);
+					sum_state->output_buffer = malloc(RESULT_MAX_SIZE);
 					init_tuple(&output_tuple_def, sum_state->output_buffer);
 
 					set_sign_bits_and_exponent_for_numeric(mn.sign_bits, mn.exponent, sum_state->output_buffer, &output_tuple_def, SELF);
@@ -214,7 +214,7 @@ static datum get_sum_from_sum_state(void* state, const data_type_info* input_typ
 							int abort_error_dummy = 0;
 							rage_engine* ex_engine = &(tx->rdb->volatile_rage_engine);
 
-							digit_write_iterator* wr = get_new_digit_write_iterator(sum_state->output_buffer, &output_tuple_def, SELF, 0 /*dummy root*/, get_NULL_tuple_pointer(&(ex_engine->pam_p->pas)), PROJECTION_PREFIX_BYTES / BYTES_PER_NUMERIC_DIGIT, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
+							digit_write_iterator* wr = get_new_digit_write_iterator(sum_state->output_buffer, &output_tuple_def, SELF, 0 /*dummy root*/, get_NULL_tuple_pointer(&(ex_engine->pam_p->pas)), RESULT_PREFIX_BYTES / BYTES_PER_NUMERIC_DIGIT, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
 
 							temporary_extension_store* temp_ext_store = NULL;
 							uint64_t digits_written = 0;

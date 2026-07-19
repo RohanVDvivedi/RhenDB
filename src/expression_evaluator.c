@@ -2284,8 +2284,6 @@ int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval
 // digit slots.
 #define PROJECTION_PREFIX_BYTES   90
 #define PROJECTION_MAX_SIZE       128
-// once this many wrong-unused-space notifications have accumulated in a store's htan, drain them
-#define PROJECTION_HTAN_FIX_THRESHOLD  20
 
 // build the data_type_info a scalar result of kind `scalar` is PROJECTED into, and report through
 // *should_free whether the caller owns it.
@@ -2397,19 +2395,6 @@ projected_type_info infer_projected_type_sql_expr_for_rhendb(sql_expression* exp
 	return res;
 }
 
-// drain a store's accumulated wrong-unused-space notifications back into the blob store, but only once they
-// cross the threshold (or when forced at the end of a write).
-static void project_fix_unused_space(transaction* tx, temporary_extension_store* store, int force)
-{
-	uint32_t pending = get_notification_count_for_heap_table_accumulative_notifier(&(store->htan));
-	if(pending == 0 || (!force && pending < PROJECTION_HTAN_FIX_THRESHOLD))
-		return;
-	rage_engine* VE = &(tx->rdb->volatile_rage_engine);
-	int ae = 0; uint64_t root, page; uint32_t unused;
-	while(pop_from_heap_table_accumulative_notifier(&(store->htan), &root, &unused, &page))
-		fix_unused_space_in_heap_table(root, unused, page, &(VE->bstd.httd), VE->pam_p, VE->pmm_p, NULL, &ae);
-}
-
 // pick the temporary extension store for an already-written prefix (in `holder`, of type `proj`).
 static temporary_extension_store* project_pick_store(transaction* tx, void* holder, data_type_info* proj)
 {
@@ -2439,11 +2424,13 @@ static int project_write_sb_to_volatile(transaction* tx, data_type_info* proj, c
 	const page_access_specs* pas = &(VE->pam_p->pas);
 	int abort_error = 0;
 
-	void* holder = malloc(pas->page_size);
+	/* the holder carries exactly one projected extended value, and that type's max_size IS
+	 * PROJECTION_MAX_SIZE -- there is never a reason to reserve a whole page for it. */
+	void* holder = malloc(PROJECTION_MAX_SIZE);
 	if(holder == NULL) { *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
 	tuple_def td; initialize_tuple_def(&td, proj);
 	init_tuple(&td, holder);
-	set_element_in_tuple(&td, SELF, holder, EMPTY_DATUM, pas->page_size);
+	set_element_in_tuple(&td, SELF, holder, EMPTY_DATUM, PROJECTION_MAX_SIZE);
 
 	binary_write_iterator* wr = get_new_binary_write_iterator(holder, &td, SELF, 0 /*dummy root*/,
 		get_NULL_tuple_pointer(pas), PROJECTION_PREFIX_BYTES, &(VE->bstd), VE->pam_p, VE->pmm_p);
@@ -2474,14 +2461,14 @@ static int project_write_sb_to_volatile(transaction* tx, data_type_info* proj, c
 			uint32_t wrote = append_to_binary_write_iterator(wr, data + off, data_size - off, notify, NULL, &abort_error);
 			if(abort_error || wrote == 0) { if(!abort_error) abort_error = 1; break; }
 			off += wrote;
-			project_fix_unused_space(tx, store, 0);       // threshold-based drain while writing
+			fix_unused_space_entries_in_store(tx, store);   // lazy : the transaction decides when
 		}
 	}
 
 	delete_binary_write_iterator(wr, NULL, &abort_error);
 	if(store != NULL)
 	{
-		project_fix_unused_space(tx, store, 1);           // force-drain before releasing the lock
+		fix_unused_space_entries_in_store(tx, store);   // lazy : below its threshold this is a no-op
 		write_unlock(&(store->blob_store_lock));
 	}
 
@@ -2516,11 +2503,12 @@ static int project_write_numeric_to_volatile(transaction* tx, data_type_info* pr
 	for(uint32_t i = 0; i < nd; i++) digits[i] = get_nth_digit_from_materialized_numeric(&mn, i);
 
 	int abort_error = 0;
-	void* holder = malloc(pas->page_size);
+	/* one projected extended numeric, max_size PROJECTION_MAX_SIZE : no page-sized buffer needed */
+	void* holder = malloc(PROJECTION_MAX_SIZE);
 	if(holder == NULL) { free(digits); deinitialize_materialized_numeric(&mn); *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
 	tuple_def td; initialize_tuple_def(&td, proj);
 	init_tuple(&td, holder);
-	set_element_in_tuple(&td, SELF, holder, EMPTY_DATUM, pas->page_size);
+	set_element_in_tuple(&td, SELF, holder, EMPTY_DATUM, PROJECTION_MAX_SIZE);
 	set_sign_bits_and_exponent_for_numeric(sb, ex, holder, &td, SELF);
 
 	digit_write_iterator* wr = get_new_digit_write_iterator(holder, &td, SELF, 0 /*dummy root*/,
@@ -2554,14 +2542,14 @@ static int project_write_numeric_to_volatile(transaction* tx, data_type_info* pr
 			uint32_t wrote = append_to_digit_write_iterator(wr, digits + off, nd - off, notify, NULL, &abort_error);
 			if(abort_error || wrote == 0) { if(!abort_error) abort_error = 1; break; }
 			off += wrote;
-			project_fix_unused_space(tx, store, 0);
+			fix_unused_space_entries_in_store(tx, store);   // lazy : the transaction decides when
 		}
 	}
 
 	delete_digit_write_iterator(wr, NULL, &abort_error);
 	if(store != NULL)
 	{
-		project_fix_unused_space(tx, store, 1);
+		fix_unused_space_entries_in_store(tx, store);   // lazy : below its threshold this is a no-op
 		write_unlock(&(store->blob_store_lock));
 	}
 
