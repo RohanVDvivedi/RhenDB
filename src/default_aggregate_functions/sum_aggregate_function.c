@@ -242,7 +242,7 @@ static datum get_sum_from_sum_state(void* state, const data_type_info* input_typ
 
 								while(digits_written < digits_count)
 								{
-									uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, digits + digits_written, digits_count - digits_written, htan_p, NULL, &abort_error_dummy);
+									uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, digits + digits_written, min(1000000ULL, digits_count - digits_written), htan_p, NULL, &abort_error_dummy);
 									if(digits_written_this_iteration == 0)
 										break;
 									digits_written += digits_written_this_iteration;
