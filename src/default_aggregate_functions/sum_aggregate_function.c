@@ -16,8 +16,6 @@
 #define PROJECTION_PREFIX_BYTES        90
 #define PROJECTION_MAX_SIZE           128
 
-#define PROJECTION_HTAN_FIX_THRESHOLD  20
-
 static data_type_info* get_sum_output_type_info(const data_type_info* input_type_info, transaction* tx)
 {
 	switch(input_type_info->type)
