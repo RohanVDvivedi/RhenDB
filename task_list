@@ -2,6 +2,11 @@ PICKED TASKS
 
 
 
+* UINT, INT, LARGE_UINT and LARGE_INT of same number of bytes in size are hashably equivalent, number 73 in UINT[3], INT[3], LARGE_UINT[3] and LARGE_INT[3] be they are nullable or not, hash to same value 
+
+
+
+
 
 DESIGN CATALOG TABLES
  LOCKING IS EXTERNAL USING LOCK TABLES
