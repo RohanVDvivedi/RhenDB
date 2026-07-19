@@ -1550,6 +1550,49 @@ static void store_int_bits(expr_value* v, expr_type target, uint256 bits)
 	}
 }
 
+/* narrow a cast integer result to the width its target type declares.
+ *
+ * without this the cast returns a full-width value while the type says (say) 2 bytes, and the
+ * discrepancy is only resolved when the value is stored -- where the tuplestore silently wraps it
+ * (70000 into an INT[2] reads back as 4464, with set_element_in_tuple still reporting success).
+ * narrowing here makes the value the expression sees identical to the value that will be stored.
+ * width 0 means "unspecified", which is the widest form and needs no narrowing. */
+static void narrow_int_to_declared_width(expr_value* v, expr_type kind, uint32_t width)
+{
+	if(width == 0) return;
+	switch(kind)
+	{
+		case RHENDB_BIT_FIELD:
+			if(width < 64) v->value.bit_field_value &= ((1ULL << width) - 1ULL);
+			return;
+		case RHENDB_UINT:
+			if(width < 8) v->value.uint_value &= ((1ULL << (width * 8)) - 1ULL);
+			return;
+		case RHENDB_INT:
+			if(width < 8)
+			{
+				uint32_t sh = 64 - (width * 8);
+				v->value.int_value = (int64_t)(((uint64_t)v->value.int_value) << sh) >> sh;  /* sign-extend */
+			}
+			return;
+		case RHENDB_LARGE_UINT:
+			if(width < 32)
+				for(uint32_t b = width; b < 32; b++) set_byte_in_uint256(&(v->value.large_uint_value), b, 0);
+			return;
+		case RHENDB_LARGE_INT:
+			if(width < 32)
+			{
+				uint8_t top = get_byte_from_uint256(v->value.large_int_value.raw_uint_value, width - 1);
+				uint8_t fill = (top & 0x80) ? 0xFF : 0x00;                     /* sign-extend */
+				for(uint32_t b = width; b < 32; b++)
+					set_byte_in_uint256(&(v->value.large_int_value.raw_uint_value), b, fill);
+			}
+			return;
+		default: return;
+	}
+}
+
+
 static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* a = data;
@@ -1596,6 +1639,12 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 
 		expr_value* v = new_val(target, ec_p);
 		store_int_bits(v, target, bits);
+		/* the target type may declare a narrower width than the full-width bits we just stored
+		 * (CAST(x AS SMALLINT) is a 2-byte INT). narrow now, so the expression's value is exactly the
+		 * value that will be stored rather than one the tuplestore silently wraps later. */
+		narrow_int_to_declared_width(v, target, native_width((const expr_type_info*)to_type));
+		v->type_info.dti_p = ((const expr_type_info*)to_type)->dti_p;   /* carry the declared width */
+		v->type_info.should_free_dti_p = 0;
 		return v;
 	}
 
@@ -1656,7 +1705,22 @@ static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_e
 	switch(type->type_name)
 	{
 		case SQL_BOOL: return (void*)(&rhendb_bool_type);
-		case SQL_SMALLINT: case SQL_INT: case SQL_BIGINT: return new_type(RHENDB_INT);
+
+		/* the integer widths are part of the SQL type, and native types now carry their declared width,
+		 * so give each its own rather than collapsing all three onto a full-width RHENDB_INT. a CAST to
+		 * SMALLINT then really does produce a 2-byte result, and a projection of it stores 2 bytes. */
+		case SQL_SMALLINT: return new_type_sized(RHENDB_INT, 2);
+		case SQL_INT:      return new_type_sized(RHENDB_INT, 4);
+		case SQL_BIGINT:   return new_type_sized(RHENDB_INT, 8);
+
+		/* BIT(n) : a collection of n bits. spec[0] carries n when the type was written with a length. */
+		case SQL_BIT:
+		{
+			uint32_t bits = 64;
+			if(type->spec_size > 0 && type->spec[0] > 0 && type->spec[0] <= 64)
+				bits = (uint32_t)(type->spec[0]);
+			return new_type_sized(RHENDB_BIT_FIELD, bits);
+		}
 		/* REAL is the 4-byte approximate type; FLOAT and DOUBLE PRECISION are 8-byte, as in common SQL */
 		case SQL_REAL: return new_type_sized(RHENDB_FLOAT, 0);
 		case SQL_FLOAT: case SQL_DOUBLE: return new_type_sized(RHENDB_DOUBLE, 0);
