@@ -2,6 +2,8 @@ PICKED TASKS
 
 
 * SQL_INT allowed with 1 to 8 bytes, SQL_BIGINT allowed with 1 to 32 bytes, 1 more spec bit suggests if it is signed, passing it as 0 means unsigned, 1 means signed
+* casts to string from numbers should be allowed, directly convering into decimal string
+
 * UINT, INT, LARGE_UINT and LARGE_INT of same number of bytes in size are hashably equivalent, number 73 in UINT[3], INT[3], LARGE_UINT[3] and LARGE_INT[3] be they are nullable or not, hash to same value 
 
 
