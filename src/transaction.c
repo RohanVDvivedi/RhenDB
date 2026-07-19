@@ -108,6 +108,23 @@ extension_reader_iterator_callback* get_callback_and_engine_for_extended_type(tr
 	return NULL;
 }
 
+void fix_unused_space_entries_in_store(transaction* tx, temporary_extension_store* temp_ext_store)
+{
+	uint32_t entries_to_fix = get_notification_count_for_heap_table_accumulative_notifier(&(temp_ext_store->htan));
+	if(entries_to_fix < TEMP_EXT_BLOB_STORE_FIX_THRESHOLD)
+		return;
+
+	int abort_error_dummy = 0;
+	uint64_t blob_store_root_page_id;
+	uint32_t unused_bytes_in_entry;
+	uint64_t page_id;
+	while(pop_from_heap_table_accumulative_notifier(&(temp_ext_store->htan), &blob_store_root_page_id, &unused_bytes_in_entry, &page_id))
+	{
+		if(blob_store_root_page_id == temp_ext_store->blob_store_root_page_id)
+			fix_unused_space_in_heap_table(blob_store_root_page_id, unused_bytes_in_entry, page_id, &(tx->rdb->volatile_rage_engine.bstd.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+	}
+}
+
 void deinitialize_transaction(transaction* tx)
 {
 	for(uint32_t i = 0; i < TEMPORARY_EXTENSION_STORE_COUNT; i++)

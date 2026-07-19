@@ -39,7 +39,8 @@ struct temporary_extension_store
 	rwlock blob_store_lock;
 };
 
-#define MAX_ENTRIES_IN_VOL_BLOBS_HTAN 56 // threshold should be something like 20 to 24 for fixing the accumulated entries
+#define MAX_ENTRIES_IN_VOL_BLOBS_HTAN        56 // threshold should be something like 20 to 24 for fixing the accumulated entries
+#define TEMP_EXT_BLOB_STORE_FIX_THRESHOLD    25
 
 // this is the number of temporary extension stores that any 1 particular transaction will maintain
 #define TEMPORARY_EXTENSION_STORE_COUNT 64
@@ -74,6 +75,9 @@ void reset_temp_ext_stores_in_transaction(transaction* tx);
 // for persistent store only callback returned is NULL
 // and for volatile_rage_engine based temp_ext_stores, everything both the return values are present
 extension_reader_iterator_callback* get_callback_and_engine_for_extended_type(transaction* tx, const data_type_info* dti_p, rage_engine** ex_engine, extension_reader_iterator_callback* pass_through);
+
+// utility function to be called with write lock on the store to fix unused space entries
+void fix_unused_space_entries_in_store(transaction* tx, temporary_extension_store* temp_ext_store);
 
 void deinitialize_transaction(transaction* tx);
 

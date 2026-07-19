@@ -3,6 +3,8 @@
 #include<tuplestore/tuple_def.h>
 #include<tuplestore/tuple.h>
 
+#include<rhendb/transaction.h>
+
 #include<serint/large_uints.h>
 #include<serint/large_ints.h>
 
@@ -11,11 +13,12 @@
 
 #include<stdlib.h>
 
-#define MAX_NUMERIC_DIGITS_IN_BASE_10_pow_12     6500 // number of digits in base 12 number
-#define MAX_NUMERIC_DIGITS_IN_BASE_10           (MAX_NUMERIC_DIGITS_IN_BASE_10_pow_12 * 12)
-#define MAX_NUMERIC_BYTES                       (MAX_NUMERIC_DIGITS_IN_BASE_10_pow_12 * 5)
+#define PROJECTION_PREFIX_BYTES        90
+#define PROJECTION_MAX_SIZE           128
 
-static data_type_info* get_sum_output_type_info(const data_type_info* input_type_info)
+#define PROJECTION_HTAN_FIX_THRESHOLD  20
+
+static data_type_info* get_sum_output_type_info(const data_type_info* input_type_info, transaction* tx)
 {
 	switch(input_type_info->type)
 	{
@@ -37,7 +40,7 @@ static data_type_info* get_sum_output_type_info(const data_type_info* input_type
 		{
 			if(is_numeric_type_info(input_type_info))
 			{
-				data_type_info* output_type_info = get_numeric_inline_type_info(MAX_NUMERIC_BYTES + 12);
+				data_type_info* output_type_info = get_numeric_extended_type_info(VOLATILE_EXT_SUB_TYPE, PROJECTION_MAX_SIZE, get_numeric_inline_type_info(PROJECTION_MAX_SIZE), &(tx->rdb->volatile_rage_engine.pam_p->pas));
 				finalize_type_info(output_type_info);
 				return output_type_info;
 			}
@@ -159,7 +162,7 @@ static void destroy_sum_state(void** state_p, const data_type_info* input_type_i
 	}
 }
 
-static datum get_sum_from_sum_state(void* state, const data_type_info* input_type_info, const data_type_info* output_type_info)
+static datum get_sum_from_sum_state(void* state, const data_type_info* input_type_info, const data_type_info* output_type_info, transaction* tx)
 {
 	switch(input_type_info->type)
 	{
@@ -194,31 +197,76 @@ static datum get_sum_from_sum_state(void* state, const data_type_info* input_typ
 
 					tuple_def output_tuple_def;
 					initialize_tuple_def(&output_tuple_def, (data_type_info*)output_type_info);
-					uint32_t output_tuple_size = get_minimum_tuple_size(&output_tuple_def);
-					uint32_t output_buffer_capacity = output_tuple_size;
-					sum_state->output_buffer = malloc(output_buffer_capacity);
+					sum_state->output_buffer = malloc(PROJECTION_MAX_SIZE);
 					init_tuple(&output_tuple_def, sum_state->output_buffer);
 
 					set_sign_bits_and_exponent_for_numeric(mn.sign_bits, mn.exponent, sum_state->output_buffer, &output_tuple_def, SELF);
+
 					if(mn.sign_bits == POSITIVE_NUMERIC || mn.sign_bits == NEGATIVE_NUMERIC)
 					{
-						uint32_t digits_to_be_written = min(MAX_NUMERIC_DIGITS_IN_BASE_10_pow_12, get_digits_count_for_materialized_numeric(&mn));
-						output_buffer_capacity += digits_to_be_written * 5 + 4;
-						sum_state->output_buffer = realloc(sum_state->output_buffer, output_buffer_capacity);
+						uint64_t digits_count = get_digits_count_for_materialized_numeric(&mn);
+						uint64_t* digits = malloc(digits_count * sizeof(uint64_t));
 
-						set_element_in_tuple(&output_tuple_def, STATIC_POSITION(2), sum_state->output_buffer, EMPTY_DATUM, output_buffer_capacity - output_tuple_size);
-						output_tuple_size = get_tuple_size(&output_tuple_def, sum_state->output_buffer);
-						expand_element_count_for_element_in_tuple(&output_tuple_def, STATIC_POSITION(2), sum_state->output_buffer, 0, digits_to_be_written, output_buffer_capacity - output_tuple_size);
-						output_tuple_size = get_tuple_size(&output_tuple_def, sum_state->output_buffer);
+						for(uint64_t i = 0; i < digits_count; i++)
+							digits[i] = get_nth_digit_from_materialized_numeric(&mn, i);
 
-						for(uint32_t i = 0; i < digits_to_be_written; i++)
+						deinitialize_materialized_numeric(&mn);
+
 						{
-							uint64_t digit = get_nth_digit_from_materialized_numeric(&mn, i);
-							set_element_in_tuple(&output_tuple_def, STATIC_POSITION(2, i), sum_state->output_buffer, &((datum){.uint_value = digit}), output_buffer_capacity - output_tuple_size);
-						}
-					}
+							int abort_error_dummy = 0;
+							rage_engine* ex_engine = &(tx->rdb->volatile_rage_engine);
 
-					deinitialize_materialized_numeric(&mn);
+							digit_write_iterator* wr = get_new_digit_write_iterator(sum_state->output_buffer, &output_tuple_def, SELF, 0 /*dummy root*/, get_NULL_tuple_pointer(&(ex_engine->pam_p->pas)), PROJECTION_PREFIX_BYTES / BYTES_PER_NUMERIC_DIGIT, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
+
+							temporary_extension_store* temp_ext_store = NULL;
+							uint64_t digits_written = 0;
+
+							// write just the prefix
+							while(digits_written < digits_count && wr->digits_written_to_prefix < wr->digits_to_be_written_to_prefix)
+							{
+								uint32_t digits_to_write_this_iteration = min(wr->digits_to_be_written_to_prefix - wr->digits_written_to_prefix, digits_count - digits_written);
+								uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, digits + digits_written, digits_to_write_this_iteration, NULL, NULL, &abort_error_dummy);
+								if(digits_written_this_iteration == 0)
+									break;
+								digits_written += digits_written_this_iteration;
+							}
+
+							// write the extension
+							if(digits_written < digits_count)
+							{
+								temp_ext_store = &(tx->temp_ext_stores[hash_element_within_tuple(sum_state->output_buffer, &output_tuple_def, EXTENDED_PREFIX_POS_ACC, FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT]);
+
+								// set the write iterator with new root_page_id and take the lock before any further access
+								write_lock(&(temp_ext_store->blob_store_lock), BLOCKING);
+								wr->blob_store_root_page_id = temp_ext_store->blob_store_root_page_id;
+
+								const heap_table_notifier* htan_p = &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(temp_ext_store->htan));
+
+								while(digits_written < digits_count)
+								{
+									uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, digits + digits_written, digits_count - digits_written, htan_p, NULL, &abort_error_dummy);
+									if(digits_written_this_iteration == 0)
+										break;
+									digits_written += digits_written_this_iteration;
+
+									fix_unused_space_entries_in_store(tx, temp_ext_store);
+								}
+							}
+
+							delete_digit_write_iterator(wr, NULL, &abort_error_dummy);
+							if(temp_ext_store != NULL)
+							{
+								fix_unused_space_entries_in_store(tx, temp_ext_store);
+								write_unlock(&(temp_ext_store->blob_store_lock));
+							}
+						}
+
+						free(digits);
+					}
+					else // only positive number have digits
+					{
+						deinitialize_materialized_numeric(&mn);
+					}
 				}
 
 				return (datum){.tuple_value = sum_state->output_buffer};
@@ -405,7 +453,7 @@ static int produce_output(const aggregate_function* af_p, datum* output, void** 
 		return 1;
 	}
 
-	(*output) = get_sum_from_sum_state((*state_p), af_p->input_type_infos[0], af_p->output_type_info);
+	(*output) = get_sum_from_sum_state((*state_p), af_p->input_type_infos[0], af_p->output_type_info, ((const sum_context*)(af_p->context_p))->tx);
 	return 1;
 }
 
@@ -450,7 +498,7 @@ aggregate_function* get_sum_aggregate_function(transaction* tx, const data_type_
 
 	af_p->destroy_aggregate_function = destroy_aggregate_function;
 
-	af_p->output_type_info = get_sum_output_type_info(input_type_info);
+	af_p->output_type_info = get_sum_output_type_info(input_type_info, tx);
 	if(af_p->output_type_info == NULL)
 	{
 		printf("incompatible input_type_info for sum_aggregate_function\n");

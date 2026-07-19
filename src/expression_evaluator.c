@@ -2321,17 +2321,17 @@ static data_type_info* build_projection_type_for_scalar(expr_type scalar, const 
 	data_type_info* ext = NULL;
 	if(scalar == RHENDB_STRING)
 	{
-		data_type_info* inl = get_text_inline_type_info(PROJECTION_PREFIX_BYTES);
+		data_type_info* inl = get_text_inline_type_info(PROJECTION_MAX_SIZE);
 		ext = inl ? get_text_extended_type_info(VOLATILE_EXT_SUB_TYPE, PROJECTION_MAX_SIZE, inl, vpas) : NULL;
 	}
 	else if(scalar == RHENDB_BINARY)
 	{
-		data_type_info* inl = get_blob_inline_type_info(PROJECTION_PREFIX_BYTES);
+		data_type_info* inl = get_blob_inline_type_info(PROJECTION_MAX_SIZE);
 		ext = inl ? get_blob_extended_type_info(VOLATILE_EXT_SUB_TYPE, PROJECTION_MAX_SIZE, inl, vpas) : NULL;
 	}
 	else if(scalar == RHENDB_NUMERIC)
 	{
-		data_type_info* inl = get_numeric_inline_type_info(PROJECTION_PREFIX_BYTES);
+		data_type_info* inl = get_numeric_inline_type_info(PROJECTION_MAX_SIZE);
 		ext = inl ? get_numeric_extended_type_info(VOLATILE_EXT_SUB_TYPE, PROJECTION_MAX_SIZE, inl, vpas) : NULL;
 	}
 	else
