@@ -93,7 +93,7 @@ static void* create_sum_state(const data_type_info* input_type_info)
 			{
 				// init context to maxcontext
 				numeric_sum_state* sum_state = malloc(sizeof(numeric_sum_state));
-				mpd_maxcontext(&(sum_state->ctx));
+				get_mpd_context_for_materialized_numeric(&(sum_state->ctx));
 				sum_state->ctx.traps = 0;
 
 				// initialize sum to 0

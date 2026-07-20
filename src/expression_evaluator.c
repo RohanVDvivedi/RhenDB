@@ -727,7 +727,7 @@ static int number_to_mpd(const expr_value* v, mpd_t* out)
 	if(!ee_mpd_new(out))
 		return 0;
 	mpd_context_t ctx;
-	mpd_maxcontext(&ctx);
+	get_mpd_context_for_materialized_numeric(&ctx);
 	uint32_t st = 0;
 	char b[256];
 	switch(v->type_info.type){
@@ -819,7 +819,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 			return NULL;
 		}
 
-		mpd_context_t ctx; mpd_maxcontext(&ctx); uint32_t st = 0;
+		mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
 		mpd_t result;
 		if(!ee_mpd_new(&result)){ if(oa) mpd_del(&sa); if(ob) mpd_del(&sb); *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
 		switch(op){
@@ -1313,7 +1313,7 @@ static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval
 	{
 		mpd_t d;
 		if(!ee_mpd_new(&d)){ if(buf != stackbuf) free(buf); *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-		mpd_context_t ctx; mpd_maxcontext(&ctx); uint32_t st = 0;
+		mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
 		mpd_qset_string(&d, buf, &ctx, &st);
 		v = new_val(RHENDB_NUMERIC, ec_p); v->numeric_value = d;
 	}
@@ -1526,7 +1526,7 @@ static int numeric_to_int_bits(const mpd_t* m, uint256* out)
 {
 	mpd_t t;
 	if(!ee_mpd_new(&t)) return 0;
-	mpd_context_t ctx; mpd_maxcontext(&ctx); uint32_t st = 0;
+	mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
 	mpd_qtrunc(&t, m, &ctx, &st);                  /* drop the fraction, toward zero */
 	char* s = mpd_qformat(&t, "f", &ctx, &st);     /* plain integer digits, never an exponent */
 	if(s == NULL){ mpd_del(&t); return 0; }
@@ -1677,7 +1677,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 			char* s = sb_to_cstring(a);
 			if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
 			if(!ee_mpd_new(&d)){ free(s); *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			mpd_context_t ctx; mpd_maxcontext(&ctx); uint32_t st = 0;
+			mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
 			mpd_qset_string(&d, s, &ctx, &st);
 			free(s);
 		}
