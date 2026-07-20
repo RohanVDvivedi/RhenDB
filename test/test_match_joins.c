@@ -82,7 +82,6 @@ int main(int argc, char** argv)
 	printf("database initialized\n\n");
 
 	initialize_tuple_defs();
-	initialize_tuple_defs2();
 
 	transaction tx = initialize_transaction(&rdb);
 
@@ -186,7 +185,6 @@ int main(int argc, char** argv)
 	deinitialize_transaction(&tx);
 
 	deinitialize_tuple_defs();
-	deinitialize_tuple_defs2();
 
 	deinitialize_rhendb(&rdb);
 
