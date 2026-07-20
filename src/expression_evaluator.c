@@ -587,6 +587,11 @@ static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int*
 		return *error_code;
 	}
 
+	/* string_or_binary_size is a uint32_t, so a materialized text/blob can hold at most UINT32_MAX bytes.
+	 * an EXTENDED value may stream more than that across many reads, so the buffer is grown with a strict
+	 * uint32_t-safe doubling (cap*2 would itself overflow past 2 GiB) that saturates at UINT32_MAX, and the
+	 * moment the source is found to exceed UINT32_MAX bytes materialization fails with RHENDB_EE_STRING_TOO_LONG
+	 * instead of silently wrapping len / cap and corrupting the heap. */
 	uint32_t cap = 64, len = 0;
 	char* buf = malloc(cap);
 	if(buf == NULL)
@@ -599,7 +604,28 @@ static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int*
 	{
 		if(len == cap)
 		{
-			uint32_t nc = cap * 2;
+			if(cap == UINT32_MAX)
+			{
+				/* the buffer already spans the whole representable size and the last read filled it, so the
+				 * source is not necessarily exhausted. one probing byte distinguishes a value that is exactly
+				 * UINT32_MAX bytes (representable) from one that is larger (which cannot fit the size field). */
+				char probe;
+				uint32_t extra = read_from_binary_read_iterator(bri, &probe, 1, transaction_id, &abort_error);
+				if(abort_error)
+				{
+					free(buf);
+					delete_binary_read_iterator(bri, transaction_id, &abort_error);
+					*error_code = RHENDB_EE_MATERIALIZE_FAILED;
+					return *error_code;
+				}
+				if(extra == 0)
+					break;                          /* exactly UINT32_MAX bytes : representable, done */
+				free(buf);                              /* strictly larger than UINT32_MAX bytes : refuse */
+				delete_binary_read_iterator(bri, transaction_id, &abort_error);
+				*error_code = RHENDB_EE_STRING_TOO_LONG;
+				return *error_code;
+			}
+			uint32_t nc = (cap <= UINT32_MAX / 2) ? (cap * 2) : UINT32_MAX; /* double, saturating at UINT32_MAX */
 			char* nb = realloc(buf, nc);
 			if(nb == NULL)
 			{
@@ -621,7 +647,7 @@ static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int*
 		}
 		if(got == 0)
 			break;
-		len += got;
+		len += got;   /* safe : got <= cap - len, so len stays <= cap <= UINT32_MAX */
 	}
 	delete_binary_read_iterator(bri, transaction_id, &abort_error);
 	if(abort_error)
