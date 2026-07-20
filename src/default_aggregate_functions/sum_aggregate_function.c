@@ -202,10 +202,10 @@ static datum get_sum_from_sum_state(void* state, const data_type_info* input_typ
 
 					if(mn.sign_bits == POSITIVE_NUMERIC || mn.sign_bits == NEGATIVE_NUMERIC)
 					{
-						uint64_t digits_count = get_digits_count_for_materialized_numeric(&mn);
+						uint32_t digits_count = get_digits_count_for_materialized_numeric(&mn);
 						uint64_t* digits = malloc(digits_count * sizeof(uint64_t));
 
-						for(uint64_t i = 0; i < digits_count; i++)
+						for(uint32_t i = 0; i < digits_count; i++)
 							digits[i] = get_nth_digit_from_materialized_numeric(&mn, i);
 
 						deinitialize_materialized_numeric(&mn);
@@ -217,7 +217,7 @@ static datum get_sum_from_sum_state(void* state, const data_type_info* input_typ
 							digit_write_iterator* wr = get_new_digit_write_iterator(sum_state->output_buffer, &output_tuple_def, SELF, 0 /*dummy root*/, get_NULL_tuple_pointer(&(ex_engine->pam_p->pas)), RESULT_PREFIX_BYTES / BYTES_PER_NUMERIC_DIGIT, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
 
 							temporary_extension_store* temp_ext_store = NULL;
-							uint64_t digits_written = 0;
+							uint32_t digits_written = 0;
 
 							// write just the prefix
 							while(digits_written < digits_count && wr->digits_written_to_prefix < wr->digits_to_be_written_to_prefix)
@@ -242,7 +242,7 @@ static datum get_sum_from_sum_state(void* state, const data_type_info* input_typ
 
 								while(digits_written < digits_count)
 								{
-									uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, digits + digits_written, min(1000000ULL, digits_count - digits_written), htan_p, NULL, &abort_error_dummy);
+									uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, digits + digits_written, digits_count - digits_written, htan_p, NULL, &abort_error_dummy);
 									if(digits_written_this_iteration == 0)
 										break;
 									digits_written += digits_written_this_iteration;
