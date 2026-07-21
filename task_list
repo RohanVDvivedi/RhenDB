@@ -123,15 +123,20 @@ DB acess operators
 
 PRIORITY HIGH LEVEL TASKS (not yet prioritized)
 
-* preloaded functions and mechanism to call them like length of string/array/blob/binary, trigonometery, max, min with variable lengths inputs
+* aggregate functions
+ * group_concat -> canctaenate all strings in same group, into a volatile string
+ * gcd -> same return type for the number (ponder over support for lcm)
+ * bitwise_and/or/xor -> only integer types wiuth same number of bytes/bits in them
+ * logical_and/or/xor -> single bit number, doen after type casting to bool
+
+* functions
+* need preloaded functions and mechanism to call them like length of string/array/blob/binary, trigonometery, max, min with variable lengths inputs
  * implement function NOW(), to get current epoch
  * implement a function to get i-th element from an array, tuple, string, blob, binary
  * implement a function to convert a byte to it's ascii value, can also allow type cast to do it
- * implement lcm, gcd like aggregate functions
- * implement get date, time, with timezone, and time in string to unix epoch -> rhendb_function (with is_aggregate_function = 0)
- * implement concat and substring -> rhendb_functions (with is_aggregate_function = 0)
- * implement double/numeric funtions, sin, cos, tan, asin, acos, atan, log, expr -> rhendb_function (with is_aggregate_function = 0)
- * implement type casting functions to large_uint, large_int, uint, int, string to numbers -> rhendb_function (with is_aggregate_function = 0)
+ * implement get date, time, with timezone, and time in string to unix epoch
+ * implement concat and substring
+ * implement double/numeric funtions, sin, cos, tan, asin, acos, atan, log, expr
 
 FUTURE TASKS
 
