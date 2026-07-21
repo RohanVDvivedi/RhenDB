@@ -133,6 +133,7 @@ enum rhendb_expr_eval_error
 	RHENDB_EE_NULL_OPERAND        = 11, // a required operand pointer was NULL
 	RHENDB_EE_STRING_TOO_LONG     = 12, // a text/blob value's byte length would not fit in the uint32_t size field (concat result, or an extended value being materialized)
 	RHENDB_EE_INCOMPATIBLE_PROJECTION = 13, // evaluated value cannot be projected into the requested type
+	RHENDB_EE_INVALID_CAST_VALUE  = 14, // a string being cast to a number is not a valid numeric value
 };
 
 // ===================================================================================================

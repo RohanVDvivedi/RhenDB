@@ -1562,6 +1562,31 @@ static int numeric_to_int_bits(const mpd_t* m, uint256* out)
 	return 1;
 }
 
+/* trim ASCII whitespace and parse a decimal/scientific numeric string into an initialized mpd_t.
+ * returns 1 on success (out set), 0 if the string is not a valid number (out untouched), -1 on OOM.
+ * honours '.', 'e'/'E' and sign; "Infinity"/"NaN" parse to the mpd specials. an empty/whitespace-only
+ * string, or any trailing/embedded garbage (mpd is whole-string strict), is rejected as not-a-number. */
+static int parse_numeric_string(const char* str, mpd_t* out)
+{
+	const char* p = str;
+	while(*p==' '||*p=='\t'||*p=='\n'||*p=='\r') p++;
+	size_t len = strlen(p);
+	while(len>0 && (p[len-1]==' '||p[len-1]=='\t'||p[len-1]=='\n'||p[len-1]=='\r')) len--;
+	if(len == 0) return 0;
+
+	char stackbuf[128];
+	char* tmp = (len + 1 <= sizeof(stackbuf)) ? stackbuf : malloc(len + 1);
+	if(tmp == NULL) return -1;
+	memory_move(tmp, p, len); tmp[len] = 0;
+
+	if(!ee_mpd_new(out)){ if(tmp != stackbuf) free(tmp); return -1; }
+	mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
+	mpd_qset_string(out, tmp, &ctx, &st);
+	if(tmp != stackbuf) free(tmp);
+	if(st & MPD_Conversion_syntax){ mpd_del(out); return 0; }   /* not a valid numeric literal */
+	return 1;
+}
+
 /* store a 256-bit integer bit-pattern into an integer-typed value, narrowing to the target width */
 static void store_int_bits(expr_value* v, expr_type target, uint256 bits)
 {
@@ -1619,6 +1644,77 @@ static void narrow_int_to_declared_width(expr_value* v, expr_type kind, uint32_t
 }
 
 
+/* plain decimal text of a number/numeric operand, as a malloc'd NUL-terminated string (caller frees with
+ * free()). integers (native and 256-bit) are exact; floats and NUMERIC go through an mpd_t and the 'f'
+ * (fixed-point) format, so the result is always ordinary decimal, never scientific. returns NULL on OOM. */
+static char* number_to_decimal_cstring(const expr_value* a)
+{
+	char stack[512];
+	switch(a->type_info.type)
+	{
+		case RHENDB_BIT_FIELD:
+		case RHENDB_UINT:
+		{
+			int n = snprintf(stack, sizeof(stack), "%llu", (unsigned long long)a->value.uint_value);
+			if(n < 0) return NULL;
+			char* s = malloc((size_t)n + 1);
+			if(s != NULL) memory_move(s, stack, (size_t)n + 1);
+			return s;
+		}
+		case RHENDB_INT:
+		{
+			int n = snprintf(stack, sizeof(stack), "%lld", (long long)a->value.int_value);
+			if(n < 0) return NULL;
+			char* s = malloc((size_t)n + 1);
+			if(s != NULL) memory_move(s, stack, (size_t)n + 1);
+			return s;
+		}
+		case RHENDB_LARGE_UINT:
+		{
+			uint32_t n = serialize_to_decimal_uint256(stack, a->value.large_uint_value);
+			stack[n] = 0;
+			char* s = malloc((size_t)n + 1);
+			if(s != NULL) memory_move(s, stack, (size_t)n + 1);
+			return s;
+		}
+		case RHENDB_LARGE_INT:
+		{
+			uint32_t n = serialize_to_decimal_int256(stack, a->value.large_int_value);
+			stack[n] = 0;
+			char* s = malloc((size_t)n + 1);
+			if(s != NULL) memory_move(s, stack, (size_t)n + 1);
+			return s;
+		}
+		case RHENDB_NUMERIC:
+		case RHENDB_FLOAT:
+		case RHENDB_DOUBLE:
+		{
+			// route both the mpd_t and the two float kinds through one mpd_t, then format fixed-point.
+			mpd_t scratch;
+			const mpd_t* d;
+			if(a->type_info.type == RHENDB_NUMERIC)
+				d = &(a->numeric_value);
+			else
+			{
+				if(!number_to_mpd(a, &scratch)) return NULL;
+				d = &scratch;
+			}
+			mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
+			char* mpd_str = mpd_qformat(d, "f", &ctx, &st);
+			if(d == &scratch) mpd_del(&scratch);
+			if(mpd_str == NULL) return NULL;
+			// normalize to a free()-able buffer : mpd_qformat allocates with mpd_free, unlike the paths above.
+			size_t len = strlen(mpd_str);
+			char* s = malloc(len + 1);
+			if(s != NULL) memory_move(s, mpd_str, len + 1);
+			mpd_free(mpd_str);
+			return s;
+		}
+		default:
+			return NULL;
+	}
+}
+
 static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* a = data;
@@ -1658,8 +1754,15 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		{
 			char* s = sb_to_cstring(a);
 			if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			bits = decimal_str_to_int_bits(s);
+			mpd_t d;
+			int pr = parse_numeric_string(s, &d);   /* parses "1.939e5" as 193900 */
 			free(s);
+			if(pr < 0){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			if(pr == 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL; }   /* not a number */
+			if(!mpd_isfinite(&d)){ mpd_del(&d); *error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL; }   /* inf/NaN has no integer value */
+			int ok = numeric_to_int_bits(&d, &bits);   /* truncate toward zero */
+			mpd_del(&d);
+			if(!ok){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
 		}
 		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
 
@@ -1680,7 +1783,18 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		double d;
 		if(src_is_numeric)     d = mpd_to_double(&(a->numeric_value));
 		else if(src_is_number) d = to_dbl(a);
-		else if(src_is_sb){ char* s = sb_to_cstring(a); if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; } d = strtod(s, NULL); free(s); }
+		else if(src_is_sb)
+		{
+			char* s = sb_to_cstring(a);
+			if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			mpd_t m;
+			int pr = parse_numeric_string(s, &m);
+			free(s);
+			if(pr < 0){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			if(pr == 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL; }   /* not a number */
+			d = mpd_to_double(&m);   /* inf/NaN are valid floating-point values */
+			mpd_del(&m);
+		}
 		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
 		expr_value* v = new_val(target, ec_p); write_flt(v, target, d); return v;
 	}
@@ -1702,16 +1816,49 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		{
 			char* s = sb_to_cstring(a);
 			if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			if(!ee_mpd_new(&d)){ free(s); *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
-			mpd_qset_string(&d, s, &ctx, &st);
+			int pr = parse_numeric_string(s, &d);
 			free(s);
+			if(pr < 0){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			if(pr == 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL; }   /* not a number */
 		}
 		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
 		expr_value* v = new_val(RHENDB_NUMERIC, ec_p); v->numeric_value = d; return v;
 	}
 
-	*error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL;   /* STRING/BINARY targets not implemented yet */
+	/* STRING / BINARY target */
+	if(target == RHENDB_STRING || target == RHENDB_BINARY)
+	{
+		const char* bytes;   /* the result bytes and their length, sourced below */
+		uint32_t n;
+		char* owned;         /* a buffer we allocated that the result value must take ownership of */
+
+		if(src_is_sb)
+		{
+			/* string/binary source (already materialized above) : reinterpret its bytes under the new label */
+			n = a->value.string_or_binary_size;
+			owned = malloc(n ? n : 1);
+			if(owned == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			if(n) memory_move(owned, a->value.string_or_binary_value, n);
+			bytes = owned;
+		}
+		else if(src_is_numeric || src_is_number)
+		{
+			/* number / numeric source : plain decimal text */
+			owned = number_to_decimal_cstring(a);
+			if(owned == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			n = (uint32_t)strlen(owned);
+			bytes = owned;
+		}
+		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
+
+		expr_value* v = new_val(target, ec_p);
+		v->buffer = owned;               /* freed by rhendb_delete_data */
+		v->capacity = n;
+		v->value = (datum){ .string_or_binary_value = bytes, .string_or_binary_size = n };
+		return v;
+	}
+
+	*error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL;   /* unknown target kind */
 }
 
 /* ------------------------------ type inference ------------------------------ */
@@ -1816,10 +1963,12 @@ static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_
 static int rhendb_can_cast_types(const void* typ_from, const void* typ_to, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_type from = effective_type((const expr_type_info*)typ_from), to = effective_type((const expr_type_info*)typ_to);
-	/* aligned with rhendb_cast : a number target is reachable from any number, or by parsing a
-	 * string/binary; string/binary cast *targets* are not implemented yet. */
-	if(et_is_num_or_numeric(to) && (et_is_num_or_numeric(from) || from == RHENDB_STRING || from == RHENDB_BINARY)) return 1;
-	return 0;
+	/* aligned with rhendb_cast : any scalar among {numbers, NUMERIC, STRING, BINARY} casts to any other.
+	 * numbers <-> numbers/NUMERIC, string/binary -> number (parsed), number/NUMERIC -> string (decimal text),
+	 * and string/binary -> string/binary (byte reinterpretation). */
+	int from_ok = et_is_num_or_numeric(from) || from == RHENDB_STRING || from == RHENDB_BINARY;
+	int to_ok   = et_is_num_or_numeric(to)   || to   == RHENDB_STRING || to   == RHENDB_BINARY;
+	return from_ok && to_ok;
 }
 static void* rhendb_get_return_type_for_op_exec_callback(void* op_exec_func, void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
 {
