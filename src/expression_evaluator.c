@@ -2226,6 +2226,13 @@ static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32
 		}
 	}
 
+	// the 0th component must not be an integral access
+	{uint32_t temp_idx; if(component_as_index(comp_ptr[0], comp_len[0], &temp_idx)){
+		free(comp_ptr); free(comp_len); free(scratch);
+		*error_code = RHENDB_EE_OUT_OF_MEMORY;
+		return 0;
+	}}
+
 	/* enumerate candidates; keep the first, and on a second distinct hit flag ambiguity */
 	int found = 0, ambiguous = 0, oom = 0;
 	uint32_t win_ti = 0, win_depth = 0; uint32_t* win_pos = NULL; const data_type_info* win_dti = NULL;
