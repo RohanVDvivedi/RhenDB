@@ -33,7 +33,7 @@ struct catalog_manager
 
 	heap_table_tuple_defs db_attributes_tuple_defs;
 	uint64_t db_attributes_root_page_id;
-	// mvcc_hdr, owner_id, owner_part_id, rel_pos_in_type, attribute_name, attribute_type_id, count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, default_value, derived_from_expression(for derived columns of table and index expressions, referencing rel_pos_info)
+	// mvcc_hdr, owner_id, owner_part_id, rel_pos_in_type, attribute_name, attribute_type_id, count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, derived_from_expression(null if not derived column and not index attribute)
 
 	heap_table_tuple_defs db_tables_tuple_defs;
 	uint64_t db_tables_root_page_id;
@@ -41,7 +41,7 @@ struct catalog_manager
 
 	heap_table_tuple_defs db_indices_tuple_defs;
 	uint64_t db_indices_root_page_id;
-	// mvcc_hdr, id, part_id, name, table_id, root_page_id
+	// mvcc_hdr, id, part_id, name, table_id, access_type(btree or hash), root_page_id, predicate_to_filter
 
 	// heap_table_tuple_defs db_functions_tuple_defs;
 	// uint64_t db_functions_root_page_id;
