@@ -13,46 +13,52 @@ data_type_info* get_data_type_info_for_rhendb_type_info(const rhendb_type_info* 
 	{
 		case RHENDB_BIT_FIELD :
 		{
-			if(rti_p->is_nullable)
-				return BIT_FIELD_NULLABLE[rti_p->size];
-			else
-				return BIT_FIELD_NON_NULLABLE[rti_p->size];
+			if(0 < rti_p->size && rti_p->size <= 64)
+			{
+				if(rti_p->is_nullable)
+					return BIT_FIELD_NULLABLE[rti_p->size];
+				else
+					return BIT_FIELD_NON_NULLABLE[rti_p->size];
+			}
+			return NULL;
 		}
 
 		case RHENDB_UINT :
 		{
 			if(rti_p->is_nullable)
 			{
-				if(rti_p->size <= 8)
+				if(0 < rti_p->size && rti_p->size <= 8)
 					return UINT_NULLABLE[rti_p->size];
-				else
+				else if(0 < rti_p->size && rti_p->size <= 32)
 					return LARGE_UINT_NULLABLE[rti_p->size];
 			}
 			else
 			{
-				if(rti_p->size <= 8)
+				if(0 < rti_p->size && rti_p->size <= 8)
 					return UINT_NON_NULLABLE[rti_p->size];
-				else
+				else if(0 < rti_p->size && rti_p->size <= 32)
 					return LARGE_UINT_NON_NULLABLE[rti_p->size];
 			}
+			return NULL;
 		}
 
 		case RHENDB_INT :
 		{
 			if(rti_p->is_nullable)
 			{
-				if(rti_p->size <= 8)
+				if(0 < rti_p->size && rti_p->size <= 8)
 					return INT_NULLABLE[rti_p->size];
-				else
+				else if(0 < rti_p->size && rti_p->size <= 32)
 					return LARGE_INT_NULLABLE[rti_p->size];
 			}
 			else
 			{
-				if(rti_p->size <= 8)
+				if(0 < rti_p->size && rti_p->size <= 8)
 					return INT_NON_NULLABLE[rti_p->size];
-				else
+				else if(0 < rti_p->size && rti_p->size <= 32)
 					return LARGE_INT_NON_NULLABLE[rti_p->size];
 			}
+			return NULL;
 		}
 
 		case RHENDB_FLOAT :
@@ -61,16 +67,17 @@ data_type_info* get_data_type_info_for_rhendb_type_info(const rhendb_type_info* 
 			{
 				if(rti_p->size == sizeof(float))
 					return FLOAT_float_NULLABLE;
-				else
+				else if(rti_p->size == sizeof(double))
 					return FLOAT_double_NULLABLE;
 			}
 			else
 			{
 				if(rti_p->size == sizeof(float))
 					return FLOAT_float_NON_NULLABLE;
-				else
+				else if(rti_p->size == sizeof(double))
 					return FLOAT_double_NON_NULLABLE;
 			}
+			return NULL;
 		}
 
 		case RHENDB_TUPLE_POINTER :
@@ -78,6 +85,18 @@ data_type_info* get_data_type_info_for_rhendb_type_info(const rhendb_type_info* 
 
 		case RHENDB_MVCC_HEADER :
 			return rdb->mvcc_hdr_type_info;
+
+		case RHENDB_TEXT :
+			return get_text_extended_type_info(PERSISTENT_EXT_SUB_TYPE, MAX_EXTENDED_TYPE_SIZE, get_text_inline_type_info(MAX_EXTENDED_TYPE_SIZE), &(rdb->persistent_acid_rage_engine.pam_p->pas));
+
+		case RHENDB_BLOB :
+			return get_blob_extended_type_info(PERSISTENT_EXT_SUB_TYPE, MAX_EXTENDED_TYPE_SIZE, get_blob_inline_type_info(MAX_EXTENDED_TYPE_SIZE), &(rdb->persistent_acid_rage_engine.pam_p->pas));
+
+		case RHENDB_NUMERIC :
+			return get_numeric_extended_type_info(PERSISTENT_EXT_SUB_TYPE, MAX_EXTENDED_TYPE_SIZE, get_numeric_inline_type_info(MAX_EXTENDED_TYPE_SIZE), &(rdb->persistent_acid_rage_engine.pam_p->pas));
+
+		case RHENDB_JSONB :
+			return get_jsonb_extended_type_info(PERSISTENT_EXT_SUB_TYPE, MAX_EXTENDED_TYPE_SIZE, MAX_EXTENDED_TYPE_SIZE, &(rdb->persistent_acid_rage_engine.pam_p->pas));
 
 		case RHENDB_ARRAY :
 		{
@@ -105,20 +124,6 @@ data_type_info* get_data_type_info_for_rhendb_type_info(const rhendb_type_info* 
 			initialize_tuple_data_type_info(dti_p, rti_p->type_name, rti_p->is_nullable, rdb->persistent_acid_rage_engine.pam_p->pas.page_size, rti_p->element_count);
 			return dti_p;
 		}
-
-		case RHENDB_STRING :
-		case RHENDB_TEXT :
-			return get_text_extended_type_info(PERSISTENT_EXT_SUB_TYPE, MAX_INLINE_SIZE + 20, get_text_inline_type_info(MAX_INLINE_SIZE + 8), &(rdb->persistent_acid_rage_engine.pam_p->pas));
-
-		case RHENDB_BINARY :
-		case RHENDB_BLOB :
-			return get_blob_extended_type_info(PERSISTENT_EXT_SUB_TYPE, MAX_INLINE_SIZE + 20, get_blob_inline_type_info(MAX_INLINE_SIZE + 8), &(rdb->persistent_acid_rage_engine.pam_p->pas));
-
-		case RHENDB_NUMERIC :
-			return get_numeric_extended_type_info(PERSISTENT_EXT_SUB_TYPE, MAX_INLINE_SIZE + 20, get_numeric_inline_type_info(MAX_INLINE_SIZE + 8), &(rdb->persistent_acid_rage_engine.pam_p->pas));
-
-		case RHENDB_JSONB :
-			return get_jsonb_extended_type_info(PERSISTENT_EXT_SUB_TYPE, MAX_INLINE_SIZE + 20, MAX_INLINE_SIZE + 8, &(rdb->persistent_acid_rage_engine.pam_p->pas));
 	}
 
 	return NULL;

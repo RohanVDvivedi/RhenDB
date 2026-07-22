@@ -181,7 +181,7 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 
 	// create a type_info that can describe any mvcc_header in the system
 	rdb->mvcc_hdr_type_info = get_mvcc_header_type_info(TRANSACTION_ID_WIDTH);
-	rdb->mvcc_hdr_type_info->is_static = 1;
+	rdb->mvcc_hdr_type_info->is_static = 1; // make it static so no one deletes it and it lives until the application lasts
 	finalize_type_info(rdb->mvcc_hdr_type_info);
 
 	uint64_t threadpool_count = min(max_concurrent_users_count * 10, 1024);

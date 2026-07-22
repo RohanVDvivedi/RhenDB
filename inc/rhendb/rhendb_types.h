@@ -4,39 +4,35 @@
 #include<rhendb/rhendb.h>
 #include<rhendb/transaction.h>
 
+#include<rhendb/max_intermediate_tuple_size.h>
+
 #include<tuplestore/data_type_info.h>
 
-#define MAX_INLINE_SIZE 230
-
-#define SMALL_TYPE_SIZE 32000
-#define LARGE_TYPE_SIZE 32000000
+#define MAX_EXTENDED_TYPE_SIZE  128
+#define MAX_PREFIX_SIZE          90 // do not load more than this many in the prefix of the extended types
 
 typedef enum rhendb_type rhendb_type;
 enum rhendb_type
 {
 	// primitive numbers of fixed length
-	RHENDB_BIT_FIELD, // size 1-64 in bits
-	RHENDB_UINT, // size 1-32 in bytes
-	RHENDB_INT, // size 1-32 in bytes
-	RHENDB_FLOAT, // either sizeof(float) or sizeof(double)
+	RHENDB_BIT_FIELD,    // size 1-64 in bits
+	RHENDB_UINT,         // size 1-32 in bytes
+	RHENDB_INT,          // size 1-32 in bytes
+	RHENDB_FLOAT,        // either sizeof(float) or sizeof(double)
 
 	// default composite types
 	RHENDB_TUPLE_POINTER,
 	RHENDB_MVCC_HEADER,
 
-	// composite inlined types
-	RHENDB_ARRAY, // fully inlined type of variable or fixed count of elements
-	RHENDB_TUPLE, // fully inlined type to hold composite elements
-
-	// extended types with total bytes lesser than 32 KB
-	RHENDB_STRING,
-	RHENDB_BINARY,
-	RHENDB_NUMERIC, // 76000 decimal digits, too big for any normal use case
-
-	// extended types with total bytes lesser than 32 MB
+	// total size of below attributes must be limited to MAX_INTERMEDIATE_TUPLE_SIZE, else we can not hold it in memory
 	RHENDB_TEXT,
 	RHENDB_BLOB,
+	RHENDB_NUMERIC,
 	RHENDB_JSONB,
+
+	// composite inlined types, array or tuple too big itself will not spill to table's blob_store, but it's nested TEXT column will
+	RHENDB_ARRAY, // fully inlined type of (variable or fixed count) array of elements
+	RHENDB_TUPLE, // fully inlined type to hold composite elements
 };
 
 typedef struct rhendb_type_info rhendb_type_info;
@@ -52,7 +48,7 @@ struct rhendb_type_info
 {
 	rhendb_type type;
 
-	int is_nullable;
+	unsigned int is_nullable:1;
 
 	uint32_t size; // number of bits for BIT_FIELD, or size in bytes for anyother numeric types
 
@@ -68,25 +64,5 @@ struct rhendb_type_info
 };
 
 data_type_info* get_data_type_info_for_rhendb_type_info(const rhendb_type_info* rti_p, const rhendb* rdb);
-
-typedef enum rhendb_alter_type rhendb_alter_type;
-enum rhendb_alter_type
-{
-	ADD_COLUMN,
-	DROP_COLUMN,
-};
-
-typedef struct rhendb_alter_operation rhendb_alter_operation;
-struct rhendb_alter_operation
-{
-	rhendb_alter_type type;
-
-	uint32_t real_position;
-	uint64_t relative_position;
-
-	char column_name[64];
-	rhendb_type_info* column_type;
-	char* computed_column_expression;
-};
 
 #endif
