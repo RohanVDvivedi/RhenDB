@@ -2057,9 +2057,10 @@ static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_cont
 
 /* "a.b.c" is resolved once against the schema and cached; the cache lives for the life of the
  * context, so the same reference is only parsed and located once and then read every row.
- * With two or more input tuples the first component is the table name (a string, matched against
- * a tuple_def's type_name); every remaining component is a field name (a string) OR an integer
- * (an array/tuple index). */
+ * A reference is resolved against every input tuple under both readings -- with a leading table
+ * (type) name and without one -- and succeeds only if exactly one input column matches (see
+ * resolve_into()); the table name is therefore optional wherever it is not needed to disambiguate.
+ * Every component after any table name is a field name (a string) OR an integer (an array/tuple index). */
 typedef struct var_cache_entry var_cache_entry;
 struct var_cache_entry
 {
@@ -2138,96 +2139,138 @@ static int component_as_index(const char* p, uint32_t len, uint32_t* out)
 	return 1;
 }
 
-/* parse "a.b.c" (from a dstring), pick the tuple and field path, and build the positional accessor */
+/* the deepest dotted path we will resolve. this is only a sanity bound against pathological input; the
+ * component and position arrays are heap-allocated to the actual path length, so nesting is not limited to
+ * any small fixed constant. */
+#define EE_MAX_PATH 1000
+
+/* walk a dotted field path [start, ncomp) starting at container `root`, writing the located element indices
+ * into positions_out (which must have room for ncomp-start entries). each component is either an integer
+ * (a direct array/tuple index) or a field name. returns 1 and sets *depth_out / *dti_out on success; returns
+ * 0 (without touching *error_code) if any component does not name a reachable element. a path that locates
+ * no field at all (start == ncomp) fails -- a bare table name is not a variable. */
+static int walk_field_path(data_type_info* root, const char** cptr, const uint32_t* clen, uint32_t start, uint32_t ncomp, uint32_t* positions_out, uint32_t* depth_out, const data_type_info** dti_out)
+{
+	char name[65];
+	data_type_info* cur = root;
+	uint32_t depth = 0;
+	for(uint32_t c = start; c < ncomp; c++)
+	{
+		if(!is_container_type_info(cur)) return 0;
+		uint32_t idx;
+		if(!component_as_index(cptr[c], clen[c], &idx))   /* a field name -> look it up */
+		{
+			uint32_t l = clen[c]; if(l > 64) return 0;
+			memory_move(name, cptr[c], l); name[l] = 0;
+			idx = find_containee_using_field_name_in_tuple_type_info(cur, name);
+			if(idx == UINT32_MAX) return 0;               /* no such field */
+		}
+		positions_out[depth++] = idx;
+		cur = get_data_type_info_for_containee_of_container_without_data(cur, idx);
+		if(cur == NULL) return 0;                         /* index out of bounds / not a container */
+	}
+	if(depth == 0) return 0;
+	*depth_out = depth;
+	*dti_out = cur;
+	return 1;
+}
+
+/* does input tuple `t` exist and carry a schema whose table (type) name equals `tname`? */
+static int tuple_table_named(rhendb_expr_eval_context* ctx, uint32_t t, const char* tname)
+{
+	return ctx->input_tuple_defs[t] != NULL
+	    && ctx->input_tuple_defs[t]->type_info != NULL
+	    && strncmp(ctx->input_tuple_defs[t]->type_info->type_name, tname, 64) == 0;
+}
+
+/* Resolve a dotted variable reference "a.b.c" to a unique (input tuple, element path).
+ *
+ * The reference is tried under BOTH readings, against EVERY input tuple, regardless of how many tuples there
+ * are (1 or many):
+ *   - table-qualified : the first component is a table (type) name and the remainder is a field path inside a
+ *                       tuple whose schema carries that name;
+ *   - unqualified     : the whole path is a field path inside a tuple (no leading table name).
+ * Every reading that successfully locates an element is a candidate. The reference resolves ONLY if there is
+ * exactly one candidate. Zero candidates -> RHENDB_EE_UNKNOWN_VARIABLE. Two or more distinct candidates
+ * (whether from different tuples, or from the table-qualified vs unqualified reading, or from two tuples that
+ * share a table name) -> RHENDB_EE_AMBIGUOUS_VARIABLE. This makes the table name optional wherever it is not
+ * needed to disambiguate, while guaranteeing a reference can never silently pick one of several columns. */
 static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32_t* out_tuple_index, positional_accessor* out_pa, const data_type_info** out_dti, int* error_code)
 {
-	#define EE_MAX_PATH 16
-
 	const char* key = get_byte_array_dstring(id);
 	cy_uint klen = get_char_count_dstring(id);
 
-	const char* comp_ptr[EE_MAX_PATH]; uint32_t comp_len[EE_MAX_PATH]; uint32_t ncomp = 0;
-	cy_uint i = 0;
-	while(i < klen && ncomp < EE_MAX_PATH){
-		cy_uint start = i;
+	/* count components first, so the component arrays can be sized to the actual path length */
+	uint32_t ncomp = 0;
+	for(cy_uint i = 0; i < klen; )
+	{
 		while(i < klen && key[i] != '.') i++;
-		uint32_t clen = (uint32_t)(i - start);
-		if(clen > 64)   /* type/field names are null-terminated strings bounded to 64 bytes */
-		{
-			*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
-			return 0;
-		}
-		comp_ptr[ncomp] = key + start; comp_len[ncomp] = clen; ncomp++;
+		ncomp++;
 		if(i < klen && key[i] == '.') i++;
 	}
-	if(ncomp == 0)
-	{
-		*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
-		return 0;
-	}
+	if(ncomp == 0 || ncomp > EE_MAX_PATH){ *error_code = RHENDB_EE_UNSUPPORTED_TYPE; return 0; }
 
-	char name[65];
+	const char** comp_ptr = malloc(sizeof(char*) * ncomp);
+	uint32_t*    comp_len = malloc(sizeof(uint32_t) * ncomp);
+	uint32_t*    scratch  = malloc(sizeof(uint32_t) * ncomp);   /* positions of the candidate being tried */
+	if(comp_ptr == NULL || comp_len == NULL || scratch == NULL){ free(comp_ptr); free(comp_len); free(scratch); *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
 
-	uint32_t tuple_index = 0, field_start = 0;
-	if(ctx->input_tuples_count >= 2)
 	{
-		/* first component is the table name (always a string) */
-		uint32_t l = comp_len[0]; memory_move(name, comp_ptr[0], l); name[l] = 0;
-		int found = -1;
-		for(uint32_t t = 0; t < ctx->input_tuples_count; t++){
-			if(ctx->input_tuple_defs[t] != NULL && ctx->input_tuple_defs[t]->type_info != NULL
-			   && strncmp(ctx->input_tuple_defs[t]->type_info->type_name, name, 64) == 0){ found = (int)t; break; }
-		}
-		if(found < 0)   /* unknown table */
+		uint32_t n = 0; cy_uint i = 0;
+		while(i < klen)
 		{
-			*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
-			return 0;
+			cy_uint start = i;
+			while(i < klen && key[i] != '.') i++;
+			comp_ptr[n] = key + start; comp_len[n] = (uint32_t)(i - start); n++;
+			if(i < klen && key[i] == '.') i++;
 		}
-		tuple_index = (uint32_t)found;
-		field_start = 1;
 	}
-	else
+
+	/* enumerate candidates; keep the first, and on a second distinct hit flag ambiguity */
+	int found = 0, ambiguous = 0, oom = 0;
+	uint32_t win_ti = 0, win_depth = 0; uint32_t* win_pos = NULL; const data_type_info* win_dti = NULL;
+
+	#define TRY_CANDIDATE(TI, START) do {                                                                   \
+		uint32_t _d; const data_type_info* _dd;                                                             \
+		if(!ambiguous && !oom && walk_field_path(ctx->input_tuple_defs[(TI)]->type_info, comp_ptr, comp_len, (START), ncomp, scratch, &_d, &_dd)) { \
+			if(found) { ambiguous = 1; }                                                                    \
+			else {                                                                                          \
+				win_pos = malloc(sizeof(uint32_t) * (_d ? _d : 1));                                         \
+				if(win_pos == NULL) { oom = 1; }                                                            \
+				else { memory_move(win_pos, scratch, sizeof(uint32_t) * _d); win_ti = (TI); win_depth = _d; win_dti = _dd; found = 1; } \
+			}                                                                                               \
+		}                                                                                                   \
+	} while(0)
+
+	/* table-qualified reading : first component names a table; try it against every tuple carrying that name */
+	if(ncomp >= 2 && comp_len[0] <= 64)
 	{
-		/* single tuple: whole path is a field path, but tolerate a leading table name */
-		tuple_index = 0; field_start = 0;
-		if(ncomp >= 2 && ctx->input_tuple_defs[0] != NULL && ctx->input_tuple_defs[0]->type_info != NULL)
-		{
-			uint32_t l = comp_len[0]; memory_move(name, comp_ptr[0], l); name[l] = 0;
-			if(strncmp(ctx->input_tuple_defs[0]->type_info->type_name, name, 64) == 0) field_start = 1;
-		}
+		char tname[65]; memory_move(tname, comp_ptr[0], comp_len[0]); tname[comp_len[0]] = 0;
+		for(uint32_t t = 0; t < ctx->input_tuples_count && !ambiguous && !oom; t++)
+			if(tuple_table_named(ctx, t, tname))
+				TRY_CANDIDATE(t, 1);
 	}
-	if(field_start >= ncomp)    /* no field named */
-	{
-		*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
-		return 0;
-	}
+	/* unqualified reading : the whole path is a field path inside some tuple */
+	for(uint32_t t = 0; t < ctx->input_tuples_count && !ambiguous && !oom; t++)
+		if(ctx->input_tuple_defs[t] != NULL && ctx->input_tuple_defs[t]->type_info != NULL)
+			TRY_CANDIDATE(t, 0);
 
-	uint32_t positions[EE_MAX_PATH]; uint32_t depth = 0;
-	data_type_info* cur = ctx->input_tuple_defs[tuple_index]->type_info;
-	for(uint32_t c = field_start; c < ncomp; c++){
-		if(!is_container_type_info(cur)){ *error_code = RHENDB_EE_UNSUPPORTED_TYPE; return 0; }
-		uint32_t idx;
-		if(!component_as_index(comp_ptr[c], comp_len[c], &idx)){   /* a field name -> look it up */
-			uint32_t l = comp_len[c]; memory_move(name, comp_ptr[c], l); name[l] = 0;
-			idx = find_containee_using_field_name_in_tuple_type_info(cur, name);
-			if(idx == UINT32_MAX){ *error_code = RHENDB_EE_UNSUPPORTED_TYPE; return 0; }   /* no such field */
-		}
-		positions[depth++] = idx;
-		cur = get_data_type_info_for_containee_of_container_without_data(cur, idx);
-		if(cur == NULL){ *error_code = RHENDB_EE_UNSUPPORTED_TYPE; return 0; }   /* index out of bounds / not a container */
-	}
+	#undef TRY_CANDIDATE
 
-	out_pa->positions_length = depth;
-	out_pa->positions = malloc((depth ? depth : 1) * sizeof(uint32_t));
-	if(out_pa->positions == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
-	memory_move(out_pa->positions, positions, depth * sizeof(uint32_t));
+	free(comp_ptr); free(comp_len); free(scratch);
 
-	*out_tuple_index = tuple_index;
-	*out_dti = cur;
+	if(oom)       { free(win_pos); *error_code = RHENDB_EE_OUT_OF_MEMORY;      return 0; }
+	if(ambiguous) { free(win_pos); *error_code = RHENDB_EE_AMBIGUOUS_VARIABLE; return 0; }
+	if(!found)    {                *error_code = RHENDB_EE_UNKNOWN_VARIABLE;   return 0; }
+
+	out_pa->positions = win_pos;
+	out_pa->positions_length = win_depth;
+	*out_tuple_index = win_ti;
+	*out_dti = win_dti;
 	return 1;
-
-	#undef EE_MAX_PATH
 }
+
+#undef EE_MAX_PATH
 
 /* find the cached resolution for id, resolving and caching it on the first miss */
 static const var_cache_entry* get_or_resolve_entry(rhendb_expr_eval_context* ctx, const dstring* id, int* error_code)

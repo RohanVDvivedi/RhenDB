@@ -134,6 +134,8 @@ enum rhendb_expr_eval_error
 	RHENDB_EE_STRING_TOO_LONG     = 12, // a text/blob value's byte length would not fit in the uint32_t size field (concat result, or an extended value being materialized)
 	RHENDB_EE_INCOMPATIBLE_PROJECTION = 13, // evaluated value cannot be projected into the requested type
 	RHENDB_EE_INVALID_CAST_VALUE  = 14, // a string being cast to a number is not a valid numeric value
+	RHENDB_EE_UNKNOWN_VARIABLE    = 15, // a variable (column reference) does not resolve to any input column
+	RHENDB_EE_AMBIGUOUS_VARIABLE  = 16, // a variable resolves to more than one input column (collision)
 };
 
 // ===================================================================================================
