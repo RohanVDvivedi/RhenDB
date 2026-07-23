@@ -166,7 +166,7 @@ operator_resource_counter setup_union_operator(operator* o, operator** input_ope
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operators[0]);
 	for(uint32_t i = 1; i < input_operators_count; i++)
 	{
-		if(!are_identical_type_info(input_tuple_def->type_info, get_tuple_def_for_tuples_to_be_consumed_from(input_operators[i])->type_info))
+		if(!are_accessibly_equivalent_type_info(input_tuple_def->type_info, get_tuple_def_for_tuples_to_be_consumed_from(input_operators[i])->type_info))
 		{
 			printf("input_operators must produce identical outputs for union_operator\n");
 			exit(-1);
