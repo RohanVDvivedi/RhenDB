@@ -7,71 +7,8 @@ PICKED TASKS
 
 
 
-DESIGN CATALOG TABLES
- LOCKING IS EXTERNAL USING LOCK TABLES
-
- db_schema_table_ids (page_table)
-  * page_table consisting of root_page_id's at fixed locations of all known schema tables, constructed at the start up in a single mini transaction right after first start up
-
- db_types (heap_table)
-  => mvcc_hdr, id, name, size(used only for primitve signed/unsigned integral, bit_field and float types)
-  * default and primitive types are created at the database start up in the first mini transaction
-
- db_attributes (heap_table)
-  => mvcc_hdr, owner_id, owner_part_id, rel_pos_in_type, attribute_name, attribute_type_id, count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, default_value, derived_from_expression(for derived columns of table and index expressions, referencing rel_pos_info)
-  * owner_id can be any one of type, table or index
-
- db_tables (heap_table)
-  => mvcc_hdr, id, part_id, name, heap_root_page_id, blobs_root_page_id
-  * only add column and drop column supported
-  * rel_pos_in_type remains the same for un modified types of the same table
-  * part_id starts with 0 and always increments
-
- db_indices (heap_table)
-  => mvcc_hdr, id, part_id, name, table_id, root_page_id
-  * each table partition gets it's own individual set of indices, no index is ever shared by 2 partitions of same table or different tables
-
-  * table and index, are related to each other by part_id and table_id
-  * one logical table with a unique table id, has many partitions with possibly same or different schema, and each of these partitions will have indexes on them with same names, and the same number of them with same name
-
-  * for tables id, part_id identifies a unique partition of the tablw, and id, part_id identifies a unique index, with table_id suggesting which logical table it belongs to, and table_id, part_id suggesting which partition of that table it belongs to
-
-  db_names_idx (bplus_tree)
-  * db_object_type (type, table, index or function(future)), name, row_id
-
-  db_id_idx (bplus_tree)
-  * db_object_type (type, table, index or function(future)), id, part_id, row_id
-
- * schema changes (add/drop column) OR new partition, adds a new partition to the table, and also new set of existing indices
- * actual drop of index or table is considered after a later scan is done by the trash_cleaner, when no entries, records exists in the corresponding data structures at root_page_id
-
- * global id is mamnaged for the complete schema tables, id is unique for all
-
-PRIORITY 1 CATALOG
- * grab a new id for a new table creation and lock it first
- * if you already have table id, lock it immediately
-
- * CREATE TABLE
-   * insert entries for table at table_id previously generated, initial attributes with mvcc header (tx_id, infinity)
-
- * ADD/DROP COLUMN lists
-   * insert new table partition for table_id, insert old and new attributes keeping rel_pos_in_type same for unchanged columns, and also new attributes even the unchanged entries are re written
-   * as we are creating a new partition for the table, we also need to drop indexes for attributes that are being dropped\
-   * and create new partitions for the old indices pointing to the new table_id and verision
-
- * CREATE INDEX
-   * create new entry for all table, partition in context, and copy again the attributes
-
- * DROP INDEX
-   * write xmax = tx_id for all index partitions, and it's attributes (clean up happens by the trash cleaner, once all entries in root_page_id are hard deleted)
- * DROP TABLE
-   * write xmax = tx_id for all table partitions, index partitions and attributes
-
- * every one of these modification you need to lock the table_id with a schema lock, allowing no modification to schema but allowing read of all partitions and their indices
-
- * any schema entry for table partition or index partition is visible as long as
-   * it itself is invisible i.e. xmax is set to a committed transaction, now it can be deleted immediately by the trash cleaner
-   * if it is visible, it should also have valid not-hard-deleted entries in the partition of that table, once that partition is empty and there is a newer partition that can accept new inserts this particular older empty partition can be deleted
+CATALOG MANAGER
+* implement it's read and write functions
 
 
 
