@@ -2,9 +2,9 @@
 
 #include<stdlib.h>
 
-char* materialize_tb(const datum uval, const data_type_info* dti, transaction* tx, uint32_t* length, uint32_t* capacity, int* error)
+char* materialize_tb(const datum uval, const data_type_info* dti, transaction* tx, uint32_t* length, uint32_t* capacity, int* error_code)
 {
-	(*error) = 0;
+	(*error_code) = MATERIALIZED_SUCCESSFULLY;
 
 	(*length) = 0;
 	(*capacity) = 0;
@@ -12,9 +12,9 @@ char* materialize_tb(const datum uval, const data_type_info* dti, transaction* t
 	if((dti != NULL && !is_text_type_info(dti) && !is_blob_type_info(dti)) || is_datum_NULL(&uval))
 	{
 		if(is_datum_NULL(&uval))
-			(*error) = MATERIALIZING_NULL_DATUM;
+			(*error_code) = MATERIALIZING_NULL_DATUM;
 		if(dti != NULL && !is_text_type_info(dti) && !is_blob_type_info(dti))
-			(*error) = MATERIALIZATION_TYPE_INVALID;
+			(*error_code) = MATERIALIZATION_TYPE_INVALID;
 
 		return NULL;
 	}
@@ -50,7 +50,7 @@ char* materialize_tb(const datum uval, const data_type_info* dti, transaction* t
 					if(has_more_bytes)
 					{
 						delete_binary_read_iterator(bri, transaction_id, &abort_error);
-						(*error) = MATERIALIZED_RESULT_TOO_BIG;
+						(*error_code) = MATERIALIZED_RESULT_TOO_BIG;
 						free(buffer);
 						return NULL;
 					}
@@ -83,16 +83,16 @@ char* materialize_tb(const datum uval, const data_type_info* dti, transaction* t
 	return buffer;
 }
 
-mpd_t materialize_numeric(const datum uval, const data_type_info* dti, transaction* tx, int* error)
+mpd_t materialize_numeric(const datum uval, const data_type_info* dti, transaction* tx, int* error_code)
 {
-	(*error) = 0;
+	(*error_code) = MATERIALIZED_SUCCESSFULLY;
 
 	if(!is_numeric_type_info(dti) || is_datum_NULL(&uval))
 	{
 		if(is_datum_NULL(&uval))
-			(*error) = MATERIALIZING_NULL_DATUM;
+			(*error_code) = MATERIALIZING_NULL_DATUM;
 		if(!is_numeric_type_info(dti))
-			(*error) = MATERIALIZATION_TYPE_INVALID;
+			(*error_code) = MATERIALIZATION_TYPE_INVALID;
 
 		mpd_t number;
 		number.flags = MPD_NAN | MPD_STATIC | MPD_CONST_DATA;
@@ -148,7 +148,7 @@ mpd_t materialize_numeric(const datum uval, const data_type_info* dti, transacti
 				{
 					if(!push_lsd_in_materialized_numeric(&mn, buf[i]))
 					{
-						(*error) = MATERIALIZED_RESULT_TOO_BIG;
+						(*error_code) = MATERIALIZED_RESULT_TOO_BIG;
 						deinitialize_materialized_numeric(&mn);
 
 						number.flags = MPD_NAN | MPD_STATIC | MPD_CONST_DATA;
