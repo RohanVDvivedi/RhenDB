@@ -83,26 +83,3 @@ FUTURE TASKS
    * once the query is done and shutdown, free up all the resources
    * if required store the buffers_allotted and thread_alloted in the query plan, and free the resources when not needed by some means later
    * finally before we do all this, make sure that the operator actually calculates the right number of resources for bufferpool and threadpool
-
-DESIGN METHODOLOGY
-   * we will use postgresql architecture over (mysql like) mini transactions
-   * we will have heap_table for storing tables, insert to which gives us a page_id (physical page_id) and a tuple_index (slot no) in that page
-   * indexes will always include the page_id, tuple_index in the index key right after the actual key columns, and the index entry will be index key followed by the covering columns
-   * inserts to table
-     * insert row in heap_table
-     * insert all index entries in all indexes, only after heap table row is inserted
-   * true deletion only happens in trash_cleaner job (aka postgresql's vaccum)
-     * scan heap_table and find the rows on a page that need to be discarded
-     * discard all the index entries for these row
-     * only then discard the heap_table row
-   * This above ordering ensures that we will never find an index entry that has a dangling heap tuple pointer
-     * i.e. on following an index entry, we will always find something
-   * inserts/deletes will always be done to heap in a single mini transaction one at a time
-   * inserts/deletes to indexes will be done in mini transactions not owned by anyone
-   * updates are just logical delete (xmax = self) followed by an actual insert into the heap
-   * reads will be be done without mini transactions, but in a fixed number of them, controlled by the resource usage limiter of the bufferpool
-   * there will be trash_cleaner, like postgresql's vaccum
-   * header will include xmin, xmax, is_xmin_committed?, is_xmax_committed?, is_xmin_aborted?, is_xmax_aborted? and both of which can be NULL
-     * xmin, xmax will be as wide as transaction_table suggests
-     * the *? are advisory bitmaps and should be kept updated when ever a heap page is being read (if only a read lock on page is held then let another writer do it asynchronously) or written
-
