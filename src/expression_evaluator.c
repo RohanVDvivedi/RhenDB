@@ -1788,8 +1788,50 @@ static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_e
 		 * so give each its own rather than collapsing all three onto a full-width RHENDB_INT. a CAST to
 		 * SMALLINT then really does produce a 2-byte result, and a projection of it stores 2 bytes. */
 		case SQL_SMALLINT: return new_type_sized(RHENDB_INT, 2);
-		case SQL_INT:      return new_type_sized(RHENDB_INT, 4);
-		case SQL_BIGINT:   return new_type_sized(RHENDB_INT, 8);
+
+		/* INT(bytes [, unsigned]) : spec[0] is the number of bytes (a regular INT / UINT, so it must be
+		 * 1..8), and spec[1] == 1 makes it unsigned while 0 or absent keeps it signed. With no spec it is the
+		 * unchanged default -- a 4-byte signed INT. An out-of-range width or a signedness flag other than
+		 * 0/1 is rejected rather than silently clamped. */
+		case SQL_INT:
+		{
+			if(type->spec_size == 0)
+				return new_type_sized(RHENDB_INT, 4);
+			if(type->spec[0] < 1 || type->spec[0] > 8)
+			{
+				*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
+				return NULL;
+			}
+			if(type->spec_size >= 2 && type->spec[1] != 0 && type->spec[1] != 1)
+			{
+				*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
+				return NULL;
+			}
+			int is_unsigned = (type->spec_size >= 2) && (type->spec[1] == 1);
+			return new_type_sized(is_unsigned ? RHENDB_UINT : RHENDB_INT, (uint32_t)type->spec[0]);
+		}
+
+		/* BIGINT : with no spec it is the unchanged default -- an 8-byte signed (regular) INT. With spec[0]
+		 * it becomes a LARGE_INT of spec[0] bytes, which must be 1..32; spec[1] == 1 makes it unsigned
+		 * (LARGE_UINT) while 0 or absent keeps it signed. An out-of-range width or a signedness flag other
+		 * than 0/1 is rejected rather than silently clamped. */
+		case SQL_BIGINT:
+		{
+			if(type->spec_size == 0)
+				return new_type_sized(RHENDB_INT, 8);
+			if(type->spec[0] < 1 || type->spec[0] > 32)
+			{
+				*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
+				return NULL;
+			}
+			if(type->spec_size >= 2 && type->spec[1] != 0 && type->spec[1] != 1)
+			{
+				*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
+				return NULL;
+			}
+			int is_unsigned = (type->spec_size >= 2) && (type->spec[1] == 1);
+			return new_type_sized(is_unsigned ? RHENDB_LARGE_UINT : RHENDB_LARGE_INT, (uint32_t)type->spec[0]);
+		}
 
 		/* BIT(n) : a collection of n bits. spec[0] carries n when the type was written with a length. */
 		case SQL_BIT:
