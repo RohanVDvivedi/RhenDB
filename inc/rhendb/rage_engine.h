@@ -22,6 +22,11 @@
 #include<tupleindexer/blob_store/blob_store.h>
 #include<tupleindexer/worm/worm.h>
 
+#include<tuplelargetypes/text_extended.h>
+#include<tuplelargetypes/blob_extended.h>
+#include<tuplelargetypes/numeric_extended.h>
+#include<tuplelargetypes/jsonb_extended.h>
+
 #include<stdint.h>
 #include<serint/large_uints.h>
 
@@ -45,6 +50,14 @@ struct rage_engine
 
 	// required for accessing extended types
 	blob_store_tuple_defs bstd;
+
+	// extended data_type_info pointers to be used with this particular engine
+	data_type_info* text_extended_type_info;
+	data_type_info* blob_extended_type_info;
+	data_type_info* numeric_extended_type_info;
+	data_type_info* jsonb_extended_type_info;
+
+	uint32_t max_prefix_size_in_bytes;
 
 	// required for accessing extended types
 	worm_tuple_defs wtd;

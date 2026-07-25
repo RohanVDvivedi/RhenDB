@@ -17,6 +17,10 @@
 // practically infinite transactions
 #define TRANSACTION_ID_WIDTH 11
 
+#define PERSISTENT_EXT_SUB_TYPE    "P" // for extended values read/written from/to disk, i.e. from persistent_acid_rage_engine
+
+#define VOLATILE_EXT_SUB_TYPE      "V" // for temporary data generated from expressions, are stored in this type, in volatile_rage_engine
+
 typedef struct rhendb rhendb;
 struct rhendb
 {

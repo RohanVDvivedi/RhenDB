@@ -1,4 +1,7 @@
 #include<rhendb/rage_engine_min_tx_engine.h>
+
+#include<rhendb/rhendb.h>
+
 #include<volatilepagestore/volatile_page_store.h>
 #include<tupleindexer/interface/page_access_methods.h>
 #include<tupleindexer/interface/unWALed_page_modification_methods.h>
@@ -94,6 +97,23 @@ rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t 
 		printf("FAILED to initialize volatile page store's bstd\n");
 		exit(-1);
 	}
+
+	#define MAX_EXTENDED_TYPE_SIZE  128
+	#define MAX_PREFIX_SIZE          90
+
+	e.text_extended_type_info = get_text_extended_type_info(VOLATILE_EXT_SUB_TYPE, MAX_EXTENDED_TYPE_SIZE, get_text_inline_type_info(MAX_EXTENDED_TYPE_SIZE), &(e.pam_p->pas));
+	e.text_extended_type_info->is_static = 1;
+
+	e.blob_extended_type_info = get_blob_extended_type_info(VOLATILE_EXT_SUB_TYPE, MAX_EXTENDED_TYPE_SIZE, get_blob_inline_type_info(MAX_EXTENDED_TYPE_SIZE), &(e.pam_p->pas));
+	e.blob_extended_type_info->is_static = 1;
+
+	e.numeric_extended_type_info = get_numeric_extended_type_info(VOLATILE_EXT_SUB_TYPE, MAX_EXTENDED_TYPE_SIZE, get_numeric_inline_type_info(MAX_EXTENDED_TYPE_SIZE), &(e.pam_p->pas));
+	e.numeric_extended_type_info->is_static = 1;
+
+	e.jsonb_extended_type_info = get_jsonb_extended_type_info(VOLATILE_EXT_SUB_TYPE, MAX_EXTENDED_TYPE_SIZE, MAX_EXTENDED_TYPE_SIZE, &(e.pam_p->pas));
+	e.jsonb_extended_type_info->is_static = 1;
+
+	e.max_prefix_size_in_bytes = MAX_PREFIX_SIZE;
 
 	if(!init_worm_tuple_definitions(&(e.wtd), &(e.pam_p->pas)))
 	{

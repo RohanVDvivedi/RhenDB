@@ -12,20 +12,11 @@
 
 #include<tuplelargetypes/extension_reader_iterator_callback.h>
 
-// the transaction struct only consists of pointers to already created structs, and need to be managed by you
-// it is basically a place holder for you (the user), and noone else, the application will not be handling or initializing it for you
-
-// this struct must be 0 initiialized, before trying to use it
-
 // extended types when we are working with them, may be stored on disk blob_store using persistent_acid_rage_engine for the corresponding table
 // or in the volatile_rage_engine 
 // given below sub_type information helps us organize them and store them at the right place
 // this type information for thsi tuplelargetypes itself helps us with that
 // this is only used when the extended type is tex, numeric or blob
-
-#define PERSISTENT_EXT_SUB_TYPE    "P" // for values read from disk, i.e. from persistent_acid_rage_engine
-
-#define VOLATILE_EXT_SUB_TYPE      "V" // for temporary data generated from expressions, are stored in this type, in volatile_rage_engine
 
 typedef struct temporary_extension_store temporary_extension_store;
 struct temporary_extension_store
