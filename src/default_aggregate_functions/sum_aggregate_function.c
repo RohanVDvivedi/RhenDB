@@ -37,11 +37,7 @@ static data_type_info* get_sum_output_type_info(const data_type_info* input_type
 		case TUPLE :
 		{
 			if(is_numeric_type_info(input_type_info))
-			{
-				data_type_info* output_type_info = get_numeric_extended_type_info(VOLATILE_EXT_SUB_TYPE, RESULT_MAX_SIZE, get_numeric_inline_type_info(RESULT_MAX_SIZE), &(tx->rdb->volatile_rage_engine.pam_p->pas));
-				finalize_type_info(output_type_info);
-				return output_type_info;
-			}
+				return tx->rdb->volatile_rage_engine.numeric_extended_type_info;
 			return NULL;
 		}
 
@@ -466,9 +462,6 @@ static void destroy_state(const aggregate_function* af_p, void** state_p)
 
 static void destroy_aggregate_function(aggregate_function* af_p)
 {
-	if(is_numeric_type_info(af_p->output_type_info))
-		destroy_type_info_recursively((void*)(af_p->output_type_info), NULL);
-
 	free((void*)af_p->context_p);
 	free(af_p);
 }
