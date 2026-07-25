@@ -2603,34 +2603,24 @@ static data_type_info* build_projection_type_for_scalar(expr_type scalar, const 
 	transaction* tx = tx_from_ctx(ec_p);
 	if(tx == NULL)
 		return NULL;
-	const page_access_specs* vpas = &(tx->rdb->volatile_rage_engine.pam_p->pas);
 
-	data_type_info* ext = NULL;
 	if(scalar == RHENDB_STRING)
 	{
-		data_type_info* inl = get_text_inline_type_info(PROJECTION_MAX_SIZE);
-		ext = inl ? get_text_extended_type_info(VOLATILE_EXT_SUB_TYPE, PROJECTION_MAX_SIZE, inl, vpas) : NULL;
+		*should_free = 0;
+		return tx->rdb->volatile_rage_engine.text_extended_type_info;
 	}
 	else if(scalar == RHENDB_BINARY)
 	{
-		data_type_info* inl = get_blob_inline_type_info(PROJECTION_MAX_SIZE);
-		ext = inl ? get_blob_extended_type_info(VOLATILE_EXT_SUB_TYPE, PROJECTION_MAX_SIZE, inl, vpas) : NULL;
+		*should_free = 0;
+		return tx->rdb->volatile_rage_engine.blob_extended_type_info;
 	}
 	else if(scalar == RHENDB_NUMERIC)
 	{
-		data_type_info* inl = get_numeric_inline_type_info(PROJECTION_MAX_SIZE);
-		ext = inl ? get_numeric_extended_type_info(VOLATILE_EXT_SUB_TYPE, PROJECTION_MAX_SIZE, inl, vpas) : NULL;
+		*should_free = 0;
+		return tx->rdb->volatile_rage_engine.numeric_extended_type_info;
 	}
 	else
 		return NULL;   // RHENDB_TUPLE / RHENDB_ARRAY
-
-	if(ext != NULL && !finalize_type_info(ext))
-	{
-		destroy_type_info_recursively(ext, NULL);
-		return NULL;
-	}
-	*should_free = (ext != NULL);
-	return ext;
 }
 
 void destroy_projected_type_info(projected_type_info pti)
