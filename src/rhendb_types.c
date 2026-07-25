@@ -87,16 +87,16 @@ data_type_info* get_data_type_info_for_rhendb_type_info(const rhendb_type_info* 
 			return rdb->mvcc_hdr_type_info;
 
 		case RHENDB_TEXT :
-			return get_text_extended_type_info(PERSISTENT_EXT_SUB_TYPE, MAX_EXTENDED_TYPE_SIZE, get_text_inline_type_info(MAX_EXTENDED_TYPE_SIZE), &(rdb->persistent_acid_rage_engine.pam_p->pas));
+			return rdb->persistent_acid_rage_engine.text_extended_type_info;
 
 		case RHENDB_BLOB :
-			return get_blob_extended_type_info(PERSISTENT_EXT_SUB_TYPE, MAX_EXTENDED_TYPE_SIZE, get_blob_inline_type_info(MAX_EXTENDED_TYPE_SIZE), &(rdb->persistent_acid_rage_engine.pam_p->pas));
+			return rdb->persistent_acid_rage_engine.blob_extended_type_info;
 
 		case RHENDB_NUMERIC :
-			return get_numeric_extended_type_info(PERSISTENT_EXT_SUB_TYPE, MAX_EXTENDED_TYPE_SIZE, get_numeric_inline_type_info(MAX_EXTENDED_TYPE_SIZE), &(rdb->persistent_acid_rage_engine.pam_p->pas));
+			return rdb->persistent_acid_rage_engine.numeric_extended_type_info;
 
 		case RHENDB_JSONB :
-			return get_jsonb_extended_type_info(PERSISTENT_EXT_SUB_TYPE, MAX_EXTENDED_TYPE_SIZE, MAX_EXTENDED_TYPE_SIZE, &(rdb->persistent_acid_rage_engine.pam_p->pas));
+			return rdb->persistent_acid_rage_engine.jsonb_extended_type_info;
 
 		case RHENDB_ARRAY :
 		{
