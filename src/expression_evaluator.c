@@ -11,7 +11,7 @@
 
 #include<rhendb/function_compare.h>
 #include<rhendb/transaction.h>
-#include<rhendb/materialization_util.h>
+#include<rhendb/util_materialization.h>
 
 #include<tuplelargetypes/common_extended.h>
 #include<tuplelargetypes/binary_read_iterator.h>

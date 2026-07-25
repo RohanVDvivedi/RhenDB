@@ -1,0 +1,89 @@
+#include<rhendb/util_transaction_ext_storer.h>
+
+#include<stdlib.h>
+
+void* tx_temp_store_tb(char* data, uint32_t data_size, data_type_info* ext_type_info, transaction* tx);
+
+void* tx_temp_store_numeric(mpd_t* number, data_type_info* ext_type_info, transaction* tx)
+{
+	tuple_def output_tuple_def;
+	initialize_tuple_def(&output_tuple_def, ext_type_info);
+
+	void* output_buffer = malloc(ext_type_info->max_size);
+	init_tuple(&output_tuple_def, output_buffer);
+
+	int exponent_too_big = 0;
+	materialized_numeric mn = decimal_to_materialized_numeric(number, &exponent_too_big);
+
+	set_sign_bits_and_exponent_for_numeric(mn.sign_bits, mn.exponent, output_buffer, &output_tuple_def, SELF);
+
+	if(mn.sign_bits == POSITIVE_NUMERIC || mn.sign_bits == NEGATIVE_NUMERIC)
+	{
+		// copy all digits outside in an array
+		uint32_t digits_count = get_digits_count_for_materialized_numeric(&mn);
+		uint64_t* digits = malloc(digits_count * sizeof(uint64_t));
+
+		for(uint32_t i = 0; i < digits_count; i++)
+			digits[i] = get_nth_digit_from_materialized_numeric(&mn, i);
+
+		// destroy the intermediate result
+		deinitialize_materialized_numeric(&mn);
+
+		{
+			int abort_error_dummy = 0;
+			rage_engine* ex_engine = &(tx->rdb->volatile_rage_engine);
+
+			digit_write_iterator* wr = get_new_digit_write_iterator(output_buffer, &output_tuple_def, SELF, 0 /*dummy root*/, get_NULL_tuple_pointer(&(ex_engine->pam_p->pas)), ex_engine->max_prefix_size_in_bytes / BYTES_PER_NUMERIC_DIGIT, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
+
+			temporary_extension_store* temp_ext_store = NULL;
+			uint32_t digits_written = 0;
+
+			// write just the prefix
+			while(digits_written < digits_count && wr->digits_written_to_prefix < wr->digits_to_be_written_to_prefix)
+			{
+				uint32_t digits_to_write_this_iteration = min(wr->digits_to_be_written_to_prefix - wr->digits_written_to_prefix, digits_count - digits_written);
+				uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, digits + digits_written, digits_to_write_this_iteration, NULL, NULL, &abort_error_dummy);
+				if(digits_written_this_iteration == 0)
+					break;
+				digits_written += digits_written_this_iteration;
+			}
+
+			// write the extension
+			if(digits_written < digits_count)
+			{
+				temp_ext_store = &(tx->temp_ext_stores[hash_element_within_tuple(output_buffer, &output_tuple_def, EXTENDED_PREFIX_POS_ACC, FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT]);
+
+				// set the write iterator with new root_page_id and take the lock before any further access
+				write_lock(&(temp_ext_store->blob_store_lock), BLOCKING);
+				wr->blob_store_root_page_id = temp_ext_store->blob_store_root_page_id;
+
+				const heap_table_notifier* htan_p = &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(temp_ext_store->htan));
+
+				while(digits_written < digits_count)
+				{
+					uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, digits + digits_written, digits_count - digits_written, htan_p, NULL, &abort_error_dummy);
+					if(digits_written_this_iteration == 0)
+						break;
+					digits_written += digits_written_this_iteration;
+
+					fix_unused_space_entries_in_store(tx, temp_ext_store);
+				}
+			}
+
+			delete_digit_write_iterator(wr, NULL, &abort_error_dummy);
+			if(temp_ext_store != NULL)
+			{
+				fix_unused_space_entries_in_store(tx, temp_ext_store);
+				write_unlock(&(temp_ext_store->blob_store_lock));
+			}
+		}
+
+		free(digits);
+	}
+	else // only positive/negative numbers have digits
+	{
+		deinitialize_materialized_numeric(&mn);
+	}
+
+	return output_buffer;
+}

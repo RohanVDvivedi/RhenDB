@@ -1,5 +1,5 @@
-#ifndef MATERIALIZATION_UTIL_H
-#define MATERIALIZATION_UTIL_H
+#ifndef UTIL_MATERIALIZATION_H
+#define UTIL_MATERIALIZATION_H
 
 #include<rhendb/transaction.h>
 

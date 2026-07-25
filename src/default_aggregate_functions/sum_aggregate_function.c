@@ -4,7 +4,7 @@
 #include<tuplestore/tuple.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/materialization_util.h>
+#include<rhendb/util_materialization.h>
 
 #include<serint/large_uints.h>
 #include<serint/large_ints.h>

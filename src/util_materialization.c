@@ -1,4 +1,4 @@
-#include<rhendb/materialization_util.h>
+#include<rhendb/util_materialization.h>
 
 #include<stdlib.h>
 
