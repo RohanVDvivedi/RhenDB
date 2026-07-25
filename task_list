@@ -35,17 +35,6 @@ DB acess operators
  * for unique constraint maintain a lock in lock_manager and hold lock on the 80-bit serialized hash value and then only check the unique btree index
 
 
-
-* make composite_reference types, composed of persistent and volatile extended and inline components
-  * for are_hashably_equivalent and can_compare, cross check all n^2 types
-  * and for hash and compare hash/compare operate only on the only first non-NULL element in them
-  * everything will need to change now and every operator need to be composite_reference aware
-  * this will help with the union functions and will not need us to materialize all of the extended types that are on the disk, this will be a big copy
-
-
-* constant folding to be done in sqltoast, by storing a pointer at every expression node, which is non NULL if the expression evaluates to a constant
-
-
 PRIORITY HIGH LEVEL TASKS (not yet prioritized)
 
 * aggregate functions
@@ -62,6 +51,15 @@ PRIORITY HIGH LEVEL TASKS (not yet prioritized)
  * implement get date, time, with timezone, and time in string to unix epoch
  * implement concat and substring
  * implement double/numeric funtions, sin, cos, tan, asin, acos, atan, log, expr
+
+* make composite_reference types, composed of persistent and volatile extended and inline components
+  * for are_hashably_equivalent and can_compare, cross check all n^2 types
+  * and for hash and compare hash/compare operate only on the only first non-NULL element in them
+  * everything will need to change now and every operator need to be composite_reference aware
+  * expression_evaluators when they get a composite_reference, they will need to decode how to treat it, both for evaluation and inference
+  * this will help with the union and merge_sorted_inputs operators and will not need us to materialize all of the extended types that are on the disk, because this could be a big copy
+
+* constant folding to be done in sqltoast, by storing a pointer at every expression node, which is non NULL if the expression evaluates to a constant
 
 FUTURE TASKS
 
