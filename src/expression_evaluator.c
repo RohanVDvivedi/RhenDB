@@ -12,6 +12,7 @@
 #include<rhendb/function_compare.h>
 #include<rhendb/transaction.h>
 #include<rhendb/util_materialization.h>
+#include<rhendb/util_transaction_ext_storer.h>
 
 #include<tuplelargetypes/common_extended.h>
 #include<tuplelargetypes/binary_read_iterator.h>
@@ -2619,176 +2620,39 @@ projected_type_info infer_projected_type_sql_expr_for_rhendb(sql_expression* exp
 	return res;
 }
 
-// pick the temporary extension store for an already-written prefix (in `holder`, of type `proj`).
-static temporary_extension_store* project_pick_store(transaction* tx, void* holder, data_type_info* proj)
-{
-	datum prefix_c; const data_type_info* prefix_dti;
-	datum whole = (datum){ .is_NULL = 0, .tuple_value = holder };
-	if(!get_nested_containee_from_datum(&prefix_c, &prefix_dti, &whole, proj, EXTENDED_PREFIX_POS_ACC))
-		prefix_c = (*NULL_DATUM);
-	uint64_t h = hash_datum(&prefix_c, prefix_dti, FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT;
-	return &(tx->temp_ext_stores[h]);
-}
-
 // write already-materialized text/blob bytes into a volatile extended value.
 //
 // the caller materializes the evaluated value first (ee_materialize_tb), so by the time we get here the bytes
-// are simply `data`/`data_size` -- no read iterator, no source lock held. that also means the destination
-// store's write lock is never held while the source is being read, which would otherwise self-deadlock when
-// the source is a volatile extended value hashing to the same store.
-//
-// two phases: fill the inline prefix against a dummy root (the write iterator only opens the blob store on
-// its first OVERFLOW append, so a dummy root is safe while just the prefix is being filled), then hash the
-// finished prefix to choose the store, take its write lock, point the iterator at the real root and that
-// store's notifier, and append the remainder.
+// are simply `data`/`data_size` -- no read iterator, no source lock held. the write itself (fill the inline
+// prefix, then hash the finished prefix to pick + lock the right extension store and stream the remainder) is
+// the shared transaction extension storer, so it lives in exactly one place now.
 static int project_write_sb_to_volatile(transaction* tx, data_type_info* proj, const char* data, uint32_t data_size,
 	datum* out_datum, void** out_buf, int* error_code)
 {
-	rage_engine* VE = &(tx->rdb->volatile_rage_engine);
-	const page_access_specs* pas = &(VE->pam_p->pas);
-	int abort_error = 0;
-
-	/* the holder carries exactly one projected extended value, and that type's max_size IS
-	 * proj->max_size -- there is never a reason to reserve a whole page for it. */
-	void* holder = malloc(proj->max_size);
-	if(holder == NULL) { *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
-	tuple_def td; initialize_tuple_def(&td, proj);
-	init_tuple(&td, holder);
-	set_element_in_tuple(&td, SELF, holder, EMPTY_DATUM, proj->max_size);
-
-	binary_write_iterator* wr = get_new_binary_write_iterator(holder, &td, SELF, 0 /*dummy root*/,
-		get_NULL_tuple_pointer(pas), VE->max_prefix_size_in_bytes, &(VE->bstd), VE->pam_p, VE->pmm_p);
-
-	uint32_t off = 0;
-	// phase 1 : inline prefix only. never hand the writer more than the remaining prefix room, else it would
-	// run past the prefix and open the blob store with the dummy root inside a single append call. the
-	// iterator caps its own prefix capacity by the available inline space, so drive off its counters.
-	while(off < data_size && wr->bytes_written_to_prefix < wr->bytes_to_be_written_to_prefix && !abort_error)
-	{
-		uint32_t room = wr->bytes_to_be_written_to_prefix - wr->bytes_written_to_prefix;
-		uint32_t give = (data_size - off) < room ? (data_size - off) : room;
-		uint32_t wrote = append_to_binary_write_iterator(wr, data + off, give, NULL, NULL, &abort_error);
-		if(abort_error || wrote == 0) { if(!abort_error) abort_error = 1; break; }
-		off += wrote;
-	}
-
-	// phase 2 : the remainder goes into the store selected by hashing the finished prefix
-	temporary_extension_store* store = NULL;
-	if(!abort_error && off < data_size)
-	{
-		store = project_pick_store(tx, holder, proj);
-		write_lock(&(store->blob_store_lock), BLOCKING);
-		wr->blob_store_root_page_id = store->blob_store_root_page_id;
-		const heap_table_notifier* notify = &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(store->htan));
-		while(off < data_size && !abort_error)
-		{
-			uint32_t wrote = append_to_binary_write_iterator(wr, data + off, data_size - off, notify, NULL, &abort_error);
-			if(abort_error || wrote == 0) { if(!abort_error) abort_error = 1; break; }
-			off += wrote;
-			fix_unused_space_entries_in_store(tx, store);   // lazy : the transaction decides when
-		}
-	}
-
-	delete_binary_write_iterator(wr, NULL, &abort_error);
-	if(store != NULL)
-	{
-		fix_unused_space_entries_in_store(tx, store);   // lazy : below its threshold this is a no-op
-		write_unlock(&(store->blob_store_lock));
-	}
-
-	int ok = !abort_error && (off == data_size);
-	if(ok)
-	{
-		uint32_t sz = get_tuple_size(&td, holder);
-		void* copy = malloc(sz ? sz : 1);
-		if(copy == NULL) { ok = 0; *error_code = RHENDB_EE_OUT_OF_MEMORY; }
-		else { memcpy(copy, holder, sz); *out_buf = copy; *out_datum = (datum){ .is_NULL = 0, .tuple_value = copy }; }
-	}
-	if(!ok && (*error_code) == 0) *error_code = RHENDB_EE_MATERIALIZE_FAILED;
-	free(holder);
-	return ok;
+	void* buf = tx_temp_store_tb(data, data_size, proj, tx);
+	if(buf == NULL) { *error_code = RHENDB_EE_MATERIALIZE_FAILED; return 0; }
+	*out_buf = buf;
+	*out_datum = (datum){ .is_NULL = 0, .tuple_value = buf };
+	return 1;
 }
 
 static int project_write_numeric_to_volatile(transaction* tx, data_type_info* proj, const mpd_t* d,
 	datum* out_datum, void** out_buf, int* error_code)
 {
-	rage_engine* VE = &(tx->rdb->volatile_rage_engine);
-	const page_access_specs* pas = &(VE->pam_p->pas);
-
+	// guard the one case the shared storer does not surface : an exponent too large for the numeric type.
+	// this is a cheap conversion (no digit copy, no write) whose result is discarded; the storer redoes the
+	// conversion internally, but that is far cheaper than reproducing the whole prefix/extension write here.
 	int exp_too_big = 0;
-	materialized_numeric mn = decimal_to_materialized_numeric(d, &exp_too_big);
+	materialized_numeric probe = decimal_to_materialized_numeric(d, &exp_too_big);
+	deinitialize_materialized_numeric(&probe);
 	if(exp_too_big) { *error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION; return 0; }
-	numeric_sign_bits sb; int16_t ex; get_sign_bits_and_exponent_for_materialized_numeric(&mn, &sb, &ex);
-	uint32_t nd = get_digits_count_for_materialized_numeric(&mn);
 
-	// gather the digits into one contiguous array so they can be appended in bulk
-	uint64_t* digits = malloc((nd ? nd : 1) * sizeof(uint64_t));
-	if(digits == NULL) { deinitialize_materialized_numeric(&mn); *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
-	for(uint32_t i = 0; i < nd; i++) digits[i] = get_nth_digit_from_materialized_numeric(&mn, i);
-
-	int abort_error = 0;
-	/* one projected extended numeric, max_size proj->max_size : no page-sized buffer needed */
-	void* holder = malloc(proj->max_size);
-	if(holder == NULL) { free(digits); deinitialize_materialized_numeric(&mn); *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
-	tuple_def td; initialize_tuple_def(&td, proj);
-	init_tuple(&td, holder);
-	set_element_in_tuple(&td, SELF, holder, EMPTY_DATUM, proj->max_size);
-	set_sign_bits_and_exponent_for_numeric(sb, ex, holder, &td, SELF);
-
-	digit_write_iterator* wr = get_new_digit_write_iterator(holder, &td, SELF, 0 /*dummy root*/,
-		get_NULL_tuple_pointer(pas), VE->max_prefix_size_in_bytes / BYTES_PER_NUMERIC_DIGIT, &(VE->bstd), VE->pam_p, VE->pmm_p);
-
-	temporary_extension_store* store = NULL;
-	uint32_t off = 0;
-
-	// ---- phase 1 : write only the prefix digits (dummy root, no blob store touched). the iterator caps its
-	// own prefix capacity by the available inline space, so drive the loop by digits_to_be_written_to_prefix
-	// and never hand it more than the remaining prefix room in a single append. ----
-	while(off < nd && wr->digits_written_to_prefix < wr->digits_to_be_written_to_prefix && !abort_error)
-	{
-		uint32_t room = wr->digits_to_be_written_to_prefix - wr->digits_written_to_prefix;
-		uint32_t give = (nd - off) < room ? (nd - off) : room;
-		uint32_t wrote = append_to_digit_write_iterator(wr, digits + off, give, NULL, NULL, &abort_error);
-		if(abort_error || wrote == 0) { if(!abort_error) abort_error = 1; break; }
-		off += wrote;
-	}
-
-	// ---- phase 2 : if digits remain, hash the finished prefix, pick + lock the store, repoint the iterator
-	// at that store's real root, and stream the remaining digits in bulk under the write lock. ----
-	if(!abort_error && off < nd)
-	{
-		store = project_pick_store(tx, holder, proj);
-		write_lock(&(store->blob_store_lock), BLOCKING);
-		wr->blob_store_root_page_id = store->blob_store_root_page_id;
-		const heap_table_notifier* notify = &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(store->htan));
-		while(off < nd && !abort_error)
-		{
-			uint32_t wrote = append_to_digit_write_iterator(wr, digits + off, nd - off, notify, NULL, &abort_error);
-			if(abort_error || wrote == 0) { if(!abort_error) abort_error = 1; break; }
-			off += wrote;
-			fix_unused_space_entries_in_store(tx, store);   // lazy : the transaction decides when
-		}
-	}
-
-	delete_digit_write_iterator(wr, NULL, &abort_error);
-	if(store != NULL)
-	{
-		fix_unused_space_entries_in_store(tx, store);   // lazy : below its threshold this is a no-op
-		write_unlock(&(store->blob_store_lock));
-	}
-
-	int ok = !abort_error;
-	if(ok)
-	{
-		uint32_t sz = get_tuple_size(&td, holder);
-		void* copy = malloc(sz ? sz : 1);
-		if(copy == NULL) { ok = 0; *error_code = RHENDB_EE_OUT_OF_MEMORY; }
-		else { memcpy(copy, holder, sz); *out_buf = copy; *out_datum = (datum){ .is_NULL = 0, .tuple_value = copy }; }
-	}
-	if(!ok && (*error_code) == 0) *error_code = RHENDB_EE_MATERIALIZE_FAILED;
-	free(holder); free(digits);
-	deinitialize_materialized_numeric(&mn);
-	return ok;
+	// the actual convert-and-store into the right extension store is the shared transaction extension storer.
+	void* buf = tx_temp_store_numeric((mpd_t*)d, proj, tx);
+	if(buf == NULL) { *error_code = RHENDB_EE_MATERIALIZE_FAILED; return 0; }
+	*out_buf = buf;
+	*out_datum = (datum){ .is_NULL = 0, .tuple_value = buf };
+	return 1;
 }
 
 projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, projected_type_info pti, int* error_code)
