@@ -2,10 +2,10 @@
 
 #include<stdlib.h>
 
-void* tx_temp_store_tb(char* data, uint32_t data_size, data_type_info* ext_type_info, transaction* tx)
+void* tx_temp_store_tb(const char* data, uint32_t data_size, const data_type_info* ext_type_info, transaction* tx)
 {
 	tuple_def output_tuple_def;
-	initialize_tuple_def(&output_tuple_def, ext_type_info);
+	initialize_tuple_def(&output_tuple_def, (data_type_info*)ext_type_info);
 
 	void* output_buffer = malloc(ext_type_info->max_size);
 	init_tuple(&output_tuple_def, output_buffer);
@@ -62,10 +62,10 @@ void* tx_temp_store_tb(char* data, uint32_t data_size, data_type_info* ext_type_
 	return output_buffer;
 }
 
-void* tx_temp_store_numeric(mpd_t* number, data_type_info* ext_type_info, transaction* tx)
+void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, transaction* tx)
 {
 	tuple_def output_tuple_def;
-	initialize_tuple_def(&output_tuple_def, ext_type_info);
+	initialize_tuple_def(&output_tuple_def, (data_type_info*)ext_type_info);
 
 	void* output_buffer = malloc(ext_type_info->max_size);
 	init_tuple(&output_tuple_def, output_buffer);
