@@ -1,24 +1,7 @@
 PICKED TASKS
 
-* SQL_INT allowed with 1 to 8 bytes, SQL_BIGINT allowed with 1 to 32 bytes, 1 more spec bit suggests if it is signed, passing it as 0 means unsigned, 1 means signed
-
-
-
-
-
 CATALOG MANAGER
 * implement it's read and write functions
-
-
-
-
-
-
-
-
-
-
-* constant folding to be done in sqltoast, by storing a pointer at every expression node, which is non NULL if the expression evaluates to a constant
 
 
 
@@ -60,7 +43,7 @@ DB acess operators
   * this will help with the union functions and will not need us to materialize all of the extended types that are on the disk, this will be a big copy
 
 
-
+* constant folding to be done in sqltoast, by storing a pointer at every expression node, which is non NULL if the expression evaluates to a constant
 
 
 PRIORITY HIGH LEVEL TASKS (not yet prioritized)
