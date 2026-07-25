@@ -1,5 +1,12 @@
 PICKED TASKS
 
+* make a materialize_extended_text, materialize_extended_blob and materialize_extended_numeric functions, and use that everywhere
+
+* make 2 types for each of the extended types and make them static, and store their pointers in rhendb
+* make and return them in the rhendb_types and the projection functions
+
+* make composite_reference types, for are_hashably_equivalent and can_compare, cross check all n^2 types
+* and for hash and compare hash/compare only first non-NULL element in them
 
 * SQL_INT allowed with 1 to 8 bytes, SQL_BIGINT allowed with 1 to 32 bytes, 1 more spec bit suggests if it is signed, passing it as 0 means unsigned, 1 means signed
 
