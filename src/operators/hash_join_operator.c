@@ -723,7 +723,7 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 
 	for(uint32_t i = 0; i < key_element_count; i++)
 	{
-		if(!do_these_types_on_being_equal_hash_to_same_value(get_type_info_for_element_from_tuple_def(left_input_tuple_def, left_key_element_ids[i]), get_type_info_for_element_from_tuple_def(right_input_tuple_def, right_key_element_ids[i])))
+		if(!are_hashably_equivalent_rhendb(get_type_info_for_element_from_tuple_def(left_input_tuple_def, left_key_element_ids[i]), get_type_info_for_element_from_tuple_def(right_input_tuple_def, right_key_element_ids[i])))
 		{
 			printf("input_operators must produce comparably hash equal on having equal key for inputs to hash_join_operator\n");
 			exit(-1);

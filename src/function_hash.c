@@ -6,7 +6,7 @@
 
 #include<stdlib.h>
 
-int do_these_types_on_being_equal_hash_to_same_value(const data_type_info* dti1, const data_type_info* dti2)
+int are_hashably_equivalent_rhendb(const data_type_info* dti1, const data_type_info* dti2)
 {
 	if(dti1 == dti2)
 		return 1;
@@ -19,13 +19,13 @@ int do_these_types_on_being_equal_hash_to_same_value(const data_type_info* dti1,
 	else if(is_extended_type_info(dti1) || is_extended_type_info(dti2)) // one of them is some not comparable extended types, like jsonb or tuple_list
 		return 0;
 	else if((dti1->type == STRING || dti1->type == BINARY || dti1->type == ARRAY) && (dti2->type == STRING || dti2->type == BINARY || dti2->type == ARRAY)) // STRING, BINARY and ARRAY are internally comparable, if their containee types are comparable
-		return do_these_types_on_being_equal_hash_to_same_value(dti1->containee, dti2->containee); // recursive call, so 2 inline arrays of extended-text types are comparable
+		return are_hashably_equivalent_rhendb(dti1->containee, dti2->containee); // recursive call, so 2 inline arrays of extended-text types are comparable
 	else if(dti1->type == TUPLE && dti2->type == TUPLE)
 	{
 		if(dti1->element_count != dti2->element_count)
 			return 0;
 		for(uint32_t i = 0; i < dti1->element_count; i++)
-			if(!do_these_types_on_being_equal_hash_to_same_value(get_data_type_info_for_containee_of_container_without_data(dti1, i), get_data_type_info_for_containee_of_container_without_data(dti2, i)))
+			if(!are_hashably_equivalent_rhendb(get_data_type_info_for_containee_of_container_without_data(dti1, i), get_data_type_info_for_containee_of_container_without_data(dti2, i)))
 				return 0;
 		return 1;
 	}
