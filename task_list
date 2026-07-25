@@ -57,6 +57,7 @@ DB acess operators
   * for are_hashably_equivalent and can_compare, cross check all n^2 types
   * and for hash and compare hash/compare operate only on the only first non-NULL element in them
   * everything will need to change now and every operator need to be composite_reference aware
+  * this will help with the union functions and will not need us to materialize all of the extended types that are on the disk, this will be a big copy
 
 
 
