@@ -21,6 +21,15 @@ char* materialize_tb(const datum uval, const data_type_info* dti, transaction* t
 
 	char* buffer = NULL;
 
+	if(dti == NULL)
+	{
+		(*length) = uval.string_or_binary_size;
+		(*capacity) = (*length);
+		buffer = malloc(*capacity);
+		memory_move(buffer, uval.string_or_binary_value, (*length));
+		return buffer;
+	}
+
 	{
 		const void* transaction_id = NULL;
 		int abort_error = 0;

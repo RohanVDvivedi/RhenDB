@@ -11,6 +11,7 @@
 
 #include<rhendb/function_compare.h>
 #include<rhendb/transaction.h>
+#include<rhendb/materialization_util.h>
 
 #include<tuplelargetypes/common_extended.h>
 #include<tuplelargetypes/binary_read_iterator.h>
@@ -554,7 +555,7 @@ static int ee_mpd_new(mpd_t* m)
 }
 
 /* ---- text/blob materialization : ONLY used by concat and like ---- */
-static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
+static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	const data_type_info* dti = v->type_info.dti_p;
 	if(dti == NULL)
@@ -566,94 +567,30 @@ static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int*
 
 	expr_type target = is_txt ? RHENDB_STRING : RHENDB_BINARY;
 
-	extension_reader_iterator_callback cb_storage;
-	extension_reader_iterator_callback* callback = NULL;
-	rage_engine* eng = engine_and_callback_from_ctx(ec_p, dti, &cb_storage, &callback);
-	/* inline text/blob is read with bstd = pam_p = callback = NULL; only an EXTENDED type must have an
-	 * engine. so a NULL engine is an error only when the type actually needs one. */
-	if(eng == NULL && dti_needs_engine(dti))
+	/* only an EXTENDED text/blob needs an engine : guard early with a clear error if one is required but
+	 * absent (the shared utility would otherwise resolve a NULL engine and misread), then delegate the
+	 * actual read to it. */
 	{
-		*error_code = RHENDB_EE_MISSING_ENGINE;
-		return *error_code;
-	}
-
-	const void* transaction_id = NULL;
-	int abort_error = 0;
-
-	binary_read_iterator* bri = get_new_binary_read_iterator(&(v->value), dti, eng ? &(eng->bstd) : NULL, eng ? eng->pam_p : NULL, callback);
-	if(bri == NULL)
-	{
-		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
-		return *error_code;
-	}
-
-	/* string_or_binary_size is a uint32_t, so a materialized text/blob can hold at most UINT32_MAX bytes.
-	 * an EXTENDED value may stream more than that across many reads, so the buffer is grown with a strict
-	 * uint32_t-safe doubling (cap*2 would itself overflow past 2 GiB) that saturates at UINT32_MAX, and the
-	 * moment the source is found to exceed UINT32_MAX bytes materialization fails with RHENDB_EE_STRING_TOO_LONG
-	 * instead of silently wrapping len / cap and corrupting the heap. */
-	uint32_t cap = 64, len = 0;
-	char* buf = malloc(cap);
-	if(buf == NULL)
-	{
-		delete_binary_read_iterator(bri, transaction_id, &abort_error);
-		*error_code = RHENDB_EE_OUT_OF_MEMORY;
-		return *error_code;
-	}
-	while(1)
-	{
-		if(len == cap)
+		extension_reader_iterator_callback cb_storage;
+		extension_reader_iterator_callback* callback = NULL;
+		rage_engine* eng = engine_and_callback_from_ctx(ec_p, dti, &cb_storage, &callback);
+		if(eng == NULL && dti_needs_engine(dti))
 		{
-			if(cap == UINT32_MAX)
-			{
-				/* the buffer already spans the whole representable size and the last read filled it, so the
-				 * source is not necessarily exhausted. one probing byte distinguishes a value that is exactly
-				 * UINT32_MAX bytes (representable) from one that is larger (which cannot fit the size field). */
-				char probe;
-				uint32_t extra = read_from_binary_read_iterator(bri, &probe, 1, transaction_id, &abort_error);
-				if(abort_error)
-				{
-					free(buf);
-					delete_binary_read_iterator(bri, transaction_id, &abort_error);
-					*error_code = RHENDB_EE_MATERIALIZE_FAILED;
-					return *error_code;
-				}
-				if(extra == 0)
-					break;                          /* exactly UINT32_MAX bytes : representable, done */
-				free(buf);                              /* strictly larger than UINT32_MAX bytes : refuse */
-				delete_binary_read_iterator(bri, transaction_id, &abort_error);
-				*error_code = RHENDB_EE_STRING_TOO_LONG;
-				return *error_code;
-			}
-			uint32_t nc = (cap <= UINT32_MAX / 2) ? (cap * 2) : UINT32_MAX; /* double, saturating at UINT32_MAX */
-			char* nb = realloc(buf, nc);
-			if(nb == NULL)
-			{
-				free(buf);
-				delete_binary_read_iterator(bri, transaction_id, &abort_error);
-				*error_code = RHENDB_EE_OUT_OF_MEMORY;
-				return *error_code;
-			}
-			buf = nb;
-			cap = nc;
-		}
-		uint32_t got = read_from_binary_read_iterator(bri, buf + len, cap - len, transaction_id, &abort_error);
-		if(abort_error)
-		{
-			free(buf);
-			delete_binary_read_iterator(bri, transaction_id, &abort_error);
-			*error_code = RHENDB_EE_MATERIALIZE_FAILED;
+			*error_code = RHENDB_EE_MISSING_ENGINE;
 			return *error_code;
 		}
-		if(got == 0)
-			break;
-		len += got;   /* safe : got <= cap - len, so len stays <= cap <= UINT32_MAX */
 	}
-	delete_binary_read_iterator(bri, transaction_id, &abort_error);
-	if(abort_error)
+
+	/* materialize_tb() runs the identical uint32-safe read loop and returns the bytes; map its codes back. */
+	uint32_t cap = 0, len = 0;
+	int mrc = MATERIALIZED_SUCCESSFULLY;
+	char* buf = materialize_tb(v->value, dti, tx_from_ctx(ec_p), &len, &cap, &mrc);
+	if(mrc != MATERIALIZED_SUCCESSFULLY)
 	{
 		free(buf);
-		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
+		/* a value overflowing the uint32 size field -> STRING_TOO_LONG; a NULL datum / non-text-or-blob type
+		 * cannot occur here (guarded above), so anything else is treated as a read failure. */
+		*error_code = (mrc == MATERIALIZED_RESULT_TOO_BIG) ? RHENDB_EE_STRING_TOO_LONG : RHENDB_EE_MATERIALIZE_FAILED;
 		return *error_code;
 	}
 
@@ -669,69 +606,37 @@ static int materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int*
 }
 
 /* ---- numeric materialization : tuple numeric -> materialized_numeric -> mpd_t (RHENDB_NUMERIC) ---- */
-static int materialize_numeric(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
+static int ee_materialize_numeric(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	if(!is_tuple_form(v))
 		return RHENDB_EE_OK;                 /* already native */
 	if(!is_numeric_type_info(v->type_info.dti_p))
 		return RHENDB_EE_OK;                 /* not a numeric */
 
-	extension_reader_iterator_callback cb_storage;
-	extension_reader_iterator_callback* callback = NULL;
-	rage_engine* eng = engine_and_callback_from_ctx(ec_p, v->type_info.dti_p, &cb_storage, &callback);
-	/* inline numeric is read with bstd = pam_p = callback = NULL; only an EXTENDED numeric needs an engine. */
-	if(eng == NULL && dti_needs_engine(v->type_info.dti_p))
+	/* only an EXTENDED numeric needs an engine : guard early with a clear error if one is required but
+	 * absent, then delegate the read (materialized_numeric -> mpd_t) to the shared utility. */
 	{
-		*error_code = RHENDB_EE_MISSING_ENGINE;
-		return *error_code;
-	}
-
-	const void* transaction_id = NULL;
-	int abort_error = 0;
-	numeric_reader_interface nri = init_intuple_numeric_reader_interface(v->value, v->type_info.dti_p, eng ? &(eng->bstd) : NULL, eng ? eng->pam_p : NULL, callback, transaction_id, &abort_error);
-	if(abort_error)
-	{
-		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
-		return *error_code;
-	}
-
-	numeric_sign_bits sb; int16_t exp;
-	nri.extract_sign_bits_and_exponent(&nri, &sb, &exp);
-
-	materialized_numeric mn;
-	if(!initialize_materialized_numeric(&mn, 8))
-	{
-		nri.close_digits_stream(&nri);
-		*error_code = RHENDB_EE_OUT_OF_MEMORY;
-		return *error_code;
-	}
-	set_sign_bits_and_exponent_for_materialized_numeric(&mn, sb, exp);
-
-	if(sb == POSITIVE_NUMERIC || sb == NEGATIVE_NUMERIC)   /* only finite non-zero values carry digits */
-	{
-		uint64_t buf[64];
-		while(1)
+		extension_reader_iterator_callback cb_storage;
+		extension_reader_iterator_callback* callback = NULL;
+		rage_engine* eng = engine_and_callback_from_ctx(ec_p, v->type_info.dti_p, &cb_storage, &callback);
+		if(eng == NULL && dti_needs_engine(v->type_info.dti_p))
 		{
-			int err = 0;
-			uint32_t got = nri.read_digits_as_stream(&nri, buf, 64, &err);
-			if(err)
-			{
-				nri.close_digits_stream(&nri);
-				deinitialize_materialized_numeric(&mn);
-				*error_code = RHENDB_EE_MATERIALIZE_FAILED;
-				return *error_code;
-			}
-			if(got == 0)
-				break;
-			/* digits stream MSD-first; push_lsd appends, keeping the MSD at the front */
-			for(uint32_t i = 0; i < got; i++)
-				push_lsd_in_materialized_numeric(&mn, buf[i]);
+			*error_code = RHENDB_EE_MISSING_ENGINE;
+			return *error_code;
 		}
 	}
-	nri.close_digits_stream(&nri);
 
-	mpd_t d = decimal_from_materialized_numeric(&mn);   /* inline mpd_t with heap coefficient, released via mpd_del */
-	deinitialize_materialized_numeric(&mn);
+	/* materialize_numeric() runs the identical digit-stream read and returns an inline mpd_t whose coefficient
+	 * is heap-allocated (released via mpd_del). a NULL datum / non-numeric type cannot occur here (guarded
+	 * above); too many digits map to STRING_TOO_LONG, anything else to a read failure. */
+	int mrc = MATERIALIZED_SUCCESSFULLY;
+	mpd_t d = materialize_numeric(v->value, v->type_info.dti_p, tx_from_ctx(ec_p), &mrc);
+	if(mrc != MATERIALIZED_SUCCESSFULLY)
+	{
+		mpd_del(&d);
+		*error_code = (mrc == MATERIALIZED_RESULT_TOO_BIG) ? RHENDB_EE_STRING_TOO_LONG : RHENDB_EE_MATERIALIZE_FAILED;
+		return *error_code;
+	}
 
 	if(v->type_info.should_free_dti_p && v->type_info.dti_p)
 		destroy_type_info_recursively(v->type_info.dti_p, NULL);
@@ -794,7 +699,7 @@ static mpd_t* operand_to_mpd(expr_value* v, mpd_t* scratch, int* owns, const sql
 		return &(v->numeric_value);
 	if(is_tuple_numeric(v))
 	{
-		if(materialize_numeric(v, ec_p, error_code))
+		if(ee_materialize_numeric(v, ec_p, error_code))
 			return NULL;
 		return &(v->numeric_value);
 	}
@@ -1036,7 +941,7 @@ static void* rhendb_get_bool(void* data, const sql_expr_eval_context* ec_p, int*
 
 	if(is_numeric_operand(v))
 	{
-		if(materialize_numeric(v, ec_p, error_code))
+		if(ee_materialize_numeric(v, ec_p, error_code))
 			return NULL;
 		return mpd_iszero(&(v->numeric_value)) ? ec_p->false_bool : ec_p->true_bool;   /* inf and nan are truthy */
 	}
@@ -1181,8 +1086,8 @@ static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context*
 			return compare_datum_rhendb(&a->value, da, &b->value, db, tx);
 		}
 		/* both already in memory (or no engine available): plain byte compare, no engine needed */
-		if(materialize_tb(a, ec_p, error_code)) return 0;
-		if(materialize_tb(b, ec_p, error_code)) return 0;
+		if(ee_materialize_tb(a, ec_p, error_code)) return 0;
+		if(ee_materialize_tb(b, ec_p, error_code)) return 0;
 		uint32_t na = a->value.string_or_binary_size, nb = b->value.string_or_binary_size;
 		uint32_t n = na < nb ? na : nb;
 		int c = n ? memcmp(a->value.string_or_binary_value, b->value.string_or_binary_value, n) : 0;
@@ -1423,8 +1328,8 @@ static void* rhendb_create_string(const dstring* data_bytes, const sql_expr_eval
 static void rhendb_concat(void** data1_p, void* data2, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* a = *data1_p; expr_value* b = data2;
-	if(materialize_tb(a, ec_p, error_code)) return;
-	if(materialize_tb(b, ec_p, error_code)) return;
+	if(ee_materialize_tb(a, ec_p, error_code)) return;
+	if(ee_materialize_tb(b, ec_p, error_code)) return;
 	int a_ok = (a->type_info.type == RHENDB_STRING || a->type_info.type == RHENDB_BINARY);
 	int b_ok = (b->type_info.type == RHENDB_STRING || b->type_info.type == RHENDB_BINARY);
 	if(!a_ok || !b_ok){ *error_code = RHENDB_EE_NON_STRING_OPERAND; return; }
@@ -1486,8 +1391,8 @@ static int like_match(const char* s, uint32_t sl, const char* p, uint32_t pl)
 static void* rhendb_like(void* str_p, void* pattern_p, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* s = str_p; expr_value* p = pattern_p;
-	if(materialize_tb(s, ec_p, error_code)) return NULL;
-	if(materialize_tb(p, ec_p, error_code)) return NULL;
+	if(ee_materialize_tb(s, ec_p, error_code)) return NULL;
+	if(ee_materialize_tb(p, ec_p, error_code)) return NULL;
 	if(s->type_info.type != RHENDB_STRING || p->type_info.type != RHENDB_STRING)
 	{
 		*error_code = RHENDB_EE_NON_STRING_OPERAND;
@@ -1721,8 +1626,8 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 	expr_type target = ((const expr_type_info*)to_type)->type;
 
 	/* bring an extended (tuple-form) source down to its scalar representation first */
-	if(is_numeric_operand(a)){ if(materialize_numeric(a, ec_p, error_code)) return NULL; }
-	else if(is_sb_operand(a)){ if(materialize_tb(a, ec_p, error_code)) return NULL; }
+	if(is_numeric_operand(a)){ if(ee_materialize_numeric(a, ec_p, error_code)) return NULL; }
+	else if(is_sb_operand(a)){ if(ee_materialize_tb(a, ec_p, error_code)) return NULL; }
 
 	int src_is_numeric = (a->type_info.type == RHENDB_NUMERIC);
 	int src_is_number  = (!is_tuple_form(a) && et_is_num(a->type_info.type));   /* native bit/int/float */
@@ -2571,8 +2476,6 @@ int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval
 // the prefix for the blob pointer (page id up to 8+4 bytes), a 4-byte offset, the inline array size header
 // and a few spare bytes). for numeric the prefix holds floor(90 / BYTES_PER_NUMERIC_DIGIT) radix-10^12
 // digit slots.
-#define PROJECTION_PREFIX_BYTES   90
-#define PROJECTION_MAX_SIZE       128
 
 // build the data_type_info a scalar result of kind `scalar` is PROJECTED into, and report through
 // *should_free whether the caller owns it.
@@ -2687,7 +2590,7 @@ static temporary_extension_store* project_pick_store(transaction* tx, void* hold
 
 // write already-materialized text/blob bytes into a volatile extended value.
 //
-// the caller materializes the evaluated value first (materialize_tb), so by the time we get here the bytes
+// the caller materializes the evaluated value first (ee_materialize_tb), so by the time we get here the bytes
 // are simply `data`/`data_size` -- no read iterator, no source lock held. that also means the destination
 // store's write lock is never held while the source is being read, which would otherwise self-deadlock when
 // the source is a volatile extended value hashing to the same store.
@@ -2704,15 +2607,15 @@ static int project_write_sb_to_volatile(transaction* tx, data_type_info* proj, c
 	int abort_error = 0;
 
 	/* the holder carries exactly one projected extended value, and that type's max_size IS
-	 * PROJECTION_MAX_SIZE -- there is never a reason to reserve a whole page for it. */
-	void* holder = malloc(PROJECTION_MAX_SIZE);
+	 * proj->max_size -- there is never a reason to reserve a whole page for it. */
+	void* holder = malloc(proj->max_size);
 	if(holder == NULL) { *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
 	tuple_def td; initialize_tuple_def(&td, proj);
 	init_tuple(&td, holder);
-	set_element_in_tuple(&td, SELF, holder, EMPTY_DATUM, PROJECTION_MAX_SIZE);
+	set_element_in_tuple(&td, SELF, holder, EMPTY_DATUM, proj->max_size);
 
 	binary_write_iterator* wr = get_new_binary_write_iterator(holder, &td, SELF, 0 /*dummy root*/,
-		get_NULL_tuple_pointer(pas), PROJECTION_PREFIX_BYTES, &(VE->bstd), VE->pam_p, VE->pmm_p);
+		get_NULL_tuple_pointer(pas), VE->max_prefix_size_in_bytes, &(VE->bstd), VE->pam_p, VE->pmm_p);
 
 	uint32_t off = 0;
 	// phase 1 : inline prefix only. never hand the writer more than the remaining prefix room, else it would
@@ -2782,16 +2685,16 @@ static int project_write_numeric_to_volatile(transaction* tx, data_type_info* pr
 	for(uint32_t i = 0; i < nd; i++) digits[i] = get_nth_digit_from_materialized_numeric(&mn, i);
 
 	int abort_error = 0;
-	/* one projected extended numeric, max_size PROJECTION_MAX_SIZE : no page-sized buffer needed */
-	void* holder = malloc(PROJECTION_MAX_SIZE);
+	/* one projected extended numeric, max_size proj->max_size : no page-sized buffer needed */
+	void* holder = malloc(proj->max_size);
 	if(holder == NULL) { free(digits); deinitialize_materialized_numeric(&mn); *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
 	tuple_def td; initialize_tuple_def(&td, proj);
 	init_tuple(&td, holder);
-	set_element_in_tuple(&td, SELF, holder, EMPTY_DATUM, PROJECTION_MAX_SIZE);
+	set_element_in_tuple(&td, SELF, holder, EMPTY_DATUM, proj->max_size);
 	set_sign_bits_and_exponent_for_numeric(sb, ex, holder, &td, SELF);
 
 	digit_write_iterator* wr = get_new_digit_write_iterator(holder, &td, SELF, 0 /*dummy root*/,
-		get_NULL_tuple_pointer(pas), PROJECTION_PREFIX_BYTES / BYTES_PER_NUMERIC_DIGIT, &(VE->bstd), VE->pam_p, VE->pmm_p);
+		get_NULL_tuple_pointer(pas), VE->max_prefix_size_in_bytes / BYTES_PER_NUMERIC_DIGIT, &(VE->bstd), VE->pam_p, VE->pmm_p);
 
 	temporary_extension_store* store = NULL;
 	uint32_t off = 0;
@@ -2921,7 +2824,7 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 	// through its own callback + engine), then the bytes are simply the datum's -- write those out.
 	if(to_ext_text || to_ext_blob)
 	{
-		if(materialize_tb(v, ec_p, error_code) != RHENDB_EE_OK)
+		if(ee_materialize_tb(v, ec_p, error_code) != RHENDB_EE_OK)
 		{
 			delete_data(v, ec_p);
 			return res;
