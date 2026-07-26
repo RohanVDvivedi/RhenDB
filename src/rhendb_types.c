@@ -9,7 +9,7 @@
 
 data_type_info* get_data_type_info_for_rhendb_type_info(const rhendb_type_info* rti_p, const rhendb* rdb)
 {
-	switch(rti_p->type)
+	switch(rti_p->base_type)
 	{
 		case RHENDB_BIT_FIELD :
 		{

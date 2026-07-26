@@ -11,8 +11,8 @@
 #define MAX_EXTENDED_TYPE_SIZE  128
 #define MAX_PREFIX_SIZE          90 // do not load more than this many in the prefix of the extended types
 
-typedef enum rhendb_type rhendb_type;
-enum rhendb_type
+typedef enum rhendb_base_type rhendb_base_type;
+enum rhendb_base_type
 {
 	// primitive numbers of fixed length
 	RHENDB_BIT_FIELD = 0,    // size 1-64 in bits
@@ -37,8 +37,8 @@ enum rhendb_type
 
 typedef struct rhendb_type_info rhendb_type_info;
 
-typedef struct rhendb_attribute rhendb_attribute;
-struct rhendb_attribute
+typedef struct rhendb_attribute_info rhendb_attribute_info;
+struct rhendb_attribute_info
 {
 	char attribute_name[64];
 	rhendb_type_info* containee;
@@ -46,7 +46,7 @@ struct rhendb_attribute
 
 struct rhendb_type_info
 {
-	rhendb_type type;
+	rhendb_base_type base_type;
 
 	unsigned int is_nullable:1;
 
@@ -58,7 +58,7 @@ struct rhendb_type_info
 
 	union
 	{
-		rhendb_attribute* containees; // array of rhendb_attribute for TUPLE
+		rhendb_attribute_info* containees; // array of rhendb_attribute_info for TUPLE
 		rhendb_type_info* containee; // single rhendb_type_info for ARRAY
 	};
 };
