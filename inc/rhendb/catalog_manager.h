@@ -38,9 +38,9 @@ struct catalog_manager
 	// table_part_id is 0, if it is not a table
 
 	tuple_def types_tuple_def;
-	heap_table_tuple_defs db_types_tuple_defs;
+	bplus_tree_tuple_defs db_types_tuple_defs;
 	uint64_t db_types_root_page_id;
-	// mvcc_hdr, id, name
+	// key(id) -> mvcc_hdr, name
 	// only user defined types are here, not the primitive ones
 
 	tuple_def indices_tuple_def;
@@ -49,9 +49,9 @@ struct catalog_manager
 	// key(table_id, id, table_part_id) -> mvcc_hdr, name, access_type(btree or hash), root_page_id, predicate
 
 	tuple_def tables_tuple_def;
-	heap_table_tuple_defs db_tables_tuple_defs;
+	bplus_tree_tuple_defs db_tables_tuple_defs;
 	uint64_t db_tables_root_page_id;
-	// mvcc_hdr, id, part_id, name, heap_root_page_id, blobs_root_page_id
+	// key(id, part_id) -> mvcc_hdr, name, heap_root_page_id, blobs_root_page_id
 
 	// tuple_def functions_tuple_def;
 	// heap_table_tuple_defs db_functions_tuple_defs;
@@ -59,19 +59,12 @@ struct catalog_manager
 
 	// ---------------- INDICES ON SCHEMA TABLE
 
-	// indices carry entries only for catalog_object_type(RHENDB_TYPE = 0 and RHENDB_TABLE = 1)
-
-	// bplus_tree index
-	// key(object_type, id, table_part_id, row_id)
-	bplus_tree_tuple_defs idx_id_part_tuple_defs;
-	uint64_t idx_id_part_root_page_id;
-
-	// bplus_tree index
-	// key(object_type, name, row_id)
+	// bplus_tree index for catalog_object_type(RHENDB_TYPE = 0 and RHENDB_TABLE = 1)
+	// key(object_type, name, id, part_id)
 	bplus_tree_tuple_defs idx_name_tuple_defs;
 	uint64_t idx_name_root_page_id;
 
-	// ---------------- EXTENSION FOR ALL THE BLOBS IN THE SYSTEM FOR ALL STRINGS ARE STORED HERE
+	// ---------------- EXTENSION FOR ALL THE BLOBS IN THE SYSTEM FOR ALL EXPRESSIONS ARE STORED HERE
 
 	// all extension get stored here
 	uint64_t ext_store_root_page_id;
@@ -134,9 +127,9 @@ enum rhendb_access_type
 typedef struct rhendb_index rhendb_index;
 struct rhendb_index
 {
-	uint64_t id;
-
 	uint64_t table_id;
+
+	uint64_t id;
 
 	uint64_t table_part_id; // there is a unique table_part_id for id, table_id pair
 

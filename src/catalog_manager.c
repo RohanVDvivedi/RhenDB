@@ -10,9 +10,9 @@
 
 static const compare_direction cmp_dirs_all_asc[] = {ASC, ASC, ASC, ASC, ASC, ASC};
 
-const positional_accessor db_attributes_key_element_ids[3] = {STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(3)};
+const positional_accessor key_element_ids0[] = {STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(3), STATIC_POSITION(4), STATIC_POSITION(5)};
 
-const positional_accessor db_indices_key_element_ids[3] = {STATIC_POSITION(2), STATIC_POSITION(1), STATIC_POSITION(3)};
+const positional_accessor key_element_ids1[] = {STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(3), STATIC_POSITION(4), STATIC_POSITION(5), STATIC_POSITION(6)};
 
 void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine)
 {
@@ -32,46 +32,43 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 	data_type_info* base_dti_p = UINT_NON_NULLABLE[2];
 
 	{
-		data_type_info* attributes_type_info = malloc(sizeof_tuple_data_type_info(11));
+		data_type_info* attributes_type_info = malloc(sizeof_tuple_data_type_info(10));
 
-		strcpy(attributes_type_info->containees[0].field_name, "mvcc_hdr");
-		attributes_type_info->containees[0].al.type_info = mvcc_hdr_dti_p;
+		strcpy(attributes_type_info->containees[0].field_name, "owner_id");
+		attributes_type_info->containees[0].al.type_info = id_dti_p;
 
-		strcpy(attributes_type_info->containees[1].field_name, "owner_id");
-		attributes_type_info->containees[1].al.type_info = id_dti_p;
+		strcpy(attributes_type_info->containees[1].field_name, "table_part_id");
+		attributes_type_info->containees[1].al.type_info = part_id_dti_p;
 
-		strcpy(attributes_type_info->containees[2].field_name, "table_part_id");
-		attributes_type_info->containees[2].al.type_info = part_id_dti_p;
+		strcpy(attributes_type_info->containees[2].field_name, "rel_pos_in_owner");
+		attributes_type_info->containees[2].al.type_info = rel_pos_in_owner_dti_p;
 
-		strcpy(attributes_type_info->containees[3].field_name, "rel_pos_in_owner");
-		attributes_type_info->containees[3].al.type_info = rel_pos_in_owner_dti_p;
+		strcpy(attributes_type_info->containees[3].field_name, "attribute_name");
+		attributes_type_info->containees[3].al.type_info = name_dti_p;
 
-		strcpy(attributes_type_info->containees[4].field_name, "attribute_name");
-		attributes_type_info->containees[4].al.type_info = name_dti_p;
+		strcpy(attributes_type_info->containees[4].field_name, "base_type");
+		attributes_type_info->containees[4].al.type_info = base_dti_p;
 
-		strcpy(attributes_type_info->containees[5].field_name, "base_type");
-		attributes_type_info->containees[5].al.type_info = base_dti_p;
+		strcpy(attributes_type_info->containees[5].field_name, "attribute_type_id");
+		attributes_type_info->containees[5].al.type_info = id_dti_p;
 
-		strcpy(attributes_type_info->containees[6].field_name, "attribute_type_id");
-		attributes_type_info->containees[6].al.type_info = id_dti_p;
+		strcpy(attributes_type_info->containees[6].field_name, "count");
+		attributes_type_info->containees[6].al.type_info = UINT_NULLABLE[4];
 
-		strcpy(attributes_type_info->containees[7].field_name, "count");
-		attributes_type_info->containees[7].al.type_info = UINT_NULLABLE[4];
+		strcpy(attributes_type_info->containees[7].field_name, "is_auto_increment");
+		attributes_type_info->containees[7].al.type_info = BIT_FIELD_NON_NULLABLE[1];
 
-		strcpy(attributes_type_info->containees[8].field_name, "is_auto_increment");
+		strcpy(attributes_type_info->containees[8].field_name, "is_nullable");
 		attributes_type_info->containees[8].al.type_info = BIT_FIELD_NON_NULLABLE[1];
 
-		strcpy(attributes_type_info->containees[9].field_name, "is_nullable");
-		attributes_type_info->containees[9].al.type_info = BIT_FIELD_NON_NULLABLE[1];
+		strcpy(attributes_type_info->containees[9].field_name, "derived_from_expr");
+		attributes_type_info->containees[9].al.type_info = catmgr_engine->text_extended_type_info;
 
-		strcpy(attributes_type_info->containees[10].field_name, "derived_from_expr");
-		attributes_type_info->containees[10].al.type_info = catmgr_engine->text_extended_type_info;
-
-		initialize_tuple_data_type_info(attributes_type_info, "rhendb_attribute", 0, 900, 11);
+		initialize_tuple_data_type_info(attributes_type_info, "rhendb_attribute", 0, 900, 10);
 
 		initialize_tuple_def(&(catmgr_p->attributes_tuple_def), attributes_type_info);
 
-		init_bplus_tree_tuple_definitions(&(catmgr_p->db_attributes_tuple_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->attributes_tuple_def), db_attributes_key_element_ids, cmp_dirs_all_asc, sizeof(db_attributes_key_element_ids) / sizeof(positional_accessor));
+		init_bplus_tree_tuple_definitions(&(catmgr_p->db_attributes_tuple_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->attributes_tuple_def), key_element_ids0, cmp_dirs_all_asc, 3);
 	}
 
 	{
@@ -90,7 +87,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 		initialize_tuple_def(&(catmgr_p->types_tuple_def), types_type_info);
 
-		init_heap_table_tuple_definitions(&(catmgr_p->db_types_tuple_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->types_tuple_def));
+		init_bplus_tree_tuple_definitions(&(catmgr_p->db_types_tuple_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->types_tuple_def), key_element_ids1, cmp_dirs_all_asc, 1);
 	}
 
 	{
@@ -99,10 +96,10 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		strcpy(indices_type_info->containees[0].field_name, "mvcc_hdr");
 		indices_type_info->containees[0].al.type_info = mvcc_hdr_dti_p;
 
-		strcpy(indices_type_info->containees[1].field_name, "id");
+		strcpy(indices_type_info->containees[1].field_name, "table_id");
 		indices_type_info->containees[1].al.type_info = id_dti_p;
 
-		strcpy(indices_type_info->containees[2].field_name, "table_id");
+		strcpy(indices_type_info->containees[2].field_name, "id");
 		indices_type_info->containees[2].al.type_info = id_dti_p;
 
 		strcpy(indices_type_info->containees[3].field_name, "table_part_id");
@@ -124,7 +121,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 		initialize_tuple_def(&(catmgr_p->indices_tuple_def), indices_type_info);
 
-		init_bplus_tree_tuple_definitions(&(catmgr_p->db_indices_tuple_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->indices_tuple_def), db_indices_key_element_ids, cmp_dirs_all_asc, sizeof(db_indices_key_element_ids) / sizeof(positional_accessor));
+		init_bplus_tree_tuple_definitions(&(catmgr_p->db_indices_tuple_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->indices_tuple_def), key_element_ids1, cmp_dirs_all_asc, 3);
 	}
 
 	{
@@ -152,7 +149,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 		initialize_tuple_def(&(catmgr_p->tables_tuple_def), tables_type_info);
 
-		init_heap_table_tuple_definitions(&(catmgr_p->db_tables_tuple_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->tables_tuple_def));
+		init_bplus_tree_tuple_definitions(&(catmgr_p->db_tables_tuple_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->tables_tuple_def), key_element_ids1, cmp_dirs_all_asc, 2);
 	}
 
 	pthread_mutex_init(&(catmgr_p->htan_lock), NULL);
@@ -163,3 +160,28 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 	pthread_mutex_init(&(catmgr_p->global_unique_schema_id_lock), NULL);
 }
+
+// utility function start
+
+// fails only if the key is duplicate
+static int insert_attribute_entry(catalog_manager* catmgr_p, const mvcc_header* mvcchdr, const rhendb_attribute* rattr, const void* min_tx_id, int* abort_error);
+
+// fails only if the key is duplicate
+static int insert_type_entry(catalog_manager* catmgr_p, const mvcc_header* mvcchdr, const rhendb_type* rtyp, const void* min_tx_id, int* abort_error);
+
+// fails only if the key is duplicate
+static int insert_index_entry(catalog_manager* catmgr_p, const mvcc_header* mvcchdr, const rhendb_index* rindx, const void* min_tx_id, int* abort_error);
+
+// fails only if the key is duplicate
+static int insert_table_entry(catalog_manager* catmgr_p, const mvcc_header* mvcchdr, const rhendb_table* rtbl, const void* min_tx_id, int* abort_error);
+
+// if table_part_id is 0, scan until the owner_id changes, even if it is a table
+static rhendb_attribute* find_all_attributes_in_order(catalog_manager* catmgr_p, uint64_t owner_id, uint64_t table_part_id, uint64_t* result_count, const void* min_tx_id, int* abort_error);
+
+static rhendb_index* find_all_indices_in_order(catalog_manager* catmgr_p, uint64_t table_id, uint64_t* result_count, const void* min_tx_id, int* abort_error);
+
+static rhendb_table* find_all_table_partitions_in_order(catalog_manager* catmgr_p, uint64_t table_id, uint64_t* result_count, const void* min_tx_id, int* abort_error);
+
+static rhendb_type* find_type(catalog_manager* catmgr_p, uint64_t type_id, const void* min_tx_id, int* abort_error);
+
+// utility functions end
