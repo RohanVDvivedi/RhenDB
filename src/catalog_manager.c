@@ -178,10 +178,10 @@ static int insert_table_entry(catalog_manager* catmgr_p, const mvcc_header* mvcc
 // if table_part_id is 0, scan until the owner_id changes, even if it is a table
 static rhendb_attribute* find_all_attributes_in_order(catalog_manager* catmgr_p, uint64_t owner_id, uint64_t table_part_id, uint64_t* result_count, const void* min_tx_id, int* abort_error);
 
-static rhendb_index* find_all_indices_in_order(catalog_manager* catmgr_p, uint64_t table_id, uint64_t* result_count, const void* min_tx_id, int* abort_error);
+static rhendb_index* find_all_indices_in_order(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* result_count, const void* min_tx_id, int* abort_error);
 
-static rhendb_table* find_all_table_partitions_in_order(catalog_manager* catmgr_p, uint64_t table_id, uint64_t* result_count, const void* min_tx_id, int* abort_error);
+static rhendb_table* find_all_table_partitions_in_order(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* result_count, const void* min_tx_id, int* abort_error);
 
-static rhendb_type* find_type(catalog_manager* catmgr_p, uint64_t type_id, const void* min_tx_id, int* abort_error);
+static rhendb_type* find_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t type_id, const void* min_tx_id, int* abort_error);
 
 // utility functions end
