@@ -31,24 +31,29 @@ struct catalog_manager
 
 	// ---------------- TABLES FOR SCHEMA
 
+	tuple_def attributes_tuple_def;
 	bplus_tree_tuple_defs db_attributes_tuple_defs;
 	uint64_t db_attributes_root_page_id;
 	// key(owner_id, table_part_id, rel_pos_in_owner) -> attribute_name, base_type (rhendb_base_type), attribute_type_id (valid for base_type == RHENDB_TUPLE), count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, derived_from_expression(null if not derived column and not index attribute)
 	// table_part_id is 0, if it is not a table
 
+	tuple_def types_tuple_def;
 	heap_table_tuple_defs db_types_tuple_defs;
 	uint64_t db_types_root_page_id;
 	// mvcc_hdr, id, name
 	// only user defined types are here, not the primitive ones
 
+	tuple_def indices_tuple_def;
 	bplus_tree_tuple_defs db_indices_tuple_defs;
 	uint64_t db_indices_root_page_id;
 	// key(table_id, id, table_part_id) -> mvcc_hdr, name, access_type(btree or hash), root_page_id, predicate
 
+	tuple_def tables_tuple_def;
 	heap_table_tuple_defs db_tables_tuple_defs;
 	uint64_t db_tables_root_page_id;
 	// mvcc_hdr, id, part_id, name, heap_root_page_id, blobs_root_page_id
 
+	// tuple_def functions_tuple_def;
 	// heap_table_tuple_defs db_functions_tuple_defs;
 	// uint64_t db_functions_root_page_id;
 
@@ -66,8 +71,16 @@ struct catalog_manager
 	bplus_tree_tuple_defs idx_name_tuple_defs;
 	uint64_t idx_name_root_page_id;
 
+	// ---------------- EXTENSION FOR ALL THE BLOBS IN THE SYSTEM FOR ALL STRINGS ARE STORED HERE
+
 	// all extension get stored here
 	uint64_t ext_store_root_page_id;
+
+	// ---------------- FOR FIXING THE UNUSED SPACE ENTRIES
+
+	// all the blob_stores and heap tables above use the same notifier
+	pthread_mutex_t htan_lock;
+	heap_table_accumulative_notifier htan;
 
 	// rage_engine to be used with catalog manager
 	rage_engine* catmgr_engine;
@@ -92,7 +105,8 @@ struct rhendb_attribute
 
 	uint64_t attribute_type_id; // valid only for base_type = RHENDB_TYPE
 
-	uint32_t count; // (0->variable length, 1->direct-element, N->fixed length array of N elements)
+	uint32_t* count; // (0->variable length, N->fixed length array of N elements, NULL means direct element)
+	uint32_t _count; // if valif count points here
 
 	unsigned int is_auto_increment:1;
 
@@ -106,8 +120,6 @@ typedef struct rhendb_type rhendb_type;
 struct rhendb_type
 {
 	uint64_t id;
-
-	rhendb_base_type base_type;
 
 	char name[64];
 };
