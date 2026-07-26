@@ -8,6 +8,12 @@
 #define HTAN_ENTRIES_MAX    56
 #define HTAN_ENTRIES_THRES  35
 
+static const compare_direction cmp_dirs_all_asc[] = {ASC, ASC, ASC, ASC, ASC, ASC};
+
+const positional_accessor db_attributes_key_element_ids[3] = {STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(3)};
+
+const positional_accessor db_indices_key_element_ids[3] = {STATIC_POSITION(2), STATIC_POSITION(1), STATIC_POSITION(3)};
+
 void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine)
 {
 	data_type_info* obj_type_dti_p = UINT_NON_NULLABLE[2];
@@ -64,6 +70,8 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		initialize_tuple_data_type_info(attributes_type_info, "rhendb_attribute", 0, 900, 11);
 
 		initialize_tuple_def(&(catmgr_p->attributes_tuple_def), attributes_type_info);
+
+		init_bplus_tree_tuple_definitions(&(catmgr_p->db_attributes_tuple_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->attributes_tuple_def), db_attributes_key_element_ids, cmp_dirs_all_asc, sizeof(db_attributes_key_element_ids) / sizeof(positional_accessor));
 	}
 
 	{
@@ -81,6 +89,8 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		initialize_tuple_data_type_info(types_type_info, "rhendb_type", 0, 900, 3);
 
 		initialize_tuple_def(&(catmgr_p->types_tuple_def), types_type_info);
+
+		init_heap_table_tuple_definitions(&(catmgr_p->db_types_tuple_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->types_tuple_def));
 	}
 
 	{
@@ -113,6 +123,8 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		initialize_tuple_data_type_info(indices_type_info, "rhendb_index", 0, 900, 8);
 
 		initialize_tuple_def(&(catmgr_p->indices_tuple_def), indices_type_info);
+
+		init_bplus_tree_tuple_definitions(&(catmgr_p->db_indices_tuple_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->indices_tuple_def), db_indices_key_element_ids, cmp_dirs_all_asc, sizeof(db_indices_key_element_ids) / sizeof(positional_accessor));
 	}
 
 	{
@@ -139,6 +151,8 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		initialize_tuple_data_type_info(tables_type_info, "rhendb_table", 0, 900, 6);
 
 		initialize_tuple_def(&(catmgr_p->tables_tuple_def), tables_type_info);
+
+		init_heap_table_tuple_definitions(&(catmgr_p->db_tables_tuple_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->tables_tuple_def));
 	}
 
 	pthread_mutex_init(&(catmgr_p->htan_lock), NULL);
