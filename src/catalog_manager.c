@@ -879,8 +879,8 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 		init_heap_table_tuple_definitions(&(catmgr_p->indices_table.heap_table_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->indices_table.record_def));
 
-		pthread_mutex_init(&(catmgr_p->tables_table.htan_lock), NULL);
-		initialize_heap_table_accumulative_notifier(&(catmgr_p->tables_table.htan), HTAN_ENTRIES_MAX);
+		pthread_mutex_init(&(catmgr_p->indices_table.htan_lock), NULL);
+		initialize_heap_table_accumulative_notifier(&(catmgr_p->indices_table.htan), HTAN_ENTRIES_MAX);
 	}
 
 	{
