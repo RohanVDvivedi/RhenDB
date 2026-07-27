@@ -1060,8 +1060,15 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 	uint32_t tuple_index = insert_in_heap_page(&new_page, heap_tuple, &possible_insertion_index, record_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_engine, abort_error);
 	if(*abort_error)
 	{
-		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, FREE_PAGE, abort_error);
+		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, NONE_OPTION, abort_error);
 		return 0;
+	}
+
+	// tuple_index will always be valid here, if this insert fails we can not proceed further
+	if(tuple_index == INVALID_TUPLE_INDEX)
+	{
+		printf("failed to insert a catalog heap table row in a new page\n");
+		exit(-1);
 	}
 
 	(*tptr) = (tuple_pointer){.page_id = new_page.page_id, .tuple_index = tuple_index};
