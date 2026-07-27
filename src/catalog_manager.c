@@ -5,6 +5,50 @@
 
 #include<tupleindexer/interface/page_access_methods.h>
 
+// index utility struct
+
+typedef struct rhendb_name_idx_entry rhendb_name_idx_entry;
+struct rhendb_name_idx_entry
+{
+	catalog_object_type object_type;
+
+	char name[64];
+
+	tuple_pointer object_tuple_pointer;
+};
+
+typedef struct rhendb_id_idx_entry rhendb_id_idx_entry;
+struct rhendb_id_idx_entry
+{
+	catalog_object_type object_type;
+
+	uint64_t id;
+
+	tuple_pointer object_tuple_pointer;
+};
+
+typedef struct rhendb_table_to_indices_entry rhendb_table_to_indices_entry;
+struct rhendb_table_to_indices_entry
+{
+	uint64_t table_id;
+
+	tuple_pointer indices_tuple_pointer;
+};
+
+typedef struct rhendb_owner_to_attributes_idx_entry rhendb_owner_to_attributes_idx_entry;
+struct rhendb_owner_to_attributes_idx_entry
+{
+	uint64_t owner_id;
+
+	uint64_t rel_pos_in_owner;
+
+	tuple_pointer attributes_tuple_pointer;
+};
+
+// serialization (struct -> (void*)tuple) functions
+
+// deserialization ((void*)tuple -> struct) functions
+
 #define ID_n_REL_POS_BYTES 8
 #define NAME_BYTES 64
 
@@ -206,7 +250,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		strcpy(name_idx_type_info->containees[2].field_name, "object.tuple_pointer");
 		name_idx_type_info->containees[2].al.type_info = &(catmgr_engine->pam_p->pas.tuple_pointer_type_info);
 
-		initialize_tuple_data_type_info(name_idx_type_info, "rhendb_name_idx", 0, 900, 3);
+		initialize_tuple_data_type_info(name_idx_type_info, "rhendb_name_idx_entry", 0, 900, 3);
 
 		initialize_tuple_def(&(catmgr_p->name_idx.record_def), name_idx_type_info);
 
@@ -225,7 +269,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		strcpy(id_idx_type_info->containees[2].field_name, "object.tuple_pointer");
 		id_idx_type_info->containees[2].al.type_info = &(catmgr_engine->pam_p->pas.tuple_pointer_type_info);
 
-		initialize_tuple_data_type_info(id_idx_type_info, "rhendb_id_idx", 0, 900, 3);
+		initialize_tuple_data_type_info(id_idx_type_info, "rhendb_id_idx_entry", 0, 900, 3);
 
 		initialize_tuple_def(&(catmgr_p->id_idx.record_def), id_idx_type_info);
 
@@ -241,7 +285,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		strcpy(table_to_indices_type_info->containees[1].field_name, "index.tuple_pointer");
 		table_to_indices_type_info->containees[1].al.type_info = &(catmgr_engine->pam_p->pas.tuple_pointer_type_info);
 
-		initialize_tuple_data_type_info(table_to_indices_type_info, "rhendb_table_to_indices", 0, 900, 2);
+		initialize_tuple_data_type_info(table_to_indices_type_info, "rhendb_table_to_indices_idx_entry", 0, 900, 2);
 
 		initialize_tuple_def(&(catmgr_p->table_to_indices_idx.record_def), table_to_indices_type_info);
 
@@ -260,7 +304,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		strcpy(owner_to_attributes_idx_type_info->containees[2].field_name, "attributes.tuple_pointer");
 		owner_to_attributes_idx_type_info->containees[2].al.type_info = &(catmgr_engine->pam_p->pas.tuple_pointer_type_info);
 
-		initialize_tuple_data_type_info(owner_to_attributes_idx_type_info, "rhendb_owner_to_attributes_idx", 0, 900, 3);
+		initialize_tuple_data_type_info(owner_to_attributes_idx_type_info, "rhendb_owner_to_attributes_idx_entry", 0, 900, 3);
 
 		initialize_tuple_def(&(catmgr_p->owner_to_attributes_idx.record_def), owner_to_attributes_idx_type_info);
 
