@@ -1076,7 +1076,10 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 	// track the new page in the heap_table (reads its unused_space), then release the page lock
 	track_unused_space_in_heap_table(hpt_p->root_page_id, &new_page, &(hpt_p->heap_table_defs), engine->pam_p, engine->pmm_p, min_tx_engine, abort_error);
 	if(*abort_error)
+	{
+		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, NONE_OPTION, abort_error);
 		return 0;
+	}
 
 	release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, NONE_OPTION, abort_error);
 	if(*abort_error)
