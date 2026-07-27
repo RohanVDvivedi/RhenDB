@@ -4,6 +4,9 @@
 #include<tupleindexer/heap_page/heap_page.h>
 
 #include<tupleindexer/interface/page_access_methods.h>
+#include<tupleindexer/common/tuple_pointer.h>
+#include<tuplelargetypes/binary_write_iterator.h>
+#include<tuplelargetypes/binary_read_iterator.h>
 
 // index utility struct
 
@@ -45,54 +48,6 @@ struct rhendb_owner_to_attributes_idx_entry
 	tuple_pointer attributes_tuple_pointer;
 };
 
-// serialization (struct -> (void*)tuple) functions
-// if should_blob is true, then serialize expression in the blob_store, in the current mini transaction passed
-// it is expected that on should_blob = 1, this function calls may abort with a abort_error, and will return NULL for sure
-
-void* serialize_rhendb_attribute(catalog_manager* catmgr_p, rhendb_attribute* attr, int should_blob, const void* min_tx_engine, int* abort_error);
-
-void* serialize_rhendb_type(catalog_manager* catmgr_p, rhendb_type* typ);
-
-void* serialize_rhendb_index_fragment(catalog_manager* catmgr_p, rhendb_index_fragment* ifrag);
-
-void* serialize_rhendb_index(catalog_manager* catmgr_p, rhendb_index* idx, int should_blob, const void* min_tx_engine, int* abort_error);
-
-void* serialize_rhendb_table_partition(catalog_manager* catmgr_p, rhendb_table_partition* tpart);
-
-void* serialize_rhendb_table(catalog_manager* catmgr_p, rhendb_table* tbl);
-
-void* serialize_rhendb_name_idx_entry(catalog_manager* catmgr_p, rhendb_name_idx_entry* nidx);
-
-void* serialize_rhendb_id_idx_entry(catalog_manager* catmgr_p, rhendb_id_idx_entry* ididx);
-
-void* serialize_rhendb_table_to_indices_entry(catalog_manager* catmgr_p, rhendb_table_to_indices_entry* t2iidx);
-
-void* serialize_rhendb_owner_to_attributes_idx_entry(catalog_manager* catmgr_p, rhendb_owner_to_attributes_idx_entry* o2aidx);
-
-// deserialization ((void*)tuple -> struct) functions
-// if should_blob is true, then deserialize expression in the blob_store, in a separate NULL read only transaction
-// else leave the blob of the expression as NULL
-
-rhendb_attribute* deserialize_rhendb_attribute(catalog_manager* catmgr_p, void* tuple, int should_blob);
-
-rhendb_type* deserialize_rhendb_type(catalog_manager* catmgr_p, void* tuple);
-
-rhendb_index_fragment* deserialize_rhendb_index_fragment(catalog_manager* catmgr_p, void* tuple);
-
-rhendb_index* deserialize_rhendb_index(catalog_manager* catmgr_p, void* tuple, int should_blob);
-
-rhendb_table_partition* deserialize_rhendb_table_partition(catalog_manager* catmgr_p, void* tuple);
-
-rhendb_table* deserialize_rhendb_table(catalog_manager* catmgr_p, void* tuple);
-
-rhendb_name_idx_entry* deserialize_rhendb_name_idx_entry(catalog_manager* catmgr_p, void* tuple);
-
-rhendb_id_idx_entry* deserialize_rhendb_id_idx_entry(catalog_manager* catmgr_p, void* tuple);
-
-rhendb_table_to_indices_entry* deserialize_rhendb_table_to_indices_entry(catalog_manager* catmgr_p, void* tuple);
-
-rhendb_owner_to_attributes_idx_entry* deserialize_rhendb_owner_to_attributes_idx_entry(catalog_manager* catmgr_p, void* tuple);
-
 // ------
 
 #define ID_n_REL_POS_BYTES 8
@@ -100,6 +55,568 @@ rhendb_owner_to_attributes_idx_entry* deserialize_rhendb_owner_to_attributes_idx
 
 #define HTAN_ENTRIES_MAX    56
 #define HTAN_ENTRIES_THRES  35
+
+// serialization (struct -> (void*)tuple) functions
+// if should_blob is true, then serialize expression in the blob_store, in the current mini transaction passed
+// it is expected that on should_blob = 1, this function calls may abort with a abort_error, and will return NULL for sure
+
+static int catalog_write_extended_blob(catalog_manager* catmgr_p, void* tuple, const tuple_def* record_def, positional_accessor position, char* data, uint32_t data_size, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	set_element_in_tuple(record_def, position, tuple, EMPTY_DATUM, get_maximum_tuple_size(record_def));
+
+	binary_write_iterator* bwi_p = get_new_binary_write_iterator(tuple, record_def, position, catmgr_p->ext_store_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), engine->max_prefix_size_in_bytes, &(engine->bstd), engine->pam_p, engine->pmm_p);
+
+	uint32_t bytes_written = 0;
+
+	pthread_mutex_lock(&(catmgr_p->htan_lock));
+
+	while(bytes_written < data_size)
+	{
+		uint32_t bytes_written_this_iteration = append_to_binary_write_iterator(bwi_p, data + bytes_written, data_size - bytes_written, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(catmgr_p->htan)), min_tx_id, abort_error);
+		if(*abort_error)
+			break;
+		if(bytes_written_this_iteration == 0)
+			break;
+
+		bytes_written += bytes_written_this_iteration;
+	}
+
+	pthread_mutex_unlock(&(catmgr_p->htan_lock));
+
+	delete_binary_write_iterator(bwi_p, min_tx_id, abort_error);
+	if(*abort_error)
+		return 0;
+
+	return 1;
+}
+
+void* serialize_rhendb_attribute(catalog_manager* catmgr_p, rhendb_attribute* attr, int should_blob, const void* min_tx_engine, int* abort_error)
+{
+	const tuple_def* record_def = &(catmgr_p->attributes_table.record_def);
+
+	void* tuple = malloc(get_maximum_tuple_size(record_def));
+
+	init_tuple(record_def, tuple);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(0), tuple, EMPTY_DATUM, UINT32_MAX);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(1), tuple, &((datum){.uint_value = attr->owner_id}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(2), tuple, &((datum){.uint_value = attr->rel_pos_in_owner}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(3), tuple, &((datum){.uint_value = attr->table_part_id_from}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(4), tuple, &((datum){.uint_value = attr->table_part_id_to}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(5), tuple, &((datum){.string_value = attr->attribute_name, .string_size = (uint32_t) strnlen(attr->attribute_name, 64)}), UINT32_MAX);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(6), tuple, &((datum){.uint_value = attr->base_type}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(7), tuple, &((datum){.uint_value = attr->attribute_type_id}), 0);
+
+	if(attr->count == NULL)
+		set_element_in_tuple(record_def, STATIC_POSITION(8), tuple, NULL_DATUM, 0);
+	else
+		set_element_in_tuple(record_def, STATIC_POSITION(8), tuple, &((datum){.uint_value = *(attr->count)}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(9), tuple, &((datum){.bit_field_value = attr->is_auto_increment}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(10), tuple, &((datum){.bit_field_value = attr->is_nullable}), 0);
+
+	if(should_blob && attr->derived_from_expr != NULL)
+	{
+		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(11), attr->derived_from_expr, strlen(attr->derived_from_expr), min_tx_engine, abort_error))
+		{
+			free(tuple);
+			return NULL;
+		}
+	}
+	else
+		set_element_in_tuple(record_def, STATIC_POSITION(11), tuple, NULL_DATUM, UINT32_MAX);
+
+	return tuple;
+}
+
+void* serialize_rhendb_type(catalog_manager* catmgr_p, rhendb_type* typ)
+{
+	const tuple_def* record_def = &(catmgr_p->types_table.record_def);
+
+	void* tuple = malloc(get_maximum_tuple_size(record_def));
+
+	init_tuple(record_def, tuple);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(0), tuple, EMPTY_DATUM, UINT32_MAX);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(1), tuple, &((datum){.uint_value = typ->id}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(2), tuple, &((datum){.string_value = typ->name, .string_size = (uint32_t) strnlen(typ->name, 64)}), UINT32_MAX);
+
+	return tuple;
+}
+
+void* serialize_rhendb_index_fragment(catalog_manager* catmgr_p, rhendb_index_fragment* ifrag)
+{
+	const tuple_def* record_def = &(catmgr_p->index_fragments_table.record_def);
+
+	void* tuple = malloc(get_maximum_tuple_size(record_def));
+
+	init_tuple(record_def, tuple);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(0), tuple, EMPTY_DATUM, UINT32_MAX);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(1), tuple, &((datum){.uint_value = ifrag->table_id}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(2), tuple, &((datum){.uint_value = ifrag->index_id}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(3), tuple, &((datum){.uint_value = ifrag->partition_id}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(4), tuple, &((datum){.uint_value = ifrag->root_page_id}), 0);
+
+	return tuple;
+}
+
+void* serialize_rhendb_index(catalog_manager* catmgr_p, rhendb_index* idx, int should_blob, const void* min_tx_engine, int* abort_error)
+{
+	const tuple_def* record_def = &(catmgr_p->indices_table.record_def);
+
+	void* tuple = malloc(get_maximum_tuple_size(record_def));
+
+	init_tuple(record_def, tuple);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(0), tuple, EMPTY_DATUM, UINT32_MAX);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(1), tuple, &((datum){.uint_value = idx->id}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(2), tuple, &((datum){.string_value = idx->name, .string_size = (uint32_t) strnlen(idx->name, 64)}), UINT32_MAX);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(3), tuple, &((datum){.uint_value = idx->table_id}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(4), tuple, &((datum){.uint_value = idx->access_methos}), 0);
+
+	if(should_blob && idx->predicate_expr != NULL)
+	{
+		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(5), idx->predicate_expr, strlen(idx->predicate_expr), min_tx_engine, abort_error))
+		{
+			free(tuple);
+			return NULL;
+		}
+	}
+	else
+		set_element_in_tuple(record_def, STATIC_POSITION(5), tuple, NULL_DATUM, get_maximum_tuple_size(record_def));
+
+	return tuple;
+}
+
+void* serialize_rhendb_table_partition(catalog_manager* catmgr_p, rhendb_table_partition* tpart)
+{
+	const tuple_def* record_def = &(catmgr_p->table_partitions_table.record_def);
+
+	void* tuple = malloc(get_maximum_tuple_size(record_def));
+
+	init_tuple(record_def, tuple);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(0), tuple, EMPTY_DATUM, UINT32_MAX);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(1), tuple, &((datum){.uint_value = tpart->table_id}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(2), tuple, &((datum){.uint_value = tpart->partition_id}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(3), tuple, &((datum){.uint_value = tpart->heap_root_page_id}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(4), tuple, &((datum){.uint_value = tpart->blobs_root_page_id}), 0);
+
+	return tuple;
+}
+
+void* serialize_rhendb_table(catalog_manager* catmgr_p, rhendb_table* tbl)
+{
+	const tuple_def* record_def = &(catmgr_p->tables_table.record_def);
+
+	void* tuple = malloc(get_maximum_tuple_size(record_def));
+
+	init_tuple(record_def, tuple);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(0), tuple, EMPTY_DATUM, UINT32_MAX);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(1), tuple, &((datum){.uint_value = tbl->id}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(2), tuple, &((datum){.string_value = tbl->name, .string_size = (uint32_t) strnlen(tbl->name, 64)}), UINT32_MAX);
+
+	return tuple;
+}
+
+void* serialize_rhendb_name_idx_entry(catalog_manager* catmgr_p, rhendb_name_idx_entry* nidx)
+{
+	const tuple_def* record_def = &(catmgr_p->name_idx.record_def);
+
+	void* tuple = malloc(get_maximum_tuple_size(record_def));
+
+	init_tuple(record_def, tuple);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(0), tuple, &((datum){.uint_value = nidx->object_type}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(1), tuple, &((datum){.string_value = nidx->name, .string_size = strnlen(nidx->name, 64)}), UINT32_MAX);
+
+	char object_tuple_pointer_serialized[sizeof(tuple_pointer)];
+	set_tuple_pointer(object_tuple_pointer_serialized, nidx->object_tuple_pointer, &(catmgr_p->catmgr_engine->pam_p->pas));
+	set_element_in_tuple(record_def, STATIC_POSITION(2), tuple, &((datum){.tuple_value = object_tuple_pointer_serialized}), 0);
+
+	return tuple;
+}
+
+void* serialize_rhendb_id_idx_entry(catalog_manager* catmgr_p, rhendb_id_idx_entry* ididx)
+{
+	const tuple_def* record_def = &(catmgr_p->id_idx.record_def);
+
+	void* tuple = malloc(get_maximum_tuple_size(record_def));
+
+	init_tuple(record_def, tuple);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(0), tuple, &((datum){.uint_value = ididx->object_type}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(1), tuple, &((datum){.uint_value = ididx->id}), 0);
+
+	char object_tuple_pointer_serialized[sizeof(tuple_pointer)];
+	set_tuple_pointer(object_tuple_pointer_serialized, ididx->object_tuple_pointer, &(catmgr_p->catmgr_engine->pam_p->pas));
+	set_element_in_tuple(record_def, STATIC_POSITION(2), tuple, &((datum){.tuple_value = object_tuple_pointer_serialized}), 0);
+
+	return tuple;
+}
+
+void* serialize_rhendb_table_to_indices_entry(catalog_manager* catmgr_p, rhendb_table_to_indices_entry* t2iidx)
+{
+	const tuple_def* record_def = &(catmgr_p->table_to_indices_idx.record_def);
+
+	void* tuple = malloc(get_maximum_tuple_size(record_def));
+
+	init_tuple(record_def, tuple);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(0), tuple, &((datum){.uint_value = t2iidx->table_id}), 0);
+
+	char indices_tuple_pointer_serialized[sizeof(tuple_pointer)];
+	set_tuple_pointer(indices_tuple_pointer_serialized, t2iidx->indices_tuple_pointer, &(catmgr_p->catmgr_engine->pam_p->pas));
+	set_element_in_tuple(record_def, STATIC_POSITION(1), tuple, &((datum){.tuple_value = indices_tuple_pointer_serialized}), 0);
+
+	return tuple;
+}
+
+void* serialize_rhendb_owner_to_attributes_idx_entry(catalog_manager* catmgr_p, rhendb_owner_to_attributes_idx_entry* o2aidx)
+{
+	const tuple_def* record_def = &(catmgr_p->owner_to_attributes_idx.record_def);
+
+	void* tuple = malloc(get_maximum_tuple_size(record_def));
+
+	init_tuple(record_def, tuple);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(0), tuple, &((datum){.uint_value = o2aidx->owner_id}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(1), tuple, &((datum){.uint_value = o2aidx->rel_pos_in_owner}), 0);
+
+	char attributes_tuple_pointer_serialized[sizeof(tuple_pointer)];
+	set_tuple_pointer(attributes_tuple_pointer_serialized, o2aidx->attributes_tuple_pointer, &(catmgr_p->catmgr_engine->pam_p->pas));
+	set_element_in_tuple(record_def, STATIC_POSITION(2), tuple, &((datum){.tuple_value = attributes_tuple_pointer_serialized}), 0);
+
+	return tuple;
+}
+
+// deserialization ((void*)tuple -> struct) functions
+// if should_blob is true, then deserialize expression in the blob_store, in a separate NULL read only transaction
+// else leave the blob of the expression as NULL
+
+static char* catalog_read_extended_blob(catalog_manager* catmgr_p, const void* tuple, const tuple_def* record_def, positional_accessor position, const data_type_info* field_dti, uint32_t* bytes_read)
+{
+	(*bytes_read) = 0;
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	datum uval;
+	get_value_from_element_from_tuple(&uval, record_def, position, tuple);
+
+	if(is_datum_NULL(&uval))
+		return NULL;
+
+	int abort_error = 0;
+	binary_read_iterator* bri_p = get_new_binary_read_iterator(&uval, field_dti, &(engine->bstd), engine->pam_p, NULL);
+
+	uint64_t capacity = 64;
+	char* data = malloc(capacity);
+
+	while(1)
+	{
+		if((*bytes_read) == capacity)
+		{
+			if(capacity == UINT32_MAX)
+			{
+				printf("catalog expression too big\n");
+				exit(-1);
+			}
+			capacity = max(UINT32_MAX, 2 * capacity);
+			data = realloc(data, capacity);
+		}
+
+		uint32_t bytes_read_this_iteration = read_from_binary_read_iterator(bri_p, data + (*bytes_read), capacity - (*bytes_read), NULL, &abort_error);
+		if(abort_error)
+			break;
+		if(bytes_read_this_iteration == 0)
+			break;
+
+		(*bytes_read) += bytes_read_this_iteration;
+	}
+
+	delete_binary_read_iterator(bri_p, NULL, &abort_error);
+	if(abort_error)
+	{
+		free(data);
+		return NULL;
+	}
+
+	return data;
+}
+
+rhendb_attribute* deserialize_rhendb_attribute(catalog_manager* catmgr_p, void* tuple, int should_blob)
+{
+	const tuple_def* record_def = &(catmgr_p->attributes_table.record_def);
+
+	rhendb_attribute* attr = malloc(sizeof(rhendb_attribute));
+
+	datum uval;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	attr->owner_id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	attr->rel_pos_in_owner = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(3), tuple);
+	attr->table_part_id_from = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(4), tuple);
+	attr->table_part_id_to = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(5), tuple);
+	memory_set(attr->attribute_name, 0, 64);
+	memory_move(attr->attribute_name, uval.string_value, uval.string_size);
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(6), tuple);
+	attr->base_type = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(7), tuple);
+	attr->attribute_type_id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(8), tuple);
+	if(uval.is_NULL)
+		attr->count = NULL;
+	else
+	{
+		attr->_count = uval.uint_value;
+		attr->count = &(attr->_count);
+	}
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(9), tuple);
+	attr->is_auto_increment = uval.bit_field_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(10), tuple);
+	attr->is_nullable = uval.bit_field_value;
+
+	if(should_blob)
+		attr->derived_from_expr = catalog_read_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(11), record_def->type_info->containees[11].al.type_info, &(attr->derived_from_expr_size));
+	else
+		attr->derived_from_expr = NULL;
+
+	return attr;
+}
+
+rhendb_type* deserialize_rhendb_type(catalog_manager* catmgr_p, void* tuple)
+{
+	const tuple_def* record_def = &(catmgr_p->types_table.record_def);
+
+	rhendb_type* typ = malloc(sizeof(rhendb_type));
+
+	datum uval;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	typ->id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	memory_move(typ->name, uval.string_value, uval.string_size);
+	typ->name[uval.string_size] = '\0';
+
+	return typ;
+}
+
+rhendb_index_fragment* deserialize_rhendb_index_fragment(catalog_manager* catmgr_p, void* tuple)
+{
+	const tuple_def* record_def = &(catmgr_p->index_fragments_table.record_def);
+
+	rhendb_index_fragment* ifrag = malloc(sizeof(rhendb_index_fragment));
+
+	datum uval;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	ifrag->table_id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	ifrag->index_id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(3), tuple);
+	ifrag->partition_id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(4), tuple);
+	ifrag->root_page_id = uval.uint_value;
+
+	return ifrag;
+}
+
+rhendb_index* deserialize_rhendb_index(catalog_manager* catmgr_p, void* tuple, int should_blob)
+{
+	const tuple_def* record_def = &(catmgr_p->indices_table.record_def);
+
+	rhendb_index* idx = malloc(sizeof(rhendb_index));
+
+	datum uval;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	idx->id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	memory_set(idx->name, 0, 64);
+	memory_move(idx->name, uval.string_value, uval.string_size);
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(3), tuple);
+	idx->table_id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(4), tuple);
+	idx->access_methos = uval.uint_value;
+
+	if(should_blob)
+		idx->predicate_expr = catalog_read_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(5), record_def->type_info->containees[5].al.type_info, &(idx->predicate_expr_size));
+	else
+		idx->predicate_expr = NULL;
+
+	return idx;
+}
+
+rhendb_table_partition* deserialize_rhendb_table_partition(catalog_manager* catmgr_p, void* tuple)
+{
+	const tuple_def* record_def = &(catmgr_p->table_partitions_table.record_def);
+
+	rhendb_table_partition* tpart = malloc(sizeof(rhendb_table_partition));
+
+	datum uval;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	tpart->table_id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	tpart->partition_id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(3), tuple);
+	tpart->heap_root_page_id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(4), tuple);
+	tpart->blobs_root_page_id = uval.uint_value;
+
+	return tpart;
+}
+
+rhendb_table* deserialize_rhendb_table(catalog_manager* catmgr_p, void* tuple)
+{
+	const tuple_def* record_def = &(catmgr_p->tables_table.record_def);
+
+	rhendb_table* tbl = malloc(sizeof(rhendb_table));
+
+	datum uval;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	tbl->id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	memory_set(tbl->name, 0, 64);
+	memory_move(tbl->name, uval.string_value, uval.string_size);
+
+	return tbl;
+}
+
+rhendb_name_idx_entry* deserialize_rhendb_name_idx_entry(catalog_manager* catmgr_p, void* tuple)
+{
+	const tuple_def* record_def = &(catmgr_p->name_idx.record_def);
+
+	rhendb_name_idx_entry* nidx = malloc(sizeof(rhendb_name_idx_entry));
+
+	datum uval;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(0), tuple);
+	nidx->object_type = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	memory_move(nidx->name, uval.string_value, uval.string_size);
+	nidx->name[uval.string_size] = '\0';
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	nidx->object_tuple_pointer = get_tuple_pointer(uval.tuple_value, &(catmgr_p->catmgr_engine->pam_p->pas));
+
+	return nidx;
+}
+
+rhendb_id_idx_entry* deserialize_rhendb_id_idx_entry(catalog_manager* catmgr_p, void* tuple)
+{
+	const tuple_def* record_def = &(catmgr_p->id_idx.record_def);
+
+	rhendb_id_idx_entry* ididx = malloc(sizeof(rhendb_id_idx_entry));
+
+	datum uval;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(0), tuple);
+	ididx->object_type = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	ididx->id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	ididx->object_tuple_pointer = get_tuple_pointer(uval.tuple_value, &(catmgr_p->catmgr_engine->pam_p->pas));
+
+	return ididx;
+}
+
+rhendb_table_to_indices_entry* deserialize_rhendb_table_to_indices_entry(catalog_manager* catmgr_p, void* tuple)
+{
+	const tuple_def* record_def = &(catmgr_p->table_to_indices_idx.record_def);
+
+	rhendb_table_to_indices_entry* t2iidx = malloc(sizeof(rhendb_table_to_indices_entry));
+
+	datum uval;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(0), tuple);
+	t2iidx->table_id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	t2iidx->indices_tuple_pointer = get_tuple_pointer(uval.tuple_value, &(catmgr_p->catmgr_engine->pam_p->pas));
+
+	return t2iidx;
+}
+
+rhendb_owner_to_attributes_idx_entry* deserialize_rhendb_owner_to_attributes_idx_entry(catalog_manager* catmgr_p, void* tuple)
+{
+	const tuple_def* record_def = &(catmgr_p->owner_to_attributes_idx.record_def);
+
+	rhendb_owner_to_attributes_idx_entry* o2aidx = malloc(sizeof(rhendb_owner_to_attributes_idx_entry));
+
+	datum uval;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(0), tuple);
+	o2aidx->owner_id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	o2aidx->rel_pos_in_owner = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	o2aidx->attributes_tuple_pointer = get_tuple_pointer(uval.tuple_value, &(catmgr_p->catmgr_engine->pam_p->pas));
+
+	return o2aidx;
+}
+
+// --
 
 static const compare_direction cmp_dirs_all_asc[] = {ASC, ASC, ASC, ASC, ASC, ASC};
 

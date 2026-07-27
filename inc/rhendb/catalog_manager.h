@@ -144,6 +144,7 @@ struct rhendb_attribute
 	unsigned int is_nullable:1;
 
 	char* derived_from_expr; // valid if the attribute is derived from expression, or for an index
+	uint32_t derived_from_expr_size;
 	// derived_from_expr is to be freed if not NULL, and needs to be deep copied
 };
 
@@ -186,6 +187,7 @@ struct rhendb_index
 	rhendb_index_access_type access_methos; // (btree or hash)
 
 	char* predicate_expr; // predicate selectivity for the index
+	uint32_t predicate_expr_size;
 };
 
 typedef struct rhendb_table_partition rhendb_table_partition;
