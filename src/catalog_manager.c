@@ -669,6 +669,40 @@ static rhendb_owner_to_attributes_idx_entry deserialize_rhendb_owner_to_attribut
 	return o2aidx;
 }
 
+// functions to get serialized key from the rhendb_table_partition and rhendb_index_fragment, this is needed as they are clustered btree tables, with uniqueness governed by these keys
+
+static void* serialize_rhendb_index_fragment_key(catalog_manager* catmgr_p, const rhendb_index_fragment* ifrag)
+{
+	const tuple_def* key_def = &(catmgr_p->index_fragments_table.clust_table_defs.key_def);
+
+	void* key_tuple = malloc(get_maximum_tuple_size(key_def));
+
+	init_tuple(key_def, key_tuple);
+
+	set_element_in_tuple(key_def, STATIC_POSITION(0), key_tuple, &((datum){.uint_value = ifrag->table_id}), 0);
+
+	set_element_in_tuple(key_def, STATIC_POSITION(1), key_tuple, &((datum){.uint_value = ifrag->index_id}), 0);
+
+	set_element_in_tuple(key_def, STATIC_POSITION(2), key_tuple, &((datum){.uint_value = ifrag->partition_id}), 0);
+
+	return key_tuple;
+}
+
+static void* serialize_rhendb_table_partition_key(catalog_manager* catmgr_p, const rhendb_table_partition* tpart)
+{
+	const tuple_def* key_def = &(catmgr_p->table_partitions_table.clust_table_defs.key_def);
+
+	void* key_tuple = malloc(get_maximum_tuple_size(key_def));
+
+	init_tuple(key_def, key_tuple);
+
+	set_element_in_tuple(key_def, STATIC_POSITION(0), key_tuple, &((datum){.uint_value = tpart->table_id}), 0);
+
+	set_element_in_tuple(key_def, STATIC_POSITION(1), key_tuple, &((datum){.uint_value = tpart->partition_id}), 0);
+
+	return key_tuple;
+}
+
 // --
 
 static const compare_direction cmp_dirs_all_asc[] = {ASC, ASC, ASC, ASC, ASC, ASC};
