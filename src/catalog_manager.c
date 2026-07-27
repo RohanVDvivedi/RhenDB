@@ -1071,7 +1071,7 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 	if(*abort_error)
 		return 0;
 
-	release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, WAS_MODIFIED, abort_error);
+	release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, NONE_OPTION, abort_error);
 	if(*abort_error)
 		return 0;
 
