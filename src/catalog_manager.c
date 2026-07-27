@@ -1,5 +1,8 @@
 #include<rhendb/catalog_manager.h>
 
+#include<tupleindexer/page_table/page_table.h>
+#include<tupleindexer/heap_page/heap_page.h>
+
 #include<tupleindexer/interface/page_access_methods.h>
 
 #define ID_PART_ID_REL_POS_BYTES 8

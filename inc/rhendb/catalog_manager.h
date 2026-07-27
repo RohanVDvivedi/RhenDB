@@ -8,9 +8,7 @@
 
 #include<rhendb/rhendb_types.h>
 
-#include<tupleindexer/page_table/page_table.h>
 #include<tupleindexer/heap_table/heap_table.h>
-#include<tupleindexer/heap_page/heap_page.h>
 #include<tupleindexer/bplus_tree/bplus_tree.h>
 
 #define FIRST_SCHEMA_UNIQUE_ID 7ULL
@@ -20,49 +18,88 @@ enum catalog_object_type
 {
 	RHENDB_TYPE = 0,
 	RHENDB_TABLE = 1,
+	RHENDB_INDEX = 2,
+};
+
+typedef struct catalog_heap_table catalog_heap_table;
+struct catalog_heap_table
+{
+	tuple_def record_def;
+
+	heap_table_tuple_defs heap_table_defs;
+
+	uint64_t root_page_id;
+};
+
+typedef struct catalog_clust_table catalog_clust_table;
+struct catalog_clust_table
+{
+	tuple_def record_def;
+
+	bplus_tree_tuple_defs clust_table_defs;
+
+	uint64_t root_page_id;
+};
+
+typedef struct catalog_btree_index catalog_btree_index;
+struct catalog_btree_index
+{
+	tuple_def record_def;
+
+	bplus_tree_tuple_defs index_defs;
+
+	uint64_t root_page_id;
 };
 
 typedef struct catalog_manager catalog_manager;
 struct catalog_manager
 {
 	// this page_table stores the all the root_page_ids of the static schema-ed catalog tables
-	page_table_tuple_defs catalog_root_tuple_defs;
 	uint64_t catalog_root_page_id;
 
 	// ---------------- TABLES FOR SCHEMA
 
-	tuple_def attributes_tuple_def;
-	bplus_tree_tuple_defs db_attributes_tuple_defs;
-	uint64_t db_attributes_root_page_id;
-	// key(owner_id, table_part_id, rel_pos_in_owner) -> attribute_name, base_type (rhendb_base_type), attribute_type_id (valid for base_type == RHENDB_TUPLE), count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, derived_from_expression(null if not derived column and not index attribute)
-	// table_part_id is 0, if it is not a table
+	catalog_table attributes_table;
+	// mvcc_hdr, owner_id, rel_pos_in_owner, table_part_id_from, table_part_id_to, attribute_name, base_type (rhendb_base_type), attribute_type_id (valid for base_type == RHENDB_TUPLE), count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, derived_from_expression(null if not derived column and not index attribute)
+	// has rows for attributes of table, type and index only
+	// table_part_id_* will remain 0 if owner_id is not a table
 
-	tuple_def types_tuple_def;
-	bplus_tree_tuple_defs db_types_tuple_defs;
-	uint64_t db_types_root_page_id;
-	// key(id) -> mvcc_hdr, name
-	// only user defined types are here, not the primitive ones
+	catalog_table types_table;
+	// mvcc_hdr, id, name and it has only user defined types, not the primitive ones
 
-	tuple_def indices_tuple_def;
-	bplus_tree_tuple_defs db_indices_tuple_defs;
-	uint64_t db_indices_root_page_id;
-	// key(table_id, id, table_part_id) -> mvcc_hdr, name, access_type(btree or hash), root_page_id, predicate
+	catalog_clust_table index_fragments_table;
+	// only supports insert/delete no updates to any attribute, fully delete the data structures here at the root_page_ids on garbage ciollection
+	// key(table_id, index_id, partition_id) -> mvcc_hdr, root_page_id
 
-	tuple_def tables_tuple_def;
-	bplus_tree_tuple_defs db_tables_tuple_defs;
-	uint64_t db_tables_root_page_id;
-	// key(id, part_id) -> mvcc_hdr, name, heap_root_page_id, blobs_root_page_id
+	catalog_table indices_table;
+	// delete predicate_expr only when no other id for the same index is alive
+	// mvcc_hdr, id, name, table_id, access_methos(btree or hash), predicate_expr
 
-	// tuple_def functions_tuple_def;
-	// heap_table_tuple_defs db_functions_tuple_defs;
-	// uint64_t db_functions_root_page_id;
+	catalog_clust_table table_partitions_table;
+	// only supports insert/delete no updates to any attribute, fully delete the data structures here at the root_page_ids on garbage ciollection
+	// key(table_id, partition_id) -> mvcc_hdr, heap_root_page_id, blobs_root_page_id
+	// partition_id starts with 1 and is not globally unique, but is per table unique
+
+	catalog_table tables_table;
+	// mvcc_hdr, id, name
+
+	// catalog_table functions_table;
 
 	// ---------------- INDICES ON SCHEMA TABLE
 
-	// bplus_tree index for catalog_object_type(RHENDB_TYPE = 0 and RHENDB_TABLE = 1)
-	// key(object_type, name, id, part_id)
-	bplus_tree_tuple_defs idx_name_tuple_defs;
-	uint64_t idx_name_root_page_id;
+	// for catalog_object_types(RHENDB_TYPE, RHENDB_TABLE, and RHENDB_INDEX)
+	// key(object_type, name, tuple_pointer)
+	catalog_btree_index name_idx;
+
+	// for catalog_object_types(RHENDB_TYPE, RHENDB_TABLE, and RHENDB_INDEX)
+	// key(object_type, id, object.tuple_pointer)
+	catalog_btree_index id_idx;
+
+	// for table_to_indices key(table_id, index.tuple_pointer)
+	catalog_btree_index table_to_indices_idx;
+
+	// for owner_to_attribute key(owner_id, rel_pos_in_owner, attribute.tuple_pointer)
+	catalog_btree_index owner_to_attributes_idx;
 
 	// ---------------- EXTENSION FOR ALL THE BLOBS IN THE SYSTEM FOR ALL EXPRESSIONS ARE STORED HERE
 
@@ -88,7 +125,8 @@ struct rhendb_attribute
 {
 	uint64_t owner_id;
 
-	uint64_t table_part_id; // valid only for table else it possibly is 0
+	uint64_t table_part_id_from; // valid only for table else it is 0
+	uint64_t table_part_id_to; // valid only for table else it is 0
 
 	uint64_t rel_pos_in_owner;
 
@@ -117,29 +155,49 @@ struct rhendb_type
 	char name[64];
 };
 
-typedef enum rhendb_access_type rhendb_access_type;
-enum rhendb_access_type
+typedef enum rhendb_index_access_type rhendb_index_access_type;
+enum rhendb_index_access_type
 {
 	RHENDB_BTREE,
 	RHENDB_HASH,
 };
 
-typedef struct rhendb_index rhendb_index;
-struct rhendb_index
+typedef struct rhendb_index_fragment rhendb_index_fragment;
+struct rhendb_index_fragment
 {
 	uint64_t table_id;
 
-	uint64_t id;
+	uint64_t index_id;
 
-	uint64_t table_part_id; // there is a unique table_part_id for id, table_id pair
+	uint64_t partition_id;
+
+	uint64_t root_page_id;
+};
+
+typedef struct rhendb_index rhendb_index;
+struct rhendb_index
+{
+	uint64_t id;
 
 	char name[64];
 
-	rhendb_access_type access_type; // (btree or hash)
+	uint64_t table_id;
 
-	uint64_t root_page_id;
+	rhendb_index_access_type access_methos; // (btree or hash)
 
 	char* predicate_expr; // predicate selectivity for the index
+};
+
+typedef struct rhendb_table_partition rhendb_table_partition;
+struct rhendb_table_partition
+{
+	uint64_t table_id;
+
+	uint64_t partition_id;
+
+	uint64_t heap_root_page_id;
+
+	uint64_t blobs_root_page_id;
 };
 
 typedef struct rhendb_table rhendb_table;
@@ -147,13 +205,7 @@ struct rhendb_table
 {
 	uint64_t id;
 
-	uint64_t part_id;
-
 	char name[64];
-
-	uint64_t heap_root_page_id;
-
-	uint64_t blobs_root_page_id;
 };
 
 // here the root_page_id is an in-out parameter, pass it as NULL_PAGE_ID to create a new transaction table, or an existing one to open that particular transaction_table
