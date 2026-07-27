@@ -59,19 +59,19 @@ struct catalog_manager
 
 	// ---------------- TABLES FOR SCHEMA
 
-	catalog_table attributes_table;
+	catalog_heap_table attributes_table;
 	// mvcc_hdr, owner_id, rel_pos_in_owner, table_part_id_from, table_part_id_to, attribute_name, base_type (rhendb_base_type), attribute_type_id (valid for base_type == RHENDB_TUPLE), count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, derived_from_expression(null if not derived column and not index attribute)
 	// has rows for attributes of table, type and index only
 	// table_part_id_* will remain 0 if owner_id is not a table
 
-	catalog_table types_table;
+	catalog_heap_table types_table;
 	// mvcc_hdr, id, name and it has only user defined types, not the primitive ones
 
 	catalog_clust_table index_fragments_table;
 	// only supports insert/delete no updates to any attribute, fully delete the data structures here at the root_page_ids on garbage ciollection
 	// key(table_id, index_id, partition_id) -> mvcc_hdr, root_page_id
 
-	catalog_table indices_table;
+	catalog_heap_table indices_table;
 	// delete predicate_expr only when no other id for the same index is alive
 	// mvcc_hdr, id, name, table_id, access_methos(btree or hash), predicate_expr
 
@@ -80,10 +80,10 @@ struct catalog_manager
 	// key(table_id, partition_id) -> mvcc_hdr, heap_root_page_id, blobs_root_page_id
 	// partition_id starts with 1 and is not globally unique, but is per table unique
 
-	catalog_table tables_table;
+	catalog_heap_table tables_table;
 	// mvcc_hdr, id, name
 
-	// catalog_table functions_table;
+	// catalog_heap_table functions_table;
 
 	// ---------------- INDICES ON SCHEMA TABLE
 
