@@ -103,7 +103,7 @@ static void catalog_write_mvcc_header(catalog_manager* catmgr_p, void* tuple, co
 
 // mvcchdr_p may be NULL, if so do not need to set it
 
-void* serialize_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_attribute* attr, int should_blob, const void* min_tx_engine, int* abort_error)
+static void* serialize_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_attribute* attr, int should_blob, const void* min_tx_engine, int* abort_error)
 {
 	const tuple_def* record_def = &(catmgr_p->attributes_table.record_def);
 
@@ -151,7 +151,7 @@ void* serialize_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_header* m
 	return tuple;
 }
 
-void* serialize_rhendb_type(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_type* typ)
+static void* serialize_rhendb_type(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_type* typ)
 {
 	const tuple_def* record_def = &(catmgr_p->types_table.record_def);
 
@@ -169,7 +169,7 @@ void* serialize_rhendb_type(catalog_manager* catmgr_p, const mvcc_header* mvcchd
 	return tuple;
 }
 
-void* serialize_rhendb_index_fragment(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_index_fragment* ifrag)
+static void* serialize_rhendb_index_fragment(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_index_fragment* ifrag)
 {
 	const tuple_def* record_def = &(catmgr_p->index_fragments_table.record_def);
 
@@ -191,7 +191,7 @@ void* serialize_rhendb_index_fragment(catalog_manager* catmgr_p, const mvcc_head
 	return tuple;
 }
 
-void* serialize_rhendb_index(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_index* idx, int should_blob, const void* min_tx_engine, int* abort_error)
+static void* serialize_rhendb_index(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_index* idx, int should_blob, const void* min_tx_engine, int* abort_error)
 {
 	const tuple_def* record_def = &(catmgr_p->indices_table.record_def);
 
@@ -224,7 +224,7 @@ void* serialize_rhendb_index(catalog_manager* catmgr_p, const mvcc_header* mvcch
 	return tuple;
 }
 
-void* serialize_rhendb_table_partition(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_table_partition* tpart)
+static void* serialize_rhendb_table_partition(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_table_partition* tpart)
 {
 	const tuple_def* record_def = &(catmgr_p->table_partitions_table.record_def);
 
@@ -246,7 +246,7 @@ void* serialize_rhendb_table_partition(catalog_manager* catmgr_p, const mvcc_hea
 	return tuple;
 }
 
-void* serialize_rhendb_table(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_table* tbl)
+static void* serialize_rhendb_table(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_table* tbl)
 {
 	const tuple_def* record_def = &(catmgr_p->tables_table.record_def);
 
@@ -264,7 +264,7 @@ void* serialize_rhendb_table(catalog_manager* catmgr_p, const mvcc_header* mvcch
 	return tuple;
 }
 
-void* serialize_rhendb_name_idx_entry(catalog_manager* catmgr_p, const rhendb_name_idx_entry* nidx)
+static void* serialize_rhendb_name_idx_entry(catalog_manager* catmgr_p, const rhendb_name_idx_entry* nidx)
 {
 	const tuple_def* record_def = &(catmgr_p->name_idx.record_def);
 
@@ -283,7 +283,7 @@ void* serialize_rhendb_name_idx_entry(catalog_manager* catmgr_p, const rhendb_na
 	return tuple;
 }
 
-void* serialize_rhendb_id_idx_entry(catalog_manager* catmgr_p, const rhendb_id_idx_entry* ididx)
+static void* serialize_rhendb_id_idx_entry(catalog_manager* catmgr_p, const rhendb_id_idx_entry* ididx)
 {
 	const tuple_def* record_def = &(catmgr_p->id_idx.record_def);
 
@@ -302,7 +302,7 @@ void* serialize_rhendb_id_idx_entry(catalog_manager* catmgr_p, const rhendb_id_i
 	return tuple;
 }
 
-void* serialize_rhendb_table_to_indices_entry(catalog_manager* catmgr_p, const rhendb_table_to_indices_entry* t2iidx)
+static void* serialize_rhendb_table_to_indices_entry(catalog_manager* catmgr_p, const rhendb_table_to_indices_entry* t2iidx)
 {
 	const tuple_def* record_def = &(catmgr_p->table_to_indices_idx.record_def);
 
@@ -319,7 +319,7 @@ void* serialize_rhendb_table_to_indices_entry(catalog_manager* catmgr_p, const r
 	return tuple;
 }
 
-void* serialize_rhendb_owner_to_attributes_idx_entry(catalog_manager* catmgr_p, const rhendb_owner_to_attributes_idx_entry* o2aidx)
+static void* serialize_rhendb_owner_to_attributes_idx_entry(catalog_manager* catmgr_p, const rhendb_owner_to_attributes_idx_entry* o2aidx)
 {
 	const tuple_def* record_def = &(catmgr_p->owner_to_attributes_idx.record_def);
 
@@ -400,7 +400,7 @@ static void catalog_read_mvcc_header(catalog_manager* catmgr_p, const void* tupl
 
 // if mvcchdr_p is not NULL, then it also needs to be read and deserialized
 
-rhendb_attribute* deserialize_rhendb_attribute(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple, int should_blob, const void* min_tx_engine, int* abort_error)
+static rhendb_attribute* deserialize_rhendb_attribute(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple, int should_blob, const void* min_tx_engine, int* abort_error)
 {
 	const tuple_def* record_def = &(catmgr_p->attributes_table.record_def);
 
@@ -466,7 +466,7 @@ rhendb_attribute* deserialize_rhendb_attribute(catalog_manager* catmgr_p, mvcc_h
 	return attr;
 }
 
-rhendb_type* deserialize_rhendb_type(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple)
+static rhendb_type* deserialize_rhendb_type(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple)
 {
 	const tuple_def* record_def = &(catmgr_p->types_table.record_def);
 
@@ -487,7 +487,7 @@ rhendb_type* deserialize_rhendb_type(catalog_manager* catmgr_p, mvcc_header* mvc
 	return typ;
 }
 
-rhendb_index_fragment* deserialize_rhendb_index_fragment(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple)
+static rhendb_index_fragment* deserialize_rhendb_index_fragment(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple)
 {
 	const tuple_def* record_def = &(catmgr_p->index_fragments_table.record_def);
 
@@ -513,7 +513,7 @@ rhendb_index_fragment* deserialize_rhendb_index_fragment(catalog_manager* catmgr
 	return ifrag;
 }
 
-rhendb_index* deserialize_rhendb_index(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple, int should_blob, const void* min_tx_engine, int* abort_error)
+static rhendb_index* deserialize_rhendb_index(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple, int should_blob, const void* min_tx_engine, int* abort_error)
 {
 	const tuple_def* record_def = &(catmgr_p->indices_table.record_def);
 
@@ -555,7 +555,7 @@ rhendb_index* deserialize_rhendb_index(catalog_manager* catmgr_p, mvcc_header* m
 	return idx;
 }
 
-rhendb_table_partition* deserialize_rhendb_table_partition(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple)
+static rhendb_table_partition* deserialize_rhendb_table_partition(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple)
 {
 	const tuple_def* record_def = &(catmgr_p->table_partitions_table.record_def);
 
@@ -581,7 +581,7 @@ rhendb_table_partition* deserialize_rhendb_table_partition(catalog_manager* catm
 	return tpart;
 }
 
-rhendb_table* deserialize_rhendb_table(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple)
+static rhendb_table* deserialize_rhendb_table(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple)
 {
 	const tuple_def* record_def = &(catmgr_p->tables_table.record_def);
 
@@ -602,7 +602,7 @@ rhendb_table* deserialize_rhendb_table(catalog_manager* catmgr_p, mvcc_header* m
 	return tbl;
 }
 
-rhendb_name_idx_entry* deserialize_rhendb_name_idx_entry(catalog_manager* catmgr_p, const void* tuple)
+static rhendb_name_idx_entry* deserialize_rhendb_name_idx_entry(catalog_manager* catmgr_p, const void* tuple)
 {
 	const tuple_def* record_def = &(catmgr_p->name_idx.record_def);
 
@@ -623,7 +623,7 @@ rhendb_name_idx_entry* deserialize_rhendb_name_idx_entry(catalog_manager* catmgr
 	return nidx;
 }
 
-rhendb_id_idx_entry* deserialize_rhendb_id_idx_entry(catalog_manager* catmgr_p, const void* tuple)
+static rhendb_id_idx_entry* deserialize_rhendb_id_idx_entry(catalog_manager* catmgr_p, const void* tuple)
 {
 	const tuple_def* record_def = &(catmgr_p->id_idx.record_def);
 
@@ -643,7 +643,7 @@ rhendb_id_idx_entry* deserialize_rhendb_id_idx_entry(catalog_manager* catmgr_p, 
 	return ididx;
 }
 
-rhendb_table_to_indices_entry* deserialize_rhendb_table_to_indices_entry(catalog_manager* catmgr_p, const void* tuple)
+static rhendb_table_to_indices_entry* deserialize_rhendb_table_to_indices_entry(catalog_manager* catmgr_p, const void* tuple)
 {
 	const tuple_def* record_def = &(catmgr_p->table_to_indices_idx.record_def);
 
@@ -660,7 +660,7 @@ rhendb_table_to_indices_entry* deserialize_rhendb_table_to_indices_entry(catalog
 	return t2iidx;
 }
 
-rhendb_owner_to_attributes_idx_entry* deserialize_rhendb_owner_to_attributes_idx_entry(catalog_manager* catmgr_p, const void* tuple)
+static rhendb_owner_to_attributes_idx_entry* deserialize_rhendb_owner_to_attributes_idx_entry(catalog_manager* catmgr_p, const void* tuple)
 {
 	const tuple_def* record_def = &(catmgr_p->owner_to_attributes_idx.record_def);
 
