@@ -481,7 +481,7 @@ rhendb_type* deserialize_rhendb_type(catalog_manager* catmgr_p, mvcc_header* mvc
 	typ->id = uval.uint_value;
 
 	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
-	memory_set(typ->name, 0 ,64);
+	memory_set(typ->name, 0, 64);
 	memory_move(typ->name, uval.string_value, uval.string_size);
 
 	return typ;
