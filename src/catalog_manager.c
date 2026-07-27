@@ -56,6 +56,26 @@ struct rhendb_owner_to_attributes_idx_entry
 #define HTAN_ENTRIES_MAX    56
 #define HTAN_ENTRIES_THRES  35
 
+static void fix_unused_space_entries_UNSAFE(catalog_manager* catmgr_p, uint64_t heap_table_root_page_id, heap_table_accumulative_notifier* htan_p, const heap_table_tuple_defs* httd_p, const void* min_tx_id, int* abort_error)
+{
+	uint32_t entries_to_fix = get_notification_count_for_heap_table_accumulative_notifier(htan_p);
+	if(entries_to_fix < HTAN_ENTRIES_THRES)
+		return;
+
+	uint64_t _heap_table_root_page_id;
+	uint32_t unused_bytes_in_entry;
+	uint64_t page_id;
+	while(pop_from_heap_table_accumulative_notifier(htan_p, &_heap_table_root_page_id, &unused_bytes_in_entry, &page_id))
+	{
+		if(heap_table_root_page_id == _heap_table_root_page_id)
+		{
+			fix_unused_space_in_heap_table(_heap_table_root_page_id, unused_bytes_in_entry, page_id, httd_p, catmgr_p->catmgr_engine->pam_p, catmgr_p->catmgr_engine->pmm_p, min_tx_id, abort_error);
+			if(*abort_error)
+				return;
+		}
+	}
+}
+
 // serialization (struct -> (void*)tuple) functions
 // if should_blob is true, then serialize expression in the blob_store, in the current mini transaction passed
 // it is expected that on should_blob = 1, this function calls may abort with a abort_error, and will return NULL for sure
@@ -83,11 +103,21 @@ static int catalog_write_extended_blob(catalog_manager* catmgr_p, void* tuple, c
 		bytes_written += bytes_written_this_iteration;
 	}
 
-	pthread_mutex_unlock(&(catmgr_p->htan_lock));
-
 	delete_binary_write_iterator(bwi_p, min_tx_id, abort_error);
 	if(*abort_error)
+	{
+		pthread_mutex_unlock(&(catmgr_p->htan_lock));
 		return 0;
+	}
+
+	fix_unused_space_entries_UNSAFE(catmgr_p, catmgr_p->ext_store_root_page_id, &(catmgr_p->htan), &(catmgr_p->catmgr_engine->bstd.httd), min_tx_id, abort_error);
+	if(*abort_error)
+	{
+		pthread_mutex_unlock(&(catmgr_p->htan_lock));
+		return 0;
+	}
+
+	pthread_mutex_unlock(&(catmgr_p->htan_lock));
 
 	return 1;
 }
@@ -972,3 +1002,9 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 	pthread_mutex_init(&(catmgr_p->global_unique_schema_id_lock), NULL);
 }
+
+// utilities for the catalog objects
+
+static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_table* hpt_p, tuple_pointer* tptr, const void* heap_tuple, const void* min_tx_engine, int* abort_error);
+
+// --

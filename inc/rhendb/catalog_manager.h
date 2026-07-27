@@ -29,6 +29,9 @@ struct catalog_heap_table
 	heap_table_tuple_defs heap_table_defs;
 
 	uint64_t root_page_id;
+
+	pthread_mutex_t htan_lock;
+	heap_table_accumulative_notifier htan;
 };
 
 typedef struct catalog_clust_table catalog_clust_table;
@@ -106,11 +109,11 @@ struct catalog_manager
 	// all extension get stored here
 	uint64_t ext_store_root_page_id;
 
-	// ---------------- FOR FIXING THE UNUSED SPACE ENTRIES
-
-	// all the blob_stores and heap tables above use the same notifier
+	// htan for the blob_store above
 	pthread_mutex_t htan_lock;
 	heap_table_accumulative_notifier htan;
+
+	// ---------------- FOR FIXING THE UNUSED SPACE ENTRIES
 
 	// rage_engine to be used with catalog manager
 	rage_engine* catmgr_engine;
