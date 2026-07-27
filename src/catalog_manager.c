@@ -673,7 +673,7 @@ static rhendb_owner_to_attributes_idx_entry deserialize_rhendb_owner_to_attribut
 
 static void* serialize_rhendb_index_fragment_key(catalog_manager* catmgr_p, const rhendb_index_fragment* ifrag)
 {
-	const tuple_def* key_def = &(catmgr_p->index_fragments_table.clust_table_defs.key_def);
+	const tuple_def* key_def = catmgr_p->index_fragments_table.clust_table_defs.key_def;
 
 	void* key_tuple = malloc(get_maximum_tuple_size(key_def));
 
@@ -690,7 +690,7 @@ static void* serialize_rhendb_index_fragment_key(catalog_manager* catmgr_p, cons
 
 static void* serialize_rhendb_table_partition_key(catalog_manager* catmgr_p, const rhendb_table_partition* tpart)
 {
-	const tuple_def* key_def = &(catmgr_p->table_partitions_table.clust_table_defs.key_def);
+	const tuple_def* key_def = catmgr_p->table_partitions_table.clust_table_defs.key_def;
 
 	void* key_tuple = malloc(get_maximum_tuple_size(key_def));
 
