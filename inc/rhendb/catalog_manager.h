@@ -30,7 +30,6 @@ struct catalog_heap_table
 
 	uint64_t root_page_id;
 
-	pthread_mutex_t htan_lock;
 	heap_table_accumulative_notifier htan;
 };
 
@@ -110,7 +109,6 @@ struct catalog_manager
 	uint64_t ext_store_root_page_id;
 
 	// htan for the blob_store above
-	pthread_mutex_t htan_lock;
 	heap_table_accumulative_notifier htan;
 
 	// ---------------- FOR FIXING THE UNUSED SPACE ENTRIES

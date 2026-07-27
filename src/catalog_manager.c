@@ -92,8 +92,6 @@ static int catalog_write_extended_blob(catalog_manager* catmgr_p, void* tuple, c
 
 	uint32_t bytes_written = 0;
 
-	pthread_mutex_lock(&(catmgr_p->htan_lock));
-
 	while(bytes_written < data_size)
 	{
 		uint32_t bytes_written_this_iteration = append_to_binary_write_iterator(bwi_p, data + bytes_written, data_size - bytes_written, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(catmgr_p->htan)), min_tx_id, abort_error);
@@ -107,19 +105,11 @@ static int catalog_write_extended_blob(catalog_manager* catmgr_p, void* tuple, c
 
 	delete_binary_write_iterator(bwi_p, min_tx_id, abort_error);
 	if(*abort_error)
-	{
-		pthread_mutex_unlock(&(catmgr_p->htan_lock));
 		return 0;
-	}
 
 	fix_unused_space_entries_UNSAFE(catmgr_p, catmgr_p->ext_store_root_page_id, &(catmgr_p->htan), &(catmgr_p->catmgr_engine->bstd.httd), min_tx_id, abort_error);
 	if(*abort_error)
-	{
-		pthread_mutex_unlock(&(catmgr_p->htan_lock));
 		return 0;
-	}
-
-	pthread_mutex_unlock(&(catmgr_p->htan_lock));
 
 	return 1;
 }
@@ -803,7 +793,6 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 		init_heap_table_tuple_definitions(&(catmgr_p->attributes_table.heap_table_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->attributes_table.record_def));
 
-		pthread_mutex_init(&(catmgr_p->attributes_table.htan_lock), NULL);
 		initialize_heap_table_accumulative_notifier(&(catmgr_p->attributes_table.htan), HTAN_ENTRIES_MAX);
 	}
 
@@ -825,7 +814,6 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 		init_heap_table_tuple_definitions(&(catmgr_p->types_table.heap_table_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->types_table.record_def));
 
-		pthread_mutex_init(&(catmgr_p->types_table.htan_lock), NULL);
 		initialize_heap_table_accumulative_notifier(&(catmgr_p->types_table.htan), HTAN_ENTRIES_MAX);
 	}
 
@@ -881,7 +869,6 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 		init_heap_table_tuple_definitions(&(catmgr_p->indices_table.heap_table_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->indices_table.record_def));
 
-		pthread_mutex_init(&(catmgr_p->indices_table.htan_lock), NULL);
 		initialize_heap_table_accumulative_notifier(&(catmgr_p->indices_table.htan), HTAN_ENTRIES_MAX);
 	}
 
@@ -928,7 +915,6 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 		init_heap_table_tuple_definitions(&(catmgr_p->tables_table.heap_table_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->tables_table.record_def));
 
-		pthread_mutex_init(&(catmgr_p->tables_table.htan_lock), NULL);
 		initialize_heap_table_accumulative_notifier(&(catmgr_p->tables_table.htan), HTAN_ENTRIES_MAX);
 	}
 
@@ -1005,9 +991,6 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		init_bplus_tree_tuple_definitions(&(catmgr_p->owner_to_attributes_idx.index_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->owner_to_attributes_idx.record_def), key_element_ids0, cmp_dirs_all_asc, 3);
 	}
 
-
-	pthread_mutex_init(&(catmgr_p->htan_lock), NULL);
-
 	initialize_heap_table_accumulative_notifier(&(catmgr_p->htan), HTAN_ENTRIES_MAX);
 
 	catmgr_p->catmgr_engine = catmgr_engine;
@@ -1026,16 +1009,11 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 
 	uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(record_def->size_def), heap_tuple);
 
-	pthread_mutex_lock(&(hpt_p->htan_lock));
-
 	// 1) try to insert into an already existing heap_page that claims enough unused_space
 	uint32_t unused_space_in_entry = 0;
 	persistent_page ppage = find_heap_page_with_enough_unused_space_from_heap_table(hpt_p->root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(hpt_p->htan)), &(hpt_p->heap_table_defs), engine->pam_p, min_tx_engine, abort_error);
 	if(*abort_error)
-	{
-		pthread_mutex_unlock(&(hpt_p->htan_lock));
 		return 0;
-	}
 
 	if(!is_persistent_page_NULL(&ppage, engine->pam_p))
 	{
@@ -1044,7 +1022,6 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 		if(*abort_error)
 		{
 			release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
-			pthread_mutex_unlock(&(hpt_p->htan_lock));
 			return 0;
 		}
 
@@ -1054,40 +1031,36 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 
 			release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
 			if(*abort_error)
-			{
-				pthread_mutex_unlock(&(hpt_p->htan_lock));
 				return 0;
-			}
 
 			// the found page's entry is now stale, fix the accumulated entries after releasing the page lock
 			fix_unused_space_entries_UNSAFE(catmgr_p, hpt_p->root_page_id, &(hpt_p->htan), &(hpt_p->heap_table_defs), min_tx_engine, abort_error);
-			pthread_mutex_unlock(&(hpt_p->htan_lock));
-			return !(*abort_error);
-		}
+			if(*abort_error)
+				return 0;
 
-		// could not insert into the found page (its unused_space entry was a stale over-estimate), fall through to a new page
-		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
-		if(*abort_error)
+			return 1;
+		}
+		else
 		{
-			pthread_mutex_unlock(&(hpt_p->htan_lock));
-			return 0;
+			// could not insert into the found page (its unused_space entry was a stale over-estimate), fall through to a new page
+			release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
+			if(*abort_error)
+				return 0;
+
+			// fall back to insert a new page and insert tuple there
 		}
 	}
 
 	// 2) no usable existing page, create a new heap_page, insert into it, and track it in the heap_table
 	persistent_page new_page = get_new_heap_page_with_write_lock(&(engine->pam_p->pas), record_def, engine->pam_p, engine->pmm_p, min_tx_engine, abort_error);
 	if(*abort_error)
-	{
-		pthread_mutex_unlock(&(hpt_p->htan_lock));
 		return 0;
-	}
 
 	uint32_t possible_insertion_index = 0;
 	uint32_t tuple_index = insert_in_heap_page(&new_page, heap_tuple, &possible_insertion_index, record_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_engine, abort_error);
 	if(*abort_error)
 	{
 		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, FREE_PAGE, abort_error);
-		pthread_mutex_unlock(&(hpt_p->htan_lock));
 		return 0;
 	}
 
@@ -1095,10 +1068,10 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 
 	// track the new page in the heap_table (reads its unused_space), then release the page lock
 	track_unused_space_in_heap_table(hpt_p->root_page_id, &new_page, &(hpt_p->heap_table_defs), engine->pam_p, engine->pmm_p, min_tx_engine, abort_error);
+	if(*abort_error)
+		return 0;
 
 	release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, WAS_MODIFIED, abort_error);
-
-	pthread_mutex_unlock(&(hpt_p->htan_lock));
 	if(*abort_error)
 		return 0;
 
