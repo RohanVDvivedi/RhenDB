@@ -5,6 +5,8 @@
 
 #include<tupleindexer/interface/page_access_methods.h>
 #include<tupleindexer/common/tuple_pointer.h>
+#include<tupleindexer/common/invalid_tuple_indices.h>
+#include<tupleindexer/interface/page_access_methods_options.h>
 #include<tuplelargetypes/binary_write_iterator.h>
 #include<tuplelargetypes/binary_read_iterator.h>
 
@@ -1017,6 +1019,90 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 // utilities for the catalog objects
 
-static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_table* hpt_p, tuple_pointer* tptr, const void* heap_tuple, const void* min_tx_engine, int* abort_error);
+static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_table* hpt_p, tuple_pointer* tptr, const void* heap_tuple, const void* min_tx_engine, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+	const tuple_def* record_def = &(hpt_p->record_def);
+
+	uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(record_def->size_def), heap_tuple);
+
+	pthread_mutex_lock(&(hpt_p->htan_lock));
+
+	// 1) try to insert into an already existing heap_page that claims enough unused_space
+	uint32_t unused_space_in_entry = 0;
+	persistent_page ppage = find_heap_page_with_enough_unused_space_from_heap_table(hpt_p->root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(hpt_p->htan)), &(hpt_p->heap_table_defs), engine->pam_p, min_tx_engine, abort_error);
+	if(*abort_error)
+	{
+		pthread_mutex_unlock(&(hpt_p->htan_lock));
+		return 0;
+	}
+
+	if(!is_persistent_page_NULL(&ppage, engine->pam_p))
+	{
+		uint32_t possible_insertion_index = 0;
+		uint32_t tuple_index = insert_in_heap_page(&ppage, heap_tuple, &possible_insertion_index, record_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_engine, abort_error);
+		if(*abort_error)
+		{
+			release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
+			pthread_mutex_unlock(&(hpt_p->htan_lock));
+			return 0;
+		}
+
+		if(tuple_index != INVALID_TUPLE_INDEX)
+		{
+			(*tptr) = (tuple_pointer){.page_id = ppage.page_id, .tuple_index = tuple_index};
+
+			release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
+			if(*abort_error)
+			{
+				pthread_mutex_unlock(&(hpt_p->htan_lock));
+				return 0;
+			}
+
+			// the found page's entry is now stale, fix the accumulated entries after releasing the page lock
+			fix_unused_space_entries_UNSAFE(catmgr_p, hpt_p->root_page_id, &(hpt_p->htan), &(hpt_p->heap_table_defs), min_tx_engine, abort_error);
+			pthread_mutex_unlock(&(hpt_p->htan_lock));
+			return !(*abort_error);
+		}
+
+		// could not insert into the found page (its unused_space entry was a stale over-estimate), fall through to a new page
+		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
+		if(*abort_error)
+		{
+			pthread_mutex_unlock(&(hpt_p->htan_lock));
+			return 0;
+		}
+	}
+
+	// 2) no usable existing page, create a new heap_page, insert into it, and track it in the heap_table
+	persistent_page new_page = get_new_heap_page_with_write_lock(&(engine->pam_p->pas), record_def, engine->pam_p, engine->pmm_p, min_tx_engine, abort_error);
+	if(*abort_error)
+	{
+		pthread_mutex_unlock(&(hpt_p->htan_lock));
+		return 0;
+	}
+
+	uint32_t possible_insertion_index = 0;
+	uint32_t tuple_index = insert_in_heap_page(&new_page, heap_tuple, &possible_insertion_index, record_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_engine, abort_error);
+	if(*abort_error)
+	{
+		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, FREE_PAGE, abort_error);
+		pthread_mutex_unlock(&(hpt_p->htan_lock));
+		return 0;
+	}
+
+	(*tptr) = (tuple_pointer){.page_id = new_page.page_id, .tuple_index = tuple_index};
+
+	// track the new page in the heap_table (reads its unused_space), then release the page lock
+	track_unused_space_in_heap_table(hpt_p->root_page_id, &new_page, &(hpt_p->heap_table_defs), engine->pam_p, engine->pmm_p, min_tx_engine, abort_error);
+
+	release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, WAS_MODIFIED, abort_error);
+
+	pthread_mutex_unlock(&(hpt_p->htan_lock));
+	if(*abort_error)
+		return 0;
+
+	return 1;
+}
 
 // --
