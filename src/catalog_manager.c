@@ -800,6 +800,9 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		initialize_tuple_def(&(catmgr_p->attributes_table.record_def), attributes_type_info);
 
 		init_heap_table_tuple_definitions(&(catmgr_p->attributes_table.heap_table_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->attributes_table.record_def));
+
+		pthread_mutex_init(&(catmgr_p->attributes_table.htan_lock), NULL);
+		initialize_heap_table_accumulative_notifier(&(catmgr_p->attributes_table.htan), HTAN_ENTRIES_MAX);
 	}
 
 	{
@@ -819,6 +822,9 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		initialize_tuple_def(&(catmgr_p->types_table.record_def), types_type_info);
 
 		init_heap_table_tuple_definitions(&(catmgr_p->types_table.heap_table_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->types_table.record_def));
+
+		pthread_mutex_init(&(catmgr_p->types_table.htan_lock), NULL);
+		initialize_heap_table_accumulative_notifier(&(catmgr_p->types_table.htan), HTAN_ENTRIES_MAX);
 	}
 
 	{
@@ -872,6 +878,9 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		initialize_tuple_def(&(catmgr_p->indices_table.record_def), indices_type_info);
 
 		init_heap_table_tuple_definitions(&(catmgr_p->indices_table.heap_table_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->indices_table.record_def));
+
+		pthread_mutex_init(&(catmgr_p->tables_table.htan_lock), NULL);
+		initialize_heap_table_accumulative_notifier(&(catmgr_p->tables_table.htan), HTAN_ENTRIES_MAX);
 	}
 
 	{
@@ -916,6 +925,9 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		initialize_tuple_def(&(catmgr_p->tables_table.record_def), tables_type_info);
 
 		init_heap_table_tuple_definitions(&(catmgr_p->tables_table.heap_table_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->tables_table.record_def));
+
+		pthread_mutex_init(&(catmgr_p->tables_table.htan_lock), NULL);
+		initialize_heap_table_accumulative_notifier(&(catmgr_p->tables_table.htan), HTAN_ENTRIES_MAX);
 	}
 
 	{
