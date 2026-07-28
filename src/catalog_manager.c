@@ -741,7 +741,7 @@ const positional_accessor key_element_ids1[] = {STATIC_POSITION(1), STATIC_POSIT
 #define OWNER_TO_ATTRIBUTES_IDX_ROOT_PAGE_ID_POS   9
 #define EXT_STORE_ROOT_PAGE_ID_ROOT_PAGE_ID_POS   10
 
-void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine)
+void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine, transaction_status_getter* tsg_p)
 {
 	data_type_info* obj_type_dti_p = UINT_NON_NULLABLE[2];
 
@@ -1004,6 +1004,8 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 	catmgr_p->catmgr_engine = catmgr_engine;
 
 	initialize_tuple_def(&(catmgr_p->mvcc_header_tuple_def), mvcc_hdr_dti_p);
+
+	catmgr_p->tsg_p = tsg_p;
 
 	pthread_mutex_init(&(catmgr_p->global_unique_schema_id_lock), NULL);
 
@@ -1273,6 +1275,8 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 			if(bpi_p != NULL)
 				delete_bplus_tree_iterator(bpi_p, NULL, &abort_error);
 		}
+
+		catmgr_p->catalog_root_page_id = (*root_page_id);
 	}
 
 	deinit_page_table_tuple_definitions(&pttd);
@@ -1370,3 +1374,7 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 }
 
 // --
+
+uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count)
+{
+}

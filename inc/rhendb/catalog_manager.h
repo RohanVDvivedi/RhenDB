@@ -119,6 +119,9 @@ struct catalog_manager
 	// tuple_def for the mvcc_header, its data_type_info is the containee at position 0 of every catalog table record
 	tuple_def mvcc_header_tuple_def;
 
+	// interface to fetch transaction statuses, needed for mvcc visibility checks
+	transaction_status_getter* tsg_p;
+
 	// this where new ids come from, each id in the schema is unique across all entities, unless it has partitions
 	pthread_mutex_t global_unique_schema_id_lock;
 	uint64_t global_unique_schema_id; // starts with FIRST_SCHEMA_UNIQUE_ID
@@ -215,7 +218,7 @@ struct rhendb_table
 };
 
 // here the root_page_id is an in-out parameter, pass it as NULL_PAGE_ID to create a new transaction table, or an existing one to open that particular transaction_table
-void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine);
+void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine, transaction_status_getter* tsg_p);
 
 // note:: must lock table by it's name before calling this function, and keep it locked until the transaction ends, for the below functions
 
