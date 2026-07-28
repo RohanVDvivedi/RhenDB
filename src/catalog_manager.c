@@ -1002,90 +1002,93 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 // utilities for the catalog objects
 
-static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_table* hpt_p, tuple_pointer* tptr, const void* heap_tuple, const void* min_tx_engine, int* abort_error)
+static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_table* hpt_p, tuple_pointer* tptr, const void** heap_tuples, uint32_t heap_tuples_count, const void* min_tx_engine, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
 	const tuple_def* record_def = &(hpt_p->record_def);
 
-	uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(record_def->size_def), heap_tuple);
+	// the heap_page we are currently filling, starts as a NULL page i.e. no page held
+	persistent_page ppage = get_NULL_persistent_page(engine->pam_p);
+	int is_new_page = 0;
 
-	// 1) try to insert into an already existing heap_page that claims enough unused_space
-	uint32_t unused_space_in_entry = 0;
-	persistent_page ppage = find_heap_page_with_enough_unused_space_from_heap_table(hpt_p->root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(hpt_p->htan)), &(hpt_p->heap_table_defs), engine->pam_p, min_tx_engine, abort_error);
-	if(*abort_error)
-		return 0;
+	uint32_t inserted_tuples = 0;
 
-	if(!is_persistent_page_NULL(&ppage, engine->pam_p))
+	while(inserted_tuples < heap_tuples_count)
 	{
-		uint32_t possible_insertion_index = 0;
-		uint32_t tuple_index = insert_in_heap_page(&ppage, heap_tuple, &possible_insertion_index, record_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_engine, abort_error);
-		if(*abort_error)
+		// if we do not hold a page, fetch one with enough unused_space for the next tuple, else allocate a fresh one
+		if(is_persistent_page_NULL(&ppage, engine->pam_p))
 		{
-			release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
-			return 0;
+			uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(record_def->size_def), heap_tuples[inserted_tuples]);
+
+			is_new_page = 0;
+			uint32_t unused_space_in_entry = 0;
+			ppage = find_heap_page_with_enough_unused_space_from_heap_table(hpt_p->root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(hpt_p->htan)), &(hpt_p->heap_table_defs), engine->pam_p, min_tx_engine, abort_error);
+			if(*abort_error)
+				goto ABORT_ERROR;
+
+			if(is_persistent_page_NULL(&ppage, engine->pam_p))
+			{
+				ppage = get_new_heap_page_with_write_lock(&(engine->pam_p->pas), record_def, engine->pam_p, engine->pmm_p, min_tx_engine, abort_error);
+				if(*abort_error)
+					goto ABORT_ERROR;
+				is_new_page = 1;
+			}
 		}
 
-		if(tuple_index != INVALID_TUPLE_INDEX)
+		// fill the held page with as many tuples as possible, until it is full (INVALID_TUPLE_INDEX)
+		// possible_insertion_index is carried across the inserts into this page, insert_in_heap_page updates it to the next index to test
+		uint32_t inserted_tuples_on_this_page = 0;
+		uint32_t possible_insertion_index = 0;
+		while(inserted_tuples < heap_tuples_count)
 		{
-			(*tptr) = (tuple_pointer){.page_id = ppage.page_id, .tuple_index = tuple_index};
-
-			release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
+			uint32_t tuple_index = insert_in_heap_page(&ppage, heap_tuples[inserted_tuples], &possible_insertion_index, record_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_engine, abort_error);
 			if(*abort_error)
-				return 0;
+				goto ABORT_ERROR;
 
-			// the found page's entry is now stale, fix the accumulated entries after releasing the page lock
+			// the page is full, stop filling it and go fetch another page
+			if(tuple_index == INVALID_TUPLE_INDEX)
+				break;
+
+			tptr[inserted_tuples] = (tuple_pointer){.page_id = ppage.page_id, .tuple_index = tuple_index};
+			inserted_tuples++;
+			inserted_tuples_on_this_page++;
+		}
+
+		// a page fetched for the next tuple must accept at least that tuple, else it can not fit on any heap_page
+		if(inserted_tuples_on_this_page == 0)
+		{
+			printf("failed to insert a catalog heap table row, tuple too large for a heap page\n");
+			exit(-1);
+		}
+
+		// a fresh page must be tracked by the heap_table (track reads the page, so it is done before releasing the lock)
+		if(is_new_page)
+		{
+			track_unused_space_in_heap_table(hpt_p->root_page_id, &ppage, &(hpt_p->heap_table_defs), engine->pam_p, engine->pmm_p, min_tx_engine, abort_error);
+			if(*abort_error)
+				goto ABORT_ERROR;
+		}
+
+		// release the page (this sets ppage back to a NULL page), then fix the now-stale unused_space entries
+		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
+		if(*abort_error)
+			goto ABORT_ERROR;
+
+		if(!is_new_page)
+		{
 			fix_unused_space_entries_UNSAFE(catmgr_p, hpt_p->root_page_id, &(hpt_p->htan), &(hpt_p->heap_table_defs), min_tx_engine, abort_error);
 			if(*abort_error)
-				return 0;
-
-			return 1;
-		}
-		else
-		{
-			// could not insert into the found page (its unused_space entry was a stale over-estimate), fall through to a new page
-			release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
-			if(*abort_error)
-				return 0;
-
-			// fall back to insert a new page and insert tuple there
+				goto ABORT_ERROR;
 		}
 	}
-
-	// 2) no usable existing page, create a new heap_page, insert into it, and track it in the heap_table
-	persistent_page new_page = get_new_heap_page_with_write_lock(&(engine->pam_p->pas), record_def, engine->pam_p, engine->pmm_p, min_tx_engine, abort_error);
-	if(*abort_error)
-		return 0;
-
-	uint32_t possible_insertion_index = 0;
-	uint32_t tuple_index = insert_in_heap_page(&new_page, heap_tuple, &possible_insertion_index, record_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_engine, abort_error);
-	if(*abort_error)
-	{
-		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, NONE_OPTION, abort_error);
-		return 0;
-	}
-
-	// tuple_index will always be valid here, if this insert fails we can not proceed further
-	if(tuple_index == INVALID_TUPLE_INDEX)
-	{
-		printf("failed to insert a catalog heap table row in a new page\n");
-		exit(-1);
-	}
-
-	(*tptr) = (tuple_pointer){.page_id = new_page.page_id, .tuple_index = tuple_index};
-
-	// track the new page in the heap_table (reads its unused_space), then release the page lock
-	track_unused_space_in_heap_table(hpt_p->root_page_id, &new_page, &(hpt_p->heap_table_defs), engine->pam_p, engine->pmm_p, min_tx_engine, abort_error);
-	if(*abort_error)
-	{
-		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, NONE_OPTION, abort_error);
-		return 0;
-	}
-
-	release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &new_page, NONE_OPTION, abort_error);
-	if(*abort_error)
-		return 0;
 
 	return 1;
+
+	ABORT_ERROR:;
+	// release the page if it is still held, a released page is already a NULL page, so this never double releases
+	if(!is_persistent_page_NULL(&ppage, engine->pam_p))
+		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
+	return 0;
 }
 
 // --
