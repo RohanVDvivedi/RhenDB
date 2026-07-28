@@ -1160,7 +1160,78 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 	}
 	else // init all root_page_ids
 	{
+		catmgr_p->global_unique_schema_id = FIRST_SCHEMA_UNIQUE_ID;
 
+		{
+			uint64_t page_latches_to_be_borrowed = 0;
+			while(1)
+			{
+				int abort_error = 0;
+
+				page_table_range_locker* ptrl_p = NULL;
+				uint64_t vaccum_bucket_id; int vaccum_needed;
+
+				ptrl_p = get_new_page_table_range_locker((*root_page_id), WHOLE_BUCKET_RANGE, &pttd, catmgr_engine->pam_p, NULL, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				catmgr_p->attributes_table.root_page_id = get_from_page_table(ptrl_p, ATTRIBUTES_TABLE_ROOT_PAGE_ID_POS, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				catmgr_p->types_table.root_page_id = get_from_page_table(ptrl_p, TYPES_TABLE_ROOT_PAGE_ID_POS, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				catmgr_p->index_fragments_table.root_page_id = get_from_page_table(ptrl_p, INDEX_FRAGMENTS_TABLE_ROOT_PAGE_ID_POS, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				catmgr_p->indices_table.root_page_id = get_from_page_table(ptrl_p, INDICES_TABLE_ROOT_PAGE_ID_POS, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				catmgr_p->table_partitions_table.root_page_id = get_from_page_table(ptrl_p, TABLE_PARTITIONS_TABLE_ROOT_PAGE_ID_POS, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				catmgr_p->tables_table.root_page_id = get_from_page_table(ptrl_p, TABLES_TABLE_ROOT_PAGE_ID_POS, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				catmgr_p->name_idx.root_page_id = get_from_page_table(ptrl_p, NAME_IDX_ROOT_PAGE_ID_POS, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				catmgr_p->id_idx.root_page_id = get_from_page_table(ptrl_p, ID_IDX_ROOT_PAGE_ID_POS, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				catmgr_p->table_to_indices_idx.root_page_id = get_from_page_table(ptrl_p, TABLE_TO_INDICES_IDX_ROOT_PAGE_ID_POS, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				catmgr_p->owner_to_attributes_idx.root_page_id = get_from_page_table(ptrl_p, OWNER_TO_ATTRIBUTES_IDX_ROOT_PAGE_ID_POS, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				catmgr_p->ext_store_root_page_id = get_from_page_table(ptrl_p, EXT_STORE_ROOT_PAGE_ID_ROOT_PAGE_ID_POS, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				delete_page_table_range_locker(ptrl_p, &vaccum_bucket_id, &vaccum_needed, NULL, &abort_error);
+				ptrl_p = NULL;
+				if(abort_error)
+					goto ABORT_ERROR_1;
+
+				if(abort_error == 0) // initialization done
+					break;
+
+				ABORT_ERROR_1:
+				if(ptrl_p != NULL)
+					delete_page_table_range_locker(ptrl_p, &vaccum_bucket_id, &vaccum_needed, NULL, &abort_error);
+			}
+		}
 		//catmgr_p->global_unique_schema_id = ;
 	}
 
