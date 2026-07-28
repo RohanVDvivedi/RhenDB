@@ -1145,7 +1145,10 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 					goto ABORT_ERROR;
 
 				if(abort_error == 0) // initialization done
+				{
+					catmgr_engine->complete_sub_transaction(catmgr_engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
 					break;
+				}
 
 				ABORT_ERROR:
 				if(ptrl_p != NULL)
