@@ -423,14 +423,7 @@ void initialize_transaction_table(transaction_table* ttbl, uint64_t* root_page_i
 			{
 				int abort_error = 0;
 
-				// we are fine with waiting for atmost a second, and we hold no latches
 				void* sub_transaction_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, page_latches_to_be_borrowed);
-
-				if(sub_transaction_id == NULL)
-				{
-					printf("FAILED (in transaction_table) :: spent 3 seconds trying to start a sub transaction to create a new transaction table but failed\n");
-					exit(-1);
-				}
 
 				(*root_page_id) = get_new_page_table(ttbl->pttd_p, ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
 				if(abort_error)

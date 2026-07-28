@@ -125,7 +125,7 @@ static void catalog_write_mvcc_header(catalog_manager* catmgr_p, void* tuple, co
 
 // mvcchdr_p may be NULL, if so do not need to set it
 
-static void* serialize_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_attribute* attr, int should_blob, const void* min_tx_engine, int* abort_error)
+static void* serialize_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_attribute* attr, int should_blob, const void* min_tx_id, int* abort_error)
 {
 	const tuple_def* record_def = &(catmgr_p->attributes_table.record_def);
 
@@ -161,7 +161,7 @@ static void* serialize_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_he
 
 	if(should_blob && attr->derived_from_expr != NULL)
 	{
-		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(11), attr->derived_from_expr, strlen(attr->derived_from_expr), min_tx_engine, abort_error))
+		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(11), attr->derived_from_expr, strlen(attr->derived_from_expr), min_tx_id, abort_error))
 		{
 			free(tuple);
 			return NULL;
@@ -213,7 +213,7 @@ static void* serialize_rhendb_index_fragment(catalog_manager* catmgr_p, const mv
 	return tuple;
 }
 
-static void* serialize_rhendb_index(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_index* idx, int should_blob, const void* min_tx_engine, int* abort_error)
+static void* serialize_rhendb_index(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_index* idx, int should_blob, const void* min_tx_id, int* abort_error)
 {
 	const tuple_def* record_def = &(catmgr_p->indices_table.record_def);
 
@@ -234,7 +234,7 @@ static void* serialize_rhendb_index(catalog_manager* catmgr_p, const mvcc_header
 
 	if(should_blob && idx->predicate_expr != NULL)
 	{
-		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(5), idx->predicate_expr, strlen(idx->predicate_expr), min_tx_engine, abort_error))
+		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(5), idx->predicate_expr, strlen(idx->predicate_expr), min_tx_id, abort_error))
 		{
 			free(tuple);
 			return NULL;
@@ -422,7 +422,7 @@ static void catalog_read_mvcc_header(catalog_manager* catmgr_p, const void* tupl
 
 // if mvcchdr_p is not NULL, then it also needs to be read and deserialized
 
-static rhendb_attribute deserialize_rhendb_attribute(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple, int should_blob, const void* min_tx_engine, int* abort_error)
+static rhendb_attribute deserialize_rhendb_attribute(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple, int should_blob, const void* min_tx_id, int* abort_error)
 {
 	const tuple_def* record_def = &(catmgr_p->attributes_table.record_def);
 
@@ -471,7 +471,7 @@ static rhendb_attribute deserialize_rhendb_attribute(catalog_manager* catmgr_p, 
 
 	if(should_blob)
 	{
-		attr.derived_from_expr = catalog_read_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(11), record_def->type_info->containees[11].al.type_info, &(attr.derived_from_expr_size), min_tx_engine, abort_error);
+		attr.derived_from_expr = catalog_read_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(11), record_def->type_info->containees[11].al.type_info, &(attr.derived_from_expr_size), min_tx_id, abort_error);
 		if(*abort_error)
 			return attr;
 	}
@@ -530,7 +530,7 @@ static rhendb_index_fragment deserialize_rhendb_index_fragment(catalog_manager* 
 	return ifrag;
 }
 
-static rhendb_index deserialize_rhendb_index(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple, int should_blob, const void* min_tx_engine, int* abort_error)
+static rhendb_index deserialize_rhendb_index(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple, int should_blob, const void* min_tx_id, int* abort_error)
 {
 	const tuple_def* record_def = &(catmgr_p->indices_table.record_def);
 
@@ -555,7 +555,7 @@ static rhendb_index deserialize_rhendb_index(catalog_manager* catmgr_p, mvcc_hea
 
 	if(should_blob)
 	{
-		idx.predicate_expr = catalog_read_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(5), record_def->type_info->containees[5].al.type_info, &(idx.predicate_expr_size), min_tx_engine, abort_error);
+		idx.predicate_expr = catalog_read_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(5), record_def->type_info->containees[5].al.type_info, &(idx.predicate_expr_size), min_tx_id, abort_error);
 		if(*abort_error)
 			return idx;
 	}
@@ -732,6 +732,18 @@ static const compare_direction cmp_dirs_all_asc[] = {ASC, ASC, ASC, ASC, ASC, AS
 const positional_accessor key_element_ids0[] = {STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(3), STATIC_POSITION(4), STATIC_POSITION(5)};
 
 const positional_accessor key_element_ids1[] = {STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(3), STATIC_POSITION(4), STATIC_POSITION(5), STATIC_POSITION(6)};
+
+#define ATTRIBUTES_TABLE_ROOT_PAGE_ID_POS          0
+#define TYPES_TABLE_ROOT_PAGE_ID_POS               1
+#define INDEX_FRAGMENTS_TABLE_ROOT_PAGE_ID_POS     2
+#define INDICES_TABLE_ROOT_PAGE_ID_POS             3
+#define TABLE_PARTITIONS_TABLE_ROOT_PAGE_ID_POS    4
+#define TABLES_TABLE_ROOT_PAGE_ID_POS              5
+#define NAME_IDX_ROOT_PAGE_ID_POS                  6
+#define ID_IDX_ROOT_PAGE_ID_POS                    7
+#define TABLE_TO_INDICES_IDX_ROOT_PAGE_ID_POS      8
+#define OWNER_TO_ATTRIBUTES_IDX_ROOT_PAGE_ID_POS   9
+#define EXT_STORE_ROOT_PAGE_ID_ROOT_PAGE_ID_POS   10
 
 void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine)
 {
@@ -998,11 +1010,166 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 	initialize_tuple_def(&(catmgr_p->mvcc_header_tuple_def), mvcc_hdr_dti_p);
 
 	pthread_mutex_init(&(catmgr_p->global_unique_schema_id_lock), NULL);
+
+	page_table_tuple_defs pttd;
+	init_page_table_tuple_definitions(&pttd, &(catmgr_engine->pam_p->pas));
+
+	if((*root_page_id) == catmgr_engine->pam_p->pas.NULL_PAGE_ID) // create a catalog
+	{
+		// create and initialize the root page for the page table
+		{
+			uint64_t page_latches_to_be_borrowed = 0;
+			while(1)
+			{
+				int abort_error = 0;
+
+				page_table_range_locker* ptrl_p = NULL;
+				uint64_t vaccum_bucket_id; int vaccum_needed;
+
+				// we are fine with waiting for atmost a second, and we hold no latches
+				void* min_tx_id = catmgr_engine->allot_new_sub_transaction_id(catmgr_engine->context, page_latches_to_be_borrowed);
+
+				(*root_page_id) = get_new_page_table(&pttd, catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR;
+
+				ptrl_p = get_new_page_table_range_locker((*root_page_id), WHOLE_BUCKET_RANGE, &pttd, catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR;
+
+				{
+					{
+						catmgr_p->attributes_table.root_page_id = get_new_heap_table(&(catmgr_p->attributes_table.heap_table_defs), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+
+						set_in_page_table(ptrl_p, ATTRIBUTES_TABLE_ROOT_PAGE_ID_POS, catmgr_p->attributes_table.root_page_id, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+					}
+					{
+						catmgr_p->types_table.root_page_id = get_new_heap_table(&(catmgr_p->types_table.heap_table_defs), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+
+						set_in_page_table(ptrl_p, TYPES_TABLE_ROOT_PAGE_ID_POS, catmgr_p->types_table.root_page_id, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+					}
+					{
+						catmgr_p->index_fragments_table.root_page_id = get_new_bplus_tree(&(catmgr_p->index_fragments_table.clust_table_defs), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+
+						set_in_page_table(ptrl_p, INDEX_FRAGMENTS_TABLE_ROOT_PAGE_ID_POS, catmgr_p->index_fragments_table.root_page_id, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+					}
+					{
+						catmgr_p->indices_table.root_page_id = get_new_heap_table(&(catmgr_p->indices_table.heap_table_defs), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+
+						set_in_page_table(ptrl_p, INDICES_TABLE_ROOT_PAGE_ID_POS, catmgr_p->indices_table.root_page_id, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+					}
+					{
+						catmgr_p->table_partitions_table.root_page_id = get_new_bplus_tree(&(catmgr_p->table_partitions_table.clust_table_defs), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+
+						set_in_page_table(ptrl_p, TABLE_PARTITIONS_TABLE_ROOT_PAGE_ID_POS, catmgr_p->table_partitions_table.root_page_id, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+					}
+					{
+						catmgr_p->tables_table.root_page_id = get_new_heap_table(&(catmgr_p->tables_table.heap_table_defs), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+
+						set_in_page_table(ptrl_p, TABLES_TABLE_ROOT_PAGE_ID_POS, catmgr_p->tables_table.root_page_id, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+					}
+					{
+						catmgr_p->name_idx.root_page_id = get_new_bplus_tree(&(catmgr_p->name_idx.index_defs), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+
+						set_in_page_table(ptrl_p, NAME_IDX_ROOT_PAGE_ID_POS, catmgr_p->name_idx.root_page_id, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+					}
+					{
+						catmgr_p->id_idx.root_page_id = get_new_bplus_tree(&(catmgr_p->id_idx.index_defs), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+
+						set_in_page_table(ptrl_p, ID_IDX_ROOT_PAGE_ID_POS, catmgr_p->id_idx.root_page_id, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+					}
+					{
+						catmgr_p->table_to_indices_idx.root_page_id = get_new_bplus_tree(&(catmgr_p->table_to_indices_idx.index_defs), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+
+						set_in_page_table(ptrl_p, TABLE_TO_INDICES_IDX_ROOT_PAGE_ID_POS, catmgr_p->table_to_indices_idx.root_page_id, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+					}
+					{
+						catmgr_p->owner_to_attributes_idx.root_page_id = get_new_bplus_tree(&(catmgr_p->owner_to_attributes_idx.index_defs), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+
+						set_in_page_table(ptrl_p, OWNER_TO_ATTRIBUTES_IDX_ROOT_PAGE_ID_POS, catmgr_p->owner_to_attributes_idx.root_page_id, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+					}
+					{
+						catmgr_p->ext_store_root_page_id = get_new_blob_store(&(catmgr_engine->bstd), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+
+						set_in_page_table(ptrl_p, EXT_STORE_ROOT_PAGE_ID_ROOT_PAGE_ID_POS, catmgr_p->ext_store_root_page_id, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+					}
+				}
+
+				delete_page_table_range_locker(ptrl_p, &vaccum_bucket_id, &vaccum_needed, min_tx_id, &abort_error);
+				ptrl_p = NULL;
+				if(abort_error)
+					goto ABORT_ERROR;
+
+				if(abort_error == 0) // initialization done
+					break;
+
+				ABORT_ERROR:
+				if(ptrl_p != NULL)
+					delete_page_table_range_locker(ptrl_p, &vaccum_bucket_id, &vaccum_needed, min_tx_id, &abort_error);
+				catmgr_engine->complete_sub_transaction(catmgr_engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			}
+
+			catmgr_p->catalog_root_page_id = (*root_page_id);
+		}
+
+		catmgr_p->global_unique_schema_id = FIRST_SCHEMA_UNIQUE_ID;
+	}
+	else // init all root_page_ids
+	{
+
+		//catmgr_p->global_unique_schema_id = ;
+	}
+
+	deinit_page_table_tuple_definitions(&pttd);
 }
 
 // utilities for the catalog objects
 
-static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_table* hpt_p, tuple_pointer* tptr, const void** heap_tuples, uint32_t heap_tuples_count, const void* min_tx_engine, int* abort_error)
+static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_table* hpt_p, tuple_pointer* tptr, const void** heap_tuples, uint32_t heap_tuples_count, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
 	const tuple_def* record_def = &(hpt_p->record_def);
@@ -1022,13 +1189,13 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 
 			is_new_page = 0;
 			uint32_t unused_space_in_entry = 0;
-			ppage = find_heap_page_with_enough_unused_space_from_heap_table(hpt_p->root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(hpt_p->htan)), &(hpt_p->heap_table_defs), engine->pam_p, min_tx_engine, abort_error);
+			ppage = find_heap_page_with_enough_unused_space_from_heap_table(hpt_p->root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(hpt_p->htan)), &(hpt_p->heap_table_defs), engine->pam_p, min_tx_id, abort_error);
 			if(*abort_error)
 				goto ABORT_ERROR;
 
 			if(is_persistent_page_NULL(&ppage, engine->pam_p))
 			{
-				ppage = get_new_heap_page_with_write_lock(&(engine->pam_p->pas), record_def, engine->pam_p, engine->pmm_p, min_tx_engine, abort_error);
+				ppage = get_new_heap_page_with_write_lock(&(engine->pam_p->pas), record_def, engine->pam_p, engine->pmm_p, min_tx_id, abort_error);
 				if(*abort_error)
 					goto ABORT_ERROR;
 				is_new_page = 1;
@@ -1041,7 +1208,7 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 		uint32_t possible_insertion_index = 0;
 		while(inserted_tuples < heap_tuples_count)
 		{
-			uint32_t tuple_index = insert_in_heap_page(&ppage, heap_tuples[inserted_tuples], &possible_insertion_index, record_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_engine, abort_error);
+			uint32_t tuple_index = insert_in_heap_page(&ppage, heap_tuples[inserted_tuples], &possible_insertion_index, record_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_id, abort_error);
 			if(*abort_error)
 				goto ABORT_ERROR;
 
@@ -1057,26 +1224,26 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 		// a page fetched for the next tuple must accept at least that tuple, else it can not fit on any heap_page
 		if(inserted_tuples_on_this_page == 0)
 		{
-			printf("failed to insert a catalog heap table row, tuple too large for a heap page\n");
+			printf("FAILED (in catalog_manager) :: failed to insert a catalog heap table row, tuple too large for a heap page\n");
 			exit(-1);
 		}
 
 		// a fresh page must be tracked by the heap_table (track reads the page, so it is done before releasing the lock)
 		if(is_new_page)
 		{
-			track_unused_space_in_heap_table(hpt_p->root_page_id, &ppage, &(hpt_p->heap_table_defs), engine->pam_p, engine->pmm_p, min_tx_engine, abort_error);
+			track_unused_space_in_heap_table(hpt_p->root_page_id, &ppage, &(hpt_p->heap_table_defs), engine->pam_p, engine->pmm_p, min_tx_id, abort_error);
 			if(*abort_error)
 				goto ABORT_ERROR;
 		}
 
 		// release the page (this sets ppage back to a NULL page), then fix the now-stale unused_space entries
-		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
+		release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
 		if(*abort_error)
 			goto ABORT_ERROR;
 
 		if(!is_new_page)
 		{
-			fix_unused_space_entries_UNSAFE(catmgr_p, hpt_p->root_page_id, &(hpt_p->htan), &(hpt_p->heap_table_defs), min_tx_engine, abort_error);
+			fix_unused_space_entries_UNSAFE(catmgr_p, hpt_p->root_page_id, &(hpt_p->htan), &(hpt_p->heap_table_defs), min_tx_id, abort_error);
 			if(*abort_error)
 				goto ABORT_ERROR;
 		}
@@ -1087,7 +1254,7 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 	ABORT_ERROR:;
 	// release the page if it is still held, a released page is already a NULL page, so this never double releases
 	if(!is_persistent_page_NULL(&ppage, engine->pam_p))
-		release_lock_on_persistent_page(engine->pam_p, min_tx_engine, &ppage, NONE_OPTION, abort_error);
+		release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
 	return 0;
 }
 
