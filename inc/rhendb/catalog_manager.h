@@ -222,7 +222,8 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 // note:: must lock table by it's name before calling this function, and keep it locked until the transaction ends, for the below functions
 
-// returns id of created table, it will always start with no indices and a single part_id of 1, by the provided name
+// returns id of created table, it will always start with no indices and a single partition_id of 1, by the provided name
+// on failure returns 0
 uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count);
 
 // returns new part_id, and also creates new partitions of existing indices on the table for this partition, with new root_page_id-s
@@ -230,7 +231,6 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, const rhendb_attribute* attr);
 
 // returns new part_id, and also creates new partitions of existing indices on the table for this partition, with new root_page_id-s
-// and drops whole indices that reference the dropped column
 // returns 0 if this call fails
 uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t rel_pos_in_owner_to_drop);
 
