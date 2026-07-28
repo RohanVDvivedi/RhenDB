@@ -90,7 +90,7 @@ struct catalog_manager
 	// ---------------- INDICES ON SCHEMA TABLE
 
 	// for catalog_object_types(RHENDB_TYPE, RHENDB_TABLE, and RHENDB_INDEX)
-	// key(object_type, name, tuple_pointer)
+	// key(object_type, name, object.tuple_pointer)
 	catalog_btree_index name_idx;
 
 	// for catalog_object_types(RHENDB_TYPE, RHENDB_TABLE, and RHENDB_INDEX)
@@ -217,6 +217,8 @@ struct rhendb_table
 // here the root_page_id is an in-out parameter, pass it as NULL_PAGE_ID to create a new transaction table, or an existing one to open that particular transaction_table
 void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine);
 
+// note:: must lock table by it's name before calling this function, and keep it locked until the transaction ends, for the below functions
+
 // returns id of created table, it will always start with no indices and a single part_id of 1, by the provided name
 uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count);
 
@@ -238,6 +240,8 @@ uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhen
 
 // drops index with this id and all it's partitions, and the corresponding list of attributes
 void drop_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id);
+
+// note:: must lock type by it's name before calling this function, and keep it locked until the transaction ends, for the below functions
 
 // returns id of created type
 uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count);
