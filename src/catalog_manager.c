@@ -1480,7 +1480,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 
 	// (2) allocate a fresh globally unique id for the new table
 	pthread_mutex_lock(&(catmgr_p->global_unique_schema_id_lock));
-	if(catmgr_p->global_unique_schema_id == UINT32_MAX)
+	if(catmgr_p->global_unique_schema_id == UINT64_MAX)
 	{
 		printf("ISSUE in (catalog_manager) :: create_table overflowed global_unique_schema_id\n");
 		exit(-1);
@@ -1539,7 +1539,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 			if(abort_error)
 			{
 				for(uint32_t j = 0; j < i; j++)
-					free(attribute_tuples[i]);
+					free(attribute_tuples[j]);
 				free(attribute_tuples);
 				goto COMPLETE;
 			}
