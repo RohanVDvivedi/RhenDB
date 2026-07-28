@@ -847,7 +847,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		strcpy(index_fragments_type_info->containees[4].field_name, "root_page_id");
 		index_fragments_type_info->containees[4].al.type_info = root_page_id_dti_p;
 
-		initialize_tuple_data_type_info(index_fragments_type_info, "rhendb_index", 0, 900, 5);
+		initialize_tuple_data_type_info(index_fragments_type_info, "rhendb_index_fragment", 0, 900, 5);
 
 		initialize_tuple_def(&(catmgr_p->index_fragments_table.record_def), index_fragments_type_info);
 
