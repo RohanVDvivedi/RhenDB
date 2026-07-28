@@ -3,10 +3,6 @@
 #include<tupleindexer/page_table/page_table.h>
 #include<tupleindexer/heap_page/heap_page.h>
 
-#include<tupleindexer/interface/page_access_methods.h>
-#include<tupleindexer/common/tuple_pointer.h>
-#include<tupleindexer/common/invalid_tuple_indices.h>
-#include<tupleindexer/interface/page_access_methods_options.h>
 #include<tuplelargetypes/binary_write_iterator.h>
 #include<tuplelargetypes/binary_read_iterator.h>
 
@@ -1237,17 +1233,38 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 			bplus_tree_iterator* bpi_p = NULL;
 
-			bpi_p = find_in_bplus_tree(catmgr_p->id_idx.root_page_id, NULL, 0, MAX, 0, READ_LOCK, &(catmgr_p->id_idx.index_defs), catmgr_engine->pam_p, NULL, NULL, &abort_error);
-			if(abort_error)
-				goto ABORT_ERROR_2;
-
 			catmgr_p->global_unique_schema_id = FIRST_SCHEMA_UNIQUE_ID;
-			if(!is_empty_bplus_tree(bpi_p))
-				catmgr_p->global_unique_schema_id = deserialize_rhendb_id_idx_entry(catmgr_p, get_tuple_bplus_tree_iterator(bpi_p)).id + 1;
+			for(catalog_object_type obj_type = 0; obj_type < 3; obj_type++)
+			{
+				void* key_obj_type = serialize_rhendb_id_idx_entry(catmgr_p, &((rhendb_id_idx_entry){.object_type = obj_type}));
+				bpi_p = find_in_bplus_tree(catmgr_p->id_idx.root_page_id, key_obj_type, 1, LESSER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->id_idx.index_defs), catmgr_engine->pam_p, NULL, NULL, &abort_error);
+				free(key_obj_type);
+				if(abort_error)
+					goto ABORT_ERROR_2;
 
-			delete_bplus_tree_iterator(bpi_p, NULL, &abort_error);
-			if(abort_error)
-				goto ABORT_ERROR_2;
+				if(is_empty_bplus_tree(bpi_p))
+				{
+					delete_bplus_tree_iterator(bpi_p, NULL, &abort_error);
+					bpi_p = NULL;
+					if(abort_error)
+						goto ABORT_ERROR_2;
+
+					break;
+				}
+
+				const void* id_idx_tuple = get_tuple_bplus_tree_iterator(bpi_p);
+				if(id_idx_tuple != NULL)
+				{
+					rhendb_id_idx_entry id_idx_strct = deserialize_rhendb_id_idx_entry(catmgr_p, get_tuple_bplus_tree_iterator(bpi_p));
+					if(id_idx_strct.object_type == obj_type)
+						catmgr_p->global_unique_schema_id = max(id_idx_strct.id + 1, catmgr_p->global_unique_schema_id);
+				}
+
+				delete_bplus_tree_iterator(bpi_p, NULL, &abort_error);
+				bpi_p = NULL;
+				if(abort_error)
+					goto ABORT_ERROR_2;
+			}
 
 			if(abort_error == 0) // initialization done
 				break;
