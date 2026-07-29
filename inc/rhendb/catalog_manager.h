@@ -127,6 +127,33 @@ struct catalog_manager
 	uint64_t global_unique_schema_id; // starts with FIRST_SCHEMA_UNIQUE_ID
 };
 
+typedef enum rhendb_base_type rhendb_base_type;
+enum rhendb_base_type
+{
+	// primitive numbers of fixed length
+	RHENDB_BIT_FIELD = 0,    // size 1-64 in bits
+	RHENDB_UINT = 1,         // size 1-32 in bytes
+	RHENDB_INT = 2,          // size 1-32 in bytes
+	RHENDB_FLOAT = 3,        // either sizeof(float) or sizeof(double)
+
+	// default composite types
+	RHENDB_TUPLE_POINTER = 4,
+	RHENDB_MVCC_HEADER = 5,
+
+	// inline basic variable length types
+	RHENDB_STRING = 6,
+	RHENDB_BINARY = 7,
+	RHENDB_NUMBER = 8,
+
+	// extended versions of those types
+	RHENDB_TEXT = 9,
+	RHENDB_BLOB = 10,
+	RHENDB_NUMERIC = 11,
+	RHENDB_JSONB = 12,
+
+	RHENDB_COMPOSITE_TYPE = 13, // check attribute_type_id, and read it
+};
+
 typedef struct rhendb_attribute rhendb_attribute;
 struct rhendb_attribute
 {
@@ -141,10 +168,10 @@ struct rhendb_attribute
 
 	rhendb_base_type base_type;
 
-	uint64_t attribute_type_id; // valid only for base_type = RHENDB_TYPE
+	uint64_t attribute_type_id; // valid only for base_type = RHENDB_COMPOSITE_TYPE
 
 	uint32_t* count; // (0->variable length, N->fixed length array of N elements, NULL means direct element)
-	uint32_t _count; // if valif count points here
+	uint32_t _count; // if valid count points here
 
 	unsigned int is_auto_increment:1;
 
