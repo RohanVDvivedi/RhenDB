@@ -2041,7 +2041,6 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 				strncpy(composite_dti_p->containees[i].field_name, composite_attrs[i].attribute_name, 64);
 				composite_dti_p->containees[i].al.type_info = containee_dti_p;
 			}
-
 			initialize_tuple_data_type_info(composite_dti_p, composite_type->name, attr.is_nullable, catmgr_p->catmgr_engine->pam_p->pas.page_size, composite_attrs_count);
 			inner_dti_p = composite_dti_p;
 			free(composite_attrs);
@@ -2049,7 +2048,6 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 			break;
 		}
 	}
-
 	if(inner_dti_p == NULL)
 	{
 		printf("BUG (in catalog_manager) :: unmappable attribute type\n");
@@ -2331,6 +2329,158 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 	free(attribute_tuple_pointers);
 	engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
 	return table_id;
+
+	ABORT_ERROR:;
+	free(attribute_tuple_pointers);
+	engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+	return 0;
+}
+
+uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count)
+{
+	if(attrs_count == 0)
+	{
+		printf("BUG in (catalog_manager) :: create_type needs a non-zero attrs_count\n");
+		exit(-1);
+	}
+
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	// we can only make persistent changes on behalf of a transaction that has a self transaction id
+	if(!ss_p->has_self_transaction_id)
+	{
+		printf("ISSUE in (catalog_manager) :: create_type needs a snapshot that has a self transaction id\n");
+		exit(-1);
+	}
+
+	// mvcc_header stamped on every new catalog row, born from our transaction and not yet deleted
+	mvcc_header new_row_mvcc_hdr = (mvcc_header){
+		.is_xmin_NULL = 0,
+		.xmin = {.is_committed = 0, .is_aborted = 0, .transaction_id = ss_p->self_transaction_id},
+		.is_xmax_NULL = 1,
+	};
+
+	uint64_t type_id = 0; // 0 == failure, real ids start at FIRST_SCHEMA_UNIQUE_ID
+	tuple_pointer* attribute_tuple_pointers = NULL;
+
+	int abort_error = 0;
+	uint64_t page_latches_to_be_borrowed = 0;
+	void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
+
+	// (1) ensure no visible type already has this name, the by-name getter walks the (RHENDB_TYPE, name) run,
+	//     checks visibility and fixes hints for us within this same mini transaction, existing_type is a localized
+	//     resource, so it is freed here itself before we bail
+	{
+		rhendb_type* existing_type = get_catalog_object_by_name(catmgr_p, ss_p, RHENDB_TYPE, name, 0, min_tx_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+		if(existing_type != NULL) // this is not abort, but we found a type with same name
+		{
+			free(existing_type);
+			goto ABORT_ERROR;
+		}
+	}
+
+	// (2) allocate a fresh globally unique id for the new type
+	pthread_mutex_lock(&(catmgr_p->global_unique_schema_id_lock));
+	if(catmgr_p->global_unique_schema_id == UINT64_MAX)
+	{
+		printf("ISSUE in (catalog_manager) :: create_type overflowed global_unique_schema_id\n");
+		exit(-1);
+	}
+	type_id = catmgr_p->global_unique_schema_id++;
+	pthread_mutex_unlock(&(catmgr_p->global_unique_schema_id_lock));
+
+	// (3) insert the types_table entry, remember its tuple_pointer for the name and id indexes
+	tuple_pointer type_tuple_pointer;
+	{
+		rhendb_type typ = (rhendb_type){.id = type_id};
+		strncpy(typ.name, name, 64);
+		void* type_tuple = serialize_rhendb_type(catmgr_p, &new_row_mvcc_hdr, &typ);
+		insert_in_catalog_heap_table(catmgr_p, &(catmgr_p->types_table), &type_tuple_pointer, (void const * const *)(&type_tuple), 1, min_tx_id, &abort_error);
+		free(type_tuple);
+		if(abort_error)
+			goto ABORT_ERROR;
+	}
+
+	// (4) all the attributes owned by this type, a type is not partitioned so from = 0 and to = 0, bulk inserted for locality
+	//     attribute_tuples is a localized resource, so it is unwound here itself on abort
+	attribute_tuple_pointers = malloc(sizeof(tuple_pointer) * attrs_count);
+	{
+		void** attribute_tuples = malloc(sizeof(void*) * attrs_count);
+		for(uint32_t i = 0; i < attrs_count; i++)
+		{
+			rhendb_attribute a = attrs[i];
+			a.owner_id = type_id;
+			a.rel_pos_in_owner = i;
+			a.table_part_id_from = 0;
+			a.table_part_id_to = 0;
+			attribute_tuples[i] = serialize_rhendb_attribute(catmgr_p, &new_row_mvcc_hdr, &a, 1, min_tx_id, &abort_error);
+			if(abort_error)
+			{
+				for(uint32_t j = 0; j < i; j++)
+					free(attribute_tuples[j]);
+				free(attribute_tuples);
+				goto ABORT_ERROR;
+			}
+		}
+		insert_in_catalog_heap_table(catmgr_p, &(catmgr_p->attributes_table), attribute_tuple_pointers, (void const * const *)attribute_tuples, attrs_count, min_tx_id, &abort_error);
+		for(uint32_t i = 0; i < attrs_count; i++)
+			free(attribute_tuples[i]);
+		free(attribute_tuples);
+		if(abort_error)
+			goto ABORT_ERROR;
+	}
+
+	// (5) name_idx and id_idx entries for the new type, pointing at its types_table row
+	{
+		rhendb_name_idx_entry name_idx_ent = (rhendb_name_idx_entry){.object_type = RHENDB_TYPE, .object_tuple_pointer = type_tuple_pointer};
+		strncpy(name_idx_ent.name, name, 64);
+		void* name_key_tuple = serialize_rhendb_name_idx_entry(catmgr_p, &name_idx_ent);
+		int inserted = insert_in_bplus_tree(catmgr_p->name_idx.root_page_id, name_key_tuple, &(catmgr_p->name_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+		free(name_key_tuple);
+		if(abort_error)
+			goto ABORT_ERROR;
+		if(!inserted)
+		{
+			printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+			exit(-1);
+		}
+	}
+	{
+		rhendb_id_idx_entry id_idx_ent = (rhendb_id_idx_entry){.object_type = RHENDB_TYPE, .id = type_id, .object_tuple_pointer = type_tuple_pointer};
+		void* id_key_tuple = serialize_rhendb_id_idx_entry(catmgr_p, &id_idx_ent);
+		int inserted = insert_in_bplus_tree(catmgr_p->id_idx.root_page_id, id_key_tuple, &(catmgr_p->id_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+		free(id_key_tuple);
+		if(abort_error)
+			goto ABORT_ERROR;
+		if(!inserted)
+		{
+			printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+			exit(-1);
+		}
+	}
+
+	// (6) owner_to_attributes_idx entries, one per attribute, pointing at each attribute's row
+	for(uint32_t i = 0; i < attrs_count; i++)
+	{
+		rhendb_owner_to_attributes_idx_entry o2aidx_ent = (rhendb_owner_to_attributes_idx_entry){.owner_id = type_id, .rel_pos_in_owner = i, .attributes_tuple_pointer = attribute_tuple_pointers[i]};
+		void* o2aidx_key_tuple = serialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, &o2aidx_ent);
+		int inserted = insert_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, o2aidx_key_tuple, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+		free(o2aidx_key_tuple);
+		if(abort_error)
+			goto ABORT_ERROR;
+		if(!inserted)
+		{
+			printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+			exit(-1);
+		}
+	}
+
+	// commit the mini transaction and hand back the new type id
+	free(attribute_tuple_pointers);
+	engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+	return type_id;
 
 	ABORT_ERROR:;
 	free(attribute_tuple_pointers);
