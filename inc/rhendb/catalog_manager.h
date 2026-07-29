@@ -172,8 +172,8 @@ struct rhendb_attribute
 
 	uint64_t attribute_type_id; // valid only for base_type = RHENDB_COMPOSITE_TYPE
 
-	uint32_t* count; // (0->variable length, N->fixed length array of N elements, NULL means direct element)
-	uint32_t _count; // if valid count points here
+	uint32_t count; // 0->variable length array, N->fixed length array of N elements, valid only when has_count is set
+	unsigned int has_count:1; // set when this attribute is an array (count is meaningful), else it is a direct single element
 
 	unsigned int is_auto_increment:1;
 

@@ -148,10 +148,10 @@ static void* serialize_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_he
 
 	set_element_in_tuple(record_def, STATIC_POSITION(8), tuple, &((datum){.uint_value = attr->attribute_type_id}), 0);
 
-	if(attr->count == NULL)
+	if(!attr->has_count)
 		set_element_in_tuple(record_def, STATIC_POSITION(9), tuple, NULL_DATUM, 0);
 	else
-		set_element_in_tuple(record_def, STATIC_POSITION(9), tuple, &((datum){.uint_value = *(attr->count)}), 0);
+		set_element_in_tuple(record_def, STATIC_POSITION(9), tuple, &((datum){.uint_value = attr->count}), 0);
 
 	set_element_in_tuple(record_def, STATIC_POSITION(10), tuple, &((datum){.bit_field_value = attr->is_auto_increment}), 0);
 
@@ -457,11 +457,11 @@ static rhendb_attribute deserialize_rhendb_attribute(catalog_manager* catmgr_p, 
 
 	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(9), tuple);
 	if(uval.is_NULL)
-		attr.count = NULL;
+		attr.has_count = 0;
 	else
 	{
-		attr._count = uval.uint_value;
-		attr.count = &(attr._count);
+		attr.has_count = 1;
+		attr.count = uval.uint_value;
 	}
 
 	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(10), tuple);
@@ -472,7 +472,7 @@ static rhendb_attribute deserialize_rhendb_attribute(catalog_manager* catmgr_p, 
 
 	if(should_blob)
 	{
-		attr.derived_from_expr = catalog_read_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(12), record_def->type_info->containees[11].al.type_info, &(attr.derived_from_expr_size), min_tx_id, abort_error);
+		attr.derived_from_expr = catalog_read_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(12), record_def->type_info->containees[12].al.type_info, &(attr.derived_from_expr_size), min_tx_id, abort_error);
 		if(*abort_error)
 			return attr;
 	}
@@ -1331,6 +1331,7 @@ static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catm
 					next_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
 					if(*abort_error)
 						goto ABORT_ERROR;
+					continue;
 				}
 
 				// follow this entry to its attributes_table row, write locked so we can persist resolved hint bits
@@ -1364,7 +1365,7 @@ static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catm
 						goto ABORT_ERROR;
 					}
 
-					if(part_id == 0 || (owned_attr.table_part_id_from <= part_id && part_id < owned_attr.table_part_id_to))
+					if(part_id == 0 || (owned_attr.table_part_id_from <= part_id && (owned_attr.table_part_id_to == 0 || part_id < owned_attr.table_part_id_to)))
 					{
 						if(should_blob)
 						{
@@ -1405,6 +1406,7 @@ static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catm
 	if((*attrs_count) == 0)
 	{
 		free(attrs);
+		attrs = NULL;
 		attrs_capacity = 0;
 	}
 
@@ -1526,39 +1528,57 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 
 		case RHENDB_COMPOSITE_TYPE :
 		{
-			/*
-			uint32_t attrs_count = 0;
-			rhendb_attribute* attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, attr.attribute_type_id, 0, 0, &attrs_count, min_tx_id, abort_error);
+			// recursively materialize the composite type from the attributes owned by its type id
+			uint64_t composite_attrs_count = 0;
+			rhendb_attribute* composite_attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, attr.attribute_type_id, 0, 0, &composite_attrs_count, min_tx_id, abort_error);
 			if(*abort_error)
-				return NULL;
-
-			inner_dti_p = malloc(sizeof_tuple_data_type_info(attrs_count));
-			for(uint32_t i = 0; i < attrs_count; i++)
 			{
-				strncpy(inner_dti_p->containees[i].field_name, attrs[i].attribute_name, sizeof(attrs[i].attribute_name));
-				inner_dti_p->containees[i].al.type_info = get_data_type_info_for_rhendb_type_info(rti_p->containee, rdb);
+				free(composite_attrs);
+				return NULL;
 			}
-			initialize_tuple_data_type_info(dti_p, rti_p->type_name, attr->is_nullable, catmgr_p->catmgr_engine->pam_p->pas.page_size, attrs_count);
-			return dti_p;
-			*/
-			return NULL; // to be implemented later
+
+			data_type_info* composite_dti_p = malloc(sizeof_tuple_data_type_info(composite_attrs_count));
+			uint32_t built_containee_count = 0;
+			for(; built_containee_count < composite_attrs_count; built_containee_count++)
+			{
+				data_type_info* containee_dti_p = get_data_type_info_for_rhendb_attribute(catmgr_p, ss_p, composite_attrs[built_containee_count], min_tx_id, abort_error);
+				if(containee_dti_p == NULL)
+					break;
+				strncpy(composite_dti_p->containees[built_containee_count].field_name, composite_attrs[built_containee_count].attribute_name, 64);
+				composite_dti_p->containees[built_containee_count].al.type_info = containee_dti_p;
+			}
+
+			// on failing to build any containee (abort or an unmappable type), unwind the ones already built and bail
+			if(built_containee_count < composite_attrs_count)
+			{
+				for(uint32_t i = 0; i < built_containee_count; i++)
+					destroy_type_info_recursively(composite_dti_p->containees[i].al.type_info, NULL);
+				free(composite_dti_p);
+				free(composite_attrs);
+				return NULL;
+			}
+
+			initialize_tuple_data_type_info(composite_dti_p, "rhendb_composite", attr.is_nullable, catmgr_p->catmgr_engine->pam_p->pas.page_size, composite_attrs_count);
+			inner_dti_p = composite_dti_p;
+			free(composite_attrs);
+			break;
 		}
 	}
 
 	if(inner_dti_p == NULL)
 		return NULL;
 
-	if(attr.count == NULL)
+	if(!attr.has_count)
 		return inner_dti_p;
 
 	data_type_info* dti_p = malloc(sizeof(data_type_info));
-	if((*(attr.count)) == 0)
+	if(attr.count == 0)
 	{
 		(*dti_p) = get_variable_element_count_array_type("rhendb_array", catmgr_p->catmgr_engine->pam_p->pas.page_size, inner_dti_p);
 	}
 	else
 	{
-		(*dti_p) = get_fixed_element_count_array_type("rhendb_array", (*(attr.count)), catmgr_p->catmgr_engine->pam_p->pas.page_size, 1, inner_dti_p); // always nullable
+		(*dti_p) = get_fixed_element_count_array_type("rhendb_array", attr.count, catmgr_p->catmgr_engine->pam_p->pas.page_size, 1, inner_dti_p); // always nullable
 	}
 	return dti_p;
 }
