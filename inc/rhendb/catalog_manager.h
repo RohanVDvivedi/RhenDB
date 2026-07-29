@@ -6,8 +6,6 @@
 #include<rhendb/mvcc_header.h>
 #include<rhendb/mvcc_snapshot.h>
 
-#include<rhendb/rhendb_types.h>
-
 #include<tupleindexer/heap_table/heap_table.h>
 #include<tupleindexer/bplus_tree/bplus_tree.h>
 
