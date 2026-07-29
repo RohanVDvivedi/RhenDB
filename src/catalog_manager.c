@@ -2185,88 +2185,24 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 	};
 
 	uint64_t table_id = 0; // 0 == failure, real ids start at FIRST_SCHEMA_UNIQUE_ID
-	int name_already_exists = 0;
 	tuple_pointer* attribute_tuple_pointers = NULL;
 
 	int abort_error = 0;
 	uint64_t page_latches_to_be_borrowed = 0;
 	void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
 
-	// (1) ensure no visible table already has this name, using the name_idx (object_type, name, tuple_pointer)
-	//     scan the (RHENDB_TABLE, name) run, follow each entry to its tables_table row, check its visibility, and
-	//     write back any hint bits we resolve in place within this same mini transaction
+	// (1) ensure no visible table already has this name, the by-name getter walks the (RHENDB_TABLE, name) run,
+	//     checks visibility and fixes hints for us within this same mini transaction, existing_table is a localized
+	//     resource, so it is freed here itself before we bail
 	{
-		rhendb_name_idx_entry name_key = (rhendb_name_idx_entry){.object_type = RHENDB_TABLE}; strncpy(name_key.name, name, 64);
-		void* name_key_tuple = serialize_rhendb_name_idx_entry(catmgr_p, &name_key);
-		bplus_tree_iterator* bpi_p = find_in_bplus_tree(catmgr_p->name_idx.root_page_id, name_key_tuple, 2, GREATER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->name_idx.index_defs), engine->pam_p, NULL, min_tx_id, &abort_error);
-		free(name_key_tuple);
+		rhendb_table* existing_table = get_catalog_object_by_name(catmgr_p, ss_p, RHENDB_TABLE, name, 0, min_tx_id, &abort_error);
 		if(abort_error)
-			goto COMPLETE;
-
-		if(!is_empty_bplus_tree(bpi_p))
+			goto ABORT_ERROR;
+		if(existing_table != NULL) // this is not abort, but we found a table with same name
 		{
-			while(1)
-			{
-				const void* name_idx_record = get_tuple_bplus_tree_iterator(bpi_p);
-				if(name_idx_record == NULL)
-					break;
-				rhendb_name_idx_entry name_idx_ent = deserialize_rhendb_name_idx_entry(catmgr_p, name_idx_record);
-
-				// stop once we walk past the (RHENDB_TABLE, name) run of the index
-				if(name_idx_ent.object_type != RHENDB_TABLE || strncmp(name_idx_ent.name, name, 64) != 0)
-					break;
-
-				// follow this entry to its tables_table row, write locked so we can persist resolved hint bits
-				persistent_page ppage = acquire_persistent_page_with_lock(engine->pam_p, min_tx_id, name_idx_ent.object_tuple_pointer.page_id, WRITE_LOCK, &abort_error);
-				if(abort_error)
-				{
-					delete_bplus_tree_iterator(bpi_p, min_tx_id, &abort_error);
-					goto COMPLETE;
-				}
-
-				const void* row = get_nth_tuple_on_persistent_page(&ppage, engine->pam_p->pas.page_size, &(catmgr_p->tables_table.record_def.size_def), name_idx_ent.object_tuple_pointer.tuple_index);
-				{
-					mvcc_header hdr;
-					catalog_read_mvcc_header(catmgr_p, row, &(catmgr_p->tables_table.record_def), &hdr);
-
-					int were_hints_updated = 0;
-					int visible = is_tuple_visible_to_mvcc_snapshot(ss_p, &hdr, catmgr_p->tsg_p, &were_hints_updated);
-
-					if(were_hints_updated)
-					{
-						char mvcc_hdr_serialized[get_maximum_tuple_size(&(catmgr_p->mvcc_header_tuple_def))];
-						write_mvcc_header(mvcc_hdr_serialized, &(catmgr_p->mvcc_header_tuple_def), &hdr);
-						set_element_in_tuple_in_place_on_persistent_page(engine->pmm_p, min_tx_id, &ppage, engine->pam_p->pas.page_size, &(catmgr_p->tables_table.record_def), name_idx_ent.object_tuple_pointer.tuple_index, STATIC_POSITION(0), &((datum){.tuple_value = mvcc_hdr_serialized}), &abort_error);
-					}
-
-					if(visible)
-						name_already_exists = 1;
-				}
-
-				release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
-				if(abort_error)
-				{
-					delete_bplus_tree_iterator(bpi_p, min_tx_id, &abort_error);
-					goto COMPLETE;
-				}
-				if(name_already_exists)
-				{
-					delete_bplus_tree_iterator(bpi_p, min_tx_id, &abort_error);
-					goto COMPLETE;
-				}
-
-				next_bplus_tree_iterator(bpi_p, min_tx_id, &abort_error);
-				if(abort_error)
-				{
-					delete_bplus_tree_iterator(bpi_p, min_tx_id, &abort_error);
-					goto COMPLETE;
-				}
-			}
+			free(existing_table);
+			goto ABORT_ERROR;
 		}
-
-		delete_bplus_tree_iterator(bpi_p, min_tx_id, &abort_error);
-		if(abort_error)
-			goto COMPLETE;
 	}
 
 	// (2) allocate a fresh globally unique id for the new table
@@ -2288,17 +2224,17 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 		insert_in_catalog_heap_table(catmgr_p, &(catmgr_p->tables_table), &table_tuple_pointer, (void const * const *)(&table_tuple), 1, min_tx_id, &abort_error);
 		free(table_tuple);
 		if(abort_error)
-			goto COMPLETE;
+			goto ABORT_ERROR;
 	}
 
 	// (4) create the table's own heap for its rows and a blob store for its large values
 	//     get_new_heap_table only lays the generic (unused_space, page_id) root, so any catalog httd works here
 	uint64_t heap_root_page_id = get_new_heap_table(&(catmgr_p->tables_table.heap_table_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
 	if(abort_error)
-		goto COMPLETE;
+		goto ABORT_ERROR;
 	uint64_t blobs_root_page_id = get_new_blob_store(&(engine->bstd), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
 	if(abort_error)
-		goto COMPLETE;
+		goto ABORT_ERROR;
 
 	// (5) a single partition entry with partition_id 1, into the clustered table_partitions_table
 	{
@@ -2307,7 +2243,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 		int inserted = insert_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, tpart_tuple, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
 		free(tpart_tuple);
 		if(abort_error)
-			goto COMPLETE;
+			goto ABORT_ERROR;
 		if(!inserted)
 		{
 			printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
@@ -2316,6 +2252,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 	}
 
 	// (6) all the attributes owned by this table, valid from partition 1 (to = 0, not yet dropped), bulk inserted for locality
+	//     attribute_tuples is a localized resource, so it is unwound here itself on abort
 	attribute_tuple_pointers = malloc(sizeof(tuple_pointer) * attrs_count);
 	{
 		void** attribute_tuples = malloc(sizeof(void*) * attrs_count);
@@ -2332,7 +2269,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 				for(uint32_t j = 0; j < i; j++)
 					free(attribute_tuples[j]);
 				free(attribute_tuples);
-				goto COMPLETE;
+				goto ABORT_ERROR;
 			}
 		}
 		insert_in_catalog_heap_table(catmgr_p, &(catmgr_p->attributes_table), attribute_tuple_pointers, (void const * const *)attribute_tuples, attrs_count, min_tx_id, &abort_error);
@@ -2340,7 +2277,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 			free(attribute_tuples[i]);
 		free(attribute_tuples);
 		if(abort_error)
-			goto COMPLETE;
+			goto ABORT_ERROR;
 	}
 
 	// (7) name_idx and id_idx entries for the new table, pointing at its tables_table row
@@ -2351,7 +2288,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 		int inserted = insert_in_bplus_tree(catmgr_p->name_idx.root_page_id, name_key_tuple, &(catmgr_p->name_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
 		free(name_key_tuple);
 		if(abort_error)
-			goto COMPLETE;
+			goto ABORT_ERROR;
 		if(!inserted)
 		{
 			printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
@@ -2364,7 +2301,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 		int inserted = insert_in_bplus_tree(catmgr_p->id_idx.root_page_id, id_key_tuple, &(catmgr_p->id_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
 		free(id_key_tuple);
 		if(abort_error)
-			goto COMPLETE;
+			goto ABORT_ERROR;
 		if(!inserted)
 		{
 			printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
@@ -2373,14 +2310,14 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 	}
 
 	// (8) owner_to_attributes_idx entries, one per attribute, pointing at each attribute's row
-	for(uint32_t i = 0; i < attrs_count && !abort_error; i++)
+	for(uint32_t i = 0; i < attrs_count; i++)
 	{
 		rhendb_owner_to_attributes_idx_entry o2aidx_ent = (rhendb_owner_to_attributes_idx_entry){.owner_id = table_id, .rel_pos_in_owner = i, .attributes_tuple_pointer = attribute_tuple_pointers[i]};
 		void* o2aidx_key_tuple = serialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, &o2aidx_ent);
 		int inserted = insert_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, o2aidx_key_tuple, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
 		free(o2aidx_key_tuple);
 		if(abort_error)
-			goto COMPLETE;
+			goto ABORT_ERROR;
 		if(!inserted)
 		{
 			printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
@@ -2388,13 +2325,13 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 		}
 	}
 
-	COMPLETE:;
-	if(attribute_tuple_pointers != NULL)
-		free(attribute_tuple_pointers);
+	// commit the mini transaction and hand back the new table id
+	free(attribute_tuple_pointers);
 	engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
-
-	if(abort_error || name_already_exists)
-		return 0; // failure, aborted or a table with this name is already visible to us
-
 	return table_id;
+
+	ABORT_ERROR:;
+	free(attribute_tuple_pointers);
+	engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+	return 0;
 }
