@@ -9,6 +9,8 @@
 #include<tupleindexer/heap_table/heap_table.h>
 #include<tupleindexer/bplus_tree/bplus_tree.h>
 
+#include<tupleindexer/utils/heap_table_accumulative_notifier.h>
+
 #define FIRST_SCHEMA_UNIQUE_ID 7ULL
 
 typedef enum catalog_object_type catalog_object_type;
