@@ -7,34 +7,7 @@
 #include<rhendb/max_intermediate_tuple_size.h>
 
 #include<tuplestore/data_type_info.h>
-
-#define MAX_EXTENDED_TYPE_SIZE  128
-#define MAX_PREFIX_SIZE          90 // do not load more than this many in the prefix of the extended types
-
-typedef enum rhendb_base_type rhendb_base_type;
-enum rhendb_base_type
-{
-	// primitive numbers of fixed length
-	RHENDB_BIT_FIELD = 0,    // size 1-64 in bits
-	RHENDB_UINT = 1,         // size 1-32 in bytes
-	RHENDB_INT = 2,          // size 1-32 in bytes
-	RHENDB_FLOAT = 3,        // either sizeof(float) or sizeof(double)
-
-	// default composite types
-	RHENDB_TUPLE_POINTER = 4,
-	RHENDB_MVCC_HEADER = 5,
-
-	// total size of below attributes must be limited to MAX_INTERMEDIATE_TUPLE_SIZE, else we can not hold it in memory
-	RHENDB_TEXT = 6,
-	RHENDB_BLOB = 7,
-	RHENDB_NUMERIC = 8,
-	RHENDB_JSONB = 9,
-
-	// composite inlined types, array or tuple too big itself will not spill to table's blob_store, but it's nested TEXT column will
-	RHENDB_ARRAY = 10, // fully inlined type of (variable or fixed count) array of elements
-	RHENDB_TUPLE = 11, // fully inlined type to hold composite elements
-};
-
+/*
 typedef struct rhendb_type_info rhendb_type_info;
 
 typedef struct rhendb_attribute_info rhendb_attribute_info;
@@ -61,8 +34,8 @@ struct rhendb_type_info
 		rhendb_attribute_info* containees; // array of rhendb_attribute_info for TUPLE
 		rhendb_type_info* containee; // single rhendb_type_info for ARRAY
 	};
-};
+};*/
 
-data_type_info* get_data_type_info_for_rhendb_type_info(const rhendb_type_info* rti_p, const rhendb* rdb);
+//data_type_info* get_data_type_info_for_rhendb_type_info(const rhendb_type_info* rti_p, const rhendb* rdb);
 
 #endif

@@ -1284,6 +1284,133 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 // utilities for the catalog objects
 
+// part_id is used only if it is non-zero
+static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t id, uint64_t part_id, uint64_t* attrs_count, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	bplus_tree_iterator* bpi_p = NULL;
+
+	// init return attrs
+	(*attrs_count) = 0;
+	uint64_t attrs_capacity = 8;
+	rhendb_attribute* attrs = malloc(sizeof(rhendb_attribute) * attrs_capacity);
+
+	{
+		rhendb_owner_to_attributes_idx_entry o2a_key = (rhendb_owner_to_attributes_idx_entry){.owner_id = id};
+		void* o2a_key_tuple = serialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, &o2a_key);
+		bpi_p = find_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, o2a_key_tuple, 1, GREATER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, NULL, min_tx_id, abort_error);
+		free(o2a_key_tuple);
+		if(*abort_error)
+			goto ABORT_ERROR;
+
+		if(!is_empty_bplus_tree(bpi_p))
+		{
+			uint64_t expected_rel_pos_in_owner = 0;
+			while(1)
+			{
+				const void* o2a_idx_record = get_tuple_bplus_tree_iterator(bpi_p);
+				if(o2a_idx_record == NULL)
+					break;
+				rhendb_owner_to_attributes_idx_entry o2a_idx_entry = deserialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, o2a_idx_record);
+
+				// stop once we walk past the (id, ...) run of the index
+				if(o2a_idx_entry.owner_id != id)
+					break;
+
+				if(o2a_idx_entry.rel_pos_in_owner < expected_rel_pos_in_owner)
+				{
+					next_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+					if(*abort_error)
+						goto ABORT_ERROR;
+				}
+
+				// follow this entry to its attributes_table row, write locked so we can persist resolved hint bits
+				persistent_page ppage = acquire_persistent_page_with_lock(engine->pam_p, min_tx_id, o2a_idx_entry.attributes_tuple_pointer.page_id, (min_tx_id != NULL) ? WRITE_LOCK : READ_LOCK, abort_error);
+				if(*abort_error)
+					goto ABORT_ERROR;
+
+				const void* row = get_nth_tuple_on_persistent_page(&ppage, engine->pam_p->pas.page_size, &(catmgr_p->attributes_table.record_def.size_def), o2a_idx_entry.attributes_tuple_pointer.tuple_index);
+				int is_row_visible = 0;
+				{
+					mvcc_header hdr;
+					catalog_read_mvcc_header(catmgr_p, row, &(catmgr_p->attributes_table.record_def), &hdr);
+
+					int were_hints_updated = 0;
+					is_row_visible = is_tuple_visible_to_mvcc_snapshot(ss_p, &hdr, catmgr_p->tsg_p, &were_hints_updated);
+
+					if(were_hints_updated && min_tx_id != NULL)
+					{
+						char mvcc_hdr_serialized[get_maximum_tuple_size(&(catmgr_p->mvcc_header_tuple_def))];
+						write_mvcc_header(mvcc_hdr_serialized, &(catmgr_p->mvcc_header_tuple_def), &hdr);
+						set_element_in_tuple_in_place_on_persistent_page(engine->pmm_p, min_tx_id, &ppage, engine->pam_p->pas.page_size, &(catmgr_p->attributes_table.record_def), o2a_idx_entry.attributes_tuple_pointer.tuple_index, STATIC_POSITION(0), &((datum){.tuple_value = mvcc_hdr_serialized}), abort_error);
+					}
+				}
+
+				if(is_row_visible)
+				{
+					rhendb_attribute owned_attr = deserialize_rhendb_attribute(catmgr_p, NULL, row, 0, min_tx_id, abort_error);
+					if(*abort_error)
+					{
+						release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
+						goto ABORT_ERROR;
+					}
+
+					if(part_id == 0 || (owned_attr.table_part_id_from <= part_id && part_id < owned_attr.table_part_id_to))
+					{
+						rhendb_attribute owned_attr = deserialize_rhendb_attribute(catmgr_p, NULL, row, 1, min_tx_id, abort_error);
+						if(*abort_error)
+						{
+							release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
+							goto ABORT_ERROR;
+						}
+
+						expected_rel_pos_in_owner = owned_attr.rel_pos_in_owner + 1;
+
+						if((*attrs_count) == attrs_capacity)
+						{
+							attrs_capacity *= 2;
+							attrs = realloc(attrs, sizeof(rhendb_attribute) * attrs_capacity);
+						}
+						attrs[(*attrs_count)++] = owned_attr;
+					}
+				}
+
+				release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
+				if(*abort_error)
+					goto ABORT_ERROR;
+
+				next_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+				if(*abort_error)
+					goto ABORT_ERROR;
+			}
+		}
+
+		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+		if(*abort_error)
+			goto ABORT_ERROR;
+	}
+
+	if((*attrs_count) == 0)
+	{
+		free(attrs);
+		attrs_capacity = 0;
+	}
+
+	return attrs;
+
+	ABORT_ERROR:;
+	if(attrs != NULL)
+	{
+		for(uint64_t i = 0; i < (*attrs_count); i++)
+			free(attrs[i].derived_from_expr);
+		free(attrs);
+	}
+	if(bpi_p != NULL)
+		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	return NULL;
+}
+
 static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_table* hpt_p, tuple_pointer* tptr, void const * const * heap_tuples, uint32_t heap_tuples_count, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
@@ -1377,6 +1504,12 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 
 uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count)
 {
+	if(attrs_count == 0)
+	{
+		printf("BUG in (catalog_manager) :: create_table needs a non-zero attrs_count\n");
+		exit(-1);
+	}
+
 	rage_engine* engine = catmgr_p->catmgr_engine;
 
 	// we can only make persistent changes on behalf of a transaction that has a self transaction id
