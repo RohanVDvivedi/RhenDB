@@ -1902,6 +1902,9 @@ static rhendb_index_fragment* get_index_fragments(catalog_manager* catmgr_p, con
 	return NULL;
 }
 
+// builds a tuple data_type_info from the attributes owned by owner_id, one containee per attribute, defined below
+static data_type_info* get_tuple_data_type_info_from_attributes(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* type_name, int is_nullable, uint64_t owner_id, uint64_t part_id, const void* min_tx_id, int* abort_error);
+
 static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_attribute attr, const void* min_tx_id, int* abort_error)
 {
 	data_type_info* inner_dti_p = NULL;
@@ -2016,35 +2019,11 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 				exit(-1);
 			}
 
-			// recursively materialize the composite type from the attributes owned by its type id
-			uint64_t composite_attrs_count = 0;
-			rhendb_attribute* composite_attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, attr.attribute_type_id, 0, 0, &composite_attrs_count, min_tx_id, abort_error);
-			if(*abort_error)
-			{
-				free(composite_type);
-				return NULL;
-			}
-
-			data_type_info* composite_dti_p = malloc(sizeof_tuple_data_type_info(composite_attrs_count));
-			for(uint32_t i = 0; i < composite_attrs_count; i++)
-			{
-				data_type_info* containee_dti_p = get_data_type_info_for_rhendb_attribute(catmgr_p, ss_p, composite_attrs[i], min_tx_id, abort_error);
-				if(*abort_error)
-				{
-					for(uint32_t j = 0; j < i; j++)
-						destroy_type_info_recursively(composite_dti_p->containees[j].al.type_info, NULL);
-					free(composite_dti_p);
-					free(composite_attrs);
-					free(composite_type);
-					return NULL;
-				}
-				strncpy(composite_dti_p->containees[i].field_name, composite_attrs[i].attribute_name, 64);
-				composite_dti_p->containees[i].al.type_info = containee_dti_p;
-			}
-			initialize_tuple_data_type_info(composite_dti_p, composite_type->name, attr.is_nullable, catmgr_p->catmgr_engine->pam_p->pas.page_size, composite_attrs_count);
-			inner_dti_p = composite_dti_p;
-			free(composite_attrs);
+			// materialize the composite type's tuple from the attributes owned by its type id, labelled with its name
+			inner_dti_p = get_tuple_data_type_info_from_attributes(catmgr_p, ss_p, composite_type->name, attr.is_nullable, attr.attribute_type_id, 0, min_tx_id, abort_error);
 			free(composite_type);
+			if(*abort_error)
+				return NULL;
 			break;
 		}
 	}
@@ -2067,6 +2046,66 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 		(*dti_p) = get_fixed_element_count_array_type("rhendb_array", attr.count, catmgr_p->catmgr_engine->pam_p->pas.page_size, 1, inner_dti_p); // always nullable
 	}
 	return dti_p;
+}
+
+// build a tuple data_type_info from the attributes owned by owner_id, materializing each attribute's type via
+// get_data_type_info_for_rhendb_attribute. for a table pass the partition part_id (else 0). type_name labels the
+// outermost tuple. returns NULL only on abort, having freed whatever it built so far.
+static data_type_info* get_tuple_data_type_info_from_attributes(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* type_name, int is_nullable, uint64_t owner_id, uint64_t part_id, const void* min_tx_id, int* abort_error)
+{
+	uint64_t attrs_count = 0;
+	rhendb_attribute* attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, owner_id, part_id, 0, &attrs_count, min_tx_id, abort_error);
+	if(*abort_error)
+		return NULL;
+
+	data_type_info* tuple_dti_p = malloc(sizeof_tuple_data_type_info(attrs_count));
+	for(uint32_t i = 0; i < attrs_count; i++)
+	{
+		data_type_info* containee_dti_p = get_data_type_info_for_rhendb_attribute(catmgr_p, ss_p, attrs[i], min_tx_id, abort_error);
+		if(*abort_error)
+		{
+			for(uint32_t j = 0; j < i; j++)
+				destroy_type_info_recursively(tuple_dti_p->containees[j].al.type_info, NULL);
+			free(tuple_dti_p);
+			free(attrs);
+			return NULL;
+		}
+		strncpy(tuple_dti_p->containees[i].field_name, attrs[i].attribute_name, 64);
+		tuple_dti_p->containees[i].al.type_info = containee_dti_p;
+	}
+	initialize_tuple_data_type_info(tuple_dti_p, type_name, is_nullable, catmgr_p->catmgr_engine->pam_p->pas.page_size, attrs_count);
+	free(attrs);
+	return tuple_dti_p;
+}
+
+// tuple data_type_info describing the rows of a table partition, from the attributes valid in (table_id, partition_id).
+// a table_partition carries no name of its own, so its row tuple is named after the owning table
+static data_type_info* get_data_type_info_for_rhendb_table_partition(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_table_partition table_partition, const void* min_tx_id, int* abort_error)
+{
+	rhendb_table* owning_table = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_TABLE, table_partition.table_id, 0, min_tx_id, abort_error);
+	if(*abort_error)
+		return NULL;
+	if(owning_table == NULL)
+	{
+		printf("BUG (in catalog_manager) :: a table partition points at a missing table\n");
+		exit(-1);
+	}
+
+	data_type_info* partition_dti_p = get_tuple_data_type_info_from_attributes(catmgr_p, ss_p, owning_table->name, 0, table_partition.table_id, table_partition.partition_id, min_tx_id, abort_error);
+	free(owning_table);
+	return partition_dti_p;
+}
+
+// tuple data_type_info describing a type, from the attributes owned by the type, labelled with the type's name
+static data_type_info* get_data_type_info_for_rhendb_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_type type, const void* min_tx_id, int* abort_error)
+{
+	return get_tuple_data_type_info_from_attributes(catmgr_p, ss_p, type.name, 0, type.id, 0, min_tx_id, abort_error);
+}
+
+// tuple data_type_info describing an index key, from the attributes owned by the index, labelled with the index's name
+static data_type_info* get_data_type_info_for_rhendb_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_index index, const void* min_tx_id, int* abort_error)
+{
+	return get_tuple_data_type_info_from_attributes(catmgr_p, ss_p, index.name, 0, index.id, 0, min_tx_id, abort_error);
 }
 
 static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_table* hpt_p, tuple_pointer* tptr, void const * const * heap_tuples, uint32_t heap_tuples_count, const void* min_tx_id, int* abort_error)
