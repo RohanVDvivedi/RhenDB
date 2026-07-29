@@ -2008,39 +2008,38 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 		{
 			// first, a single id_idx lookup for this composite type's own row (must be visible to us) to get its name
 			rhendb_type* composite_type = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_TYPE, attr.attribute_type_id, 0, min_tx_id, abort_error);
-			if(composite_type == NULL)
+			if(*abort_error)
 				return NULL;
+			if(composite_type == NULL)
+			{
+				printf("BUG (in catalog_manager) :: mi9ssing type\n");
+				exit(-1);
+			}
 
 			// recursively materialize the composite type from the attributes owned by its type id
 			uint64_t composite_attrs_count = 0;
 			rhendb_attribute* composite_attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, attr.attribute_type_id, 0, 0, &composite_attrs_count, min_tx_id, abort_error);
 			if(*abort_error)
 			{
-				free(composite_attrs);
 				free(composite_type);
 				return NULL;
 			}
 
 			data_type_info* composite_dti_p = malloc(sizeof_tuple_data_type_info(composite_attrs_count));
-			uint32_t built_containee_count = 0;
-			for(; built_containee_count < composite_attrs_count; built_containee_count++)
+			for(uint32_t i = 0; i < composite_attrs_count; i++)
 			{
-				data_type_info* containee_dti_p = get_data_type_info_for_rhendb_attribute(catmgr_p, ss_p, composite_attrs[built_containee_count], min_tx_id, abort_error);
-				if(containee_dti_p == NULL)
-					break;
-				strncpy(composite_dti_p->containees[built_containee_count].field_name, composite_attrs[built_containee_count].attribute_name, 64);
-				composite_dti_p->containees[built_containee_count].al.type_info = containee_dti_p;
-			}
-
-			// on failing to build any containee (abort or an unmappable type), unwind the ones already built and bail
-			if(built_containee_count < composite_attrs_count)
-			{
-				for(uint32_t i = 0; i < built_containee_count; i++)
-					destroy_type_info_recursively(composite_dti_p->containees[i].al.type_info, NULL);
-				free(composite_dti_p);
-				free(composite_attrs);
-				free(composite_type);
-				return NULL;
+				data_type_info* containee_dti_p = get_data_type_info_for_rhendb_attribute(catmgr_p, ss_p, composite_attrs[i], min_tx_id, abort_error);  // returning NULL from this function is a big BUG so let it be faulted
+				if(*abort_error)
+				{
+					for(uint32_t j = 0; j < i; j++)
+						destroy_type_info_recursively(composite_dti_p->containees[j].al.type_info, NULL);
+					free(composite_dti_p);
+					free(composite_attrs);
+					free(composite_type);
+					return NULL;
+				}
+				strncpy(composite_dti_p->containees[i].field_name, composite_attrs[i].attribute_name, 64);
+				composite_dti_p->containees[i].al.type_info = containee_dti_p;
 			}
 
 			initialize_tuple_data_type_info(composite_dti_p, composite_type->name, attr.is_nullable, catmgr_p->catmgr_engine->pam_p->pas.page_size, composite_attrs_count);
@@ -2051,7 +2050,7 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 		}
 	}
 
-	if(inner_dti_p == NULL)
+	if(inner_dti_p == NULL) // returning NULL from this function is a big BUG so let it be faulted
 		return NULL;
 
 	if(!attr.has_count)
