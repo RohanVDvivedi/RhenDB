@@ -62,7 +62,7 @@ struct catalog_manager
 	// ---------------- TABLES FOR SCHEMA
 
 	catalog_heap_table attributes_table;
-	// mvcc_hdr, owner_id, rel_pos_in_owner, table_part_id_from, table_part_id_to, attribute_name, base_type (rhendb_base_type), attribute_type_id (valid for base_type == RHENDB_TUPLE), count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, derived_from_expression(null if not derived column and not index attribute)
+	// mvcc_hdr, owner_id, rel_pos_in_owner, table_part_id_from, table_part_id_to, attribute_name, base_type (rhendb_base_type), size (for non composite base type), attribute_type_id (valid for base_type == RHENDB_TUPLE), count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, derived_from_expression(null if not derived column and not index attribute)
 	// has rows for attributes of table, type and index only
 	// table_part_id_* will remain 0 if owner_id is not a table
 
@@ -167,6 +167,8 @@ struct rhendb_attribute
 	char attribute_name[64];
 
 	rhendb_base_type base_type;
+
+	uint32_t size; // for base type
 
 	uint64_t attribute_type_id; // valid only for base_type = RHENDB_COMPOSITE_TYPE
 

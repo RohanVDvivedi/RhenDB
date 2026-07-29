@@ -144,27 +144,29 @@ static void* serialize_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_he
 
 	set_element_in_tuple(record_def, STATIC_POSITION(6), tuple, &((datum){.uint_value = attr->base_type}), 0);
 
-	set_element_in_tuple(record_def, STATIC_POSITION(7), tuple, &((datum){.uint_value = attr->attribute_type_id}), 0);
+	set_element_in_tuple(record_def, STATIC_POSITION(7), tuple, &((datum){.uint_value = attr->size}), 0);
+
+	set_element_in_tuple(record_def, STATIC_POSITION(8), tuple, &((datum){.uint_value = attr->attribute_type_id}), 0);
 
 	if(attr->count == NULL)
-		set_element_in_tuple(record_def, STATIC_POSITION(8), tuple, NULL_DATUM, 0);
+		set_element_in_tuple(record_def, STATIC_POSITION(9), tuple, NULL_DATUM, 0);
 	else
-		set_element_in_tuple(record_def, STATIC_POSITION(8), tuple, &((datum){.uint_value = *(attr->count)}), 0);
+		set_element_in_tuple(record_def, STATIC_POSITION(9), tuple, &((datum){.uint_value = *(attr->count)}), 0);
 
-	set_element_in_tuple(record_def, STATIC_POSITION(9), tuple, &((datum){.bit_field_value = attr->is_auto_increment}), 0);
+	set_element_in_tuple(record_def, STATIC_POSITION(10), tuple, &((datum){.bit_field_value = attr->is_auto_increment}), 0);
 
-	set_element_in_tuple(record_def, STATIC_POSITION(10), tuple, &((datum){.bit_field_value = attr->is_nullable}), 0);
+	set_element_in_tuple(record_def, STATIC_POSITION(11), tuple, &((datum){.bit_field_value = attr->is_nullable}), 0);
 
 	if(should_blob && attr->derived_from_expr != NULL)
 	{
-		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(11), attr->derived_from_expr, strlen(attr->derived_from_expr), min_tx_id, abort_error))
+		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(12), attr->derived_from_expr, strlen(attr->derived_from_expr), min_tx_id, abort_error))
 		{
 			free(tuple);
 			return NULL;
 		}
 	}
 	else
-		set_element_in_tuple(record_def, STATIC_POSITION(11), tuple, NULL_DATUM, UINT32_MAX);
+		set_element_in_tuple(record_def, STATIC_POSITION(12), tuple, NULL_DATUM, UINT32_MAX);
 
 	return tuple;
 }
@@ -448,9 +450,12 @@ static rhendb_attribute deserialize_rhendb_attribute(catalog_manager* catmgr_p, 
 	attr.base_type = uval.uint_value;
 
 	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(7), tuple);
-	attr.attribute_type_id = uval.uint_value;
+	attr.size = uval.uint_value;
 
 	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(8), tuple);
+	attr.attribute_type_id = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(9), tuple);
 	if(uval.is_NULL)
 		attr.count = NULL;
 	else
@@ -459,15 +464,15 @@ static rhendb_attribute deserialize_rhendb_attribute(catalog_manager* catmgr_p, 
 		attr.count = &(attr._count);
 	}
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(9), tuple);
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(10), tuple);
 	attr.is_auto_increment = uval.bit_field_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(10), tuple);
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(11), tuple);
 	attr.is_nullable = uval.bit_field_value;
 
 	if(should_blob)
 	{
-		attr.derived_from_expr = catalog_read_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(11), record_def->type_info->containees[11].al.type_info, &(attr.derived_from_expr_size), min_tx_id, abort_error);
+		attr.derived_from_expr = catalog_read_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(12), record_def->type_info->containees[11].al.type_info, &(attr.derived_from_expr_size), min_tx_id, abort_error);
 		if(*abort_error)
 			return attr;
 	}
@@ -757,7 +762,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 	data_type_info* base_dti_p = UINT_NON_NULLABLE[2];
 
 	{
-		data_type_info* attributes_type_info = malloc(sizeof_tuple_data_type_info(12));
+		data_type_info* attributes_type_info = malloc(sizeof_tuple_data_type_info(13));
 
 		strcpy(attributes_type_info->containees[0].field_name, "mvcc_hdr");
 		attributes_type_info->containees[0].al.type_info = mvcc_hdr_dti_p;
@@ -780,22 +785,25 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		strcpy(attributes_type_info->containees[6].field_name, "base_type");
 		attributes_type_info->containees[6].al.type_info = base_dti_p;
 
-		strcpy(attributes_type_info->containees[7].field_name, "attribute_type_id");
-		attributes_type_info->containees[7].al.type_info = id_dti_p;
+		strcpy(attributes_type_info->containees[7].field_name, "size");
+		attributes_type_info->containees[7].al.type_info = UINT_NON_NULLABLE[4];
 
-		strcpy(attributes_type_info->containees[8].field_name, "count");
-		attributes_type_info->containees[8].al.type_info = UINT_NULLABLE[4];
+		strcpy(attributes_type_info->containees[8].field_name, "attribute_type_id");
+		attributes_type_info->containees[8].al.type_info = id_dti_p;
 
-		strcpy(attributes_type_info->containees[9].field_name, "is_auto_increment");
-		attributes_type_info->containees[9].al.type_info = BIT_FIELD_NON_NULLABLE[1];
+		strcpy(attributes_type_info->containees[9].field_name, "count");
+		attributes_type_info->containees[9].al.type_info = UINT_NULLABLE[4];
 
-		strcpy(attributes_type_info->containees[10].field_name, "is_nullable");
+		strcpy(attributes_type_info->containees[10].field_name, "is_auto_increment");
 		attributes_type_info->containees[10].al.type_info = BIT_FIELD_NON_NULLABLE[1];
 
-		strcpy(attributes_type_info->containees[11].field_name, "derived_from_expr");
-		attributes_type_info->containees[11].al.type_info = catmgr_engine->text_extended_type_info;
+		strcpy(attributes_type_info->containees[11].field_name, "is_nullable");
+		attributes_type_info->containees[11].al.type_info = BIT_FIELD_NON_NULLABLE[1];
 
-		initialize_tuple_data_type_info(attributes_type_info, "rhendb_attribute", 0, 900, 12);
+		strcpy(attributes_type_info->containees[12].field_name, "derived_from_expr");
+		attributes_type_info->containees[12].al.type_info = catmgr_engine->text_extended_type_info;
+
+		initialize_tuple_data_type_info(attributes_type_info, "rhendb_attribute", 0, 900, 13);
 
 		initialize_tuple_def(&(catmgr_p->attributes_table.record_def), attributes_type_info);
 
@@ -1285,7 +1293,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 // utilities for the catalog objects
 
 // part_id is used only if it is non-zero
-static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t id, uint64_t part_id, uint64_t* attrs_count, const void* min_tx_id, int* abort_error)
+static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t id, uint64_t part_id, int should_blob, uint64_t* attrs_count, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
 
@@ -1358,11 +1366,14 @@ static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catm
 
 					if(part_id == 0 || (owned_attr.table_part_id_from <= part_id && part_id < owned_attr.table_part_id_to))
 					{
-						rhendb_attribute owned_attr = deserialize_rhendb_attribute(catmgr_p, NULL, row, 1, min_tx_id, abort_error);
-						if(*abort_error)
+						if(should_blob)
 						{
-							release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
-							goto ABORT_ERROR;
+							owned_attr = deserialize_rhendb_attribute(catmgr_p, NULL, row, 1, min_tx_id, abort_error);
+							if(*abort_error)
+							{
+								release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
+								goto ABORT_ERROR;
+							}
 						}
 
 						expected_rel_pos_in_owner = owned_attr.rel_pos_in_owner + 1;
@@ -1409,6 +1420,147 @@ static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catm
 	if(bpi_p != NULL)
 		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
 	return NULL;
+}
+
+static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_attribute attr, const void* min_tx_id, int* abort_error)
+{
+	data_type_info* inner_dti_p = NULL;
+
+	switch(attr.base_type)
+	{
+		case RHENDB_BIT_FIELD :
+		{
+			if(0 < attr.size && attr.size <= 64)
+			{
+				if(attr.is_nullable)
+					inner_dti_p = BIT_FIELD_NULLABLE[attr.size];
+				else
+					inner_dti_p = BIT_FIELD_NON_NULLABLE[attr.size];
+			}
+			break;
+		}
+
+		case RHENDB_UINT :
+		{
+			if(attr.is_nullable)
+			{
+				if(0 < attr.size && attr.size <= 8)
+					inner_dti_p = UINT_NULLABLE[attr.size];
+				else if(0 < attr.size && attr.size <= 32)
+					inner_dti_p = LARGE_UINT_NULLABLE[attr.size];
+			}
+			else
+			{
+				if(0 < attr.size && attr.size <= 8)
+					inner_dti_p = UINT_NON_NULLABLE[attr.size];
+				else if(0 < attr.size && attr.size <= 32)
+					inner_dti_p = LARGE_UINT_NON_NULLABLE[attr.size];
+			}
+			break;
+		}
+
+		case RHENDB_INT :
+		{
+			if(attr.is_nullable)
+			{
+				if(0 < attr.size && attr.size <= 8)
+					inner_dti_p = INT_NULLABLE[attr.size];
+				else if(0 < attr.size && attr.size <= 32)
+					inner_dti_p = LARGE_INT_NULLABLE[attr.size];
+			}
+			else
+			{
+				if(0 < attr.size && attr.size <= 8)
+					inner_dti_p = INT_NON_NULLABLE[attr.size];
+				else if(0 < attr.size && attr.size <= 32)
+					inner_dti_p = LARGE_INT_NON_NULLABLE[attr.size];
+			}
+			break;
+		}
+
+		case RHENDB_FLOAT :
+		{
+			if(attr.is_nullable)
+			{
+				if(attr.size == sizeof(float))
+					inner_dti_p = FLOAT_float_NULLABLE;
+				else if(attr.size == sizeof(double))
+					inner_dti_p = FLOAT_double_NULLABLE;
+			}
+			else
+			{
+				if(attr.size == sizeof(float))
+					inner_dti_p = FLOAT_float_NON_NULLABLE;
+				else if(attr.size == sizeof(double))
+					inner_dti_p = FLOAT_double_NON_NULLABLE;
+			}
+			break;
+		}
+
+		case RHENDB_TUPLE_POINTER :
+			inner_dti_p = &(catmgr_p->catmgr_engine->pam_p->pas.tuple_pointer_type_info); break;
+
+		case RHENDB_MVCC_HEADER :
+			inner_dti_p = catmgr_p->mvcc_header_tuple_def.type_info; break;
+
+		case RHENDB_STRING :
+			inner_dti_p = get_text_inline_type_info(attr.size); break;
+
+		case RHENDB_BINARY :
+			inner_dti_p = get_blob_inline_type_info(attr.size); break;
+
+		case RHENDB_NUMBER :
+			inner_dti_p = get_numeric_inline_type_info(attr.size); break;
+
+		case RHENDB_TEXT :
+			inner_dti_p = catmgr_p->catmgr_engine->text_extended_type_info; break;
+
+		case RHENDB_BLOB :
+			inner_dti_p = catmgr_p->catmgr_engine->blob_extended_type_info; break;
+
+		case RHENDB_NUMERIC :
+			inner_dti_p = catmgr_p->catmgr_engine->numeric_extended_type_info; break;
+
+		case RHENDB_JSONB :
+			inner_dti_p = catmgr_p->catmgr_engine->jsonb_extended_type_info; break;
+
+		case RHENDB_COMPOSITE_TYPE :
+		{
+			/*
+			uint32_t attrs_count = 0;
+			rhendb_attribute* attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, attr.attribute_type_id, 0, 0, &attrs_count, min_tx_id, abort_error);
+			if(*abort_error)
+				return NULL;
+
+			inner_dti_p = malloc(sizeof_tuple_data_type_info(attrs_count));
+			for(uint32_t i = 0; i < attrs_count; i++)
+			{
+				strncpy(inner_dti_p->containees[i].field_name, attrs[i].attribute_name, sizeof(attrs[i].attribute_name));
+				inner_dti_p->containees[i].al.type_info = get_data_type_info_for_rhendb_type_info(rti_p->containee, rdb);
+			}
+			initialize_tuple_data_type_info(dti_p, rti_p->type_name, attr->is_nullable, catmgr_p->catmgr_engine->pam_p->pas.page_size, attrs_count);
+			return dti_p;
+			*/
+			return NULL; // to be implemented later
+		}
+	}
+
+	if(inner_dti_p == NULL)
+		return NULL;
+
+	if(attr.count == NULL)
+		return inner_dti_p;
+
+	data_type_info* dti_p = malloc(sizeof(data_type_info));
+	if((*(attr.count)) == 0)
+	{
+		(*dti_p) = get_variable_element_count_array_type("rhendb_array", catmgr_p->catmgr_engine->pam_p->pas.page_size, inner_dti_p);
+	}
+	else
+	{
+		(*dti_p) = get_fixed_element_count_array_type("rhendb_array", (*(attr.count)), catmgr_p->catmgr_engine->pam_p->pas.page_size, 1, inner_dti_p); // always nullable
+	}
+	return dti_p;
 }
 
 static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_table* hpt_p, tuple_pointer* tptr, void const * const * heap_tuples, uint32_t heap_tuples_count, const void* min_tx_id, int* abort_error)
