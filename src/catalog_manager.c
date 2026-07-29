@@ -1640,6 +1640,268 @@ static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catm
 	return NULL;
 }
 
+// get every index of a table via the table_to_indices_idx (keyed on table_id), following each entry to its indices_table
+// row and returning the ones visible to us as a malloc-ed array. should_blob controls reading each index's predicate_expr.
+static rhendb_index* get_indices_for_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, int should_blob, uint64_t* indices_count, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	bplus_tree_iterator* bpi_p = NULL;
+
+	// init return indices
+	(*indices_count) = 0;
+	uint64_t indices_capacity = 8;
+	rhendb_index* indices = malloc(sizeof(rhendb_index) * indices_capacity);
+
+	rhendb_table_to_indices_entry t2i_key = (rhendb_table_to_indices_entry){.table_id = table_id};
+	void* t2i_key_tuple = serialize_rhendb_table_to_indices_entry(catmgr_p, &t2i_key);
+	bpi_p = find_in_bplus_tree(catmgr_p->table_to_indices_idx.root_page_id, t2i_key_tuple, 1, GREATER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->table_to_indices_idx.index_defs), engine->pam_p, NULL, min_tx_id, abort_error);
+	free(t2i_key_tuple);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	if(!is_empty_bplus_tree(bpi_p))
+	{
+		while(1)
+		{
+			const void* t2i_idx_record = get_tuple_bplus_tree_iterator(bpi_p);
+			if(t2i_idx_record == NULL)
+				break;
+			rhendb_table_to_indices_entry t2i_idx_entry = deserialize_rhendb_table_to_indices_entry(catmgr_p, t2i_idx_record);
+
+			// stop once we walk past the (table_id, ...) run of the index
+			if(t2i_idx_entry.table_id != table_id)
+				break;
+
+			// materialize the index row via the shared getter (it acquires, checks visibility, fixes hints and mallocs),
+			// then shallow copy it into our array and free that extra allocation, the predicate_expr is carried over as is
+			rhendb_index* materialized_index = get_visible_catalog_object_at(catmgr_p, ss_p, RHENDB_INDEX, t2i_idx_entry.indices_tuple_pointer, should_blob, min_tx_id, abort_error);
+			if(*abort_error)
+				goto ABORT_ERROR;
+
+			if(materialized_index != NULL)
+			{
+				if((*indices_count) == indices_capacity)
+				{
+					indices_capacity *= 2;
+					indices = realloc(indices, sizeof(rhendb_index) * indices_capacity);
+				}
+				indices[(*indices_count)++] = (*materialized_index);
+				free(materialized_index);
+			}
+
+			next_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+			if(*abort_error)
+				goto ABORT_ERROR;
+		}
+	}
+
+	delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	bpi_p = NULL;
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	if((*indices_count) == 0)
+	{
+		free(indices);
+		indices = NULL;
+	}
+
+	return indices;
+
+	ABORT_ERROR:;
+	if(indices != NULL)
+	{
+		for(uint64_t i = 0; i < (*indices_count); i++)
+			free(indices[i].predicate_expr);
+		free(indices);
+	}
+	if(bpi_p != NULL)
+		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	return NULL;
+}
+
+// get every partition of a table from the clustered table_partitions_table (keyed on (table_id, partition_id)), scanning
+// its (table_id, ...) run and returning the ones visible to us as a malloc-ed array. resolved hint bits are written back
+// in place on the leaf when min_tx_id != NULL.
+static rhendb_table_partition* get_partitions_for_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* partitions_count, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	bplus_tree_iterator* bpi_p = NULL;
+
+	// init return partitions
+	(*partitions_count) = 0;
+	uint64_t partitions_capacity = 8;
+	rhendb_table_partition* partitions = malloc(sizeof(rhendb_table_partition) * partitions_capacity);
+
+	rhendb_table_partition partition_key = (rhendb_table_partition){.table_id = table_id};
+	void* partition_key_tuple = serialize_rhendb_table_partition_key(catmgr_p, &partition_key);
+	bpi_p = find_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, partition_key_tuple, 1, GREATER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, (min_tx_id != NULL) ? engine->pmm_p : NULL, min_tx_id, abort_error);
+	free(partition_key_tuple);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	if(!is_empty_bplus_tree(bpi_p))
+	{
+		while(1)
+		{
+			const void* partition_record = get_tuple_bplus_tree_iterator(bpi_p);
+			if(partition_record == NULL)
+				break;
+			mvcc_header hdr;
+			rhendb_table_partition partition_entry = deserialize_rhendb_table_partition(catmgr_p, &hdr, partition_record);
+
+			// stop once we walk past the (table_id, ...) run of the clustered index
+			if(partition_entry.table_id != table_id)
+				break;
+
+			int were_hints_updated = 0;
+			int is_partition_visible = is_tuple_visible_to_mvcc_snapshot(ss_p, &hdr, catmgr_p->tsg_p, &were_hints_updated);
+
+			// the mvcc_header is the non-key element at position 0, persist the resolved hints back in place on the leaf
+			if(were_hints_updated && min_tx_id != NULL)
+			{
+				char mvcc_hdr_serialized[get_maximum_tuple_size(&(catmgr_p->mvcc_header_tuple_def))];
+				write_mvcc_header(mvcc_hdr_serialized, &(catmgr_p->mvcc_header_tuple_def), &hdr);
+				update_non_key_element_in_place_at_bplus_tree_iterator(bpi_p, STATIC_POSITION(0), &((datum){.tuple_value = mvcc_hdr_serialized}), min_tx_id, abort_error);
+				if(*abort_error)
+					goto ABORT_ERROR;
+			}
+
+			if(is_partition_visible)
+			{
+				if((*partitions_count) == partitions_capacity)
+				{
+					partitions_capacity *= 2;
+					partitions = realloc(partitions, sizeof(rhendb_table_partition) * partitions_capacity);
+				}
+				partitions[(*partitions_count)++] = partition_entry;
+			}
+
+			next_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+			if(*abort_error)
+				goto ABORT_ERROR;
+		}
+	}
+
+	delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	bpi_p = NULL;
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	if((*partitions_count) == 0)
+	{
+		free(partitions);
+		partitions = NULL;
+	}
+
+	return partitions;
+
+	ABORT_ERROR:;
+	free(partitions);
+	if(bpi_p != NULL)
+		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	return NULL;
+}
+
+// get the index fragments from the clustered index_fragments_table (keyed on (table_id, index_id, partition_id)).
+// table_id is always concerned, index_id is concerned only when it is non zero, and partition_id only when both index_id
+// and it are non zero. returns the fragments visible to us as a malloc-ed array, writing hints back when min_tx_id != NULL.
+static rhendb_index_fragment* get_index_fragments(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id, uint64_t partition_id, uint64_t* fragments_count, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	bplus_tree_iterator* bpi_p = NULL;
+
+	// init return fragments
+	(*fragments_count) = 0;
+	uint64_t fragments_capacity = 8;
+	rhendb_index_fragment* fragments = malloc(sizeof(rhendb_index_fragment) * fragments_capacity);
+
+	// decide how many of the leading key elements the lookup should be concerned with
+	uint32_t key_element_count = 1;
+	if(index_id != 0)
+	{
+		key_element_count = 2;
+		if(partition_id != 0)
+			key_element_count = 3;
+	}
+
+	rhendb_index_fragment fragment_key = (rhendb_index_fragment){.table_id = table_id, .index_id = index_id, .partition_id = partition_id};
+	void* fragment_key_tuple = serialize_rhendb_index_fragment_key(catmgr_p, &fragment_key);
+	bpi_p = find_in_bplus_tree(catmgr_p->index_fragments_table.root_page_id, fragment_key_tuple, key_element_count, GREATER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->index_fragments_table.clust_table_defs), engine->pam_p, (min_tx_id != NULL) ? engine->pmm_p : NULL, min_tx_id, abort_error);
+	free(fragment_key_tuple);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	if(!is_empty_bplus_tree(bpi_p))
+	{
+		while(1)
+		{
+			const void* fragment_record = get_tuple_bplus_tree_iterator(bpi_p);
+			if(fragment_record == NULL)
+				break;
+			mvcc_header hdr;
+			rhendb_index_fragment fragment_entry = deserialize_rhendb_index_fragment(catmgr_p, &hdr, fragment_record);
+
+			// stop once we walk past the concerned (table_id [, index_id [, partition_id]]) key prefix
+			if(fragment_entry.table_id != table_id)
+				break;
+			if(index_id != 0 && fragment_entry.index_id != index_id)
+				break;
+			if(index_id != 0 && partition_id != 0 && fragment_entry.partition_id != partition_id)
+				break;
+
+			int were_hints_updated = 0;
+			int is_fragment_visible = is_tuple_visible_to_mvcc_snapshot(ss_p, &hdr, catmgr_p->tsg_p, &were_hints_updated);
+
+			// the mvcc_header is the non-key element at position 0, persist the resolved hints back in place on the leaf
+			if(were_hints_updated && min_tx_id != NULL)
+			{
+				char mvcc_hdr_serialized[get_maximum_tuple_size(&(catmgr_p->mvcc_header_tuple_def))];
+				write_mvcc_header(mvcc_hdr_serialized, &(catmgr_p->mvcc_header_tuple_def), &hdr);
+				update_non_key_element_in_place_at_bplus_tree_iterator(bpi_p, STATIC_POSITION(0), &((datum){.tuple_value = mvcc_hdr_serialized}), min_tx_id, abort_error);
+				if(*abort_error)
+					goto ABORT_ERROR;
+			}
+
+			if(is_fragment_visible)
+			{
+				if((*fragments_count) == fragments_capacity)
+				{
+					fragments_capacity *= 2;
+					fragments = realloc(fragments, sizeof(rhendb_index_fragment) * fragments_capacity);
+				}
+				fragments[(*fragments_count)++] = fragment_entry;
+			}
+
+			next_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+			if(*abort_error)
+				goto ABORT_ERROR;
+		}
+	}
+
+	delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	bpi_p = NULL;
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	if((*fragments_count) == 0)
+	{
+		free(fragments);
+		fragments = NULL;
+	}
+
+	return fragments;
+
+	ABORT_ERROR:;
+	free(fragments);
+	if(bpi_p != NULL)
+		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	return NULL;
+}
+
 static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_attribute attr, const void* min_tx_id, int* abort_error)
 {
 	data_type_info* inner_dti_p = NULL;
