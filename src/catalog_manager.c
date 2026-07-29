@@ -1373,7 +1373,7 @@ static void* get_visible_catalog_object_at(catalog_manager* catmgr_p, const mvcc
 	return object;
 
 	ABORT_ERROR :
-	if(is_persistent_page_NULL(&ppage, engine->pam_p))
+	if(!is_persistent_page_NULL(&ppage, engine->pam_p))
 		release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
 	if(object != NULL)
 	{
