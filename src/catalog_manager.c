@@ -1293,6 +1293,222 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 // utilities for the catalog objects
 
 // part_id is used only if it is non-zero
+// materialize the catalog object living at object_tuple_pointer (a row in the tables / types / indices heap, picked by
+// object_type) into a freshly malloc-ed rhendb_table / rhendb_type / rhendb_index and return it. returns NULL on abort,
+// or when the row is not visible to ss_p. when ss_p is NULL the visibility check is skipped and the row is taken as-is.
+// hint bits are written back only when resolved and min_tx_id != NULL. for an index, should_blob reads its predicate_expr.
+static void* get_visible_catalog_object_at(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, tuple_pointer object_tuple_pointer, int should_blob, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+	void* object = NULL;
+	persistent_page ppage = get_NULL_persistent_page(engine->pam_p);
+
+	const tuple_def* record_def = NULL;
+	if(object_type == RHENDB_TYPE)
+		record_def = &(catmgr_p->types_table.record_def);
+	else if(object_type == RHENDB_INDEX)
+		record_def = &(catmgr_p->indices_table.record_def);
+	else if(object_type == RHENDB_TABLE)
+		record_def = &(catmgr_p->tables_table.record_def);
+	else
+	{
+		printf("BUG (in catalog_manager) :: unknown objec type passed\n");
+		exit(-1);
+	}
+
+	ppage = acquire_persistent_page_with_lock(engine->pam_p, min_tx_id, object_tuple_pointer.page_id, (min_tx_id != NULL) ? WRITE_LOCK : READ_LOCK, abort_error);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	const void* row = get_nth_tuple_on_persistent_page(&ppage, engine->pam_p->pas.page_size, &(record_def->size_def), object_tuple_pointer.tuple_index);
+	if(row != NULL)
+	{
+		// when ss_p is NULL, skip the visibility check and take the row as-is
+		int is_object_visible = 1;
+		if(ss_p != NULL)
+		{
+			mvcc_header hdr;
+			catalog_read_mvcc_header(catmgr_p, row, record_def, &hdr);
+
+			int were_hints_updated = 0;
+			is_object_visible = is_tuple_visible_to_mvcc_snapshot(ss_p, &hdr, catmgr_p->tsg_p, &were_hints_updated);
+
+			if(were_hints_updated && min_tx_id != NULL)
+			{
+				char mvcc_hdr_serialized[get_maximum_tuple_size(&(catmgr_p->mvcc_header_tuple_def))];
+				write_mvcc_header(mvcc_hdr_serialized, &(catmgr_p->mvcc_header_tuple_def), &hdr);
+				set_element_in_tuple_in_place_on_persistent_page(engine->pmm_p, min_tx_id, &ppage, engine->pam_p->pas.page_size, record_def, object_tuple_pointer.tuple_index, STATIC_POSITION(0), &((datum){.tuple_value = mvcc_hdr_serialized}), abort_error);
+				if(*abort_error)
+					goto ABORT_ERROR;
+			}
+		}
+
+		if(is_object_visible)
+		{
+			if(object_type == RHENDB_TABLE)
+			{
+				rhendb_table* materialized_object = malloc(sizeof(rhendb_table));
+				(*materialized_object) = deserialize_rhendb_table(catmgr_p, NULL, row);
+				object = materialized_object;
+			}
+			else if(object_type == RHENDB_TYPE)
+			{
+				rhendb_type* materialized_object = malloc(sizeof(rhendb_type));
+				(*materialized_object) = deserialize_rhendb_type(catmgr_p, NULL, row);
+				object = materialized_object;
+			}
+			else if(object_type == RHENDB_INDEX)
+			{
+				rhendb_index* materialized_object = malloc(sizeof(rhendb_index));
+				(*materialized_object) = deserialize_rhendb_index(catmgr_p, NULL, row, should_blob, min_tx_id, abort_error);
+				object = materialized_object;
+			}
+		}
+	}
+
+	release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	return object;
+
+	ABORT_ERROR :
+	if(is_persistent_page_NULL(&ppage, engine->pam_p))
+		release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
+	if(object != NULL)
+	{
+		if(object_type == RHENDB_INDEX && ((rhendb_index*)object)->predicate_expr != NULL)
+			free(((rhendb_index*)object)->predicate_expr);
+		free(object);
+	}
+	return NULL;
+}
+
+// look up a catalog object of object_type by its id via the id_idx, and materialize the version visible to us.
+// returns a plain malloc-ed rhendb_table / rhendb_type / rhendb_index, or NULL on abort / not found / not visible.
+static void* get_catalog_object_by_id(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, uint64_t id, int should_blob, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+	void* object = NULL;
+	bplus_tree_iterator* bpi_p = NULL;
+
+	rhendb_id_idx_entry id_key = (rhendb_id_idx_entry){.object_type = object_type, .id = id};
+	void* id_key_tuple = serialize_rhendb_id_idx_entry(catmgr_p, &id_key);
+	bpi_p = find_in_bplus_tree(catmgr_p->id_idx.root_page_id, id_key_tuple, 2, GREATER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->id_idx.index_defs), engine->pam_p, NULL, min_tx_id, abort_error);
+	free(id_key_tuple);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	if(!is_empty_bplus_tree(bpi_p))
+	{
+		// every heap update inserts a fresh id_idx entry, so more than one may share this (object_type, id),
+		// walk the run until we materialize the version that is visible to us
+		while(1)
+		{
+			const void* id_idx_record = get_tuple_bplus_tree_iterator(bpi_p);
+			if(id_idx_record == NULL)
+				break;
+			rhendb_id_idx_entry id_idx_entry = deserialize_rhendb_id_idx_entry(catmgr_p, id_idx_record);
+
+			// stop once we walk past the (object_type, id) run of the index
+			if(id_idx_entry.object_type != object_type || id_idx_entry.id != id)
+				break;
+
+			object = get_visible_catalog_object_at(catmgr_p, ss_p, object_type, id_idx_entry.object_tuple_pointer, should_blob, min_tx_id, abort_error);
+			if(*abort_error)
+				goto ABORT_ERROR;
+			if(object != NULL)
+				break;
+
+			next_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+			if(*abort_error)
+				goto ABORT_ERROR;
+		}
+	}
+
+	delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	bpi_p = NULL;
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	return object;
+
+	ABORT_ERROR:;
+	if(bpi_p != NULL)
+		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	if(object != NULL)
+	{
+		if(object_type == RHENDB_INDEX && ((rhendb_index*)object)->predicate_expr != NULL)
+			free(((rhendb_index*)object)->predicate_expr);
+		free(object);
+		object = NULL;
+	}
+	return NULL;
+}
+
+// look up a catalog object of object_type by its name via the name_idx, and materialize the version visible to us.
+// returns a plain malloc-ed rhendb_table / rhendb_type / rhendb_index, or NULL on abort / not found / not visible.
+static void* get_catalog_object_by_name(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, char* name, int should_blob, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+	void* object = NULL;
+	bplus_tree_iterator* bpi_p = NULL;
+
+	rhendb_name_idx_entry name_key = (rhendb_name_idx_entry){.object_type = object_type};
+	strncpy(name_key.name, name, 64);
+	void* name_key_tuple = serialize_rhendb_name_idx_entry(catmgr_p, &name_key);
+	bpi_p = find_in_bplus_tree(catmgr_p->name_idx.root_page_id, name_key_tuple, 2, GREATER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->name_idx.index_defs), engine->pam_p, NULL, min_tx_id, abort_error);
+	free(name_key_tuple);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	if(!is_empty_bplus_tree(bpi_p))
+	{
+		// every heap update inserts a fresh name_idx entry, so more than one may share this (object_type, name),
+		// walk the run until we materialize the version that is visible to us
+		while(1)
+		{
+			const void* name_idx_record = get_tuple_bplus_tree_iterator(bpi_p);
+			if(name_idx_record == NULL)
+				break;
+			rhendb_name_idx_entry name_idx_entry = deserialize_rhendb_name_idx_entry(catmgr_p, name_idx_record);
+
+			// stop once we walk past the (object_type, name) run of the index
+			if(name_idx_entry.object_type != object_type || strncmp(name_idx_entry.name, name, 64) != 0)
+				break;
+
+			object = get_visible_catalog_object_at(catmgr_p, ss_p, object_type, name_idx_entry.object_tuple_pointer, should_blob, min_tx_id, abort_error);
+			if(*abort_error)
+				goto ABORT_ERROR;
+			if(object != NULL)
+				break;
+
+			next_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+			if(*abort_error)
+				goto ABORT_ERROR;
+		}
+	}
+
+	delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	bpi_p = NULL;
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	return object;
+
+	ABORT_ERROR:;
+	if(bpi_p != NULL)
+		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	if(object != NULL)
+	{
+		if(object_type == RHENDB_INDEX && ((rhendb_index*)object)->predicate_expr != NULL)
+			free(((rhendb_index*)object)->predicate_expr);
+		free(object);
+		object = NULL;
+	}
+	return NULL;
+}
+
 static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t id, uint64_t part_id, int should_blob, uint64_t* attrs_count, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
@@ -1528,12 +1744,18 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 
 		case RHENDB_COMPOSITE_TYPE :
 		{
+			// first, a single id_idx lookup for this composite type's own row (must be visible to us) to get its name
+			rhendb_type* composite_type = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_TYPE, attr.attribute_type_id, 0, min_tx_id, abort_error);
+			if(composite_type == NULL)
+				return NULL;
+
 			// recursively materialize the composite type from the attributes owned by its type id
 			uint64_t composite_attrs_count = 0;
 			rhendb_attribute* composite_attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, attr.attribute_type_id, 0, 0, &composite_attrs_count, min_tx_id, abort_error);
 			if(*abort_error)
 			{
 				free(composite_attrs);
+				free(composite_type);
 				return NULL;
 			}
 
@@ -1555,12 +1777,14 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 					destroy_type_info_recursively(composite_dti_p->containees[i].al.type_info, NULL);
 				free(composite_dti_p);
 				free(composite_attrs);
+				free(composite_type);
 				return NULL;
 			}
 
-			initialize_tuple_data_type_info(composite_dti_p, "rhendb_composite", attr.is_nullable, catmgr_p->catmgr_engine->pam_p->pas.page_size, composite_attrs_count);
+			initialize_tuple_data_type_info(composite_dti_p, composite_type->name, attr.is_nullable, catmgr_p->catmgr_engine->pam_p->pas.page_size, composite_attrs_count);
 			inner_dti_p = composite_dti_p;
 			free(composite_attrs);
+			free(composite_type);
 			break;
 		}
 	}
