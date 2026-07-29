@@ -2028,7 +2028,7 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 			data_type_info* composite_dti_p = malloc(sizeof_tuple_data_type_info(composite_attrs_count));
 			for(uint32_t i = 0; i < composite_attrs_count; i++)
 			{
-				data_type_info* containee_dti_p = get_data_type_info_for_rhendb_attribute(catmgr_p, ss_p, composite_attrs[i], min_tx_id, abort_error);  // returning NULL from this function is a big BUG so let it be faulted
+				data_type_info* containee_dti_p = get_data_type_info_for_rhendb_attribute(catmgr_p, ss_p, composite_attrs[i], min_tx_id, abort_error);
 				if(*abort_error)
 				{
 					for(uint32_t j = 0; j < i; j++)
@@ -2050,8 +2050,11 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 		}
 	}
 
-	if(inner_dti_p == NULL) // returning NULL from this function is a big BUG so let it be faulted
-		return NULL;
+	if(inner_dti_p == NULL)
+	{
+		printf("BUG (in catalog_manager) :: unmappable attribute type\n");
+		exit(-1);
+	}
 
 	if(!attr.has_count)
 		return inner_dti_p;
