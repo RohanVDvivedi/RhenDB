@@ -2,10 +2,15 @@ PICKED TASKS
 
 CATALOG MANAGER
 * implement it's read and write functions
-
-* move rhendb_base_type into the catalog_manager
-* write a utility function to walk the attributes table and the owner index, to return an attribute, tree, make attribute_type_id accompany a chat type_name[64], void* attributes, uint64_t attributes_count, all of which are null if it is a base type and until fully materialized
-* and also a function to return a data_type_info, for a owner_id, table_part_id for this tree, we will need to make this function publicly available
+* implement
+  * add column
+  * drop column
+  * create index
+  * rename table
+  * rename type
+  * rename index
+  * getters of all types
+  * dependency tracking and drop functionality (*far future)
 
 
 
