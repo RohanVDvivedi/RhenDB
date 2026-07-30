@@ -2422,6 +2422,43 @@ static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_
 
 // --
 
+// write a non NULL xmax (our transaction) on the mvcc_header of the row at row_tuple_pointer, in place, marking it deleted
+static void write_xmax_at(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, const tuple_pointer row_tuple_pointer, const tuple_def* record_def, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+	persistent_page ppage = get_NULL_persistent_page(engine->pam_p);
+
+	ppage = acquire_persistent_page_with_lock(engine->pam_p, min_tx_id, row_tuple_pointer.page_id, WRITE_LOCK, abort_error);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	const void* row = get_nth_tuple_on_persistent_page(&ppage, engine->pam_p->pas.page_size, &(record_def->size_def), row_tuple_pointer.tuple_index);
+	mvcc_header hdr;
+	catalog_read_mvcc_header(catmgr_p, row, record_def, &hdr);
+	hdr.is_xmax_NULL = 0;
+	hdr.xmax = (transaction_id_with_hints){.is_committed = 0, .is_aborted = 0, .transaction_id = ss_p->self_transaction_id};
+
+	// keep the serialized mvcc buffer in its own block so its variable length type does not span the goto
+	{
+		char mvcc_hdr_serialized[get_maximum_tuple_size(&(catmgr_p->mvcc_header_tuple_def))];
+		write_mvcc_header(mvcc_hdr_serialized, &(catmgr_p->mvcc_header_tuple_def), &hdr);
+		set_element_in_tuple_in_place_on_persistent_page(engine->pmm_p, min_tx_id, &ppage, engine->pam_p->pas.page_size, record_def, row_tuple_pointer.tuple_index, STATIC_POSITION(0), &((datum){.tuple_value = mvcc_hdr_serialized}), abort_error);
+	}
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	return;
+
+	ABORT_ERROR:;
+	if(!is_persistent_page_NULL(&ppage, engine->pam_p))
+		release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
+	return;
+}
+
 uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count)
 {
 	if(attrs_count == 0)
@@ -2965,6 +3002,121 @@ uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot*
 	}
 }
 
+int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, char* new_name)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	if(!ss_p->has_self_transaction_id)
+	{
+		printf("ISSUE in (catalog_manager) :: rename_table needs a snapshot that has a self transaction id\n");
+		exit(-1);
+	}
+
+	// mvcc_header stamped on the new (renamed) row, born from our transaction and not yet deleted
+	mvcc_header new_row_mvcc_hdr = (mvcc_header){
+		.is_xmin_NULL = 0,
+		.xmin = {.is_committed = 0, .is_aborted = 0, .transaction_id = ss_p->self_transaction_id},
+		.is_xmax_NULL = 1,
+	};
+
+	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
+	while(1)
+	{
+		int abort_error = 0;
+		uint64_t page_latches_to_be_borrowed = 0;
+		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
+
+		rhendb_table* old_table = NULL;
+
+		// (1) find the current table (deep copy) and remember its tuple_pointer
+		tuple_pointer old_tuple_pointer;
+		old_table = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_TABLE, table_id, 1, &old_tuple_pointer, min_tx_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+		if(old_table == NULL) // no such visible table, nothing to rename
+		{
+			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			return 0;
+		}
+
+		// (2) if it already has this name, there is nothing to do
+		if(strncmp(old_table->name, new_name, 64) == 0)
+		{
+			free(old_table);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			return 1;
+		}
+
+		// (3) the new name must be unique among visible tables ((object_type, name) is unique for visibility)
+		rhendb_table* existing_table = get_catalog_object_by_name(catmgr_p, ss_p, RHENDB_TABLE, new_name, 0, NULL, min_tx_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+		if(existing_table != NULL) // not an abort, but a table with the new name already exists
+		{
+			free(existing_table);
+			free(old_table);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			return 0;
+		}
+
+		// (4) mark the old row deleted with our xmax
+		write_xmax_at(catmgr_p, ss_p, old_tuple_pointer, &(catmgr_p->tables_table.record_def), min_tx_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		// (5) insert the new row : the old table shallow copied with the new name, stamped with our xmin
+		tuple_pointer new_tuple_pointer;
+		{
+			rhendb_table new_table = (*old_table);
+			strncpy(new_table.name, new_name, 64);
+			void* new_table_tuple = serialize_rhendb_table(catmgr_p, &new_row_mvcc_hdr, &new_table);
+			insert_in_catalog_heap_table(catmgr_p, &(catmgr_p->tables_table), &new_tuple_pointer, (void const * const *)(&new_table_tuple), 1, min_tx_id, &abort_error);
+			free(new_table_tuple);
+			free(old_table);
+			old_table = NULL;
+			if(abort_error)
+				goto ABORT_ERROR;
+		}
+
+		// (6) name_idx and id_idx entries for the new row
+		{
+			rhendb_name_idx_entry name_idx_ent = (rhendb_name_idx_entry){.object_type = RHENDB_TABLE, .object_tuple_pointer = new_tuple_pointer};
+			strncpy(name_idx_ent.name, new_name, 64);
+			void* name_key_tuple = serialize_rhendb_name_idx_entry(catmgr_p, &name_idx_ent);
+			int inserted = insert_in_bplus_tree(catmgr_p->name_idx.root_page_id, name_key_tuple, &(catmgr_p->name_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+			free(name_key_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(!inserted)
+			{
+				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+				exit(-1);
+			}
+		}
+		{
+			rhendb_id_idx_entry id_idx_ent = (rhendb_id_idx_entry){.object_type = RHENDB_TABLE, .id = table_id, .object_tuple_pointer = new_tuple_pointer};
+			void* id_key_tuple = serialize_rhendb_id_idx_entry(catmgr_p, &id_idx_ent);
+			int inserted = insert_in_bplus_tree(catmgr_p->id_idx.root_page_id, id_key_tuple, &(catmgr_p->id_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+			free(id_key_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(!inserted)
+			{
+				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+				exit(-1);
+			}
+		}
+
+		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		return 1;
+
+		ABORT_ERROR:;
+		if(old_table != NULL)
+			free(old_table);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+	}
+}
+
 uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_index* index_like, const rhendb_attribute* attrs, uint32_t attrs_count)
 {
 	if(attrs_count == 0)
@@ -3176,6 +3328,147 @@ uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhen
 	}
 }
 
+int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id, char* new_name)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	if(!ss_p->has_self_transaction_id)
+	{
+		printf("ISSUE in (catalog_manager) :: rename_index needs a snapshot that has a self transaction id\n");
+		exit(-1);
+	}
+
+	// mvcc_header stamped on the new (renamed) row, born from our transaction and not yet deleted
+	mvcc_header new_row_mvcc_hdr = (mvcc_header){
+		.is_xmin_NULL = 0,
+		.xmin = {.is_committed = 0, .is_aborted = 0, .transaction_id = ss_p->self_transaction_id},
+		.is_xmax_NULL = 1,
+	};
+
+	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
+	while(1)
+	{
+		int abort_error = 0;
+		uint64_t page_latches_to_be_borrowed = 0;
+		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
+
+		rhendb_index* old_index = NULL;
+
+		// (1) find the current index (deep copy, its predicate_expr is carried over) and remember its tuple_pointer
+		tuple_pointer old_tuple_pointer;
+		old_index = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_INDEX, index_id, 1, &old_tuple_pointer, min_tx_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+		if(old_index == NULL) // no such visible index, nothing to rename
+		{
+			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			return 0;
+		}
+
+		// (2) if it already has this name, there is nothing to do
+		if(strncmp(old_index->name, new_name, 64) == 0)
+		{
+			free(old_index->predicate_expr);
+			free(old_index);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			return 1;
+		}
+
+		// (3) the new name must be unique among visible indexes ((object_type, name) is unique for visibility)
+		rhendb_index* existing_index = get_catalog_object_by_name(catmgr_p, ss_p, RHENDB_INDEX, new_name, 0, NULL, min_tx_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+		if(existing_index != NULL) // not an abort, but an index with the new name already exists
+		{
+			free(existing_index);
+			free(old_index->predicate_expr);
+			free(old_index);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			return 0;
+		}
+
+		// (4) mark the old row deleted with our xmax
+		write_xmax_at(catmgr_p, ss_p, old_tuple_pointer, &(catmgr_p->indices_table.record_def), min_tx_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		// (5) insert the new row : the old index shallow copied with the new name, stamped with our xmin
+		tuple_pointer new_tuple_pointer;
+		{
+			rhendb_index new_index = (*old_index);
+			strncpy(new_index.name, new_name, 64);
+			void* new_index_tuple = serialize_rhendb_index(catmgr_p, &new_row_mvcc_hdr, &new_index, 1, min_tx_id, &abort_error);
+			if(abort_error)
+			{
+				free(new_index_tuple);
+				goto ABORT_ERROR;
+			}
+			insert_in_catalog_heap_table(catmgr_p, &(catmgr_p->indices_table), &new_tuple_pointer, (void const * const *)(&new_index_tuple), 1, min_tx_id, &abort_error);
+			free(new_index_tuple);
+			free(old_index->predicate_expr);
+			free(old_index);
+			old_index = NULL;
+			if(abort_error)
+				goto ABORT_ERROR;
+		}
+
+		// (6) table_to_indices entry, so the table keeps enumerating this index under the new row
+		{
+			rhendb_table_to_indices_entry t2iidx_ent = (rhendb_table_to_indices_entry){.table_id = table_id, .indices_tuple_pointer = new_tuple_pointer};
+			void* t2iidx_key_tuple = serialize_rhendb_table_to_indices_entry(catmgr_p, &t2iidx_ent);
+			int inserted = insert_in_bplus_tree(catmgr_p->table_to_indices_idx.root_page_id, t2iidx_key_tuple, &(catmgr_p->table_to_indices_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+			free(t2iidx_key_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(!inserted)
+			{
+				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+				exit(-1);
+			}
+		}
+
+		// (7) name_idx and id_idx entries for the new row
+		{
+			rhendb_name_idx_entry name_idx_ent = (rhendb_name_idx_entry){.object_type = RHENDB_INDEX, .object_tuple_pointer = new_tuple_pointer};
+			strncpy(name_idx_ent.name, new_name, 64);
+			void* name_key_tuple = serialize_rhendb_name_idx_entry(catmgr_p, &name_idx_ent);
+			int inserted = insert_in_bplus_tree(catmgr_p->name_idx.root_page_id, name_key_tuple, &(catmgr_p->name_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+			free(name_key_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(!inserted)
+			{
+				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+				exit(-1);
+			}
+		}
+		{
+			rhendb_id_idx_entry id_idx_ent = (rhendb_id_idx_entry){.object_type = RHENDB_INDEX, .id = index_id, .object_tuple_pointer = new_tuple_pointer};
+			void* id_key_tuple = serialize_rhendb_id_idx_entry(catmgr_p, &id_idx_ent);
+			int inserted = insert_in_bplus_tree(catmgr_p->id_idx.root_page_id, id_key_tuple, &(catmgr_p->id_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+			free(id_key_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(!inserted)
+			{
+				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+				exit(-1);
+			}
+		}
+
+		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		return 1;
+
+		ABORT_ERROR:;
+		if(old_index != NULL)
+		{
+			free(old_index->predicate_expr);
+			free(old_index);
+		}
+		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+	}
+}
+
 uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count)
 {
 	if(attrs_count == 0)
@@ -3334,43 +3627,6 @@ uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char*
 	}
 }
 
-// write a non NULL xmax (our transaction) on the mvcc_header of the row at row_tuple_pointer, in place, marking it deleted
-static void write_xmax_at(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, const tuple_pointer row_tuple_pointer, const tuple_def* record_def, const void* min_tx_id, int* abort_error)
-{
-	rage_engine* engine = catmgr_p->catmgr_engine;
-	persistent_page ppage = get_NULL_persistent_page(engine->pam_p);
-
-	ppage = acquire_persistent_page_with_lock(engine->pam_p, min_tx_id, row_tuple_pointer.page_id, WRITE_LOCK, abort_error);
-	if(*abort_error)
-		goto ABORT_ERROR;
-
-	const void* row = get_nth_tuple_on_persistent_page(&ppage, engine->pam_p->pas.page_size, &(record_def->size_def), row_tuple_pointer.tuple_index);
-	mvcc_header hdr;
-	catalog_read_mvcc_header(catmgr_p, row, record_def, &hdr);
-	hdr.is_xmax_NULL = 0;
-	hdr.xmax = (transaction_id_with_hints){.is_committed = 0, .is_aborted = 0, .transaction_id = ss_p->self_transaction_id};
-
-	// keep the serialized mvcc buffer in its own block so its variable length type does not span the goto
-	{
-		char mvcc_hdr_serialized[get_maximum_tuple_size(&(catmgr_p->mvcc_header_tuple_def))];
-		write_mvcc_header(mvcc_hdr_serialized, &(catmgr_p->mvcc_header_tuple_def), &hdr);
-		set_element_in_tuple_in_place_on_persistent_page(engine->pmm_p, min_tx_id, &ppage, engine->pam_p->pas.page_size, record_def, row_tuple_pointer.tuple_index, STATIC_POSITION(0), &((datum){.tuple_value = mvcc_hdr_serialized}), abort_error);
-	}
-	if(*abort_error)
-		goto ABORT_ERROR;
-
-	release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
-	if(*abort_error)
-		goto ABORT_ERROR;
-
-	return;
-
-	ABORT_ERROR:;
-	if(!is_persistent_page_NULL(&ppage, engine->pam_p))
-		release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
-	return;
-}
-
 // the heavy lifting for dropping an index within an existing mini transaction : delete all of its index_fragments from the
 // clustered index_fragments index using a write iterator, write xmax on all of its attributes, then write xmax on its own
 // row. does nothing if the index is not visible to us. returns 1 if it was dropped, 0 otherwise. reports engine aborts.
@@ -3469,7 +3725,6 @@ static int drop_index_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_
 	return 0;
 }
 
-
 static int drop_type_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t type_id, const void* min_tx_id, int* abort_error)
 {
 	tuple_pointer* attribute_tuple_pointers = NULL;
@@ -3514,7 +3769,6 @@ static int drop_type_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p
 		free(attribute_tuple_pointers);
 	return 0;
 }
-
 
 static int drop_table_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, const void* min_tx_id, int* abort_error)
 {
@@ -3631,7 +3885,6 @@ static int drop_table_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_
 	return 0;
 }
 
-
 int drop_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
@@ -3661,7 +3914,6 @@ int drop_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t ta
 	return dropped;
 }
 
-
 int drop_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
@@ -3690,7 +3942,6 @@ int drop_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t ta
 
 	return dropped;
 }
-
 
 int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t type_id)
 {
