@@ -296,4 +296,25 @@ int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t typ
 // uint64_t create_function(catalog_manager* catmgr_p, char* name);
 // void drop_function(catalog_manager* catmgr_p, uint64_t id);
 
+// getters
+// shared schema locks must be taken for this on the concerned table or type
+
+// all the below getter functions will return a valid fully read expression or any other blobbed type if they contain it
+
+void* get_catalog_object_by_id_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, uint64_t id);
+
+void* get_catalog_object_by_name_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, char* name);
+
+// partition_id is always 0 for index or type
+rhendb_attribute* get_attributes_for_catalog_object_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, uint64_t partition_id);
+
+rhendb_partition* get_partitions_for_table_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* partitions_count);
+
+rhendb_index* get_indices_for_table_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* indices_count);
+
+rhendb_index_fragment* get_index_fragments_for_index_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t index_id, uint64_t* index_fragments_count);
+
+// must call destroy_type_info_recursively, to destroy the returned object
+data_type_info* get_data_type_info_for_rhendb_attribute_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_attribute* attribute);
+
 #endif
