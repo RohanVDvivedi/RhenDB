@@ -2110,6 +2110,60 @@ static uint64_t get_last_assigned_partition_id_for_table(catalog_manager* catmgr
 	return 0;
 }
 
+// the highest rel_pos_in_owner ever ASSIGNED to this owner, read from the owner_to_attributes index without any
+// mvcc visibility filter. every attribute version ever created keeps its owner_to_attributes entry (a dropped
+// column leaves its entry in place, and an aborted add_column still leaves one behind physically) and rel_pos is
+// only ever handed out monotonically, so this is the last rel_pos ever assigned. using (this + 1) for a new column
+// guarantees a rel_pos that no historical, capped, or invisible attribute version can shadow -- unlike the visible
+// maximum, which gets reused after a drop and then collides at that slot with the still-visible capped version.
+// scans once, in reverse from (owner_id, UINT64_MAX); *has_any is set to 1 iff the owner has at least one entry.
+static uint64_t get_last_assigned_rel_pos_for_owner(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, int* has_any, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+	bplus_tree_iterator* bpi_p = NULL;
+	uint64_t last_assigned_rel_pos = 0;
+	if(has_any != NULL)
+		(*has_any) = 0;
+
+	rhendb_owner_to_attributes_idx_entry owner_key = (rhendb_owner_to_attributes_idx_entry){.owner_id = owner_id, .rel_pos_in_owner = UINT64_MAX};
+	void* owner_key_tuple = serialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, &owner_key);
+	bpi_p = find_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, owner_key_tuple, 2, LESSER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, NULL, min_tx_id, abort_error);
+	free(owner_key_tuple);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	if(!is_empty_bplus_tree(bpi_p))
+	{
+		const void* owner_idx_record = get_tuple_bplus_tree_iterator(bpi_p);
+		if(owner_idx_record != NULL)
+		{
+			rhendb_owner_to_attributes_idx_entry owner_idx_ent = deserialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, owner_idx_record);
+
+			// the first entry at or below (owner_id, UINT64_MAX) belongs to this owner only if its owner_id matches
+			if(owner_idx_ent.owner_id == owner_id)
+			{
+				last_assigned_rel_pos = owner_idx_ent.rel_pos_in_owner;
+				if(has_any != NULL)
+					(*has_any) = 1;
+			}
+		}
+	}
+
+	delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	bpi_p = NULL;
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	return last_assigned_rel_pos;
+
+	ABORT_ERROR:;
+	if(bpi_p != NULL)
+		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	if(has_any != NULL)
+		(*has_any) = 0;
+	return 0;
+}
+
 // the visible attribute at (owner_id, rel_pos_in_owner) via the owner_to_attributes index, malloc-ed, or NULL if none is
 // visible or on abort. when found and attribute_tuple_pointer is not NULL, its heap tuple_pointer is written there.
 static rhendb_attribute* get_attribute_for_owner_at_rel_pos(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, uint64_t rel_pos_in_owner, int should_blob, tuple_pointer* attribute_tuple_pointer, const void* min_tx_id, int* abort_error)
@@ -2784,9 +2838,17 @@ static uint64_t create_new_partition_and_index_fragments(catalog_manager* catmgr
 	// assign from the last partition_id ever ASSIGNED to this table (physically present, visibility-independent),
 	// not the last VISIBLE one -- otherwise a partition left behind by an aborted/invisible transaction would let
 	// us recompute an already-used partition_id and collide on the clustered-index insert below
-	new_partition_id = get_last_assigned_partition_id_for_table(catmgr_p, ss_p, table_id, min_tx_id, abort_error) + 1;
-	if(*abort_error)
-		goto ABORT_ERROR;
+	{
+		uint64_t last_assigned_partition_id = get_last_assigned_partition_id_for_table(catmgr_p, ss_p, table_id, min_tx_id, abort_error);
+		if(*abort_error)
+			goto ABORT_ERROR;
+		if(last_assigned_partition_id == UINT64_MAX)
+		{
+			printf("ISSUE (in catalog_manager) :: partition_id overflow for table\n");
+			exit(-1);
+		}
+		new_partition_id = last_assigned_partition_id + 1;
+	}
 
 	uint64_t heap_root_page_id = get_new_heap_table(&(catmgr_p->tables_table.heap_table_defs), engine->pam_p, engine->pmm_p, min_tx_id, abort_error);
 	if(*abort_error)
@@ -2867,7 +2929,7 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 		uint64_t page_latches_to_be_borrowed = 0;
 		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
 
-		// (1) get the last partition's attributes, reject a duplicate name, and note the next rel_pos to use
+		// (1) get the last partition's attributes and reject a duplicate name
 		{
 			uint64_t last_partition_id = get_last_partition_id_for_table(catmgr_p, ss_p, table_id, min_tx_id, &abort_error);
 			if(abort_error)
@@ -2877,6 +2939,12 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 			rhendb_attribute* last_partition_attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, table_id, last_partition_id, 0, NULL, &last_partition_attrs_count, min_tx_id, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR;
+
+			if(last_partition_attrs_count >= UINT32_MAX)
+			{
+				printf("BUG (in catalog_manager) :: attribute/tuplestore indexing overflow for table\n");
+				exit(-1);
+			}
 
 			int name_already_exists = 0;
 			for(uint64_t i = 0; i < last_partition_attrs_count; i++)
@@ -2888,8 +2956,6 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 					name_already_exists = 1;
 					break;
 				}
-				if(last_partition_attrs[i].rel_pos_in_owner >= new_rel_pos_in_owner)
-					new_rel_pos_in_owner = last_partition_attrs[i].rel_pos_in_owner + 1;
 			}
 			free(last_partition_attrs);
 			if(name_already_exists) // not an abort, but a column of this name already exists
@@ -2897,6 +2963,23 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
 				return 0;
 			}
+		}
+
+		// (1b) assign the new column's rel_pos from the last rel_pos ever ASSIGNED to this table (physically present
+		// in owner_to_attributes, visibility-independent), never the visible maximum: a rel_pos freed by an earlier
+		// drop must not be reused, or the new live column would share its slot with a still-visible capped historical
+		// version there that shadows it in get_attribute_for_owner_at_rel_pos and breaks its later drop/rename
+		{
+			int has_any = 0;
+			uint64_t last_assigned_rel_pos = get_last_assigned_rel_pos_for_owner(catmgr_p, ss_p, table_id, &has_any, min_tx_id, &abort_error);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(last_assigned_rel_pos == UINT64_MAX)
+			{
+				printf("ISSUE (in catalog_manager) :: rel_pos_in_owner overflow for table\n");
+				exit(-1);
+			}
+			new_rel_pos_in_owner = has_any ? (last_assigned_rel_pos + 1) : 0;
 		}
 
 		// (2) create the new partition, its storage and index fragments, this computes the new partition_id
