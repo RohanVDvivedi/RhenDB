@@ -2526,7 +2526,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 			}
 		}
 		free(attribute_tuple_pointers);
-		attribute_tuple_pointers = NULL
+		attribute_tuple_pointers = NULL;
 
 		// (8) name_idx and id_idx entries for the new table, pointing at its tables_table row
 		{
