@@ -306,13 +306,13 @@ void* get_catalog_object_by_id_from_catalog(catalog_manager* catmgr_p, const mvc
 void* get_catalog_object_by_name_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, char* name);
 
 // partition_id is always 0 for index or type
-rhendb_attribute* get_attributes_for_catalog_object_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, uint64_t partition_id);
+rhendb_attribute* get_attributes_for_catalog_object_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, uint64_t partition_id, uint64_t* attrs_count);
 
-rhendb_partition* get_partitions_for_table_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* partitions_count);
+rhendb_table_partition* get_partitions_for_table_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* partitions_count);
 
 rhendb_index* get_indices_for_table_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* indices_count);
 
-rhendb_index_fragment* get_index_fragments_for_index_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t index_id, uint64_t* index_fragments_count);
+rhendb_index_fragment* get_index_fragments_for_index_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id, uint64_t* index_fragments_count);
 
 // must call destroy_type_info_recursively, to destroy the returned object
 data_type_info* get_data_type_info_for_rhendb_attribute_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_attribute* attribute);

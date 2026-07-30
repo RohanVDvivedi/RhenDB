@@ -4106,3 +4106,97 @@ int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t typ
 
 	return dropped;
 }
+
+// all these are read only, so they run with no mini transaction (min_tx_id is NULL), they only track abort_error and
+// retry the read for as long as it aborts. the returned blobs/arrays/objects are owned by the caller.
+
+void* get_catalog_object_by_id_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, uint64_t id)
+{
+	void* object = NULL;
+	while(1)
+	{
+		int abort_error = 0;
+		object = get_catalog_object_by_id(catmgr_p, ss_p, object_type, id, 1, NULL, NULL, &abort_error);
+		if(abort_error == 0)
+			break;
+	}
+	return object;
+}
+
+void* get_catalog_object_by_name_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, char* name)
+{
+	void* object = NULL;
+	while(1)
+	{
+		int abort_error = 0;
+		object = get_catalog_object_by_name(catmgr_p, ss_p, object_type, name, 1, NULL, NULL, &abort_error);
+		if(abort_error == 0)
+			break;
+	}
+	return object;
+}
+
+rhendb_attribute* get_attributes_for_catalog_object_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, uint64_t partition_id, uint64_t* attrs_count)
+{
+	rhendb_attribute* attrs = NULL;
+	while(1)
+	{
+		int abort_error = 0;
+		attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, owner_id, partition_id, 1, NULL, attrs_count, NULL, &abort_error);
+		if(abort_error == 0)
+			break;
+	}
+	return attrs;
+}
+
+rhendb_table_partition* get_partitions_for_table_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* partitions_count)
+{
+	rhendb_table_partition* partitions = NULL;
+	while(1)
+	{
+		int abort_error = 0;
+		partitions = get_partitions_for_table(catmgr_p, ss_p, table_id, partitions_count, NULL, &abort_error);
+		if(abort_error == 0)
+			break;
+	}
+	return partitions;
+}
+
+rhendb_index* get_indices_for_table_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* indices_count)
+{
+	rhendb_index* indices = NULL;
+	while(1)
+	{
+		int abort_error = 0;
+		indices = get_indices_for_table(catmgr_p, ss_p, table_id, 1, NULL, indices_count, NULL, &abort_error);
+		if(abort_error == 0)
+			break;
+	}
+	return indices;
+}
+
+rhendb_index_fragment* get_index_fragments_for_index_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id, uint64_t* index_fragments_count)
+{
+	rhendb_index_fragment* fragments = NULL;
+	while(1)
+	{
+		int abort_error = 0;
+		fragments = get_index_fragments(catmgr_p, ss_p, table_id, index_id, 0, index_fragments_count, NULL, &abort_error);
+		if(abort_error == 0)
+			break;
+	}
+	return fragments;
+}
+
+data_type_info* get_data_type_info_for_rhendb_attribute_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_attribute* attribute)
+{
+	data_type_info* attribute_data_type_info = NULL;
+	while(1)
+	{
+		int abort_error = 0;
+		attribute_data_type_info = get_data_type_info_for_rhendb_attribute(catmgr_p, ss_p, (*attribute), NULL, &abort_error);
+		if(abort_error == 0)
+			break;
+	}
+	return attribute_data_type_info;
+}
