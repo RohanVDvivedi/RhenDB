@@ -1,8 +1,7 @@
 PICKED TASKS
 
 CATALOG MANAGER
-* getter to get all active tables and types
-* integrate with rhendb
+* getter to get all active table and type names
 
 
 
