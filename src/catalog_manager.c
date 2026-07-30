@@ -1740,7 +1740,7 @@ static rhendb_table_partition* get_partitions_for_table(catalog_manager* catmgr_
 
 	rhendb_table_partition partition_key = (rhendb_table_partition){.table_id = table_id};
 	void* partition_key_tuple = serialize_rhendb_table_partition_key(catmgr_p, &partition_key);
-	bpi_p = find_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, partition_key_tuple, 1, GREATER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, NULL, min_tx_id, abort_error);
+	bpi_p = find_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, partition_key_tuple, 1, GREATER_THAN_EQUALS, 0, (min_tx_id != NULL) ? WRITE_LOCK : READ_LOCK, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, (min_tx_id != NULL) ? engine->pmm_p : NULL, min_tx_id, abort_error);
 	free(partition_key_tuple);
 	if(*abort_error)
 		goto ABORT_ERROR;
@@ -1834,7 +1834,7 @@ static rhendb_index_fragment* get_index_fragments(catalog_manager* catmgr_p, con
 
 	rhendb_index_fragment fragment_key = (rhendb_index_fragment){.table_id = table_id, .index_id = index_id, .partition_id = partition_id};
 	void* fragment_key_tuple = serialize_rhendb_index_fragment_key(catmgr_p, &fragment_key);
-	bpi_p = find_in_bplus_tree(catmgr_p->index_fragments_table.root_page_id, fragment_key_tuple, key_element_count, GREATER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->index_fragments_table.clust_table_defs), engine->pam_p, NULL, min_tx_id, abort_error);
+	bpi_p = find_in_bplus_tree(catmgr_p->index_fragments_table.root_page_id, fragment_key_tuple, key_element_count, GREATER_THAN_EQUALS, 0, (min_tx_id != NULL) ? WRITE_LOCK : READ_LOCK, &(catmgr_p->index_fragments_table.clust_table_defs), engine->pam_p, (min_tx_id != NULL) ? engine->pmm_p : NULL, min_tx_id, abort_error);
 	free(fragment_key_tuple);
 	if(*abort_error)
 		goto ABORT_ERROR;
@@ -1973,7 +1973,7 @@ static uint64_t get_last_partition_id_for_table(catalog_manager* catmgr_p, const
 
 	rhendb_table_partition partition_key = (rhendb_table_partition){.table_id = table_id, .partition_id = UINT64_MAX};
 	void* partition_key_tuple = serialize_rhendb_table_partition_key(catmgr_p, &partition_key);
-	bpi_p = find_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, partition_key_tuple, 2, LESSER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, NULL, min_tx_id, abort_error);
+	bpi_p = find_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, partition_key_tuple, 2, LESSER_THAN_EQUALS, 0, (min_tx_id != NULL) ? WRITE_LOCK : READ_LOCK, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, (min_tx_id != NULL) ? engine->pmm_p : NULL, min_tx_id, abort_error);
 	free(partition_key_tuple);
 	if(*abort_error)
 		goto ABORT_ERROR;
