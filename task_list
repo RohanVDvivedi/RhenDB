@@ -4,7 +4,6 @@ CATALOG MANAGER
 * implement it's read and write functions
 * implement
   * getters of all types
-  * rename column
   * dependency tracking and drop cascade functionality (for type and function) (*far future)
 
 
