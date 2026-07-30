@@ -179,6 +179,8 @@ struct rhendb_attribute
 
 	unsigned int is_nullable:1;
 
+	compare_direction cmp_dir; // sort order for index attributes (ASC/DESC), else unused for now
+
 	char* derived_from_expr; // valid if the attribute is derived from expression, or for an index
 	uint32_t derived_from_expr_size;
 	// derived_from_expr is to be freed if not NULL, and needs to be deep copied
