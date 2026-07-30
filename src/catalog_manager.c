@@ -3117,8 +3117,8 @@ int alter_table_rename_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss
 			}
 		}
 
-		free(old_attr);
 		free(old_attr->derived_from_expr);
+		free(old_attr);
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
 		return 1;
 
@@ -3129,8 +3129,8 @@ int alter_table_rename_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss
 			free(attribute_tuple_pointers);
 		if(old_attr != NULL)
 		{
-			free(old_attr);
 			free(old_attr->derived_from_expr);
+			free(old_attr);
 		}
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
 	}
