@@ -3,14 +3,9 @@ PICKED TASKS
 CATALOG MANAGER
 * implement it's read and write functions
 * implement
-  * add column
-  * drop column
-  * create index
-  * rename table
-  * rename type
-  * rename index
   * getters of all types
-  * dependency tracking and drop functionality (*far future)
+  * rename column
+  * dependency tracking and drop cascade functionality (for type and function) (*far future)
 
 
 
