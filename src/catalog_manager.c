@@ -1390,7 +1390,7 @@ static void* get_catalog_object_at(catalog_manager* catmgr_p, const mvcc_snapsho
 
 // look up a catalog object of object_type by its id via the id_idx, and materialize the version visible to us.
 // returns a plain malloc-ed rhendb_table / rhendb_type / rhendb_index, or NULL on abort / not found / not visible.
-static void* get_catalog_object_by_id(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, uint64_t id, int should_blob, const void* min_tx_id, int* abort_error)
+static void* get_catalog_object_by_id(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, uint64_t id, int should_blob, tuple_pointer* object_tuple_pointer, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
 	void* object = NULL;
@@ -1419,6 +1419,8 @@ static void* get_catalog_object_by_id(catalog_manager* catmgr_p, const mvcc_snap
 				break;
 
 			object = get_catalog_object_at(catmgr_p, ss_p, object_type, id_idx_entry.object_tuple_pointer, should_blob, min_tx_id, abort_error);
+			if(object != NULL && object_tuple_pointer != NULL)
+				(*object_tuple_pointer) = id_idx_entry.object_tuple_pointer;
 			if(*abort_error)
 				goto ABORT_ERROR;
 			if(object != NULL)
@@ -1452,7 +1454,7 @@ static void* get_catalog_object_by_id(catalog_manager* catmgr_p, const mvcc_snap
 
 // look up a catalog object of object_type by its name via the name_idx, and materialize the version visible to us.
 // returns a plain malloc-ed rhendb_table / rhendb_type / rhendb_index, or NULL on abort / not found / not visible.
-static void* get_catalog_object_by_name(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, char* name, int should_blob, const void* min_tx_id, int* abort_error)
+static void* get_catalog_object_by_name(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, char* name, int should_blob, tuple_pointer* object_tuple_pointer, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
 	void* object = NULL;
@@ -1482,6 +1484,8 @@ static void* get_catalog_object_by_name(catalog_manager* catmgr_p, const mvcc_sn
 				break;
 
 			object = get_catalog_object_at(catmgr_p, ss_p, object_type, name_idx_entry.object_tuple_pointer, should_blob, min_tx_id, abort_error);
+			if(object != NULL && object_tuple_pointer != NULL)
+				(*object_tuple_pointer) = name_idx_entry.object_tuple_pointer;
 			if(*abort_error)
 				goto ABORT_ERROR;
 			if(object != NULL)
@@ -1512,7 +1516,7 @@ static void* get_catalog_object_by_name(catalog_manager* catmgr_p, const mvcc_sn
 	return NULL;
 }
 
-static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t id, uint64_t part_id, int should_blob, uint64_t* attrs_count, const void* min_tx_id, int* abort_error)
+static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t id, uint64_t part_id, int should_blob, tuple_pointer** attribute_tuple_pointers, uint64_t* attrs_count, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
 
@@ -1522,6 +1526,8 @@ static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catm
 	(*attrs_count) = 0;
 	uint64_t attrs_capacity = 8;
 	rhendb_attribute* attrs = malloc(sizeof(rhendb_attribute) * attrs_capacity);
+	if(attribute_tuple_pointers != NULL)
+		(*attribute_tuple_pointers) = malloc(sizeof(tuple_pointer) * attrs_capacity);
 
 	{
 		rhendb_owner_to_attributes_idx_entry o2a_key = (rhendb_owner_to_attributes_idx_entry){.owner_id = id};
@@ -1602,7 +1608,11 @@ static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catm
 						{
 							attrs_capacity *= 2;
 							attrs = realloc(attrs, sizeof(rhendb_attribute) * attrs_capacity);
+							if(attribute_tuple_pointers != NULL)
+								(*attribute_tuple_pointers) = realloc((*attribute_tuple_pointers), sizeof(tuple_pointer) * attrs_capacity);
 						}
+						if(attribute_tuple_pointers != NULL)
+							(*attribute_tuple_pointers)[(*attrs_count)] = o2a_idx_entry.attributes_tuple_pointer;
 						attrs[(*attrs_count)++] = owned_attr;
 					}
 				}
@@ -1627,11 +1637,21 @@ static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catm
 		free(attrs);
 		attrs = NULL;
 		attrs_capacity = 0;
+		if(attribute_tuple_pointers != NULL)
+		{
+			free((*attribute_tuple_pointers));
+			(*attribute_tuple_pointers) = NULL;
+		}
 	}
 
 	return attrs;
 
 	ABORT_ERROR:;
+	if(attribute_tuple_pointers != NULL && (*attribute_tuple_pointers) != NULL)
+	{
+		free((*attribute_tuple_pointers));
+		(*attribute_tuple_pointers) = NULL;
+	}
 	if(attrs != NULL)
 	{
 		for(uint64_t i = 0; i < (*attrs_count); i++)
@@ -1645,7 +1665,7 @@ static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catm
 
 // get every index of a table via the table_to_indices_idx (keyed on table_id), following each entry to its indices_table
 // row and returning the ones visible to us as a malloc-ed array. should_blob controls reading each index's predicate_expr.
-static rhendb_index* get_indices_for_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, int should_blob, uint64_t* indices_count, const void* min_tx_id, int* abort_error)
+static rhendb_index* get_indices_for_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, int should_blob, tuple_pointer** indices_tuple_pointers, uint64_t* indices_count, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
 
@@ -1655,6 +1675,8 @@ static rhendb_index* get_indices_for_table(catalog_manager* catmgr_p, const mvcc
 	(*indices_count) = 0;
 	uint64_t indices_capacity = 8;
 	rhendb_index* indices = malloc(sizeof(rhendb_index) * indices_capacity);
+	if(indices_tuple_pointers != NULL)
+		(*indices_tuple_pointers) = malloc(sizeof(tuple_pointer) * indices_capacity);
 
 	rhendb_table_to_indices_entry t2i_key = (rhendb_table_to_indices_entry){.table_id = table_id};
 	void* t2i_key_tuple = serialize_rhendb_table_to_indices_entry(catmgr_p, &t2i_key);
@@ -1688,7 +1710,11 @@ static rhendb_index* get_indices_for_table(catalog_manager* catmgr_p, const mvcc
 				{
 					indices_capacity *= 2;
 					indices = realloc(indices, sizeof(rhendb_index) * indices_capacity);
+					if(indices_tuple_pointers != NULL)
+						(*indices_tuple_pointers) = realloc((*indices_tuple_pointers), sizeof(tuple_pointer) * indices_capacity);
 				}
+				if(indices_tuple_pointers != NULL)
+					(*indices_tuple_pointers)[(*indices_count)] = t2i_idx_entry.indices_tuple_pointer;
 				indices[(*indices_count)++] = (*materialized_index);
 				free(materialized_index);
 			}
@@ -1708,11 +1734,21 @@ static rhendb_index* get_indices_for_table(catalog_manager* catmgr_p, const mvcc
 	{
 		free(indices);
 		indices = NULL;
+		if(indices_tuple_pointers != NULL)
+		{
+			free((*indices_tuple_pointers));
+			(*indices_tuple_pointers) = NULL;
+		}
 	}
 
 	return indices;
 
 	ABORT_ERROR:;
+	if(indices_tuple_pointers != NULL && (*indices_tuple_pointers) != NULL)
+	{
+		free((*indices_tuple_pointers));
+		(*indices_tuple_pointers) = NULL;
+	}
 	if(indices != NULL)
 	{
 		for(uint64_t i = 0; i < (*indices_count); i++)
@@ -2029,7 +2065,7 @@ static uint64_t get_last_partition_id_for_table(catalog_manager* catmgr_p, const
 
 // the visible attribute at (owner_id, rel_pos_in_owner) via the owner_to_attributes index, malloc-ed, or NULL if none is
 // visible or on abort. when found and attribute_tuple_pointer is not NULL, its heap tuple_pointer is written there.
-static rhendb_attribute* get_attribute_for_owner_at_rel_pos(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, uint64_t rel_pos_in_owner, tuple_pointer* attribute_tuple_pointer, int should_blob, const void* min_tx_id, int* abort_error)
+static rhendb_attribute* get_attribute_for_owner_at_rel_pos(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, uint64_t rel_pos_in_owner, int should_blob, tuple_pointer* attribute_tuple_pointer, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
 	bplus_tree_iterator* bpi_p = NULL;
@@ -2197,7 +2233,7 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 		case RHENDB_COMPOSITE_TYPE :
 		{
 			// first, a single id_idx lookup for this composite type's own row (must be visible to us) to get its name
-			rhendb_type* composite_type = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_TYPE, attr.attribute_type_id, 0, min_tx_id, abort_error);
+			rhendb_type* composite_type = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_TYPE, attr.attribute_type_id, 0, NULL, min_tx_id, abort_error);
 			if(*abort_error)
 				return NULL;
 			if(composite_type == NULL)
@@ -2241,7 +2277,7 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 static data_type_info* get_tuple_data_type_info_from_attributes(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* type_name, int is_nullable, uint64_t owner_id, uint64_t part_id, const void* min_tx_id, int* abort_error)
 {
 	uint64_t attrs_count = 0;
-	rhendb_attribute* attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, owner_id, part_id, 0, &attrs_count, min_tx_id, abort_error);
+	rhendb_attribute* attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, owner_id, part_id, 0, NULL, &attrs_count, min_tx_id, abort_error);
 	if(*abort_error)
 		return NULL;
 
@@ -2269,7 +2305,7 @@ static data_type_info* get_tuple_data_type_info_from_attributes(catalog_manager*
 // a table_partition carries no name of its own, so its row tuple is named after the owning table
 static data_type_info* get_data_type_info_for_rhendb_table_partition(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_table_partition table_partition, const void* min_tx_id, int* abort_error)
 {
-	rhendb_table* owning_table = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_TABLE, table_partition.table_id, 0, min_tx_id, abort_error);
+	rhendb_table* owning_table = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_TABLE, table_partition.table_id, 0, NULL, min_tx_id, abort_error);
 	if(*abort_error)
 		return NULL;
 	if(owning_table == NULL)
@@ -2424,7 +2460,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 		//     checks visibility and fixes hints for us within this same mini transaction, existing_table is a localized
 		//     resource, so it is freed here itself before we bail
 		{
-			rhendb_table* existing_table = get_catalog_object_by_name(catmgr_p, ss_p, RHENDB_TABLE, name, 0, min_tx_id, &abort_error);
+			rhendb_table* existing_table = get_catalog_object_by_name(catmgr_p, ss_p, RHENDB_TABLE, name, 0, NULL, min_tx_id, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR;
 			if(existing_table != NULL) // this is not abort, but we found a table with same name
@@ -2587,7 +2623,7 @@ static uint64_t create_index_fragment_root_page_id(catalog_manager* catmgr_p, co
 
 	// the per attribute compare directions come from the attributes themselves
 	uint64_t index_attributes_count = 0;
-	index_attributes = get_attributes_for_catalog_object(catmgr_p, ss_p, index.id, 0, 0, &index_attributes_count, min_tx_id, abort_error);
+	index_attributes = get_attributes_for_catalog_object(catmgr_p, ss_p, index.id, 0, 0, NULL, &index_attributes_count, min_tx_id, abort_error);
 	if(*abort_error)
 		goto ABORT_ERROR;
 
@@ -2686,7 +2722,7 @@ static uint64_t create_new_partition_and_index_fragments(catalog_manager* catmgr
 	}
 
 	uint64_t indices_count = 0;
-	indices = get_indices_for_table(catmgr_p, ss_p, table_id, 0, &indices_count, min_tx_id, abort_error);
+	indices = get_indices_for_table(catmgr_p, ss_p, table_id, 0, NULL, &indices_count, min_tx_id, abort_error);
 	if(*abort_error)
 		goto ABORT_ERROR;
 
@@ -2757,7 +2793,7 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 				goto ABORT_ERROR;
 
 			uint64_t last_partition_attrs_count = 0;
-			rhendb_attribute* last_partition_attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, table_id, last_partition_id, 0, &last_partition_attrs_count, min_tx_id, &abort_error);
+			rhendb_attribute* last_partition_attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, table_id, last_partition_id, 0, NULL, &last_partition_attrs_count, min_tx_id, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR;
 
@@ -2853,7 +2889,7 @@ uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot*
 		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
 
 		// (1) find the visible attribute at this rel_pos and make sure it is not already dropped (to == 0)
-		attribute_to_drop = get_attribute_for_owner_at_rel_pos(catmgr_p, ss_p, table_id, rel_pos_in_owner_to_drop, &attribute_to_drop_tuple_pointer, 1, min_tx_id, &abort_error);
+		attribute_to_drop = get_attribute_for_owner_at_rel_pos(catmgr_p, ss_p, table_id, rel_pos_in_owner_to_drop, 1, &attribute_to_drop_tuple_pointer, min_tx_id, &abort_error);
 		if(abort_error)
 			goto ABORT_ERROR;
 		if(attribute_to_drop == NULL || attribute_to_drop->table_part_id_to != 0) // not present, not visible, or already dropped
@@ -2972,7 +3008,7 @@ uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhen
 
 		// (1) ensure no visible index already has this exact name
 		{
-			rhendb_index* existing_index = get_catalog_object_by_name(catmgr_p, ss_p, RHENDB_INDEX, index_like->name, 0, min_tx_id, &abort_error);
+			rhendb_index* existing_index = get_catalog_object_by_name(catmgr_p, ss_p, RHENDB_INDEX, index_like->name, 0, NULL, min_tx_id, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR;
 			if(existing_index != NULL) // this is not abort, but we found an index with the same name
@@ -3184,7 +3220,7 @@ uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char*
 		//     checks visibility and fixes hints for us within this same mini transaction, existing_type is a localized
 		//     resource, so it is freed here itself before we bail
 		{
-			rhendb_type* existing_type = get_catalog_object_by_name(catmgr_p, ss_p, RHENDB_TYPE, name, 0, min_tx_id, &abort_error);
+			rhendb_type* existing_type = get_catalog_object_by_name(catmgr_p, ss_p, RHENDB_TYPE, name, 0, NULL, min_tx_id, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR;
 			if(existing_type != NULL) // this is not abort, but we found a type with same name
@@ -3302,4 +3338,110 @@ uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char*
 			free(attribute_tuple_pointers);
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
 	}
+}
+
+// write a non NULL xmax (our transaction) on the mvcc_header of the row at row_tuple_pointer, in place, marking it deleted
+static void write_xmax_at(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, const tuple_pointer row_tuple_pointer, const tuple_def* record_def, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+	persistent_page ppage = get_NULL_persistent_page(engine->pam_p);
+
+	ppage = acquire_persistent_page_with_lock(engine->pam_p, min_tx_id, row_tuple_pointer.page_id, WRITE_LOCK, abort_error);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	const void* row = get_nth_tuple_on_persistent_page(&ppage, engine->pam_p->pas.page_size, &(record_def->size_def), row_tuple_pointer.tuple_index);
+	mvcc_header hdr;
+	catalog_read_mvcc_header(catmgr_p, row, record_def, &hdr);
+	hdr.is_xmax_NULL = 0;
+	hdr.xmax = (transaction_id_with_hints){.is_committed = 0, .is_aborted = 0, .transaction_id = ss_p->self_transaction_id};
+
+	// keep the serialized mvcc buffer in its own block so its variable length type does not span the goto
+	{
+		char mvcc_hdr_serialized[get_maximum_tuple_size(&(catmgr_p->mvcc_header_tuple_def))];
+		write_mvcc_header(mvcc_hdr_serialized, &(catmgr_p->mvcc_header_tuple_def), &hdr);
+		set_element_in_tuple_in_place_on_persistent_page(engine->pmm_p, min_tx_id, &ppage, engine->pam_p->pas.page_size, record_def, row_tuple_pointer.tuple_index, STATIC_POSITION(0), &((datum){.tuple_value = mvcc_hdr_serialized}), abort_error);
+	}
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	return;
+
+	ABORT_ERROR:;
+	if(!is_persistent_page_NULL(&ppage, engine->pam_p))
+		release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, abort_error);
+	return;
+}
+
+// the heavy lifting for dropping a type within an existing mini transaction : start at the type, write xmax on all of its
+// attributes, then write xmax on the type's own row. does nothing if the type is not visible to us. a later cascade could
+// reuse this to drop related objects in the same mini transaction. reports engine aborts through abort_error.
+static int drop_type_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t type_id, const void* min_tx_id, int* abort_error)
+{
+	// (1) start at the type, find its own row and remember its tuple_pointer
+	tuple_pointer type_tuple_pointer;
+	rhendb_type* type = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_TYPE, type_id, 0, &type_tuple_pointer, min_tx_id, abort_error);
+	if(*abort_error)
+		return 0;
+	if(type == NULL) // no such visible type, nothing to drop
+		return 0;
+	free(type);
+
+	// (2) go to all of the type's attributes and write an xmax on each of their rows
+	tuple_pointer* attribute_tuple_pointers = NULL;
+	uint64_t attrs_count = 0;
+	rhendb_attribute* attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, type_id, 0, 0, &attribute_tuple_pointers, &attrs_count, min_tx_id, abort_error);
+	if(attrs != NULL)
+		free(attrs);
+	if(*abort_error)
+		return 0;
+
+	for(uint64_t i = 0; i < attrs_count; i++)
+	{
+		write_xmax_at(catmgr_p, ss_p, attribute_tuple_pointers[i], &(catmgr_p->attributes_table.record_def), min_tx_id, abort_error);
+		if(*abort_error)
+		{
+			free(attribute_tuple_pointers);
+			return 0;
+		}
+	}
+	free(attribute_tuple_pointers);
+
+	// (3) finally write an xmax on the type's own row
+	write_xmax_at(catmgr_p, ss_p, type_tuple_pointer, &(catmgr_p->types_table.record_def), min_tx_id, abort_error);
+
+	return 1;
+}
+
+int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t type_id)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	if(!ss_p->has_self_transaction_id)
+	{
+		printf("ISSUE in (catalog_manager) :: drop_type needs a snapshot that has a self transaction id\n");
+		exit(-1);
+	}
+
+	int dropped = 0;
+
+	// retry the whole mini transaction for as long as it aborts
+	while(1)
+	{
+		int abort_error = 0;
+		uint64_t page_latches_to_be_borrowed = 0;
+		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
+
+		int dropped = drop_type_simple(catmgr_p, ss_p, type_id, min_tx_id, &abort_error);
+
+		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		if(abort_error == 0)
+			break;
+	}
+
+	return dropped;
 }

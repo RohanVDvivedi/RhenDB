@@ -266,14 +266,14 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t rel_pos_in_owner_to_drop);
 
 // drops all it's partitions, and all indices for this table
-void drop_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id);
+int drop_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id);
 
 // returns id of created index, and creates the same index for all the partitions of this table
 // all part_id's of this index point to the same attributes list
 uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_index* index_like, const rhendb_attribute* attrs, uint32_t attrs_count);
 
 // drops index with this id and all it's partitions, and the corresponding list of attributes
-void drop_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id);
+int drop_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id);
 
 // note:: must lock type by it's name before calling this function, and keep it locked until the transaction ends, for the below functions
 
@@ -281,7 +281,7 @@ void drop_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t t
 uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count);
 
 // drops all the attributes also
-void drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t type_id);
+int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t type_id);
 
 // returns id of created function
 // uint64_t create_function(catalog_manager* catmgr_p, char* name);
