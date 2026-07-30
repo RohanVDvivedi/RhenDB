@@ -3002,6 +3002,141 @@ uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot*
 	}
 }
 
+int alter_table_rename_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t rel_pos_in_owner, char* new_name)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	if(!ss_p->has_self_transaction_id)
+	{
+		printf("ISSUE in (catalog_manager) :: alter_table_rename_column needs a snapshot that has a self transaction id\n");
+		exit(-1);
+	}
+
+	// mvcc_header stamped on the new (renamed) attribute row, born from our transaction and not yet deleted
+	mvcc_header new_row_mvcc_hdr = (mvcc_header){
+		.is_xmin_NULL = 0,
+		.xmin = {.is_committed = 0, .is_aborted = 0, .transaction_id = ss_p->self_transaction_id},
+		.is_xmax_NULL = 1,
+	};
+
+	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
+	while(1)
+	{
+		int abort_error = 0;
+		uint64_t page_latches_to_be_borrowed = 0;
+		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
+
+		tuple_pointer* attribute_tuple_pointers = NULL;
+		rhendb_attribute* attrs = NULL;
+		uint64_t attrs_count = 0;
+		rhendb_attribute* old_attr = NULL;
+		tuple_pointer old_attr_tuple_pointer;
+
+		// (1) get all attributes of the table valid in its last partition (with blob, we deep copy the renamed one)
+		uint64_t last_partition_id = get_last_partition_id_for_table(catmgr_p, ss_p, table_id, min_tx_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+		attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, table_id, last_partition_id, 0, &attribute_tuple_pointers, &attrs_count, min_tx_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		// (2) locate the attribute to rename (by rel_pos), and note any name collision with a different attribute
+		int found = 0;
+		uint64_t found_index = 0;
+		int name_collides = 0;
+		for(uint64_t i = 0; i < attrs_count; i++)
+		{
+			if(attrs[i].rel_pos_in_owner == rel_pos_in_owner)
+			{
+				found = 1;
+				found_index = i;
+				old_attr_tuple_pointer = attribute_tuple_pointers[i];
+			}
+			else if(strncmp(attrs[i].attribute_name, new_name, 64) == 0)
+				name_collides = 1;
+		}
+
+		// (3) resolve any logical outcome up front : not present or a name clash fail (0), an already matching name is a no-op (1)
+		{
+			int logical_result = -1;
+			if(!found || name_collides)
+				logical_result = 0;
+			else if(strncmp(attrs[found_index].attribute_name, new_name, 64) == 0)
+				logical_result = 1;
+			if(logical_result != -1)
+			{
+				free(attrs);
+				free(attribute_tuple_pointers);
+				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				return logical_result;
+			}
+		}
+		free(attrs);
+		attrs = NULL;
+		free(attribute_tuple_pointers);
+		attribute_tuple_pointers = NULL;
+
+		old_attr = get_attribute_at(catmgr_p, ss_p, old_attr_tuple_pointer, 1, min_tx_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		// (4) mark the old attribute row dead with our xmax
+		write_xmax_at(catmgr_p, ss_p, old_attr_tuple_pointer, &(catmgr_p->attributes_table.record_def), min_tx_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		// (5) insert the new attribute row : the old attribute shallow copied with the new name, same partition range, our xmin
+		tuple_pointer new_attribute_tuple_pointer;
+		{
+			rhendb_attribute new_attribute = (*old_attr);
+			strncpy(new_attribute.attribute_name, new_name, 64);
+			void* attribute_tuple = serialize_rhendb_attribute(catmgr_p, &new_row_mvcc_hdr, &new_attribute, 1, min_tx_id, &abort_error);
+			if(abort_error)
+			{
+				free(attribute_tuple);
+				goto ABORT_ERROR;
+			}
+			insert_in_catalog_heap_table(catmgr_p, &(catmgr_p->attributes_table), &new_attribute_tuple_pointer, (void const * const *)(&attribute_tuple), 1, min_tx_id, &abort_error);
+			free(attribute_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+		}
+
+		// (6) owner_to_attributes entry for the new attribute row
+		{
+			rhendb_owner_to_attributes_idx_entry o2aidx_ent = (rhendb_owner_to_attributes_idx_entry){.owner_id = table_id, .rel_pos_in_owner = rel_pos_in_owner, .attributes_tuple_pointer = new_attribute_tuple_pointer};
+			void* o2aidx_key_tuple = serialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, &o2aidx_ent);
+			int inserted = insert_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, o2aidx_key_tuple, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+			free(o2aidx_key_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(!inserted)
+			{
+				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+				exit(-1);
+			}
+		}
+
+		free(old_attr);
+		free(old_attr->derived_from_expr);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		return 1;
+
+		ABORT_ERROR:;
+		if(attrs != NULL)
+			free(attrs);
+		if(attribute_tuple_pointers != NULL)
+			free(attribute_tuple_pointers);
+		if(old_attr != NULL)
+		{
+			free(old_attr);
+			free(old_attr->derived_from_expr);
+		}
+		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+	}
+}
+
+
 int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, char* new_name)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
