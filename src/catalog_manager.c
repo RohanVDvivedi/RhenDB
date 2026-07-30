@@ -3384,6 +3384,9 @@ static int drop_index_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
 
+	bplus_tree_iterator* bpi_p = NULL;
+	tuple_pointer* attribute_tuple_pointers = NULL;
+
 	// (1) start at the index, find its own row and remember its tuple_pointer
 	tuple_pointer index_tuple_pointer;
 	rhendb_index* index = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_INDEX, index_id, 0, &index_tuple_pointer, min_tx_id, abort_error);
@@ -3398,10 +3401,10 @@ static int drop_index_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_
 	{
 		rhendb_index_fragment fragment_key = (rhendb_index_fragment){.table_id = table_id, .index_id = index_id};
 		void* fragment_key_tuple = serialize_rhendb_index_fragment_key(catmgr_p, &fragment_key);
-		bplus_tree_iterator* bpi_p = find_in_bplus_tree(catmgr_p->index_fragments_table.root_page_id, fragment_key_tuple, 2, GREATER_THAN_EQUALS, 0, WRITE_LOCK, &(catmgr_p->index_fragments_table.clust_table_defs), engine->pam_p, engine->pmm_p, min_tx_id, abort_error);
+		bpi_p = find_in_bplus_tree(catmgr_p->index_fragments_table.root_page_id, fragment_key_tuple, 2, GREATER_THAN_EQUALS, 0, WRITE_LOCK, &(catmgr_p->index_fragments_table.clust_table_defs), engine->pam_p, engine->pmm_p, min_tx_id, abort_error);
 		free(fragment_key_tuple);
 		if(*abort_error)
-			return 0;
+			goto ABORT_ERROR;
 
 		while(1)
 		{
@@ -3424,54 +3427,59 @@ static int drop_index_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_
 				write_mvcc_header(mvcc_hdr_serialized, &(catmgr_p->mvcc_header_tuple_def), &hdr);
 				update_non_key_element_in_place_at_bplus_tree_iterator(bpi_p, STATIC_POSITION(0), &((datum){.tuple_value = mvcc_hdr_serialized}), min_tx_id, abort_error);
 				if(*abort_error)
-				{
-					delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
-					return 0;
-				}
+					goto ABORT_ERROR;
 			}
 
 			next_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
 			if(*abort_error)
-			{
-				delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
-				return 0;
-			}
+				goto ABORT_ERROR;
 		}
 
 		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+		bpi_p = NULL;
 		if(*abort_error)
-			return 0;
+			goto ABORT_ERROR;
 	}
 
 	// (3) write xmax on all of the index's attributes (an index's attributes are not partitioned, so part_id 0 finds them all)
-	tuple_pointer* attribute_tuple_pointers = NULL;
-	uint64_t attrs_count = 0;
-	rhendb_attribute* attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, index_id, 0, 0, &attribute_tuple_pointers, &attrs_count, min_tx_id, abort_error);
-	if(attrs != NULL)
-		free(attrs);
-	if(*abort_error)
-		return 0;
-
-	for(uint64_t i = 0; i < attrs_count; i++)
 	{
-		write_xmax_at(catmgr_p, ss_p, attribute_tuple_pointers[i], &(catmgr_p->attributes_table.record_def), min_tx_id, abort_error);
+		uint64_t attrs_count = 0;
+		rhendb_attribute* attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, index_id, 0, 0, &attribute_tuple_pointers, &attrs_count, min_tx_id, abort_error);
+		if(attrs != NULL)
+			free(attrs);
 		if(*abort_error)
+			goto ABORT_ERROR;
+
+		for(uint64_t i = 0; i < attrs_count; i++)
 		{
-			free(attribute_tuple_pointers);
-			return 0;
+			write_xmax_at(catmgr_p, ss_p, attribute_tuple_pointers[i], &(catmgr_p->attributes_table.record_def), min_tx_id, abort_error);
+			if(*abort_error)
+				goto ABORT_ERROR;
 		}
+		free(attribute_tuple_pointers);
+		attribute_tuple_pointers = NULL;
 	}
-	free(attribute_tuple_pointers);
 
 	// (4) finally write xmax on the index's own row
 	write_xmax_at(catmgr_p, ss_p, index_tuple_pointer, &(catmgr_p->indices_table.record_def), min_tx_id, abort_error);
+	if(*abort_error)
+		goto ABORT_ERROR;
 
 	return 1;
+
+	ABORT_ERROR:;
+	if(bpi_p != NULL)
+		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	if(attribute_tuple_pointers != NULL)
+		free(attribute_tuple_pointers);
+	return 0;
 }
 
 
 static int drop_type_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t type_id, const void* min_tx_id, int* abort_error)
 {
+	tuple_pointer* attribute_tuple_pointers = NULL;
+
 	// (1) start at the type, find its own row and remember its tuple_pointer
 	tuple_pointer type_tuple_pointer;
 	rhendb_type* type = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_TYPE, type_id, 0, &type_tuple_pointer, min_tx_id, abort_error);
@@ -3482,38 +3490,46 @@ static int drop_type_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p
 	free(type);
 
 	// (2) go to all of the type's attributes and write an xmax on each of their rows
-	tuple_pointer* attribute_tuple_pointers = NULL;
-	uint64_t attrs_count = 0;
-	rhendb_attribute* attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, type_id, 0, 0, &attribute_tuple_pointers, &attrs_count, min_tx_id, abort_error);
-	if(attrs != NULL)
-		free(attrs);
-	if(*abort_error)
-		return 0;
-
-	for(uint64_t i = 0; i < attrs_count; i++)
 	{
-		write_xmax_at(catmgr_p, ss_p, attribute_tuple_pointers[i], &(catmgr_p->attributes_table.record_def), min_tx_id, abort_error);
+		uint64_t attrs_count = 0;
+		rhendb_attribute* attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, type_id, 0, 0, &attribute_tuple_pointers, &attrs_count, min_tx_id, abort_error);
+		if(attrs != NULL)
+			free(attrs);
 		if(*abort_error)
+			goto ABORT_ERROR;
+
+		for(uint64_t i = 0; i < attrs_count; i++)
 		{
-			free(attribute_tuple_pointers);
-			return 0;
+			write_xmax_at(catmgr_p, ss_p, attribute_tuple_pointers[i], &(catmgr_p->attributes_table.record_def), min_tx_id, abort_error);
+			if(*abort_error)
+				goto ABORT_ERROR;
 		}
+		free(attribute_tuple_pointers);
+		attribute_tuple_pointers = NULL;
 	}
-	free(attribute_tuple_pointers);
 
 	// (3) finally write an xmax on the type's own row
 	write_xmax_at(catmgr_p, ss_p, type_tuple_pointer, &(catmgr_p->types_table.record_def), min_tx_id, abort_error);
+	if(*abort_error)
+		goto ABORT_ERROR;
 
 	return 1;
+
+	ABORT_ERROR:;
+	if(attribute_tuple_pointers != NULL)
+		free(attribute_tuple_pointers);
+	return 0;
 }
 
 
-// the heavy lifting for dropping a table within an existing mini transaction : drop each of its indexes (reusing
-// drop_index_simple), delete all of its partitions from the clustered table_partitions using a write iterator, write xmax
-// on its (currently alive) attributes, then write xmax on its own row. returns 1 if dropped, 0 otherwise. reports aborts.
 static int drop_table_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	bplus_tree_iterator* bpi_p = NULL;
+	tuple_pointer* attribute_tuple_pointers = NULL;
+	rhendb_index* indices = NULL;
+	uint64_t indices_count = 0;
 
 	// (1) start at the table, find its own row and remember its tuple_pointer
 	tuple_pointer table_tuple_pointer;
@@ -3525,36 +3541,28 @@ static int drop_table_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_
 	free(table);
 
 	// (2) drop every index of this table, reusing drop_index_simple
+	indices = get_indices_for_table(catmgr_p, ss_p, table_id, 0, NULL, &indices_count, min_tx_id, abort_error);
+	if(*abort_error)
+		goto ABORT_ERROR;
+	for(uint64_t i = 0; i < indices_count; i++)
 	{
-		uint64_t indices_count = 0;
-		rhendb_index* indices = get_indices_for_table(catmgr_p, ss_p, table_id, 0, NULL, &indices_count, min_tx_id, abort_error);
+		drop_index_simple(catmgr_p, ss_p, table_id, indices[i].id, min_tx_id, abort_error);
 		if(*abort_error)
-			return 0;
-
-		for(uint64_t i = 0; i < indices_count; i++)
-		{
-			drop_index_simple(catmgr_p, ss_p, table_id, indices[i].id, min_tx_id, abort_error);
-			if(*abort_error)
-			{
-				for(uint64_t k = 0; k < indices_count; k++)
-					free(indices[k].predicate_expr);
-				free(indices);
-				return 0;
-			}
-		}
-		for(uint64_t i = 0; i < indices_count; i++)
-			free(indices[i].predicate_expr);
-		free(indices);
+			goto ABORT_ERROR;
 	}
+	for(uint64_t i = 0; i < indices_count; i++)
+		free(indices[i].predicate_expr);
+	free(indices);
+	indices = NULL;
 
 	// (3) mark every partition of this table deleted (xmax in place), walking with a WRITE_LOCKed iterator
 	{
 		rhendb_table_partition partition_key = (rhendb_table_partition){.table_id = table_id};
 		void* partition_key_tuple = serialize_rhendb_table_partition_key(catmgr_p, &partition_key);
-		bplus_tree_iterator* bpi_p = find_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, partition_key_tuple, 1, GREATER_THAN_EQUALS, 0, WRITE_LOCK, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, engine->pmm_p, min_tx_id, abort_error);
+		bpi_p = find_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, partition_key_tuple, 1, GREATER_THAN_EQUALS, 0, WRITE_LOCK, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, engine->pmm_p, min_tx_id, abort_error);
 		free(partition_key_tuple);
 		if(*abort_error)
-			return 0;
+			goto ABORT_ERROR;
 
 		while(1)
 		{
@@ -3577,55 +3585,62 @@ static int drop_table_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_
 				write_mvcc_header(mvcc_hdr_serialized, &(catmgr_p->mvcc_header_tuple_def), &hdr);
 				update_non_key_element_in_place_at_bplus_tree_iterator(bpi_p, STATIC_POSITION(0), &((datum){.tuple_value = mvcc_hdr_serialized}), min_tx_id, abort_error);
 				if(*abort_error)
-				{
-					delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
-					return 0;
-				}
+					goto ABORT_ERROR;
 			}
 
 			next_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
 			if(*abort_error)
-			{
-				delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
-				return 0;
-			}
+				goto ABORT_ERROR;
 		}
 
 		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+		bpi_p = NULL;
 		if(*abort_error)
-			return 0;
+			goto ABORT_ERROR;
 	}
 
 	// (4) write xmax on the table's currently alive attributes (those valid in its last partition)
 	{
 		uint64_t last_partition_id = get_last_partition_id_for_table(catmgr_p, ss_p, table_id, min_tx_id, abort_error);
 		if(*abort_error)
-			return 0;
+			goto ABORT_ERROR;
 
-		tuple_pointer* attribute_tuple_pointers = NULL;
 		uint64_t attrs_count = 0;
 		rhendb_attribute* attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, table_id, last_partition_id, 0, &attribute_tuple_pointers, &attrs_count, min_tx_id, abort_error);
 		if(attrs != NULL)
 			free(attrs);
 		if(*abort_error)
-			return 0;
+			goto ABORT_ERROR;
 
 		for(uint64_t i = 0; i < attrs_count; i++)
 		{
 			write_xmax_at(catmgr_p, ss_p, attribute_tuple_pointers[i], &(catmgr_p->attributes_table.record_def), min_tx_id, abort_error);
 			if(*abort_error)
-			{
-				free(attribute_tuple_pointers);
-				return 0;
-			}
+				goto ABORT_ERROR;
 		}
 		free(attribute_tuple_pointers);
+		attribute_tuple_pointers = NULL;
 	}
 
 	// (5) finally write xmax on the table's own row
 	write_xmax_at(catmgr_p, ss_p, table_tuple_pointer, &(catmgr_p->tables_table.record_def), min_tx_id, abort_error);
+	if(*abort_error)
+		goto ABORT_ERROR;
 
 	return 1;
+
+	ABORT_ERROR:;
+	if(bpi_p != NULL)
+		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	if(attribute_tuple_pointers != NULL)
+		free(attribute_tuple_pointers);
+	if(indices != NULL)
+	{
+		for(uint64_t i = 0; i < indices_count; i++)
+			free(indices[i].predicate_expr);
+		free(indices);
+	}
+	return 0;
 }
 
 
