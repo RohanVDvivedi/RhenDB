@@ -2745,18 +2745,12 @@ static uint64_t create_new_partition_and_index_fragments(catalog_manager* catmgr
 		}
 	}
 
-	for(uint64_t i = 0; i < indices_count; i++)
-		free(indices[i].predicate_expr);
 	free(indices);
 	return new_partition_id;
 
 	ABORT_ERROR:;
 	if(indices != NULL)
-	{
-		for(uint64_t i = 0; i < indices_count; i++)
-			free(indices[i].predicate_expr);
 		free(indices);
-	}
 	return 0;
 }
 
@@ -3550,8 +3544,6 @@ static int drop_table_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_
 		if(*abort_error)
 			goto ABORT_ERROR;
 	}
-	for(uint64_t i = 0; i < indices_count; i++)
-		free(indices[i].predicate_expr);
 	free(indices);
 	indices = NULL;
 
@@ -3635,11 +3627,7 @@ static int drop_table_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_
 	if(attribute_tuple_pointers != NULL)
 		free(attribute_tuple_pointers);
 	if(indices != NULL)
-	{
-		for(uint64_t i = 0; i < indices_count; i++)
-			free(indices[i].predicate_expr);
 		free(indices);
-	}
 	return 0;
 }
 
