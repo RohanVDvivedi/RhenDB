@@ -265,12 +265,21 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 // returns 0 if this call fails
 uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t rel_pos_in_owner_to_drop);
 
+// rename a column to a new one
+int alter_table_rename_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t rel_pos_in_owner_to_drop, char* new_name);
+
+// returns 1 on successfull rename
+int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, char* new_name);
+
 // drops all it's partitions, and all indices for this table
 int drop_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id);
 
 // returns id of created index, and creates the same index for all the partitions of this table
 // all part_id's of this index point to the same attributes list
 uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_index* index_like, const rhendb_attribute* attrs, uint32_t attrs_count);
+
+// returns 1 on successfull rename
+int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id, char* new_name);
 
 // drops index with this id and all it's partitions, and the corresponding list of attributes
 int drop_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id);
