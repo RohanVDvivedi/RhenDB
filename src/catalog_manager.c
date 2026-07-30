@@ -3436,7 +3436,7 @@ int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t typ
 		uint64_t page_latches_to_be_borrowed = 0;
 		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
 
-		int dropped = drop_type_simple(catmgr_p, ss_p, type_id, min_tx_id, &abort_error);
+		dropped = drop_type_simple(catmgr_p, ss_p, type_id, min_tx_id, &abort_error);
 
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
 		if(abort_error == 0)
