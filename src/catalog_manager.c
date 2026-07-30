@@ -2063,6 +2063,53 @@ static uint64_t get_last_partition_id_for_table(catalog_manager* catmgr_p, const
 	return 0;
 }
 
+// the highest partition_id physically present for this table in the table_partitions clustered index,
+// regardless of mvcc visibility. because partition_ids are only ever assigned monotonically and never reused,
+// this is the last partition_id ever ASSIGNED to the table, so (this + 1) is always a free partition_id -- even
+// when the most recently created partition belongs to a transaction that later aborted (or is otherwise not
+// visible to ss_p). scans the clustered index once, in reverse from (table_id, UINT64_MAX), and returns the
+// first entry's partition_id without any visibility lookup; returns 0 if the table has no partition entries.
+static uint64_t get_last_assigned_partition_id_for_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+	bplus_tree_iterator* bpi_p = NULL;
+	uint64_t last_assigned_partition_id = 0;
+
+	rhendb_table_partition partition_key = (rhendb_table_partition){.table_id = table_id, .partition_id = UINT64_MAX};
+	void* partition_key_tuple = serialize_rhendb_table_partition_key(catmgr_p, &partition_key);
+	bpi_p = find_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, partition_key_tuple, 2, LESSER_THAN_EQUALS, 0, (min_tx_id != NULL) ? WRITE_LOCK : READ_LOCK, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, (min_tx_id != NULL) ? engine->pmm_p : NULL, min_tx_id, abort_error);
+	free(partition_key_tuple);
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	if(!is_empty_bplus_tree(bpi_p))
+	{
+		const void* partition_record = get_tuple_bplus_tree_iterator(bpi_p);
+		if(partition_record != NULL)
+		{
+			mvcc_header hdr;
+			rhendb_table_partition partition_entry = deserialize_rhendb_table_partition(catmgr_p, &hdr, partition_record);
+
+			// the first entry at or below (table_id, UINT64_MAX) belongs to this table only if its table_id matches;
+			// otherwise this table has no partitions yet and its last assigned partition_id is 0
+			if(partition_entry.table_id == table_id)
+				last_assigned_partition_id = partition_entry.partition_id;
+		}
+	}
+
+	delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	bpi_p = NULL;
+	if(*abort_error)
+		goto ABORT_ERROR;
+
+	return last_assigned_partition_id;
+
+	ABORT_ERROR:;
+	if(bpi_p != NULL)
+		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
+	return 0;
+}
+
 // the visible attribute at (owner_id, rel_pos_in_owner) via the owner_to_attributes index, malloc-ed, or NULL if none is
 // visible or on abort. when found and attribute_tuple_pointer is not NULL, its heap tuple_pointer is written there.
 static rhendb_attribute* get_attribute_for_owner_at_rel_pos(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, uint64_t rel_pos_in_owner, int should_blob, tuple_pointer* attribute_tuple_pointer, const void* min_tx_id, int* abort_error)
@@ -2734,7 +2781,10 @@ static uint64_t create_new_partition_and_index_fragments(catalog_manager* catmgr
 	uint64_t new_partition_id = 0;
 	rhendb_index* indices = NULL;
 
-	new_partition_id = get_last_partition_id_for_table(catmgr_p, ss_p, table_id, min_tx_id, abort_error) + 1;
+	// assign from the last partition_id ever ASSIGNED to this table (physically present, visibility-independent),
+	// not the last VISIBLE one -- otherwise a partition left behind by an aborted/invisible transaction would let
+	// us recompute an already-used partition_id and collide on the clustered-index insert below
+	new_partition_id = get_last_assigned_partition_id_for_table(catmgr_p, ss_p, table_id, min_tx_id, abort_error) + 1;
 	if(*abort_error)
 		goto ABORT_ERROR;
 
