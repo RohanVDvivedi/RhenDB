@@ -162,7 +162,7 @@ static void* serialize_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_he
 
 	if(should_blob && attr->derived_from_expr != NULL)
 	{
-		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(13), attr->derived_from_expr, strlen(attr->derived_from_expr), min_tx_id, abort_error))
+		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(13), attr->derived_from_expr, attr->derived_from_expr_size, min_tx_id, abort_error))
 		{
 			free(tuple);
 			return NULL;
@@ -235,7 +235,7 @@ static void* serialize_rhendb_index(catalog_manager* catmgr_p, const mvcc_header
 
 	if(should_blob && idx->predicate_expr != NULL)
 	{
-		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(5), idx->predicate_expr, strlen(idx->predicate_expr), min_tx_id, abort_error))
+		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(5), idx->predicate_expr, idx->predicate_expr_size, min_tx_id, abort_error))
 		{
 			free(tuple);
 			return NULL;
@@ -2564,9 +2564,13 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 {
 	if(attrs_count == 0)
 	{
-		printf("BUG in (catalog_manager) :: create_table needs a non-zero attrs_count\n");
-		exit(-1);
+		printf("ISSUE in (catalog_manager) :: create_table needs a non-zero attrs_count\n");
+		return 0; // logical failure, not a fatal bug
 	}
+
+	// NOTE (caller responsibility): attribute names within 'attrs' are NOT checked for uniqueness here, unlike
+	// alter_table_add_column which rejects a duplicate name. duplicate column names must be prevented by the
+	// caller until this validation is added to the catalog.
 
 	rage_engine* engine = catmgr_p->catmgr_engine;
 
@@ -3389,9 +3393,13 @@ uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhen
 {
 	if(attrs_count == 0)
 	{
-		printf("BUG in (catalog_manager) :: create_index needs a non-zero attrs_count\n");
-		exit(-1);
+		printf("ISSUE in (catalog_manager) :: create_index needs a non-zero attrs_count\n");
+		return 0; // logical failure, not a fatal bug
 	}
+
+	// NOTE (caller responsibility): attribute names within 'attrs' (the index's key columns plus the trailing
+	// tuple_pointer) are NOT checked for uniqueness here. duplicate attribute names must be prevented by the
+	// caller until this validation is added to the catalog.
 
 	rage_engine* engine = catmgr_p->catmgr_engine;
 
@@ -3741,9 +3749,12 @@ uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char*
 {
 	if(attrs_count == 0)
 	{
-		printf("BUG in (catalog_manager) :: create_type needs a non-zero attrs_count\n");
-		exit(-1);
+		printf("ISSUE in (catalog_manager) :: create_type needs a non-zero attrs_count\n");
+		return 0; // logical failure, not a fatal bug
 	}
+
+	// NOTE (caller responsibility): attribute names within 'attrs' are NOT checked for uniqueness here. duplicate
+	// attribute names must be prevented by the caller until this validation is added to the catalog.
 
 	rage_engine* engine = catmgr_p->catmgr_engine;
 
