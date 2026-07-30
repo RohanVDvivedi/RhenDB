@@ -1,10 +1,8 @@
 PICKED TASKS
 
 CATALOG MANAGER
-* implement it's read and write functions
-* implement
-  * getters of all types
-  * dependency tracking and drop cascade functionality (for type and function) (*far future)
+* getter to get all active tables and types
+* integrate with rhendb
 
 
 
@@ -76,9 +74,13 @@ FUTURE TASKS
  3.* define statistics tables (*future and (low priority)) - persistent
    * same structurally and composed of indexes and heap_tables
 
- 4.* lock table remaining tasks (*future)
+ 4.* lock_manager remaining tasks (*future)
    * deadlock detection and resolution task job (*future, for now rely on timeouts to back off and abort)
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock (*future, do it when query optimizer and catalog tables are ready)
+
+ 5.* catalog_manager remaining tasks (*future)
+   * dependency tracking and drop cascade functionality (for type and function) (*far future)
+   * trash cleaner for catalog manager
 
  5.* always sum up all the operator_resource_counter-s after making the operators and request that many resources from the rhendb's resource_usage_limiter-s
    * once the query is done and shutdown, free up all the resources
