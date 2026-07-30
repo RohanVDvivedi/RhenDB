@@ -2089,7 +2089,6 @@ static rhendb_attribute* get_attribute_for_owner_at_rel_pos(catalog_manager* cat
 	return NULL;
 }
 
-
 // builds a tuple data_type_info from the attributes owned by owner_id, one containee per attribute, defined below
 static data_type_info* get_tuple_data_type_info_from_attributes(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* type_name, int is_nullable, uint64_t owner_id, uint64_t part_id, const void* min_tx_id, int* abort_error);
 
@@ -2511,7 +2510,25 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 				goto ABORT_ERROR;
 		}
 
-		// (7) name_idx and id_idx entries for the new table, pointing at its tables_table row
+		// (7) owner_to_attributes_idx entries, one per attribute, pointing at each attribute's row
+		for(uint32_t i = 0; i < attrs_count; i++)
+		{
+			rhendb_owner_to_attributes_idx_entry o2aidx_ent = (rhendb_owner_to_attributes_idx_entry){.owner_id = table_id, .rel_pos_in_owner = i, .attributes_tuple_pointer = attribute_tuple_pointers[i]};
+			void* o2aidx_key_tuple = serialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, &o2aidx_ent);
+			int inserted = insert_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, o2aidx_key_tuple, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+			free(o2aidx_key_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(!inserted)
+			{
+				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+				exit(-1);
+			}
+		}
+		free(attribute_tuple_pointers);
+		attribute_tuple_pointers = NULL
+
+		// (8) name_idx and id_idx entries for the new table, pointing at its tables_table row
 		{
 			rhendb_name_idx_entry name_idx_ent = (rhendb_name_idx_entry){.object_type = RHENDB_TABLE, .object_tuple_pointer = table_tuple_pointer};
 			strncpy(name_idx_ent.name, name, 64);
@@ -2540,24 +2557,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 			}
 		}
 
-		// (8) owner_to_attributes_idx entries, one per attribute, pointing at each attribute's row
-		for(uint32_t i = 0; i < attrs_count; i++)
-		{
-			rhendb_owner_to_attributes_idx_entry o2aidx_ent = (rhendb_owner_to_attributes_idx_entry){.owner_id = table_id, .rel_pos_in_owner = i, .attributes_tuple_pointer = attribute_tuple_pointers[i]};
-			void* o2aidx_key_tuple = serialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, &o2aidx_ent);
-			int inserted = insert_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, o2aidx_key_tuple, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
-			free(o2aidx_key_tuple);
-			if(abort_error)
-				goto ABORT_ERROR;
-			if(!inserted)
-			{
-				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
-				exit(-1);
-			}
-		}
-
 		// commit the mini transaction and hand back the new table id
-		free(attribute_tuple_pointers);
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
 		return table_id;
 
@@ -2935,6 +2935,216 @@ uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot*
 	}
 }
 
+uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_index* index_like, const rhendb_attribute* attrs, uint32_t attrs_count)
+{
+	if(attrs_count == 0)
+	{
+		printf("BUG in (catalog_manager) :: create_index needs a non-zero attrs_count\n");
+		exit(-1);
+	}
+
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	// we can only make persistent changes on behalf of a transaction that has a self transaction id
+	if(!ss_p->has_self_transaction_id)
+	{
+		printf("ISSUE in (catalog_manager) :: create_index needs a snapshot that has a self transaction id\n");
+		exit(-1);
+	}
+
+	// mvcc_header stamped on every new catalog row, born from our transaction and not yet deleted
+	mvcc_header new_row_mvcc_hdr = (mvcc_header){
+		.is_xmin_NULL = 0,
+		.xmin = {.is_committed = 0, .is_aborted = 0, .transaction_id = ss_p->self_transaction_id},
+		.is_xmax_NULL = 1,
+	};
+
+	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
+	while(1)
+	{
+		uint64_t index_id = 0; // 0 == failure, real ids start at FIRST_SCHEMA_UNIQUE_ID
+		tuple_pointer* attribute_tuple_pointers = NULL;
+		rhendb_table_partition* partitions = NULL;
+
+		int abort_error = 0;
+		uint64_t page_latches_to_be_borrowed = 0;
+		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
+
+		// (1) ensure no visible index already has this exact name
+		{
+			rhendb_index* existing_index = get_catalog_object_by_name(catmgr_p, ss_p, RHENDB_INDEX, index_like->name, 0, min_tx_id, &abort_error);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(existing_index != NULL) // this is not abort, but we found an index with the same name
+			{
+				free(existing_index->predicate_expr);
+				free(existing_index);
+				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				return 0;
+			}
+		}
+
+		// (2) allocate a fresh globally unique id for the new index
+		pthread_mutex_lock(&(catmgr_p->global_unique_schema_id_lock));
+		if(catmgr_p->global_unique_schema_id == UINT64_MAX)
+		{
+			printf("ISSUE in (catalog_manager) :: create_index overflowed global_unique_schema_id\n");
+			exit(-1);
+		}
+		index_id = catmgr_p->global_unique_schema_id++;
+		pthread_mutex_unlock(&(catmgr_p->global_unique_schema_id_lock));
+
+		// (3) insert the indices_table entry, remember its tuple_pointer for the name and id indexes
+		tuple_pointer index_tuple_pointer;
+		{
+			rhendb_index new_index = (*index_like);
+			new_index.id = index_id;
+			void* index_tuple = serialize_rhendb_index(catmgr_p, &new_row_mvcc_hdr, &new_index, 1, min_tx_id, &abort_error);
+			if(abort_error)
+			{
+				free(index_tuple);
+				goto ABORT_ERROR;
+			}
+			insert_in_catalog_heap_table(catmgr_p, &(catmgr_p->indices_table), &index_tuple_pointer, (void const * const *)(&index_tuple), 1, min_tx_id, &abort_error);
+			free(index_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+		}
+
+		// (4) the index's own attributes, owned by the index, not partitioned so from = 0 and to = 0, bulk inserted for locality
+		attribute_tuple_pointers = malloc(sizeof(tuple_pointer) * attrs_count);
+		{
+			void** attribute_tuples = malloc(sizeof(void*) * attrs_count);
+			for(uint32_t i = 0; i < attrs_count; i++)
+			{
+				rhendb_attribute a = attrs[i];
+				a.owner_id = index_id;
+				a.rel_pos_in_owner = i;
+				a.table_part_id_from = 0;
+				a.table_part_id_to = 0;
+				attribute_tuples[i] = serialize_rhendb_attribute(catmgr_p, &new_row_mvcc_hdr, &a, 1, min_tx_id, &abort_error);
+				if(abort_error)
+				{
+					for(uint32_t j = 0; j < i; j++)
+						free(attribute_tuples[j]);
+					free(attribute_tuples);
+					goto ABORT_ERROR;
+				}
+			}
+			insert_in_catalog_heap_table(catmgr_p, &(catmgr_p->attributes_table), attribute_tuple_pointers, (void const * const *)attribute_tuples, attrs_count, min_tx_id, &abort_error);
+			for(uint32_t i = 0; i < attrs_count; i++)
+				free(attribute_tuples[i]);
+			free(attribute_tuples);
+			if(abort_error)
+				goto ABORT_ERROR;
+		}
+
+		// (5) owner_to_attributes entries for the index's attributes, needed so the fragment builder can read them back
+		for(uint32_t i = 0; i < attrs_count; i++)
+		{
+			rhendb_owner_to_attributes_idx_entry o2aidx_ent = (rhendb_owner_to_attributes_idx_entry){.owner_id = index_id, .rel_pos_in_owner = i, .attributes_tuple_pointer = attribute_tuple_pointers[i]};
+			void* o2aidx_key_tuple = serialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, &o2aidx_ent);
+			int inserted = insert_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, o2aidx_key_tuple, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+			free(o2aidx_key_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(!inserted)
+			{
+				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+				exit(-1);
+			}
+		}
+		free(attribute_tuple_pointers);
+		attribute_tuple_pointers = NULL;
+
+		// (6) one fresh index fragment for every existing partition of the table
+		// at this point attributes should be well setup at this point because they would be read back
+		{
+			rhendb_index new_index = (*index_like);
+			new_index.id = index_id;
+			uint64_t partitions_count = 0;
+			partitions = get_partitions_for_table(catmgr_p, ss_p, index_like->table_id, &partitions_count, min_tx_id, &abort_error);
+			if(abort_error)
+				goto ABORT_ERROR;
+
+			for(uint64_t i = 0; i < partitions_count; i++)
+			{
+				uint64_t fragment_root_page_id = create_index_fragment_root_page_id(catmgr_p, ss_p, new_index, min_tx_id, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR;
+
+				rhendb_index_fragment new_fragment = (rhendb_index_fragment){.table_id = index_like->table_id, .index_id = index_id, .partition_id = partitions[i].partition_id, .root_page_id = fragment_root_page_id};
+				void* fragment_tuple = serialize_rhendb_index_fragment(catmgr_p, &new_row_mvcc_hdr, &new_fragment);
+				int inserted = insert_in_bplus_tree(catmgr_p->index_fragments_table.root_page_id, fragment_tuple, &(catmgr_p->index_fragments_table.clust_table_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+				free(fragment_tuple);
+				if(abort_error)
+					goto ABORT_ERROR;
+				if(!inserted)
+				{
+					printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+					exit(-1);
+				}
+			}
+			free(partitions);
+			partitions = NULL;
+		}
+
+		// (7) the table_to_indices entry, so the table can enumerate this index (for fragments on future partitions)
+		{
+			rhendb_table_to_indices_entry t2iidx_ent = (rhendb_table_to_indices_entry){.table_id = index_like->table_id, .indices_tuple_pointer = index_tuple_pointer};
+			void* t2iidx_key_tuple = serialize_rhendb_table_to_indices_entry(catmgr_p, &t2iidx_ent);
+			int inserted = insert_in_bplus_tree(catmgr_p->table_to_indices_idx.root_page_id, t2iidx_key_tuple, &(catmgr_p->table_to_indices_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+			free(t2iidx_key_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(!inserted)
+			{
+				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+				exit(-1);
+			}
+		}
+
+		// (8) name_idx and id_idx entries for the new index, pointing at its indices_table row
+		{
+			rhendb_name_idx_entry name_idx_ent = (rhendb_name_idx_entry){.object_type = RHENDB_INDEX, .object_tuple_pointer = index_tuple_pointer};
+			strncpy(name_idx_ent.name, index_like->name, 64);
+			void* name_key_tuple = serialize_rhendb_name_idx_entry(catmgr_p, &name_idx_ent);
+			int inserted = insert_in_bplus_tree(catmgr_p->name_idx.root_page_id, name_key_tuple, &(catmgr_p->name_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+			free(name_key_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(!inserted)
+			{
+				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+				exit(-1);
+			}
+		}
+		{
+			rhendb_id_idx_entry id_idx_ent = (rhendb_id_idx_entry){.object_type = RHENDB_INDEX, .id = index_id, .object_tuple_pointer = index_tuple_pointer};
+			void* id_key_tuple = serialize_rhendb_id_idx_entry(catmgr_p, &id_idx_ent);
+			int inserted = insert_in_bplus_tree(catmgr_p->id_idx.root_page_id, id_key_tuple, &(catmgr_p->id_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+			free(id_key_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(!inserted)
+			{
+				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+				exit(-1);
+			}
+		}
+
+		// commit the mini transaction and hand back the new index id
+		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		return index_id;
+
+		ABORT_ERROR:;
+		if(attribute_tuple_pointers != NULL)
+			free(attribute_tuple_pointers);
+		if(partitions != NULL)
+			free(partitions);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+	}
+}
 
 uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count)
 {
@@ -3036,7 +3246,25 @@ uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char*
 				goto ABORT_ERROR;
 		}
 
-		// (5) name_idx and id_idx entries for the new type, pointing at its types_table row
+		// (5) owner_to_attributes_idx entries, one per attribute, pointing at each attribute's row
+		for(uint32_t i = 0; i < attrs_count; i++)
+		{
+			rhendb_owner_to_attributes_idx_entry o2aidx_ent = (rhendb_owner_to_attributes_idx_entry){.owner_id = type_id, .rel_pos_in_owner = i, .attributes_tuple_pointer = attribute_tuple_pointers[i]};
+			void* o2aidx_key_tuple = serialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, &o2aidx_ent);
+			int inserted = insert_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, o2aidx_key_tuple, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+			free(o2aidx_key_tuple);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(!inserted)
+			{
+				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
+				exit(-1);
+			}
+		}
+		free(attribute_tuple_pointers);
+		attribute_tuple_pointers = NULL;
+
+		// (6) name_idx and id_idx entries for the new type, pointing at its types_table row
 		{
 			rhendb_name_idx_entry name_idx_ent = (rhendb_name_idx_entry){.object_type = RHENDB_TYPE, .object_tuple_pointer = type_tuple_pointer};
 			strncpy(name_idx_ent.name, name, 64);
@@ -3065,24 +3293,7 @@ uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char*
 			}
 		}
 
-		// (6) owner_to_attributes_idx entries, one per attribute, pointing at each attribute's row
-		for(uint32_t i = 0; i < attrs_count; i++)
-		{
-			rhendb_owner_to_attributes_idx_entry o2aidx_ent = (rhendb_owner_to_attributes_idx_entry){.owner_id = type_id, .rel_pos_in_owner = i, .attributes_tuple_pointer = attribute_tuple_pointers[i]};
-			void* o2aidx_key_tuple = serialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, &o2aidx_ent);
-			int inserted = insert_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, o2aidx_key_tuple, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
-			free(o2aidx_key_tuple);
-			if(abort_error)
-				goto ABORT_ERROR;
-			if(!inserted)
-			{
-				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
-				exit(-1);
-			}
-		}
-
 		// commit the mini transaction and hand back the new type id
-		free(attribute_tuple_pointers);
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
 		return type_id;
 
