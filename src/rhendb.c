@@ -10,6 +10,7 @@
 #include<unistd.h>
 
 #define TX_TABLE_ROOT_PAGE_ID_KEY "AAA-tx_table_root_page_id"
+#define CATALOG_ROOT_PAGE_ID_KEY  "AAB-catalog_root_page_id"
 
 static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_users_count)
 {
@@ -75,7 +76,7 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 
 		// create transaction table here
 		{
-			uint64_t tx_table_root_page_id = 0;
+			uint64_t tx_table_root_page_id = rdb->persistent_acid_rage_engine.pam_p->pas.NULL_PAGE_ID;
 			initialize_transaction_table(&(rdb->tx_table), &(tx_table_root_page_id), &(rdb->persistent_acid_rage_engine), max_concurrent_users_count);
 
 			init_tuple(&(system_roots_record_def), tuple_buffer);
@@ -86,6 +87,23 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 			if(abort_error)
 			{
 				printf("FAILED TO CREATE SYSTEM TABLES SECIFICALLY TRANSACTION TABLE\n");
+				exit(-1);
+			}
+		}
+
+		// create transaction table here
+		{
+			uint64_t catalog_root_page_id = rdb->persistent_acid_rage_engine.pam_p->pas.NULL_PAGE_ID;
+			initialize_catalog_manager(&(rdb->cat_mgr), &(catalog_root_page_id), rdb->mvcc_hdr_type_info, &(rdb->persistent_acid_rage_engine), &(rdb->tsg));
+
+			init_tuple(&(system_roots_record_def), tuple_buffer);
+			set_element_in_tuple(&(system_roots_record_def), STATIC_POSITION(0), tuple_buffer, &((datum){.string_value = CATALOG_ROOT_PAGE_ID_KEY, .string_size = sizeof(CATALOG_ROOT_PAGE_ID_KEY)}), 100);
+			set_element_in_tuple(&(system_roots_record_def), STATIC_POSITION(1), tuple_buffer, &((datum){.uint_value = catalog_root_page_id}), 100);
+
+			insert_in_bplus_tree(root_page_id, tuple_buffer, &bpttd, rdb->persistent_acid_rage_engine.pam_p, rdb->persistent_acid_rage_engine.pmm_p, sub_transaction_id, &abort_error);
+			if(abort_error)
+			{
+				printf("FAILED TO CREATE SYSTEM TABLES SECIFICALLY CATALOG TABLES\n");
 				exit(-1);
 			}
 		}
@@ -137,6 +155,12 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 				if(0 == strncmp(TX_TABLE_ROOT_PAGE_ID_KEY, system_table_name.string_value, system_table_name.string_size))
 				{
 					initialize_transaction_table(&(rdb->tx_table), &(system_root_page_id), &(rdb->persistent_acid_rage_engine), max_concurrent_users_count);
+				}
+
+				// compare with key and initialize catalog tables here
+				if(0 == strncmp(CATALOG_ROOT_PAGE_ID_KEY, system_table_name.string_value, system_table_name.string_size))
+				{
+					initialize_catalog_manager(&(rdb->cat_mgr), &(system_root_page_id), rdb->mvcc_hdr_type_info, &(rdb->persistent_acid_rage_engine), &(rdb->tsg));
 				}
 
 				// initialize more system tables here

@@ -3,6 +3,7 @@
 
 #include<rhendb/transaction_table.h>
 #include<rhendb/lock_manager.h>
+#include<rhendb/catalog_manager.h>
 #include<rhendb/query_plan.h>
 
 #include<boompar/resource_usage_limiter.h>
@@ -53,6 +54,9 @@ struct rhendb
 	// and the lck_table => stored on the volatile_rage_engine
 	pthread_mutex_t lock_manager_external_lock;
 	lock_manager lck_table;
+
+	// needs locks on table_names and type_names to synchronize itself
+	catalog_manager cat_mgr;
 
 	// hash_table_tuple+defs for use internal to the rash_table
 	hash_table_tuple_defs rash_httd;
