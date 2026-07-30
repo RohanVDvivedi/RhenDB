@@ -23,30 +23,30 @@
 typedef enum expr_type expr_type;
 enum expr_type
 {
-	RHENDB_BIT_FIELD  = 0,
-	RHENDB_UINT	      = 1,
-	RHENDB_INT 	      = 2,
+	RHENDB_EXPR_BIT_FIELD  = 0,
+	RHENDB_EXPR_UINT	      = 1,
+	RHENDB_EXPR_INT 	      = 2,
 
-	// RHENDB_FLOAT is the 4-byte IEEE type, RHENDB_DOUBLE the 8-byte one. both keep their value in
+	// RHENDB_EXPR_FLOAT is the 4-byte IEEE type, RHENDB_EXPR_DOUBLE the 8-byte one. both keep their value in
 	// datum.double_value while being computed; the kind records the declared width, which decides how
 	// wide the value is finally stored.
-	RHENDB_FLOAT      = 3,
-	RHENDB_DOUBLE     = 4,
+	RHENDB_EXPR_FLOAT      = 3,
+	RHENDB_EXPR_DOUBLE     = 4,
 
-	RHENDB_LARGE_UINT = 5,
-	RHENDB_LARGE_INT  = 6,
+	RHENDB_EXPR_LARGE_UINT = 5,
+	RHENDB_EXPR_LARGE_INT  = 6,
 
-	RHENDB_STRING     = 7,
-	RHENDB_BINARY     = 8,
+	RHENDB_EXPR_STRING     = 7,
+	RHENDB_EXPR_BINARY     = 8,
 
 	// TUPLE and ARRAY REQUIRE dti_p. every native scalar above MAY also carry a dti_p, used purely to
 	// remember its declared width (bits for BIT_FIELD, bytes otherwise) so that results are not widened to
 	// the maximum. that dti_p is always static or owned by an input tuple, hence never freed.
-	RHENDB_TUPLE      = 9,
-	RHENDB_ARRAY      = 10,
+	RHENDB_EXPR_TUPLE      = 9,
+	RHENDB_EXPR_ARRAY      = 10,
 
 	// points a valid materialized numeric
-	RHENDB_NUMERIC    = 11,
+	RHENDB_EXPR_NUMERIC    = 11,
 };
 
 typedef struct expr_type_info expr_type_info;
@@ -67,7 +67,7 @@ struct expr_value
 	union
 	{
 		datum value;
-		mpd_t numeric_value; // used only for RHENDB_NUMERIC
+		mpd_t numeric_value; // used only for RHENDB_EXPR_NUMERIC
 	};
 
 	// on destroy buffer must be destroyed, if not NULL
@@ -255,7 +255,7 @@ void destroy_projected_type_info(projected_type_info pti);
 // infer_projected_type_sql_expr_for_rhendb() returned for this expression (so no cast is needed -- the kinds
 // already match).
 //   - if the evaluated value ALREADY has the projected type, its datum is handed back untouched;
-//   - a RHENDB_STRING/BINARY result is materialized and written into the transaction's volatile blob store
+//   - a RHENDB_EXPR_STRING/BINARY result is materialized and written into the transaction's volatile blob store
 //     as an extended value (prefix written, hashed to pick one of the 64 temporary_extension_stores, then
 //     the remainder appended into that store under its WRITE lock);
 //   - a numeric result is stored as an extended numeric the same way;
