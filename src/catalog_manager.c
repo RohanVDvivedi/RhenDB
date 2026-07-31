@@ -4280,6 +4280,98 @@ void* get_catalog_object_by_name_from_catalog(catalog_manager* catmgr_p, const m
 	return object;
 }
 
+// returns the names of all catalog objects of object_type visible to ss_p as a malloc-ed array of char[64],
+// ordered by name (the name index is ordered by (object_type, name)). writes the count to (*names_count);
+// the caller frees the whole array with a single free(). RHENDB_INDEX is unsupported here on purpose.
+void* get_all_catalog_object_names_by_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, uint64_t* names_count)
+{
+	// index names are unique only within their table, so there is no meaningful global name listing for indices;
+	// callers must go through get_indices_for_table_from_catalog instead
+	if(object_type == RHENDB_INDEX)
+	{
+		printf("BUG in (catalog_manager) :: get_all_catalog_object_names_by_type does not support RHENDB_INDEX, use get_indices_for_table_from_catalog instead\n");
+		exit(-1);
+	}
+
+	rage_engine* engine = catmgr_p->catmgr_engine;
+	uint64_t names_capacity = 8;
+	char (*names)[64] = malloc(sizeof(*names) * names_capacity);
+	(*names_count) = 0;
+
+	// read-only getter: min_tx_id is NULL and we retry the whole scan for as long as it aborts, like the others
+	while(1)
+	{
+		int abort_error = 0;
+		bplus_tree_iterator* bpi_p = NULL;
+		(*names_count) = 0;
+
+		// seek to the first name index entry of this object_type (name left empty == the smallest name) and walk
+		// the run forward in name order
+		rhendb_name_idx_entry name_key = (rhendb_name_idx_entry){.object_type = object_type};
+		void* name_key_tuple = serialize_rhendb_name_idx_entry(catmgr_p, &name_key);
+		bpi_p = find_in_bplus_tree(catmgr_p->name_idx.root_page_id, name_key_tuple, 1, GREATER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->name_idx.index_defs), engine->pam_p, NULL, NULL, &abort_error);
+		free(name_key_tuple);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		if(!is_empty_bplus_tree(bpi_p))
+		{
+			while(1)
+			{
+				const void* name_idx_record = get_tuple_bplus_tree_iterator(bpi_p);
+				if(name_idx_record == NULL)
+					break;
+				rhendb_name_idx_entry name_idx_entry = deserialize_rhendb_name_idx_entry(catmgr_p, name_idx_record);
+
+				// stop once we walk past this object_type's run of the index
+				if(name_idx_entry.object_type != object_type)
+					break;
+
+				// more than one name index entry can share a (object_type, name) (a fresh entry is inserted on every
+				// heap update); we list a name once, and only if some version at that name is visible to ss_p
+				void* object = get_catalog_object_at(catmgr_p, ss_p, object_type, name_idx_entry.object_tuple_pointer, 0, NULL, &abort_error);
+				if(abort_error)
+				{
+					free(object);
+					goto ABORT_ERROR;
+				}
+				if(object != NULL)
+				{
+					free(object);
+					if((*names_count) == names_capacity)
+					{
+						names_capacity *= 2;
+						names = realloc(names, names_capacity * sizeof(*names));
+					}
+					strncpy(names[(*names_count)++], name_idx_entry.name, 64);
+				}
+
+				next_bplus_tree_iterator(bpi_p, NULL, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR;
+			}
+		}
+
+		delete_bplus_tree_iterator(bpi_p, NULL, &abort_error);
+		bpi_p = NULL;
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		if((*names_count) == 0)
+		{
+			free(names);
+			names = NULL;
+			names_capacity = 0;
+		}
+
+		return names;
+
+		ABORT_ERROR:;
+		if(bpi_p != NULL)
+			delete_bplus_tree_iterator(bpi_p, NULL, &abort_error);
+	}
+}
+
 rhendb_attribute* get_attributes_for_catalog_object_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, uint64_t partition_id, uint64_t* attrs_count)
 {
 	rhendb_attribute* attrs = NULL;

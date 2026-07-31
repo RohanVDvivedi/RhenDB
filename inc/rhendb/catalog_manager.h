@@ -305,6 +305,12 @@ void* get_catalog_object_by_id_from_catalog(catalog_manager* catmgr_p, const mvc
 
 void* get_catalog_object_by_name_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, char* name);
 
+// returns the names of all catalog objects of object_type that are visible to ss_p, as a malloc-ed array of
+// char[64] ordered by name (scanned via the name index). writes the count to (*names_count). the caller
+// frees the result with a single free(). intended for schema inspection. RHENDB_INDEX is NOT supported here
+// return valus is array of char[64] having names_count number of elements
+void* get_all_catalog_object_names_by_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, uint64_t* names_count);
+
 // partition_id is always 0 for index or type
 rhendb_attribute* get_attributes_for_catalog_object_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, uint64_t partition_id, uint64_t* attrs_count);
 
