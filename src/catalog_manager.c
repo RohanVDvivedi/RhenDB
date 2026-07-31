@@ -1301,7 +1301,6 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 // utilities for the catalog objects
 
-// part_id is used only if it is non-zero
 // materialize the catalog object living at object_tuple_pointer (a row in the tables / types / indices heap, picked by
 // object_type) into a freshly malloc-ed rhendb_table / rhendb_type / rhendb_index and return it. returns NULL on abort,
 // or when the row is not visible to ss_p.
@@ -1516,7 +1515,8 @@ static void* get_catalog_object_by_name(catalog_manager* catmgr_p, const mvcc_sn
 	return NULL;
 }
 
-static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t id, uint64_t part_id, int should_blob, tuple_pointer** attribute_tuple_pointers, uint64_t* attrs_count, const void* min_tx_id, int* abort_error)
+// partition_id is used only if it is non-zero
+static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t id, uint64_t partition_id, int should_blob, tuple_pointer** attribute_tuple_pointers, uint64_t* attrs_count, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
 
@@ -1590,7 +1590,7 @@ static rhendb_attribute* get_attributes_for_catalog_object(catalog_manager* catm
 						goto ABORT_ERROR;
 					}
 
-					if(part_id == 0 || (owned_attr.table_part_id_from <= part_id && (owned_attr.table_part_id_to == 0 || part_id < owned_attr.table_part_id_to)))
+					if(partition_id == 0 || (owned_attr.table_part_id_from <= partition_id && (owned_attr.table_part_id_to == 0 || partition_id < owned_attr.table_part_id_to)))
 					{
 						if(should_blob)
 						{
@@ -1847,7 +1847,7 @@ static rhendb_table_partition* get_partitions_for_table(catalog_manager* catmgr_
 
 // get the index fragments from the clustered index_fragments_table (keyed on (table_id, index_id, partition_id)).
 // table_id is always concerned, index_id is concerned only when it is non zero, and partition_id only when both index_id
-// and it are non zero. returns the fragments visible to us as a malloc-ed array, writing hints back when min_tx_id != NULL.
+// and partition_id are non zero. returns the fragments visible to us as a malloc-ed array, writing hints back when min_tx_id != NULL.
 static rhendb_index_fragment* get_index_fragments(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id, uint64_t partition_id, uint64_t* fragments_count, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
@@ -1999,7 +1999,7 @@ static rhendb_attribute* get_attribute_at(catalog_manager* catmgr_p, const mvcc_
 	return NULL;
 }
 
-// the largest partition_id among the visible partitions of a table, 0 if it has none. found by seeking to (table_id, max)
+// the largest partition_id among the visible partitions of a table, 0 if it has none. found by seeking to last of (table_id, _)
 // in the clustered table_partitions index and walking backwards to the newest visible partition.
 static uint64_t get_last_partition_id_for_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, const void* min_tx_id, int* abort_error)
 {
@@ -2007,9 +2007,9 @@ static uint64_t get_last_partition_id_for_table(catalog_manager* catmgr_p, const
 	bplus_tree_iterator* bpi_p = NULL;
 	uint64_t last_partition_id = 0;
 
-	rhendb_table_partition partition_key = (rhendb_table_partition){.table_id = table_id, .partition_id = UINT64_MAX};
+	rhendb_table_partition partition_key = (rhendb_table_partition){.table_id = table_id};
 	void* partition_key_tuple = serialize_rhendb_table_partition_key(catmgr_p, &partition_key);
-	bpi_p = find_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, partition_key_tuple, 2, LESSER_THAN_EQUALS, 0, (min_tx_id != NULL) ? WRITE_LOCK : READ_LOCK, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, (min_tx_id != NULL) ? engine->pmm_p : NULL, min_tx_id, abort_error);
+	bpi_p = find_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, partition_key_tuple, 1, LESSER_THAN_EQUALS, 0, (min_tx_id != NULL) ? WRITE_LOCK : READ_LOCK, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, (min_tx_id != NULL) ? engine->pmm_p : NULL, min_tx_id, abort_error);
 	free(partition_key_tuple);
 	if(*abort_error)
 		goto ABORT_ERROR;
@@ -2067,7 +2067,7 @@ static uint64_t get_last_partition_id_for_table(catalog_manager* catmgr_p, const
 // regardless of mvcc visibility. because partition_ids are only ever assigned monotonically and never reused,
 // this is the last partition_id ever ASSIGNED to the table, so (this + 1) is always a free partition_id -- even
 // when the most recently created partition belongs to a transaction that later aborted (or is otherwise not
-// visible to ss_p). scans the clustered index once, in reverse from (table_id, UINT64_MAX), and returns the
+// visible to ss_p). scans the clustered index once, in reverse from (table_id, _), and returns the
 // first entry's partition_id without any visibility lookup; returns 0 if the table has no partition entries.
 static uint64_t get_last_assigned_partition_id_for_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, const void* min_tx_id, int* abort_error)
 {
@@ -2075,9 +2075,9 @@ static uint64_t get_last_assigned_partition_id_for_table(catalog_manager* catmgr
 	bplus_tree_iterator* bpi_p = NULL;
 	uint64_t last_assigned_partition_id = 0;
 
-	rhendb_table_partition partition_key = (rhendb_table_partition){.table_id = table_id, .partition_id = UINT64_MAX};
+	rhendb_table_partition partition_key = (rhendb_table_partition){.table_id = table_id};
 	void* partition_key_tuple = serialize_rhendb_table_partition_key(catmgr_p, &partition_key);
-	bpi_p = find_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, partition_key_tuple, 2, LESSER_THAN_EQUALS, 0, (min_tx_id != NULL) ? WRITE_LOCK : READ_LOCK, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, (min_tx_id != NULL) ? engine->pmm_p : NULL, min_tx_id, abort_error);
+	bpi_p = find_in_bplus_tree(catmgr_p->table_partitions_table.root_page_id, partition_key_tuple, 1, LESSER_THAN_EQUALS, 0, (min_tx_id != NULL) ? WRITE_LOCK : READ_LOCK, &(catmgr_p->table_partitions_table.clust_table_defs), engine->pam_p, (min_tx_id != NULL) ? engine->pmm_p : NULL, min_tx_id, abort_error);
 	free(partition_key_tuple);
 	if(*abort_error)
 		goto ABORT_ERROR;
@@ -2116,7 +2116,7 @@ static uint64_t get_last_assigned_partition_id_for_table(catalog_manager* catmgr
 // only ever handed out monotonically, so this is the last rel_pos ever assigned. using (this + 1) for a new column
 // guarantees a rel_pos that no historical, capped, or invisible attribute version can shadow -- unlike the visible
 // maximum, which gets reused after a drop and then collides at that slot with the still-visible capped version.
-// scans once, in reverse from (owner_id, UINT64_MAX); *has_any is set to 1 iff the owner has at least one entry.
+// scans once, in reverse from (owner_id, _); *has_any is set to 1 iff the owner has at least one entry.
 static uint64_t get_last_assigned_rel_pos_for_owner(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, int* has_any, const void* min_tx_id, int* abort_error)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;
@@ -2125,9 +2125,9 @@ static uint64_t get_last_assigned_rel_pos_for_owner(catalog_manager* catmgr_p, c
 	if(has_any != NULL)
 		(*has_any) = 0;
 
-	rhendb_owner_to_attributes_idx_entry owner_key = (rhendb_owner_to_attributes_idx_entry){.owner_id = owner_id, .rel_pos_in_owner = UINT64_MAX};
+	rhendb_owner_to_attributes_idx_entry owner_key = (rhendb_owner_to_attributes_idx_entry){.owner_id = owner_id};
 	void* owner_key_tuple = serialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, &owner_key);
-	bpi_p = find_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, owner_key_tuple, 2, LESSER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, NULL, min_tx_id, abort_error);
+	bpi_p = find_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, owner_key_tuple, 1, LESSER_THAN_EQUALS, 0, READ_LOCK, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, NULL, min_tx_id, abort_error);
 	free(owner_key_tuple);
 	if(*abort_error)
 		goto ABORT_ERROR;
