@@ -1172,7 +1172,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 				ABORT_ERROR:
 				if(ptrl_p != NULL)
 					delete_page_table_range_locker(ptrl_p, &vaccum_bucket_id, &vaccum_needed, min_tx_id, &abort_error);
-				catmgr_engine->complete_sub_transaction(catmgr_engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				catmgr_engine->complete_sub_transaction(catmgr_engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 			}
 
 			catmgr_p->catalog_root_page_id = (*root_page_id);
@@ -2614,7 +2614,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 			if(existing_table != NULL) // this is not abort, but we found a table with same name
 			{
 				free(existing_table);
-				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 				write_unlock(&(catmgr_p->catlog_manager_lock));
 				return 0;
 			}
@@ -2743,14 +2743,14 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 		}
 
 		// commit the mini transaction and hand back the new table id
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return table_id;
 
 		ABORT_ERROR:;
 		if(attribute_tuple_pointers != NULL)
 			free(attribute_tuple_pointers);
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 	}
 }
 
@@ -2974,7 +2974,7 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 			free(last_partition_attrs);
 			if(name_already_exists) // not an abort, but a column of this name already exists
 			{
-				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 				write_unlock(&(catmgr_p->catlog_manager_lock));
 				return 0;
 			}
@@ -3032,12 +3032,12 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 			}
 		}
 
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return new_partition_id;
 
 		ABORT_ERROR:;
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 	}
 }
 
@@ -3081,7 +3081,7 @@ uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot*
 				free(attribute_to_drop->derived_from_expr);
 				free(attribute_to_drop);
 			}
-			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 0;
 		}
@@ -3141,7 +3141,7 @@ uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot*
 
 		free(attribute_to_drop->derived_from_expr);
 		free(attribute_to_drop);
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return new_partition_id;
 
@@ -3151,7 +3151,7 @@ uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot*
 			free(attribute_to_drop->derived_from_expr);
 			free(attribute_to_drop);
 		}
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 	}
 }
 
@@ -3222,7 +3222,7 @@ int alter_table_rename_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss
 			{
 				free(attrs);
 				free(attribute_tuple_pointers);
-				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 				write_unlock(&(catmgr_p->catlog_manager_lock));
 				return logical_result;
 			}
@@ -3275,7 +3275,7 @@ int alter_table_rename_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss
 
 		free(old_attr->derived_from_expr);
 		free(old_attr);
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return 1;
 
@@ -3289,7 +3289,7 @@ int alter_table_rename_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss
 			free(old_attr->derived_from_expr);
 			free(old_attr);
 		}
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 	}
 }
 
@@ -3329,7 +3329,7 @@ int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 			goto ABORT_ERROR;
 		if(old_table == NULL) // no such visible table, nothing to rename
 		{
-			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 0;
 		}
@@ -3338,7 +3338,7 @@ int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 		if(strncmp(old_table->name, new_name, 64) == 0)
 		{
 			free(old_table);
-			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 1;
 		}
@@ -3351,7 +3351,7 @@ int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 		{
 			free(existing_table);
 			free(old_table);
-			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 0;
 		}
@@ -3404,14 +3404,14 @@ int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 			}
 		}
 
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return 1;
 
 		ABORT_ERROR:;
 		if(old_table != NULL)
 			free(old_table);
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 	}
 }
 
@@ -3465,7 +3465,7 @@ uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhen
 			{
 				free(existing_index->predicate_expr);
 				free(existing_index);
-				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 				write_unlock(&(catmgr_p->catlog_manager_lock));
 				return 0;
 			}
@@ -3621,7 +3621,7 @@ uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhen
 		}
 
 		// commit the mini transaction and hand back the new index id
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return index_id;
 
@@ -3630,7 +3630,7 @@ uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhen
 			free(attribute_tuple_pointers);
 		if(partitions != NULL)
 			free(partitions);
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 	}
 }
 
@@ -3669,7 +3669,7 @@ int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 			goto ABORT_ERROR;
 		if(old_index == NULL) // no such visible index, nothing to rename
 		{
-			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 0;
 		}
@@ -3679,7 +3679,7 @@ int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 		{
 			free(old_index->predicate_expr);
 			free(old_index);
-			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 1;
 		}
@@ -3693,7 +3693,7 @@ int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 			free(existing_index);
 			free(old_index->predicate_expr);
 			free(old_index);
-			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 0;
 		}
@@ -3767,7 +3767,7 @@ int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 			}
 		}
 
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return 1;
 
@@ -3777,7 +3777,7 @@ int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 			free(old_index->predicate_expr);
 			free(old_index);
 		}
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 	}
 }
 
@@ -3830,7 +3830,7 @@ uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char*
 			if(existing_type != NULL) // this is not abort, but we found a type with same name
 			{
 				free(existing_type);
-				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 				write_unlock(&(catmgr_p->catlog_manager_lock));
 				return 0;
 			}
@@ -3935,14 +3935,14 @@ uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char*
 		}
 
 		// commit the mini transaction and hand back the new type id
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return type_id;
 
 		ABORT_ERROR:;
 		if(attribute_tuple_pointers != NULL)
 			free(attribute_tuple_pointers);
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 	}
 }
 
@@ -4227,7 +4227,7 @@ int drop_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t ta
 
 		dropped = drop_table_simple(catmgr_p, ss_p, table_id, min_tx_id, &abort_error);
 
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 		if(abort_error == 0)
 			break;
 	}
@@ -4259,7 +4259,7 @@ int drop_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t ta
 
 		dropped = drop_index_simple(catmgr_p, ss_p, table_id, index_id, min_tx_id, &abort_error);
 
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 		if(abort_error == 0)
 			break;
 	}
@@ -4291,7 +4291,7 @@ int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t typ
 
 		dropped = drop_type_simple(catmgr_p, ss_p, type_id, min_tx_id, &abort_error);
 
-		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 		if(abort_error == 0)
 			break;
 	}
