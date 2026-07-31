@@ -11,6 +11,8 @@
 
 #include<tupleindexer/utils/heap_table_accumulative_notifier.h>
 
+#include<lockking/rwlock.h>
+
 #define FIRST_SCHEMA_UNIQUE_ID 7ULL
 
 typedef enum catalog_object_type catalog_object_type;
@@ -56,6 +58,9 @@ struct catalog_btree_index
 typedef struct catalog_manager catalog_manager;
 struct catalog_manager
 {
+	// global catalog_manager_lock, this prevents concurrent DMLs from deadlocking and limit buffers being used by the DDL leaving most of them for DQL and DML
+	rwlock catlog_manager_lock;
+
 	// this page_table stores the all the root_page_ids of the static schema-ed catalog tables
 	uint64_t catalog_root_page_id;
 

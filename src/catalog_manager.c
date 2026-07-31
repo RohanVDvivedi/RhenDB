@@ -1016,6 +1016,8 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		init_bplus_tree_tuple_definitions(&(catmgr_p->owner_to_attributes_idx.index_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->owner_to_attributes_idx.record_def), key_element_ids0, cmp_dirs_all_asc, 3);
 	}
 
+	initialize_rwlock(&(catmgr_p->catlog_manager_lock), NULL);
+
 	initialize_heap_table_accumulative_notifier(&(catmgr_p->htan), HTAN_ENTRIES_MAX);
 
 	catmgr_p->catmgr_engine = catmgr_engine;
