@@ -7,6 +7,8 @@
 #include<tuplelargetypes/binary_write_iterator.h>
 #include<tuplelargetypes/binary_read_iterator.h>
 
+// NOTE:: static functions i.e. internal functions will not even touch catlog_manager_lock
+
 // index utility struct
 
 typedef struct rhendb_name_idx_entry rhendb_name_idx_entry;
@@ -2590,6 +2592,8 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 		.is_xmax_NULL = 1,
 	};
 
+	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
+
 	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
 	while(1)
 	{
@@ -2611,6 +2615,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 			{
 				free(existing_table);
 				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				write_unlock(&(catmgr_p->catlog_manager_lock));
 				return 0;
 			}
 		}
@@ -2739,6 +2744,7 @@ uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char
 
 		// commit the mini transaction and hand back the new table id
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return table_id;
 
 		ABORT_ERROR:;
@@ -2925,6 +2931,8 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 		.is_xmax_NULL = 1,
 	};
 
+	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
+
 	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
 	while(1)
 	{
@@ -2967,6 +2975,7 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 			if(name_already_exists) // not an abort, but a column of this name already exists
 			{
 				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				write_unlock(&(catmgr_p->catlog_manager_lock));
 				return 0;
 			}
 		}
@@ -3024,6 +3033,7 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 		}
 
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return new_partition_id;
 
 		ABORT_ERROR:;
@@ -3046,6 +3056,8 @@ uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot*
 		.xmin = {.is_committed = 0, .is_aborted = 0, .transaction_id = ss_p->self_transaction_id},
 		.is_xmax_NULL = 1,
 	};
+
+	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
 
 	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
 	while(1)
@@ -3070,6 +3082,7 @@ uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot*
 				free(attribute_to_drop);
 			}
 			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 0;
 		}
 
@@ -3129,6 +3142,7 @@ uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot*
 		free(attribute_to_drop->derived_from_expr);
 		free(attribute_to_drop);
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return new_partition_id;
 
 		ABORT_ERROR:;
@@ -3157,6 +3171,8 @@ int alter_table_rename_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss
 		.xmin = {.is_committed = 0, .is_aborted = 0, .transaction_id = ss_p->self_transaction_id},
 		.is_xmax_NULL = 1,
 	};
+
+	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
 
 	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
 	while(1)
@@ -3207,6 +3223,7 @@ int alter_table_rename_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss
 				free(attrs);
 				free(attribute_tuple_pointers);
 				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				write_unlock(&(catmgr_p->catlog_manager_lock));
 				return logical_result;
 			}
 		}
@@ -3259,6 +3276,7 @@ int alter_table_rename_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss
 		free(old_attr->derived_from_expr);
 		free(old_attr);
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return 1;
 
 		ABORT_ERROR:;
@@ -3293,6 +3311,8 @@ int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 		.is_xmax_NULL = 1,
 	};
 
+	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
+
 	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
 	while(1)
 	{
@@ -3310,6 +3330,7 @@ int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 		if(old_table == NULL) // no such visible table, nothing to rename
 		{
 			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 0;
 		}
 
@@ -3318,6 +3339,7 @@ int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 		{
 			free(old_table);
 			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 1;
 		}
 
@@ -3330,6 +3352,7 @@ int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 			free(existing_table);
 			free(old_table);
 			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 0;
 		}
 
@@ -3382,6 +3405,7 @@ int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 		}
 
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return 1;
 
 		ABORT_ERROR:;
@@ -3419,6 +3443,8 @@ uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhen
 		.is_xmax_NULL = 1,
 	};
 
+	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
+
 	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
 	while(1)
 	{
@@ -3440,6 +3466,7 @@ uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhen
 				free(existing_index->predicate_expr);
 				free(existing_index);
 				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				write_unlock(&(catmgr_p->catlog_manager_lock));
 				return 0;
 			}
 		}
@@ -3595,6 +3622,7 @@ uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhen
 
 		// commit the mini transaction and hand back the new index id
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return index_id;
 
 		ABORT_ERROR:;
@@ -3623,6 +3651,8 @@ int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 		.is_xmax_NULL = 1,
 	};
 
+	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
+
 	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
 	while(1)
 	{
@@ -3640,6 +3670,7 @@ int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 		if(old_index == NULL) // no such visible index, nothing to rename
 		{
 			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 0;
 		}
 
@@ -3649,6 +3680,7 @@ int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 			free(old_index->predicate_expr);
 			free(old_index);
 			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 1;
 		}
 
@@ -3662,6 +3694,7 @@ int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 			free(old_index->predicate_expr);
 			free(old_index);
 			engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+			write_unlock(&(catmgr_p->catlog_manager_lock));
 			return 0;
 		}
 
@@ -3735,6 +3768,7 @@ int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 		}
 
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return 1;
 
 		ABORT_ERROR:;
@@ -3774,6 +3808,8 @@ uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char*
 		.is_xmax_NULL = 1,
 	};
 
+	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
+
 	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
 	while(1)
 	{
@@ -3795,6 +3831,7 @@ uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char*
 			{
 				free(existing_type);
 				engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				write_unlock(&(catmgr_p->catlog_manager_lock));
 				return 0;
 			}
 		}
@@ -3899,6 +3936,7 @@ uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char*
 
 		// commit the mini transaction and hand back the new type id
 		engine->complete_sub_transaction(engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+		write_unlock(&(catmgr_p->catlog_manager_lock));
 		return type_id;
 
 		ABORT_ERROR:;
@@ -4178,6 +4216,8 @@ int drop_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t ta
 
 	int dropped = 0;
 
+	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
+
 	// retry the whole mini transaction for as long as it aborts
 	while(1)
 	{
@@ -4192,6 +4232,7 @@ int drop_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t ta
 			break;
 	}
 
+	write_unlock(&(catmgr_p->catlog_manager_lock));
 	return dropped;
 }
 
@@ -4207,6 +4248,8 @@ int drop_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t ta
 
 	int dropped = 0;
 
+	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
+
 	// retry the whole mini transaction for as long as it aborts
 	while(1)
 	{
@@ -4221,6 +4264,7 @@ int drop_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t ta
 			break;
 	}
 
+	write_unlock(&(catmgr_p->catlog_manager_lock));
 	return dropped;
 }
 
@@ -4236,6 +4280,8 @@ int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t typ
 
 	int dropped = 0;
 
+	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
+
 	// retry the whole mini transaction for as long as it aborts
 	while(1)
 	{
@@ -4250,6 +4296,7 @@ int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t typ
 			break;
 	}
 
+	write_unlock(&(catmgr_p->catlog_manager_lock));
 	return dropped;
 }
 
@@ -4259,6 +4306,7 @@ int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t typ
 void* get_catalog_object_by_id_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, uint64_t id)
 {
 	void* object = NULL;
+	read_lock(&(catmgr_p->catlog_manager_lock), WRITE_PREFERRING, BLOCKING);
 	while(1)
 	{
 		int abort_error = 0;
@@ -4266,12 +4314,14 @@ void* get_catalog_object_by_id_from_catalog(catalog_manager* catmgr_p, const mvc
 		if(abort_error == 0)
 			break;
 	}
+	read_unlock(&(catmgr_p->catlog_manager_lock));
 	return object;
 }
 
 void* get_catalog_object_by_name_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, char* name)
 {
 	void* object = NULL;
+	read_lock(&(catmgr_p->catlog_manager_lock), WRITE_PREFERRING, BLOCKING);
 	while(1)
 	{
 		int abort_error = 0;
@@ -4279,6 +4329,7 @@ void* get_catalog_object_by_name_from_catalog(catalog_manager* catmgr_p, const m
 		if(abort_error == 0)
 			break;
 	}
+	read_unlock(&(catmgr_p->catlog_manager_lock));
 	return object;
 }
 
@@ -4299,6 +4350,8 @@ void* get_all_catalog_object_names_by_type(catalog_manager* catmgr_p, const mvcc
 	uint64_t names_capacity = 8;
 	char (*names)[64] = malloc(sizeof(*names) * names_capacity);
 	(*names_count) = 0;
+
+	read_lock(&(catmgr_p->catlog_manager_lock), WRITE_PREFERRING, BLOCKING);
 
 	// read-only getter: min_tx_id is NULL and we retry the whole scan for as long as it aborts, like the others
 	while(1)
@@ -4366,6 +4419,7 @@ void* get_all_catalog_object_names_by_type(catalog_manager* catmgr_p, const mvcc
 			names_capacity = 0;
 		}
 
+		read_unlock(&(catmgr_p->catlog_manager_lock));
 		return names;
 
 		ABORT_ERROR:;
@@ -4377,6 +4431,7 @@ void* get_all_catalog_object_names_by_type(catalog_manager* catmgr_p, const mvcc
 rhendb_attribute* get_attributes_for_catalog_object_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, uint64_t partition_id, uint64_t* attrs_count)
 {
 	rhendb_attribute* attrs = NULL;
+	read_lock(&(catmgr_p->catlog_manager_lock), WRITE_PREFERRING, BLOCKING);
 	while(1)
 	{
 		int abort_error = 0;
@@ -4384,12 +4439,14 @@ rhendb_attribute* get_attributes_for_catalog_object_from_catalog(catalog_manager
 		if(abort_error == 0)
 			break;
 	}
+	read_unlock(&(catmgr_p->catlog_manager_lock));
 	return attrs;
 }
 
 rhendb_table_partition* get_partitions_for_table_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* partitions_count)
 {
 	rhendb_table_partition* partitions = NULL;
+	read_lock(&(catmgr_p->catlog_manager_lock), WRITE_PREFERRING, BLOCKING);
 	while(1)
 	{
 		int abort_error = 0;
@@ -4397,12 +4454,14 @@ rhendb_table_partition* get_partitions_for_table_from_catalog(catalog_manager* c
 		if(abort_error == 0)
 			break;
 	}
+	read_unlock(&(catmgr_p->catlog_manager_lock));
 	return partitions;
 }
 
 rhendb_index* get_indices_for_table_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* indices_count)
 {
 	rhendb_index* indices = NULL;
+	read_lock(&(catmgr_p->catlog_manager_lock), WRITE_PREFERRING, BLOCKING);
 	while(1)
 	{
 		int abort_error = 0;
@@ -4410,12 +4469,14 @@ rhendb_index* get_indices_for_table_from_catalog(catalog_manager* catmgr_p, cons
 		if(abort_error == 0)
 			break;
 	}
+	read_unlock(&(catmgr_p->catlog_manager_lock));
 	return indices;
 }
 
 rhendb_index_fragment* get_index_fragments_for_index_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id, uint64_t* index_fragments_count)
 {
 	rhendb_index_fragment* fragments = NULL;
+	read_lock(&(catmgr_p->catlog_manager_lock), WRITE_PREFERRING, BLOCKING);
 	while(1)
 	{
 		int abort_error = 0;
@@ -4423,12 +4484,14 @@ rhendb_index_fragment* get_index_fragments_for_index_from_catalog(catalog_manage
 		if(abort_error == 0)
 			break;
 	}
+	read_unlock(&(catmgr_p->catlog_manager_lock));
 	return fragments;
 }
 
 data_type_info* get_data_type_info_for_rhendb_attribute_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_attribute* attribute)
 {
 	data_type_info* attribute_data_type_info = NULL;
+	read_lock(&(catmgr_p->catlog_manager_lock), WRITE_PREFERRING, BLOCKING);
 	while(1)
 	{
 		int abort_error = 0;
@@ -4436,5 +4499,6 @@ data_type_info* get_data_type_info_for_rhendb_attribute_from_catalog(catalog_man
 		if(abort_error == 0)
 			break;
 	}
+	read_unlock(&(catmgr_p->catlog_manager_lock));
 	return attribute_data_type_info;
 }
