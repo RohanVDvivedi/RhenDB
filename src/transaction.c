@@ -60,10 +60,10 @@ void register_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr)
 		delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
 	}
 
-	// expand if required, we do not want to lookup more than a single page
+	// expand if required, we do not want to lookup more than a single page, 70% page fill works better for speed and efficient memory utilization, hence the 0.7
 	if( ((double)(tx->inserted_tuple_pointers.entries_count) * 12.0)
 		/ ((double)(tx->inserted_tuple_pointers.root_handle.bucket_count))
-		/ ((double)(tx->rdb->volatile_rage_engine.pam_p->pas.page_size))     > 1.0)
+		/ ((double)(tx->rdb->volatile_rage_engine.pam_p->pas.page_size))     > 0.7)
 		expand_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
 
 	write_unlock(&(tx->inserted_tuple_pointers.hash_table_lock));
