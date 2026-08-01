@@ -47,8 +47,6 @@ struct hashset_for_tuple_pointers
 	// record_def is simply the tuple_pointer_tuple_def and it itself is the key
 	hash_table_tuple_defs httd;
 
-	positional_accessor key_element_position;
-
 	rwlock hash_table_lock;
 };
 

@@ -5,6 +5,12 @@
 #define MAX_ENTRIES_IN_VOL_BLOBS_HTAN        56 // threshold should be something like 20 to 24 for fixing the accumulated entries
 #define TEMP_EXT_BLOB_STORE_FIX_THRESHOLD    25
 
+// we already know that tuple_pointer has only 2 fixed sized unsigned integral attributes
+positional_accessor key_element_positions_for_hashset_for_tuple_pointers[2] = {
+	STATIC_POSITION(0),
+	STATIC_POSITION(1),
+};
+
 transaction initialize_transaction(rhendb* rdb)
 {
 	transaction tx = {
@@ -16,8 +22,7 @@ transaction initialize_transaction(rhendb* rdb)
 	{
 		const void* transaction_id = NULL;
 		int abort_error_dummy = 0;
-		tx.inserted_tuple_pointers.key_element_position = SELF;
-		init_hash_table_tuple_definitions(&(tx.inserted_tuple_pointers.httd), &(rdb->volatile_rage_engine.pam_p->pas), &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_tuple_def), &(tx.inserted_tuple_pointers.key_element_position), 1, FNV_64_TUPLE_HASHER);
+		init_hash_table_tuple_definitions(&(tx.inserted_tuple_pointers.httd), &(rdb->volatile_rage_engine.pam_p->pas), &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_tuple_def), key_element_positions_for_hashset_for_tuple_pointers, sizeof(key_element_positions_for_hashset_for_tuple_pointers)/ sizeof(positional_accessor), FNV_64_TUPLE_HASHER);
 		tx.inserted_tuple_pointers.root_handle = get_new_hash_table(64, &(tx.inserted_tuple_pointers.httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
 		initialize_rwlock(&(tx.inserted_tuple_pointers.hash_table_lock), NULL);
 	}
