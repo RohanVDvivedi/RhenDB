@@ -8,6 +8,8 @@
 
 #include<tuplestore/data_type_info.h>
 
+#include<tupleindexer/hash_table/hash_table.h>
+
 #include<tupleindexer/utils/heap_table_accumulative_notifier.h>
 
 #include<tuplelargetypes/extension_reader_iterator_callback.h>
@@ -30,6 +32,26 @@ struct temporary_extension_store
 	rwlock blob_store_lock;
 };
 
+// every tuple inserted (even update is a delete followed by insert) must have it's tuple_pointer inserted in this hashset
+// this allows the source operators like table scans and index scans know which tuples to not return from the scan
+// this enables scanning and then updating the tuple (effectively an insert), and now the scans can skip this particular tuple_pointer and avoid double processing it
+// every insert or update (delete then insert), must register it's inserted tuple pointer in this hashset
+
+typedef struct hashset_for_tuple_pointers hashset_for_tuple_pointers;
+struct hashset_for_tuple_pointers
+{
+	hash_table_handle root_handle;
+
+	uint64_t entries_count;
+
+	// record_def is simply the tuple_pointer_tuple_def and it itself is the key
+	hash_table_tuple_defs httd;
+
+	positional_accessor key_element_position;
+
+	rwlock hash_table_lock;
+};
+
 // this is the number of temporary extension stores that any 1 particular transaction will maintain
 #define TEMPORARY_EXTENSION_STORE_COUNT 64
 
@@ -50,13 +72,27 @@ struct transaction
 	// curr_query is the parent most query being run, hels up kill the whole query when needed
 	query_plan* curr_query;
 
+	// every inserted tuple pointer must be registered here, so the source operator scans can skip it
+	hashset_for_tuple_pointers inserted_tuple_pointers;
+
 	// the array that holds these temporary extension blobs, access them by the hash of the prefix
 	temporary_extension_store temp_ext_stores[TEMPORARY_EXTENSION_STORE_COUNT];
 };
 
 transaction initialize_transaction(rhendb* rdb);
 
+// registers that there was an insert at the given tuple_pointer for the current query
+void register_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr);
+
+// checks if a given tuple_pointer was inserted for the current query, so that the source scan operators can skip it
+int was_registered_as_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr);
+
+// deletes the old inserted_tuple_pointers and creates new hash_table for it
+// this needs to be called after the current query is completed, so that this very same inserted tuple pointer are visible to the next query in the same transaction
+void reset_inserted_tuple_pointers(transaction* tx);
+
 // deletes the old temp_ext_stores and creates new blobs for them
+// this needs to be done after completion of the current query, after which the temporary memory for the extended objects produced for this query is no longer needed
 void reset_temp_ext_stores_in_transaction(transaction* tx);
 
 // if dti_p is not extended then both the attributes are NULL,

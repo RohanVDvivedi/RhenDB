@@ -13,6 +13,15 @@ transaction initialize_transaction(rhendb* rdb)
 		.transaction_id = NULL,
 	};
 
+	{
+		const void* transaction_id = NULL;
+		int abort_error_dummy = 0;
+		tx.inserted_tuple_pointers.key_element_position = SELF;
+		init_hash_table_tuple_definitions(&(tx.inserted_tuple_pointers.httd), &(rdb->volatile_rage_engine.pam_p->pas), &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_tuple_def), &(tx.inserted_tuple_pointers.key_element_position), 1, FNV_64_TUPLE_HASHER);
+		tx.inserted_tuple_pointers.root_handle = get_new_hash_table(64, &(tx.inserted_tuple_pointers.httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		initialize_rwlock(&(tx.inserted_tuple_pointers.hash_table_lock), NULL);
+	}
+
 	for(uint32_t i = 0; i < TEMPORARY_EXTENSION_STORE_COUNT; i++)
 	{
 		const void* transaction_id = NULL;
@@ -23,6 +32,84 @@ transaction initialize_transaction(rhendb* rdb)
 	}
 
 	return tx;
+}
+
+void register_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr)
+{
+	char tptr_tpl[20];
+	set_tuple_pointer(tptr_tpl, tptr, &(tx->rdb->persistent_acid_rage_engine.pam_p->pas)); // tuple_pointer belongs to the persistent_acid_rage_engine so this is the way to serialize it
+
+	const void* transaction_id = NULL;
+	int abort_error_dummy = 0;
+
+	write_lock(&(tx->inserted_tuple_pointers.hash_table_lock), BLOCKING);
+
+	// perform the insert and increment entry_count
+	{
+		hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->inserted_tuple_pointers.root_handle), (bucket_range){0,0}, tptr_tpl, &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+
+		insert_in_hash_table_iterator(hti_p, tptr_tpl, transaction_id, &abort_error_dummy);
+		tx->inserted_tuple_pointers.entries_count++;
+
+		hash_table_vaccum_params htvp;
+		delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
+	}
+
+	// expand if required, we do not want to lookup more than a single page
+	if( ((double)(tx->inserted_tuple_pointers.entries_count) * 12.0)
+		/ ((double)(tx->inserted_tuple_pointers.root_handle.bucket_count))
+		/ ((double)(tx->rdb->volatile_rage_engine.pam_p->pas.page_size))     > 1.0)
+		expand_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+
+	write_unlock(&(tx->inserted_tuple_pointers.hash_table_lock));
+}
+
+int was_registered_as_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr)
+{
+	char tptr_tpl[20];
+	set_tuple_pointer(tptr_tpl, tptr, &(tx->rdb->persistent_acid_rage_engine.pam_p->pas)); // tuple_pointer belongs to the persistent_acid_rage_engine so this is the way to serialize it
+
+	const void* transaction_id = NULL;
+	int abort_error_dummy = 0;
+
+	int was_registered = 0;
+
+	read_lock(&(tx->inserted_tuple_pointers.hash_table_lock), READ_PREFERRING, BLOCKING);
+
+	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->inserted_tuple_pointers.root_handle), (bucket_range){0,0}, tptr_tpl, &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, NULL, transaction_id, &abort_error_dummy);
+
+	if(!is_curr_bucket_empty_for_hash_table_iterator(hti_p))
+	{
+		while(1)
+		{
+			if(get_tuple_hash_table_iterator(hti_p) != NULL) // we found this exact tptr
+			{
+				was_registered = 1;
+				break;
+			}
+
+			if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, transaction_id, &abort_error_dummy)) // if we can not go to the next one in the same bucket, we are done searching
+				break;
+		}
+	}
+
+	hash_table_vaccum_params htvp;
+	delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
+
+	read_unlock(&(tx->inserted_tuple_pointers.hash_table_lock));
+
+	return was_registered;
+}
+
+void reset_inserted_tuple_pointers(transaction* tx)
+{
+	const void* transaction_id = NULL;
+	int abort_error_dummy = 0;
+
+	destroy_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
+
+	tx->inserted_tuple_pointers.root_handle = get_new_hash_table(64, &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+	tx->inserted_tuple_pointers.entries_count = 0;
 }
 
 void reset_temp_ext_stores_in_transaction(transaction* tx)
@@ -137,6 +224,14 @@ void deinitialize_transaction(transaction* tx)
 		destroy_blob_store(tx->temp_ext_stores[i].blob_store_root_page_id, &(tx->rdb->volatile_rage_engine.bstd), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
 		deinitialize_heap_table_accumulative_notifier(&(tx->temp_ext_stores[i].htan));
 		deinitialize_rwlock(&(tx->temp_ext_stores[i].blob_store_lock));
+	}
+
+	{
+		const void* transaction_id = NULL;
+		int abort_error_dummy = 0;
+		destroy_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
+		deinit_hash_table_tuple_definitions(&(tx->inserted_tuple_pointers.httd));
+		deinitialize_rwlock(&(tx->inserted_tuple_pointers.hash_table_lock));
 	}
 
 	tx->rdb = NULL;
