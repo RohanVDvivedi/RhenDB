@@ -24,6 +24,7 @@ DB acess operators
  * mvcc check is done for the output of every scan
  * filter check is done again for the output of index if it's key is possibly extended type
 
+ * table_schema_lock - by name
  * table_locks -> locks the table_id of the table for schema changes
  * tuple_locks -> lock root_page_id, page_id, tuple_index -> on update or delete, lock the older version, newer version is not even visible
  * key_locks -> hash key how ever big it is concatenate it with root_page_id and lock it

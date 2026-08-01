@@ -256,8 +256,7 @@ struct rhendb_table
 // here the root_page_id is an in-out parameter, pass it as NULL_PAGE_ID to create a new transaction table, or an existing one to open that particular transaction_table
 void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine, transaction_status_getter* tsg_p);
 
-// note:: must lock table by it's name before calling this DDL-like function, and keep it locked until the transaction ends, for the below functions
-// read locks are not needed for schema it is mvcc-ed
+// note:: must exclusive_lock table/type/index by it's name before calling this DDL-write-like functions, and keep it locked until the transaction ends, for the below functions
 
 // returns id of created table, it will always start with no indices and a single partition_id of 1, by the provided name
 // on failure returns 0
@@ -303,7 +302,7 @@ int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t typ
 // void drop_function(catalog_manager* catmgr_p, uint64_t id);
 
 // getters
-// any schema locks are not required for getters are the reads are mvcc-ed, your current valid read will last until you last
+// note:: must shared_lock table/type/index by it's name before calling this DDL-write-like functions, after/better you call the getter and before you use the object
 
 // all the below getter functions will return a valid fully read expression or any other blobbed type if they contain it
 
