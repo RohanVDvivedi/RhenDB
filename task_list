@@ -1,11 +1,12 @@
 PICKED TASKS
 
-HEAP TABLE OPERATORS
+HEAP TABLE OPERATORS SOURCE/SINK
  * don't let create these operators it they donot have a right snapshot or a valid self transaction_id
   * insert accepts (tuple) and on a flag registers tuple pointer that was inserted, it may optionally return (table_id, partition_id, tuple_pointer, tuple_with_mvcc_version)
   * delete accepts (table_id, partition_id, tuple_pointer), it will write the right xmax there
- * don't let create these operators it they donot have a right snapshot
+ * don't let create these operators it they do not have a right snapshot
   * scan a table and do mvcc checks and is not registered insert check (pass a flag for this) and return (table_id, partition_id, tuple_pointer, tuple_with_mvcc_version)
+ * hook to lock the older version in shared or exclusive mode
 
 
 
@@ -24,14 +25,12 @@ DB acess operators
  * mvcc check is done for the output of every scan
  * filter check is done again for the output of index if it's key is possibly extended type
 
- * table_schema_lock - by name
- * table_locks -> locks the table_id of the table for schema changes
- * tuple_locks -> lock root_page_id, page_id, tuple_index -> on update or delete, lock the older version, newer version is not even visible
- * key_locks -> hash key how ever big it is concatenate it with root_page_id and lock it
+ * schema_lock (shared exclusive) for table/type/index -> "schema":name:id
+ * tuple_locks (shared exclusive) -> lock "tuple":table_id:partition_id:tuple_pointer -> on update or delete, lock the older version, newer version is not even visible
+ * key_locks (shared exclusive) -> lock "key":hash-of-key allows uniqueness constraint
 
  * for auto_increment store a counter in the db_table object and increment it and return it
  * for unique constraint maintain a lock in lock_manager and hold lock on the 80-bit serialized hash value and then only check the unique btree index
-
 
 PRIORITY HIGH LEVEL TASKS (not yet prioritized)
 
