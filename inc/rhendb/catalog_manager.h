@@ -256,17 +256,18 @@ struct rhendb_table
 // here the root_page_id is an in-out parameter, pass it as NULL_PAGE_ID to create a new transaction table, or an existing one to open that particular transaction_table
 void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine, transaction_status_getter* tsg_p);
 
-// note:: must lock table by it's name before calling this function, and keep it locked until the transaction ends, for the below functions
+// note:: must lock table by it's name before calling this DDL-like function, and keep it locked until the transaction ends, for the below functions
+// read locks are not needed for schema it is mvcc-ed
 
 // returns id of created table, it will always start with no indices and a single partition_id of 1, by the provided name
 // on failure returns 0
 uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count);
 
-// returns new part_id, and also creates new partitions of existing indices on the table for this partition, with new root_page_id-s
+// returns new partition_id, and also creates new partitions of existing indices on the table for this partition, with new root_page_id-s
 // returns 0 if this call fails
 uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, const rhendb_attribute* attr);
 
-// returns new part_id, and also creates new partitions of existing indices on the table for this partition, with new root_page_id-s
+// returns new partition_id, and also creates new partitions of existing indices on the table for this partition, with new root_page_id-s
 // returns 0 if this call fails
 uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t rel_pos_in_owner_to_drop);
 
@@ -280,7 +281,7 @@ int rename_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 int drop_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id);
 
 // returns id of created index, and creates the same index for all the partitions of this table
-// all part_id's of this index point to the same attributes list
+// all partition_id's of this index point to the same attributes list
 uint64_t create_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_index* index_like, const rhendb_attribute* attrs, uint32_t attrs_count);
 
 // returns 1 on successfull rename
@@ -302,7 +303,7 @@ int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t typ
 // void drop_function(catalog_manager* catmgr_p, uint64_t id);
 
 // getters
-// shared schema locks must be taken for this on the concerned table or type
+// any schema locks are not required for getters are the reads are mvcc-ed, your current valid read will last until you last
 
 // all the below getter functions will return a valid fully read expression or any other blobbed type if they contain it
 
