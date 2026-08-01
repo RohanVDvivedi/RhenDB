@@ -30,9 +30,6 @@ struct temporary_extension_store
 	rwlock blob_store_lock;
 };
 
-#define MAX_ENTRIES_IN_VOL_BLOBS_HTAN        56 // threshold should be something like 20 to 24 for fixing the accumulated entries
-#define TEMP_EXT_BLOB_STORE_FIX_THRESHOLD    25
-
 // this is the number of temporary extension stores that any 1 particular transaction will maintain
 #define TEMPORARY_EXTENSION_STORE_COUNT 64
 

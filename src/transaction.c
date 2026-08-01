@@ -2,6 +2,9 @@
 
 #include<tuplelargetypes/common_extended.h>
 
+#define MAX_ENTRIES_IN_VOL_BLOBS_HTAN        56 // threshold should be something like 20 to 24 for fixing the accumulated entries
+#define TEMP_EXT_BLOB_STORE_FIX_THRESHOLD    25
+
 transaction initialize_transaction(rhendb* rdb)
 {
 	transaction tx = {
