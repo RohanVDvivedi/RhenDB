@@ -12,6 +12,8 @@
 #include<rhendb/function_compare.h>
 #include<rhendb/transaction.h>
 #include<rhendb/util_materialization.h>
+#include<rhendb/util_numeric_conversions.h>
+#include<tuplestore/data_type_info_defaults.h>
 #include<rhendb/util_transaction_ext_storer.h>
 
 #include<tuplelargetypes/common_extended.h>
@@ -654,35 +656,23 @@ static int ee_materialize_numeric(expr_value* v, const sql_expr_eval_context* ec
  * operands go through the decimal string of a double, so they are only double-precise. */
 static int number_to_mpd(const expr_value* v, mpd_t* out)
 {
-	if(!ee_mpd_new(out))
-		return 0;
-	mpd_context_t ctx;
-	get_mpd_context_for_materialized_numeric(&ctx);
-	uint32_t st = 0;
-	char b[256];
+	/* map the expr kind to the tuplestore type that names the same native member, then let the
+	 * shared numeric-conversion util build the mpd_t (returned by value, MPD_STATIC + heap coeff). */
+	const data_type_info* dti;
 	switch(v->type_info.type){
-		case RHENDB_EXPR_BIT_FIELD:
-		case RHENDB_EXPR_UINT:
-			mpd_qset_u64(out, v->value.uint_value, &ctx, &st); break;
-		case RHENDB_EXPR_INT:
-			mpd_qset_i64(out, v->value.int_value, &ctx, &st); break;
-		case RHENDB_EXPR_FLOAT:
-		case RHENDB_EXPR_DOUBLE:
-			snprintf(b, sizeof(b), "%.17g", read_flt(v));
-			mpd_qset_string(out, b, &ctx, &st);
-			break;
-		case RHENDB_EXPR_LARGE_UINT:
-			b[serialize_to_decimal_uint256(b, v->value.large_uint_value)] = '\0';
-			mpd_qset_string(out, b, &ctx, &st);
-			break;
-		case RHENDB_EXPR_LARGE_INT:
-			b[serialize_to_decimal_int256(b, v->value.large_int_value)] = '\0';
-			mpd_qset_string(out, b, &ctx, &st);
-			break;
-		default:
-			mpd_del(out);
-			return 0;
+		case RHENDB_EXPR_BIT_FIELD: dti = BIT_FIELD_NON_NULLABLE[64];  break;
+		case RHENDB_EXPR_UINT:      dti = UINT_NON_NULLABLE[8];        break;
+		case RHENDB_EXPR_INT:       dti = INT_NON_NULLABLE[8];         break;
+		case RHENDB_EXPR_FLOAT:     dti = FLOAT_float_NON_NULLABLE;    break; /* value in .float_value  */
+		case RHENDB_EXPR_DOUBLE:    dti = FLOAT_double_NON_NULLABLE;   break; /* value in .double_value */
+		case RHENDB_EXPR_LARGE_UINT: dti = LARGE_UINT_NON_NULLABLE[32]; break;
+		case RHENDB_EXPR_LARGE_INT:  dti = LARGE_INT_NON_NULLABLE[32];  break;
+		default: return 0;
 	}
+	int ec = 0;
+	mpd_t r = numeric_from_primitive_numeral(dti, &(v->value), &ec);
+	if(ec) return 0; /* on error the util has already released any resource it acquired */
+	*out = r;
 	return 1;
 }
 

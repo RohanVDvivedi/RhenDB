@@ -8,26 +8,19 @@
 #include<string.h>
 #include<math.h>
 
-// build a fresh mpd_t returned BY VALUE: static struct (copied out to caller), heap coefficient buffer.
-// THE CALLER MUST RELEASE THE RETURNED VALUE WITH mpd_del() (frees .data, not the struct).
-// this function ALWAYS returns an mpd_del-able value; on error it returns a quiet NaN.
-static mpd_t new_returnable_mpd(void)
-{
-	mpd_t res;
-	res.flags = MPD_STATIC;
-	res.exp = 0; res.digits = 0; res.len = 0;
-	res.alloc = MPD_MINALLOC;
-	res.data = mpd_alloc(MPD_MINALLOC, sizeof(mpd_uint_t));
-	if(res.data == NULL)
-		exit(-1);
-	return res;
-}
-
 mpd_t numeric_from_primitive_numeral(const data_type_info* dti, const datum* uval, int* error_code)
 {
 	(*error_code) = NUMERIC_CONVERSION_SUCCESSFULL;
 
-	mpd_t numeric = new_returnable_mpd();
+	mpd_t numeric;
+	numeric.flags = MPD_STATIC;
+	numeric.exp = 0;
+	numeric.digits = 0;
+	numeric.len = 0;
+	numeric.alloc = MPD_MINALLOC;
+	numeric.data = mpd_alloc(MPD_MINALLOC, sizeof(mpd_uint_t));
+	if(res.data == NULL)
+		exit(-1);
 
 	mpd_context_t maxctx;
 	mpd_maxcontext(&maxctx); // huge precision -> exact for every integer we can hold
@@ -101,7 +94,7 @@ mpd_t numeric_from_primitive_numeral(const data_type_info* dti, const datum* uva
 			else
 			{
 				char buf[64];
-				snprintf(buf, sizeof(buf), is_flt ? "%.9g" : "%.17g", d); // round-trip-exact digits
+				snprintf(buf, sizeof(buf), "%.17g", d);
 				mpd_qset_string(&numeric, buf, &maxctx, &status);
 				if(status & MPD_Malloc_error)
 					exit(-1);
