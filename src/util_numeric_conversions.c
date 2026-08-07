@@ -1,4 +1,4 @@
-#include<util_numeric_conversions.h>
+#include<rhendb/util_numeric_conversions.h>
 
 mpd_t numeric_from_primitive_numeral(const data_type_info* dti, const datum* uval, int* error_code)
 {
@@ -28,7 +28,7 @@ mpd_t numeric_from_primitive_numeral(const data_type_info* dti, const datum* uva
 			// use large_uint_value
 			break;
 		}
-		case LAGRE_INT :
+		case LARGE_INT :
 		{
 			// use large_int_value
 			break;
@@ -63,7 +63,7 @@ datum numeric_to_primitive_numeral(const data_type_info* dti, mpd_t numeric, int
 {
 	(*error_code) = NUMERIC_CONVERSION_SUCCESSFULL;
 
-	datum num = NULL;
+	datum num = (*NULL_DATUM);
 
 	switch(dti->type)
 	{
@@ -87,7 +87,7 @@ datum numeric_to_primitive_numeral(const data_type_info* dti, mpd_t numeric, int
 			// use large_uint_value
 			break;
 		}
-		case LAGRE_INT :
+		case LARGE_INT :
 		{
 			// use large_int_value
 			break;

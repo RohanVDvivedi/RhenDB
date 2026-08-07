@@ -3,6 +3,9 @@
 
 #include<mpdecimal.h>
 
+#include<tuplestore/data_type_info.h>
+#include<tuplestore/datum.h>
+
 #define NUMERIC_CONVERSION_SUCCESSFULL       0
 #define NUMERIC_CONVERSION_TYPE_FAILURE      1
 #define NUMERIC_CONVERSION_UN_REPRESENTABLE  2
