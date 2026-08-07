@@ -19,7 +19,7 @@ mpd_t numeric_from_primitive_numeral(const data_type_info* dti, const datum* uva
 	numeric.len = 0;
 	numeric.alloc = MPD_MINALLOC;
 	numeric.data = mpd_alloc(MPD_MINALLOC, sizeof(mpd_uint_t));
-	if(res.data == NULL)
+	if(numeric.data == NULL)
 		exit(-1);
 
 	mpd_context_t maxctx;
@@ -69,17 +69,11 @@ mpd_t numeric_from_primitive_numeral(const data_type_info* dti, const datum* uva
 		}
 		case FLOAT :
 		{
-			double d; int is_flt;
+			double d;
 			if(dti->size == sizeof(float))
-			{
-				d = (double)(uval->float_value);
-				is_flt = 1;
-			}
+				d = uval->float_value;
 			else if(dti->size == sizeof(double))
-			{
 				d = uval->double_value;
-				is_flt = 0;
-			}
 			else
 			{
 				(*error_code) = NUMERIC_CONVERSION_TYPE_FAILURE;
