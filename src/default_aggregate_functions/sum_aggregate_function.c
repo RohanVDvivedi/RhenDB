@@ -252,10 +252,7 @@ static int NUMERIC_update_sum_state(void** state_p, const datum input, const agg
 	int error_code = 0;
 	mpd_t input_mpd_t = materialize_numeric(input, af_p->input_type_infos[0], tx, &error_code);
 	if(error_code)
-	{
-		mpd_del(&input_mpd_t);
 		return 0;
-	}
 
 	uint32_t status = 0;
 	mpd_qadd(&(sum_state->sum), &(sum_state->sum), &input_mpd_t, &(sum_state->ctx), &status);

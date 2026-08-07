@@ -588,7 +588,6 @@ static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, i
 	char* buf = materialize_tb(v->value, dti, tx_from_ctx(ec_p), &len, &cap, &mrc);
 	if(mrc != MATERIALIZED_SUCCESSFULLY)
 	{
-		free(buf);
 		/* a value overflowing the uint32 size field -> STRING_TOO_LONG; a NULL datum / non-text-or-blob type
 		 * cannot occur here (guarded above), so anything else is treated as a read failure. */
 		*error_code = (mrc == MATERIALIZED_RESULT_TOO_BIG) ? RHENDB_EE_STRING_TOO_LONG : RHENDB_EE_MATERIALIZE_FAILED;
@@ -634,7 +633,6 @@ static int ee_materialize_numeric(expr_value* v, const sql_expr_eval_context* ec
 	mpd_t d = materialize_numeric(v->value, v->type_info.dti_p, tx_from_ctx(ec_p), &mrc);
 	if(mrc != MATERIALIZED_SUCCESSFULLY)
 	{
-		mpd_del(&d);
 		*error_code = (mrc == MATERIALIZED_RESULT_TOO_BIG) ? RHENDB_EE_STRING_TOO_LONG : RHENDB_EE_MATERIALIZE_FAILED;
 		return *error_code;
 	}
