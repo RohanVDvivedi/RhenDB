@@ -712,7 +712,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 	data_type_info* base_dti_p = UINT_NON_NULLABLE[2];
 
 	{
-		data_type_info* attributes_type_info = malloc(sizeof_tuple_data_type_info(14));
+		data_type_info* attributes_type_info = malloc(sizeof_tuple_data_type_info(12));
 
 		strcpy(attributes_type_info->containees[0].field_name, "mvcc_hdr");
 		attributes_type_info->containees[0].al.type_info = mvcc_hdr_dti_p;
@@ -750,7 +750,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		strcpy(attributes_type_info->containees[11].field_name, "derived_from_expr");
 		attributes_type_info->containees[11].al.type_info = catmgr_engine->text_extended_type_info;
 
-		initialize_tuple_data_type_info(attributes_type_info, "rhendb_attribute", 0, 900, 14);
+		initialize_tuple_data_type_info(attributes_type_info, "rhendb_attribute", 0, 900, 12);
 
 		initialize_tuple_def(&(catmgr_p->attributes_table.record_def), attributes_type_info);
 
