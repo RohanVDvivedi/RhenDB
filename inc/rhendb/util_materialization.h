@@ -19,6 +19,8 @@
 #define MATERIALIZATION_TYPE_INVALID   2
 #define MATERIALIZING_NULL_DATUM       3
 
+/* if error_code is returned nothing needs to be freed/released all resources acquired in the functions are already taken cared of */
+
 // dti must be a text/blob type, inline or extended
 // directly returns NULL, if the dti is not a text or blob type, if dti is NULL, we expect uval to be a native tuple store string datum
 // uval input parameter for this function must be not a NULL_DATUM
@@ -30,6 +32,7 @@ char* materialize_tb(const datum uval, const data_type_info* dti, transaction* t
 // dti must be a numeric type, inline or extended
 // directly returns NAN, if the dti is not a numeric type
 // uval input parameter for this function must be not a NULL_DATUM
+materialized_numeric materialize_numeric1(const datum uval, const data_type_info* dti, transaction* tx, int* error_code);
 mpd_t materialize_numeric(const datum uval, const data_type_info* dti, transaction* tx, int* error_code);
 
 #endif

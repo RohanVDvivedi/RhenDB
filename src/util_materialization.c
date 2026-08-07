@@ -92,9 +92,11 @@ char* materialize_tb(const datum uval, const data_type_info* dti, transaction* t
 	return buffer;
 }
 
-mpd_t materialize_numeric(const datum uval, const data_type_info* dti, transaction* tx, int* error_code)
+materialized_numeric materialize_numeric1(const datum uval, const data_type_info* dti, transaction* tx, int* error_code)
 {
 	(*error_code) = MATERIALIZED_SUCCESSFULLY;
+
+	materialized_numeric mn;
 
 	if(!is_numeric_type_info(dti) || is_datum_NULL(&uval))
 	{
@@ -103,17 +105,12 @@ mpd_t materialize_numeric(const datum uval, const data_type_info* dti, transacti
 		if(!is_numeric_type_info(dti))
 			(*error_code) = MATERIALIZATION_TYPE_INVALID;
 
-		mpd_t number;
-		number.flags = MPD_NAN | MPD_STATIC | MPD_CONST_DATA;
-		number.exp = 0;
-		number.digits = 0;
-		number.len = 0;
-		number.alloc = 0;
-		number.data = NULL;
-		return number;
+		return mn;
 	}
 
-	mpd_t number;
+	// perform minimal initialization
+	if(!initialize_materialized_numeric(&mn, 8))
+		exit(-1);
 
 	{
 		const void* transaction_id = NULL;
@@ -133,9 +130,6 @@ mpd_t materialize_numeric(const datum uval, const data_type_info* dti, transacti
 		numeric_sign_bits sb; int16_t exp;
 		nri.extract_sign_bits_and_exponent(&nri, &sb, &exp);
 
-		materialized_numeric mn;
-		if(!initialize_materialized_numeric(&mn, 8))
-			exit(-1);
 		set_sign_bits_and_exponent_for_materialized_numeric(&mn, sb, exp);
 
 		if(sb == POSITIVE_NUMERIC || sb == NEGATIVE_NUMERIC)   /* only finite non-zero values carry digits */
@@ -159,23 +153,29 @@ mpd_t materialize_numeric(const datum uval, const data_type_info* dti, transacti
 					{
 						(*error_code) = MATERIALIZED_RESULT_TOO_BIG;
 						deinitialize_materialized_numeric(&mn);
-
-						number.flags = MPD_NAN | MPD_STATIC | MPD_CONST_DATA;
-						number.exp = 0;
-						number.digits = 0;
-						number.len = 0;
-						number.alloc = 0;
-						number.data = NULL;
-						return number;
+						return mn;
 					}
 				}
 			}
 		}
 		nri.close_digits_stream(&nri);
-
-		number = decimal_from_materialized_numeric(&mn);
-		deinitialize_materialized_numeric(&mn);
 	}
+
+	return mn;
+}
+
+mpd_t materialize_numeric(const datum uval, const data_type_info* dti, transaction* tx, int* error_code)
+{
+	(*error_code) = MATERIALIZED_SUCCESSFULLY;
+
+	mpd_t number;
+
+	materialized_numeric mn = materialize_numeric1(uval, dti, tx, error_code);
+	if(*error_code)
+		return number;
+
+	number = decimal_from_materialized_numeric(&mn);
+	deinitialize_materialized_numeric(&mn);
 
 	return number;
 }
