@@ -11,22 +11,27 @@ mpd_t numeric_from_primitive_numeral(const data_type_info* dti, const datum* uva
 		case BIT_FIELD :
 		{
 			// use bit_field_value
+			break;
 		}
 		case UINT :
 		{
 			// use uint_value
+			break;
 		}
 		case INT :
 		{
 			// use int_value
+			break;
 		}
 		case LARGE_UINT :
 		{
 			// use large_uint_value
+			break;
 		}
 		case LAGRE_INT :
 		{
 			// use large_int_value
+			break;
 		}
 		case FLOAT :
 		{
@@ -38,6 +43,16 @@ mpd_t numeric_from_primitive_numeral(const data_type_info* dti, const datum* uva
 			{
 				// use double_value
 			}
+			else
+			{
+				(*error_code) = NUMERIC_CONVERSION_TYPE_FAILURE;
+			}
+			break;
+		}
+		default:
+		{
+			(*error_code) = NUMERIC_CONVERSION_TYPE_FAILURE;
+			break;
 		}
 	}
 
@@ -55,22 +70,27 @@ datum numeric_to_primitive_numeral(const data_type_info* dti, mpd_t numeric, int
 		case BIT_FIELD :
 		{
 			// use bit_field_value
+			break;
 		}
 		case UINT :
 		{
 			// use uint_value
+			break;
 		}
 		case INT :
 		{
 			// use int_value
+			break;
 		}
 		case LARGE_UINT :
 		{
 			// use large_uint_value
+			break;
 		}
 		case LAGRE_INT :
 		{
 			// use large_int_value
+			break;
 		}
 		case FLOAT :
 		{
@@ -82,6 +102,16 @@ datum numeric_to_primitive_numeral(const data_type_info* dti, mpd_t numeric, int
 			{
 				// use double_value
 			}
+			else
+			{
+				(*error_code) = NUMERIC_CONVERSION_TYPE_FAILURE;
+			}
+			break;
+		}
+		default:
+		{
+			(*error_code) = NUMERIC_CONVERSION_TYPE_FAILURE;
+			break;
 		}
 	}
 
