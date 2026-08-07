@@ -18,9 +18,8 @@
 typedef enum catalog_object_type catalog_object_type;
 enum catalog_object_type
 {
-	RHENDB_TYPE = 0,
-	RHENDB_TABLE = 1,
-	RHENDB_INDEX = 2,
+	RHENDB_TABLE = 0,
+	RHENDB_INDEX = 1,
 };
 
 typedef struct catalog_heap_table catalog_heap_table;
@@ -67,12 +66,9 @@ struct catalog_manager
 	// ---------------- TABLES FOR SCHEMA
 
 	catalog_heap_table attributes_table;
-	// mvcc_hdr, owner_id, rel_pos_in_owner, table_part_id_from, table_part_id_to, attribute_name, base_type (rhendb_base_type), size (for non composite base type), attribute_type_id (valid for base_type == RHENDB_TUPLE), count (0->variable length, 1->direct-element, N->fixed length array of N elements), is_auto_increment, is_nullable, derived_from_expression(null if not derived column and not index attribute)
-	// has rows for attributes of table, type and index only
+	// mvcc_hdr, owner_id, rel_pos_in_owner, table_part_id_from, table_part_id_to, attribute_name, base_type (rhendb_base_type), size (for non extended base types), is_auto_increment, is_nullable, derived_from_expression(null if not derived column and not index attribute)
+	// has rows for attributes of table and index only
 	// table_part_id_* will remain 0 if owner_id is not a table
-
-	catalog_heap_table types_table;
-	// mvcc_hdr, id, name and it has only user defined types, not the primitive ones
 
 	catalog_clust_table index_fragments_table;
 	// only supports insert/delete no updates to any attribute, fully delete the data structures here at the root_page_ids on garbage ciollection
@@ -94,11 +90,11 @@ struct catalog_manager
 
 	// ---------------- INDICES ON SCHEMA TABLE
 
-	// for catalog_object_types(RHENDB_TYPE, RHENDB_TABLE, and RHENDB_INDEX)
+	// for catalog_object_types(RHENDB_TABLE, and RHENDB_INDEX)
 	// key(object_type, name, object.tuple_pointer)
 	catalog_btree_index name_idx;
 
-	// for catalog_object_types(RHENDB_TYPE, RHENDB_TABLE, and RHENDB_INDEX)
+	// for catalog_object_types(RHENDB_TABLE, and RHENDB_INDEX)
 	// key(object_type, id, object.tuple_pointer)
 	catalog_btree_index id_idx;
 
@@ -142,21 +138,25 @@ enum rhendb_base_type
 	RHENDB_FLOAT = 3,        // either sizeof(float) or sizeof(double)
 
 	// default composite types
-	RHENDB_TUPLE_POINTER = 4,
-	RHENDB_MVCC_HEADER = 5,
+	RHENDB_TUPLE_POINTER = 4,   // for index last attribute
+	RHENDB_MVCC_HEADER = 5,     // for mvcc headers as first attribute of the heap tuple
 
-	// inline basic variable length types
+	// inline basic variable length types, primarily used for indexing the below rhendb_base_types 9, 10 and 11
 	RHENDB_STRING = 6,
 	RHENDB_BINARY = 7,
 	RHENDB_NUMBER = 8,
 
-	// extended versions of those types
+	// non-extended types above
+	// extended types below
+
+	// extended versions of above types, these must go in the heap tables, inline versions to be used only for indexes
 	RHENDB_TEXT = 9,
 	RHENDB_BLOB = 10,
 	RHENDB_NUMERIC = 11,
-	RHENDB_JSONB = 12,
 
-	RHENDB_COMPOSITE_TYPE = 13, // check attribute_type_id, and read it
+	// any composition of the above types and the arrays for those types go here
+	// we do not have native composite types, instead a dynamic jsonb is used
+	RHENDB_JSONB = 12,
 };
 
 typedef struct rhendb_attribute rhendb_attribute;
@@ -173,12 +173,7 @@ struct rhendb_attribute
 
 	rhendb_base_type base_type;
 
-	uint32_t size; // for base type
-
-	uint64_t attribute_type_id; // valid only for base_type = RHENDB_COMPOSITE_TYPE
-
-	uint32_t count; // 0->variable length array, N->fixed length array of N elements, valid only when has_count is set
-	unsigned int has_count:1; // set when this attribute is an array (count is meaningful), else it is a direct single element
+	uint32_t size; // for non-extended base types
 
 	unsigned int is_auto_increment:1;
 
@@ -189,14 +184,6 @@ struct rhendb_attribute
 	char* derived_from_expr; // valid if the attribute is derived from expression, or for an index
 	uint32_t derived_from_expr_size;
 	// derived_from_expr is to be freed if not NULL, and needs to be deep copied
-};
-
-typedef struct rhendb_type rhendb_type;
-struct rhendb_type
-{
-	uint64_t id;
-
-	char name[64];
 };
 
 typedef enum rhendb_index_access_type rhendb_index_access_type;
@@ -227,7 +214,7 @@ struct rhendb_index
 
 	uint64_t table_id;
 
-	rhendb_index_access_type access_methos; // (btree or hash)
+	rhendb_index_access_type access_method; // (btree or hash)
 
 	char* predicate_expr; // predicate selectivity for the index
 	uint32_t predicate_expr_size;
@@ -256,7 +243,7 @@ struct rhendb_table
 // here the root_page_id is an in-out parameter, pass it as NULL_PAGE_ID to create a new transaction table, or an existing one to open that particular transaction_table
 void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine, transaction_status_getter* tsg_p);
 
-// note:: must exclusive_lock table/type/index by it's name before calling this DDL-write-like functions, and keep it locked until the transaction ends, for the below functions
+// note:: must exclusive_lock table/index by it's name before calling this DDL-write-like functions, and keep it locked until the transaction ends, for the below functions
 
 // returns id of created table, it will always start with no indices and a single partition_id of 1, by the provided name
 // on failure returns 0
@@ -289,20 +276,12 @@ int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 // drops index with this id and all it's partitions, and the corresponding list of attributes
 int drop_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t index_id);
 
-// note:: must lock type by it's name before calling this function, and keep it locked until the transaction ends, for the below functions
-
-// returns id of created type
-uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count);
-
-// drops all the attributes also
-int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t type_id);
-
 // returns id of created function
 // uint64_t create_function(catalog_manager* catmgr_p, char* name);
 // void drop_function(catalog_manager* catmgr_p, uint64_t id);
 
 // getters
-// note:: must shared_lock table/type/index by it's name before calling this DDL-write-like functions, after/better you call the getter and before you use the object
+// note:: must shared_lock table/index by it's name before calling this DDL-write-like functions, after/better you call the getter and before you use the object
 
 // all the below getter functions will return a valid fully read expression or any other blobbed type if they contain it
 
@@ -314,9 +293,9 @@ void* get_catalog_object_by_name_from_catalog(catalog_manager* catmgr_p, const m
 // char[64] ordered by name (scanned via the name index). writes the count to (*names_count). the caller
 // frees the result with a single free(). intended for schema inspection. RHENDB_INDEX is NOT supported here
 // return valus is array of char[64] having names_count number of elements
-void* get_all_catalog_object_names_by_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, uint64_t* names_count);
+void* get_all_catalog_object_names_by_catalog_object_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, uint64_t* names_count);
 
-// partition_id is always 0 for index or type
+// partition_id is always 0 for index
 rhendb_attribute* get_attributes_for_catalog_object_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t owner_id, uint64_t partition_id, uint64_t* attrs_count);
 
 rhendb_table_partition* get_partitions_for_table_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t* partitions_count);
@@ -327,5 +306,9 @@ rhendb_index_fragment* get_index_fragments_for_index_from_catalog(catalog_manage
 
 // must call destroy_type_info_recursively, to destroy the returned object
 data_type_info* get_data_type_info_for_rhendb_attribute_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_attribute* attribute);
+
+data_type_info* get_data_type_info_for_rhendb_table_partition_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_table_partition* partition);
+
+data_type_info* get_data_type_info_for_rhendb_index_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_index* index);
 
 #endif

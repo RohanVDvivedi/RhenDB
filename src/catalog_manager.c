@@ -149,47 +149,22 @@ static void* serialize_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_he
 
 	set_element_in_tuple(record_def, STATIC_POSITION(7), tuple, &((datum){.uint_value = attr->size}), 0);
 
-	set_element_in_tuple(record_def, STATIC_POSITION(8), tuple, &((datum){.uint_value = attr->attribute_type_id}), 0);
+	set_element_in_tuple(record_def, STATIC_POSITION(8), tuple, &((datum){.bit_field_value = attr->is_auto_increment}), 0);
 
-	if(!attr->has_count)
-		set_element_in_tuple(record_def, STATIC_POSITION(9), tuple, NULL_DATUM, 0);
-	else
-		set_element_in_tuple(record_def, STATIC_POSITION(9), tuple, &((datum){.uint_value = attr->count}), 0);
+	set_element_in_tuple(record_def, STATIC_POSITION(9), tuple, &((datum){.bit_field_value = attr->is_nullable}), 0);
 
-	set_element_in_tuple(record_def, STATIC_POSITION(10), tuple, &((datum){.bit_field_value = attr->is_auto_increment}), 0);
-
-	set_element_in_tuple(record_def, STATIC_POSITION(11), tuple, &((datum){.bit_field_value = attr->is_nullable}), 0);
-
-	set_element_in_tuple(record_def, STATIC_POSITION(12), tuple, &((datum){.int_value = attr->cmp_dir}), 0);
+	set_element_in_tuple(record_def, STATIC_POSITION(10), tuple, &((datum){.int_value = attr->cmp_dir}), 0);
 
 	if(should_blob && attr->derived_from_expr != NULL)
 	{
-		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(13), attr->derived_from_expr, attr->derived_from_expr_size, min_tx_id, abort_error))
+		if(!catalog_write_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(11), attr->derived_from_expr, attr->derived_from_expr_size, min_tx_id, abort_error))
 		{
 			free(tuple);
 			return NULL;
 		}
 	}
 	else
-		set_element_in_tuple(record_def, STATIC_POSITION(13), tuple, NULL_DATUM, UINT32_MAX);
-
-	return tuple;
-}
-
-static void* serialize_rhendb_type(catalog_manager* catmgr_p, const mvcc_header* mvcchdr_p, const rhendb_type* typ)
-{
-	const tuple_def* record_def = &(catmgr_p->types_table.record_def);
-
-	void* tuple = malloc(get_maximum_tuple_size(record_def));
-
-	init_tuple(record_def, tuple);
-
-	if(mvcchdr_p != NULL)
-		catalog_write_mvcc_header(catmgr_p, tuple, record_def, mvcchdr_p);
-
-	set_element_in_tuple(record_def, STATIC_POSITION(1), tuple, &((datum){.uint_value = typ->id}), 0);
-
-	set_element_in_tuple(record_def, STATIC_POSITION(2), tuple, &((datum){.string_value = typ->name, .string_size = strnlen(typ->name, 64)}), UINT32_MAX);
+		set_element_in_tuple(record_def, STATIC_POSITION(11), tuple, NULL_DATUM, UINT32_MAX);
 
 	return tuple;
 }
@@ -233,7 +208,7 @@ static void* serialize_rhendb_index(catalog_manager* catmgr_p, const mvcc_header
 
 	set_element_in_tuple(record_def, STATIC_POSITION(3), tuple, &((datum){.uint_value = idx->table_id}), 0);
 
-	set_element_in_tuple(record_def, STATIC_POSITION(4), tuple, &((datum){.uint_value = idx->access_methos}), 0);
+	set_element_in_tuple(record_def, STATIC_POSITION(4), tuple, &((datum){.uint_value = idx->access_method}), 0);
 
 	if(should_blob && idx->predicate_expr != NULL)
 	{
@@ -458,29 +433,17 @@ static rhendb_attribute deserialize_rhendb_attribute(catalog_manager* catmgr_p, 
 	attr.size = uval.uint_value;
 
 	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(8), tuple);
-	attr.attribute_type_id = uval.uint_value;
-
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(9), tuple);
-	if(uval.is_NULL)
-		attr.has_count = 0;
-	else
-	{
-		attr.has_count = 1;
-		attr.count = uval.uint_value;
-	}
-
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(10), tuple);
 	attr.is_auto_increment = uval.bit_field_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(11), tuple);
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(9), tuple);
 	attr.is_nullable = uval.bit_field_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(12), tuple);
+	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(10), tuple);
 	attr.cmp_dir = uval.int_value;
 
 	if(should_blob)
 	{
-		attr.derived_from_expr = catalog_read_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(13), record_def->type_info->containees[13].al.type_info, &(attr.derived_from_expr_size), min_tx_id, abort_error);
+		attr.derived_from_expr = catalog_read_extended_blob(catmgr_p, tuple, record_def, STATIC_POSITION(11), record_def->type_info->containees[11].al.type_info, &(attr.derived_from_expr_size), min_tx_id, abort_error);
 		if(*abort_error)
 			return attr;
 	}
@@ -491,26 +454,6 @@ static rhendb_attribute deserialize_rhendb_attribute(catalog_manager* catmgr_p, 
 	}
 
 	return attr;
-}
-
-static rhendb_type deserialize_rhendb_type(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple)
-{
-	const tuple_def* record_def = &(catmgr_p->types_table.record_def);
-
-	rhendb_type typ = {};
-
-	datum uval;
-
-	if(mvcchdr_p != NULL)
-		catalog_read_mvcc_header(catmgr_p, tuple, record_def, mvcchdr_p);
-
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
-	typ.id = uval.uint_value;
-
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
-	memory_move(typ.name, uval.string_value, uval.string_size);
-
-	return typ;
 }
 
 static rhendb_index_fragment deserialize_rhendb_index_fragment(catalog_manager* catmgr_p, mvcc_header* mvcchdr_p, const void* tuple)
@@ -560,7 +503,7 @@ static rhendb_index deserialize_rhendb_index(catalog_manager* catmgr_p, mvcc_hea
 	idx.table_id = uval.uint_value;
 
 	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(4), tuple);
-	idx.access_methos = uval.uint_value;
+	idx.access_method = uval.uint_value;
 
 	if(should_blob)
 	{
@@ -743,16 +686,15 @@ const positional_accessor key_element_ids0[] = {STATIC_POSITION(0), STATIC_POSIT
 const positional_accessor key_element_ids1[] = {STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(3), STATIC_POSITION(4), STATIC_POSITION(5), STATIC_POSITION(6)};
 
 #define ATTRIBUTES_TABLE_ROOT_PAGE_ID_POS          0
-#define TYPES_TABLE_ROOT_PAGE_ID_POS               1
-#define INDEX_FRAGMENTS_TABLE_ROOT_PAGE_ID_POS     2
-#define INDICES_TABLE_ROOT_PAGE_ID_POS             3
-#define TABLE_PARTITIONS_TABLE_ROOT_PAGE_ID_POS    4
-#define TABLES_TABLE_ROOT_PAGE_ID_POS              5
-#define NAME_IDX_ROOT_PAGE_ID_POS                  6
-#define ID_IDX_ROOT_PAGE_ID_POS                    7
-#define TABLE_TO_INDICES_IDX_ROOT_PAGE_ID_POS      8
-#define OWNER_TO_ATTRIBUTES_IDX_ROOT_PAGE_ID_POS   9
-#define EXT_STORE_ROOT_PAGE_ID_ROOT_PAGE_ID_POS   10
+#define INDEX_FRAGMENTS_TABLE_ROOT_PAGE_ID_POS     1
+#define INDICES_TABLE_ROOT_PAGE_ID_POS             2
+#define TABLE_PARTITIONS_TABLE_ROOT_PAGE_ID_POS    3
+#define TABLES_TABLE_ROOT_PAGE_ID_POS              4
+#define NAME_IDX_ROOT_PAGE_ID_POS                  5
+#define ID_IDX_ROOT_PAGE_ID_POS                    6
+#define TABLE_TO_INDICES_IDX_ROOT_PAGE_ID_POS      7
+#define OWNER_TO_ATTRIBUTES_IDX_ROOT_PAGE_ID_POS   8
+#define EXT_STORE_ROOT_PAGE_ID_ROOT_PAGE_ID_POS    9
 
 void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine, transaction_status_getter* tsg_p)
 {
@@ -796,23 +738,17 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		strcpy(attributes_type_info->containees[7].field_name, "size");
 		attributes_type_info->containees[7].al.type_info = UINT_NON_NULLABLE[4];
 
-		strcpy(attributes_type_info->containees[8].field_name, "attribute_type_id");
-		attributes_type_info->containees[8].al.type_info = id_dti_p;
+		strcpy(attributes_type_info->containees[8].field_name, "is_auto_increment");
+		attributes_type_info->containees[8].al.type_info = BIT_FIELD_NON_NULLABLE[1];
 
-		strcpy(attributes_type_info->containees[9].field_name, "count");
-		attributes_type_info->containees[9].al.type_info = UINT_NULLABLE[4];
+		strcpy(attributes_type_info->containees[9].field_name, "is_nullable");
+		attributes_type_info->containees[9].al.type_info = BIT_FIELD_NON_NULLABLE[1];
 
-		strcpy(attributes_type_info->containees[10].field_name, "is_auto_increment");
-		attributes_type_info->containees[10].al.type_info = BIT_FIELD_NON_NULLABLE[1];
+		strcpy(attributes_type_info->containees[10].field_name, "cmp_dir");
+		attributes_type_info->containees[10].al.type_info = INT_NON_NULLABLE[1];
 
-		strcpy(attributes_type_info->containees[11].field_name, "is_nullable");
-		attributes_type_info->containees[11].al.type_info = BIT_FIELD_NON_NULLABLE[1];
-
-		strcpy(attributes_type_info->containees[12].field_name, "cmp_dir");
-		attributes_type_info->containees[12].al.type_info = INT_NON_NULLABLE[1];
-
-		strcpy(attributes_type_info->containees[13].field_name, "derived_from_expr");
-		attributes_type_info->containees[13].al.type_info = catmgr_engine->text_extended_type_info;
+		strcpy(attributes_type_info->containees[11].field_name, "derived_from_expr");
+		attributes_type_info->containees[11].al.type_info = catmgr_engine->text_extended_type_info;
 
 		initialize_tuple_data_type_info(attributes_type_info, "rhendb_attribute", 0, 900, 14);
 
@@ -821,27 +757,6 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 		init_heap_table_tuple_definitions(&(catmgr_p->attributes_table.heap_table_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->attributes_table.record_def));
 
 		initialize_heap_table_accumulative_notifier(&(catmgr_p->attributes_table.htan), HTAN_ENTRIES_MAX);
-	}
-
-	{
-		data_type_info* types_type_info = malloc(sizeof_tuple_data_type_info(3));
-
-		strcpy(types_type_info->containees[0].field_name, "mvcc_hdr");
-		types_type_info->containees[0].al.type_info = mvcc_hdr_dti_p;
-
-		strcpy(types_type_info->containees[1].field_name, "id");
-		types_type_info->containees[1].al.type_info = id_dti_p;
-
-		strcpy(types_type_info->containees[2].field_name, "name");
-		types_type_info->containees[2].al.type_info = name_dti_p;
-
-		initialize_tuple_data_type_info(types_type_info, "rhendb_type", 0, 900, 3);
-
-		initialize_tuple_def(&(catmgr_p->types_table.record_def), types_type_info);
-
-		init_heap_table_tuple_definitions(&(catmgr_p->types_table.heap_table_defs), &(catmgr_engine->pam_p->pas), &(catmgr_p->types_table.record_def));
-
-		initialize_heap_table_accumulative_notifier(&(catmgr_p->types_table.htan), HTAN_ENTRIES_MAX);
 	}
 
 	{
@@ -1067,15 +982,6 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 							goto ABORT_ERROR;
 					}
 					{
-						catmgr_p->types_table.root_page_id = get_new_heap_table(&(catmgr_p->types_table.heap_table_defs), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
-						if(abort_error)
-							goto ABORT_ERROR;
-
-						set_in_page_table(ptrl_p, TYPES_TABLE_ROOT_PAGE_ID_POS, catmgr_p->types_table.root_page_id, min_tx_id, &abort_error);
-						if(abort_error)
-							goto ABORT_ERROR;
-					}
-					{
 						catmgr_p->index_fragments_table.root_page_id = get_new_bplus_tree(&(catmgr_p->index_fragments_table.clust_table_defs), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
 						if(abort_error)
 							goto ABORT_ERROR;
@@ -1197,10 +1103,6 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 			if(abort_error)
 				goto ABORT_ERROR_1;
 
-			catmgr_p->types_table.root_page_id = get_from_page_table(ptrl_p, TYPES_TABLE_ROOT_PAGE_ID_POS, NULL, &abort_error);
-			if(abort_error)
-				goto ABORT_ERROR_1;
-
 			catmgr_p->index_fragments_table.root_page_id = get_from_page_table(ptrl_p, INDEX_FRAGMENTS_TABLE_ROOT_PAGE_ID_POS, NULL, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR_1;
@@ -1316,12 +1218,10 @@ static void* get_catalog_object_at(catalog_manager* catmgr_p, const mvcc_snapsho
 	persistent_page ppage = get_NULL_persistent_page(engine->pam_p);
 
 	const tuple_def* record_def = NULL;
-	if(object_type == RHENDB_TYPE)
-		record_def = &(catmgr_p->types_table.record_def);
+	if(object_type == RHENDB_TABLE)
+		record_def = &(catmgr_p->tables_table.record_def);
 	else if(object_type == RHENDB_INDEX)
 		record_def = &(catmgr_p->indices_table.record_def);
-	else if(object_type == RHENDB_TABLE)
-		record_def = &(catmgr_p->tables_table.record_def);
 	else
 	{
 		printf("BUG (in catalog_manager) :: unknown objec type passed\n");
@@ -1356,12 +1256,6 @@ static void* get_catalog_object_at(catalog_manager* catmgr_p, const mvcc_snapsho
 			{
 				rhendb_table* materialized_object = malloc(sizeof(rhendb_table));
 				(*materialized_object) = deserialize_rhendb_table(catmgr_p, NULL, row);
-				object = materialized_object;
-			}
-			else if(object_type == RHENDB_TYPE)
-			{
-				rhendb_type* materialized_object = malloc(sizeof(rhendb_type));
-				(*materialized_object) = deserialize_rhendb_type(catmgr_p, NULL, row);
 				object = materialized_object;
 			}
 			else if(object_type == RHENDB_INDEX)
@@ -2235,8 +2129,6 @@ static data_type_info* get_tuple_data_type_info_from_attributes(catalog_manager*
 
 static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_attribute attr, const void* min_tx_id, int* abort_error)
 {
-	data_type_info* inner_dti_p = NULL;
-
 	switch(attr.base_type)
 	{
 		case RHENDB_BIT_FIELD :
@@ -2244,11 +2136,11 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 			if(0 < attr.size && attr.size <= 64)
 			{
 				if(attr.is_nullable)
-					inner_dti_p = BIT_FIELD_NULLABLE[attr.size];
+					return BIT_FIELD_NULLABLE[attr.size];
 				else
-					inner_dti_p = BIT_FIELD_NON_NULLABLE[attr.size];
+					return BIT_FIELD_NON_NULLABLE[attr.size];
 			}
-			break;
+			return NULL;
 		}
 
 		case RHENDB_UINT :
@@ -2256,18 +2148,18 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 			if(attr.is_nullable)
 			{
 				if(0 < attr.size && attr.size <= 8)
-					inner_dti_p = UINT_NULLABLE[attr.size];
+					return UINT_NULLABLE[attr.size];
 				else if(0 < attr.size && attr.size <= 32)
-					inner_dti_p = LARGE_UINT_NULLABLE[attr.size];
+					return LARGE_UINT_NULLABLE[attr.size];
 			}
 			else
 			{
 				if(0 < attr.size && attr.size <= 8)
-					inner_dti_p = UINT_NON_NULLABLE[attr.size];
+					return UINT_NON_NULLABLE[attr.size];
 				else if(0 < attr.size && attr.size <= 32)
-					inner_dti_p = LARGE_UINT_NON_NULLABLE[attr.size];
+					return LARGE_UINT_NON_NULLABLE[attr.size];
 			}
-			break;
+			return NULL;
 		}
 
 		case RHENDB_INT :
@@ -2275,18 +2167,18 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 			if(attr.is_nullable)
 			{
 				if(0 < attr.size && attr.size <= 8)
-					inner_dti_p = INT_NULLABLE[attr.size];
+					return INT_NULLABLE[attr.size];
 				else if(0 < attr.size && attr.size <= 32)
-					inner_dti_p = LARGE_INT_NULLABLE[attr.size];
+					return LARGE_INT_NULLABLE[attr.size];
 			}
 			else
 			{
 				if(0 < attr.size && attr.size <= 8)
-					inner_dti_p = INT_NON_NULLABLE[attr.size];
+					return INT_NON_NULLABLE[attr.size];
 				else if(0 < attr.size && attr.size <= 32)
-					inner_dti_p = LARGE_INT_NON_NULLABLE[attr.size];
+					return LARGE_INT_NON_NULLABLE[attr.size];
 			}
-			break;
+			return NULL;
 		}
 
 		case RHENDB_FLOAT :
@@ -2294,86 +2186,49 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 			if(attr.is_nullable)
 			{
 				if(attr.size == sizeof(float))
-					inner_dti_p = FLOAT_float_NULLABLE;
+					return FLOAT_float_NULLABLE;
 				else if(attr.size == sizeof(double))
-					inner_dti_p = FLOAT_double_NULLABLE;
+					return FLOAT_double_NULLABLE;
 			}
 			else
 			{
 				if(attr.size == sizeof(float))
-					inner_dti_p = FLOAT_float_NON_NULLABLE;
+					return FLOAT_float_NON_NULLABLE;
 				else if(attr.size == sizeof(double))
-					inner_dti_p = FLOAT_double_NON_NULLABLE;
+					return FLOAT_double_NON_NULLABLE;
 			}
-			break;
+			return NULL;
 		}
 
 		case RHENDB_TUPLE_POINTER :
-			inner_dti_p = &(catmgr_p->catmgr_engine->pam_p->pas.tuple_pointer_type_info); break;
+			return &(catmgr_p->catmgr_engine->pam_p->pas.tuple_pointer_type_info); break;
 
 		case RHENDB_MVCC_HEADER :
-			inner_dti_p = catmgr_p->mvcc_header_tuple_def.type_info; break;
+			return catmgr_p->mvcc_header_tuple_def.type_info; break;
 
 		case RHENDB_STRING :
-			inner_dti_p = get_text_inline_type_info(attr.size); break;
+			return get_text_inline_type_info(attr.size); break;
 
 		case RHENDB_BINARY :
-			inner_dti_p = get_blob_inline_type_info(attr.size); break;
+			return get_blob_inline_type_info(attr.size); break;
 
 		case RHENDB_NUMBER :
-			inner_dti_p = get_numeric_inline_type_info(attr.size); break;
+			return get_numeric_inline_type_info(attr.size); break;
 
 		case RHENDB_TEXT :
-			inner_dti_p = catmgr_p->catmgr_engine->text_extended_type_info; break;
+			return catmgr_p->catmgr_engine->text_extended_type_info; break;
 
 		case RHENDB_BLOB :
-			inner_dti_p = catmgr_p->catmgr_engine->blob_extended_type_info; break;
+			return catmgr_p->catmgr_engine->blob_extended_type_info; break;
 
 		case RHENDB_NUMERIC :
-			inner_dti_p = catmgr_p->catmgr_engine->numeric_extended_type_info; break;
+			return catmgr_p->catmgr_engine->numeric_extended_type_info; break;
 
 		case RHENDB_JSONB :
-			inner_dti_p = catmgr_p->catmgr_engine->jsonb_extended_type_info; break;
-
-		case RHENDB_COMPOSITE_TYPE :
-		{
-			// first, a single id_idx lookup for this composite type's own row (must be visible to us) to get its name
-			rhendb_type* composite_type = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_TYPE, attr.attribute_type_id, 0, NULL, min_tx_id, abort_error);
-			if(*abort_error)
-				return NULL;
-			if(composite_type == NULL)
-			{
-				printf("BUG (in catalog_manager) :: mi9ssing type\n");
-				exit(-1);
-			}
-
-			// materialize the composite type's tuple from the attributes owned by its type id, labelled with its name
-			inner_dti_p = get_tuple_data_type_info_from_attributes(catmgr_p, ss_p, composite_type->name, attr.is_nullable, attr.attribute_type_id, 0, min_tx_id, abort_error);
-			free(composite_type);
-			if(*abort_error)
-				return NULL;
-			break;
-		}
-	}
-	if(inner_dti_p == NULL)
-	{
-		printf("BUG (in catalog_manager) :: unmappable attribute type\n");
-		exit(-1);
+			return catmgr_p->catmgr_engine->jsonb_extended_type_info; break;
 	}
 
-	if(!attr.has_count)
-		return inner_dti_p;
-
-	data_type_info* dti_p = malloc(sizeof(data_type_info));
-	if(attr.count == 0)
-	{
-		(*dti_p) = get_variable_element_count_array_type("rhendb_array", catmgr_p->catmgr_engine->pam_p->pas.page_size, inner_dti_p);
-	}
-	else
-	{
-		(*dti_p) = get_fixed_element_count_array_type("rhendb_array", attr.count, catmgr_p->catmgr_engine->pam_p->pas.page_size, 1, inner_dti_p); // always nullable
-	}
-	return dti_p;
+	return NULL;
 }
 
 // build a tuple data_type_info from the attributes owned by owner_id, materializing each attribute's type via
@@ -2422,12 +2277,6 @@ static data_type_info* get_data_type_info_for_rhendb_table_partition(catalog_man
 	data_type_info* partition_dti_p = get_tuple_data_type_info_from_attributes(catmgr_p, ss_p, owning_table->name, 0, table_partition.table_id, table_partition.partition_id, min_tx_id, abort_error);
 	free(owning_table);
 	return partition_dti_p;
-}
-
-// tuple data_type_info describing a type, from the attributes owned by the type, labelled with the type's name
-static data_type_info* get_data_type_info_for_rhendb_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_type type, const void* min_tx_id, int* abort_error)
-{
-	return get_tuple_data_type_info_from_attributes(catmgr_p, ss_p, type.name, 0, type.id, 0, min_tx_id, abort_error);
 }
 
 // tuple data_type_info describing an index key, from the attributes owned by the index, labelled with the index's name
@@ -2781,7 +2630,7 @@ static uint64_t create_index_fragment_root_page_id(catalog_manager* catmgr_p, co
 
 	// the key is all the attributes, but for a hash index a trailing tuple_pointer attribute is not part of the key
 	uint32_t key_element_count = attribute_count;
-	if(index.access_methos == RHENDB_HASH && attribute_count > 0 && fragment_record_data_type_info->containees[attribute_count - 1].al.type_info == &(engine->pam_p->pas.tuple_pointer_type_info))
+	if(index.access_method == RHENDB_HASH && attribute_count > 0 && fragment_record_data_type_info->containees[attribute_count - 1].al.type_info == &(engine->pam_p->pas.tuple_pointer_type_info))
 		key_element_count = attribute_count - 1;
 
 	tuple_def fragment_record_def;
@@ -2799,7 +2648,7 @@ static uint64_t create_index_fragment_root_page_id(catalog_manager* catmgr_p, co
 		key_compare_directions[i] = index_attributes[i].cmp_dir;
 	}
 
-	if(index.access_methos == RHENDB_HASH)
+	if(index.access_method == RHENDB_HASH)
 	{
 		hash_table_tuple_defs fragment_hash_table_defs;
 		init_hash_table_tuple_definitions(&fragment_hash_table_defs, &(engine->pam_p->pas), &fragment_record_def, key_element_ids, key_element_count, FNV_64_TUPLE_HASHER);
@@ -3781,171 +3630,6 @@ int rename_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t 
 	}
 }
 
-uint64_t create_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count)
-{
-	if(attrs_count == 0)
-	{
-		printf("ISSUE in (catalog_manager) :: create_type needs a non-zero attrs_count\n");
-		return 0; // logical failure, not a fatal bug
-	}
-
-	// NOTE (caller responsibility): attribute names within 'attrs' are NOT checked for uniqueness here. duplicate
-	// attribute names must be prevented by the caller until this validation is added to the catalog.
-
-	rage_engine* engine = catmgr_p->catmgr_engine;
-
-	// we can only make persistent changes on behalf of a transaction that has a self transaction id
-	if(!ss_p->has_self_transaction_id)
-	{
-		printf("ISSUE in (catalog_manager) :: create_type needs a snapshot that has a self transaction id\n");
-		exit(-1);
-	}
-
-	// mvcc_header stamped on every new catalog row, born from our transaction and not yet deleted
-	mvcc_header new_row_mvcc_hdr = (mvcc_header){
-		.is_xmin_NULL = 0,
-		.xmin = {.is_committed = 0, .is_aborted = 0, .transaction_id = ss_p->self_transaction_id},
-		.is_xmax_NULL = 1,
-	};
-
-	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
-
-	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
-	while(1)
-	{
-		uint64_t type_id = 0; // 0 == failure, real ids start at FIRST_SCHEMA_UNIQUE_ID
-		tuple_pointer* attribute_tuple_pointers = NULL;
-
-		int abort_error = 0;
-		uint64_t page_latches_to_be_borrowed = 0;
-		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
-
-		// (1) ensure no visible type already has this name, the by-name getter walks the (RHENDB_TYPE, name) run,
-		//     checks visibility and fixes hints for us within this same mini transaction, existing_type is a localized
-		//     resource, so it is freed here itself before we bail
-		{
-			rhendb_type* existing_type = get_catalog_object_by_name(catmgr_p, ss_p, RHENDB_TYPE, name, 0, NULL, min_tx_id, &abort_error);
-			if(abort_error)
-				goto ABORT_ERROR;
-			if(existing_type != NULL) // this is not abort, but we found a type with same name
-			{
-				free(existing_type);
-				engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
-				write_unlock(&(catmgr_p->catlog_manager_lock));
-				return 0;
-			}
-		}
-
-		// (2) allocate a fresh globally unique id for the new type
-		pthread_mutex_lock(&(catmgr_p->global_unique_schema_id_lock));
-		if(catmgr_p->global_unique_schema_id == UINT64_MAX)
-		{
-			printf("ISSUE in (catalog_manager) :: create_type overflowed global_unique_schema_id\n");
-			exit(-1);
-		}
-		type_id = catmgr_p->global_unique_schema_id++;
-		pthread_mutex_unlock(&(catmgr_p->global_unique_schema_id_lock));
-
-		// (3) insert the types_table entry, remember its tuple_pointer for the name and id indexes
-		tuple_pointer type_tuple_pointer;
-		{
-			rhendb_type typ = (rhendb_type){.id = type_id};
-			strncpy(typ.name, name, 64);
-			void* type_tuple = serialize_rhendb_type(catmgr_p, &new_row_mvcc_hdr, &typ);
-			insert_in_catalog_heap_table(catmgr_p, &(catmgr_p->types_table), &type_tuple_pointer, (void const * const *)(&type_tuple), 1, min_tx_id, &abort_error);
-			free(type_tuple);
-			if(abort_error)
-				goto ABORT_ERROR;
-		}
-
-		// (4) all the attributes owned by this type, a type is not partitioned so from = 0 and to = 0, bulk inserted for locality
-		//     attribute_tuples is a localized resource, so it is unwound here itself on abort
-		attribute_tuple_pointers = malloc(sizeof(tuple_pointer) * attrs_count);
-		{
-			void** attribute_tuples = malloc(sizeof(void*) * attrs_count);
-			for(uint32_t i = 0; i < attrs_count; i++)
-			{
-				rhendb_attribute a = attrs[i];
-				a.owner_id = type_id;
-				a.rel_pos_in_owner = i;
-				a.table_part_id_from = 0;
-				a.table_part_id_to = 0;
-				attribute_tuples[i] = serialize_rhendb_attribute(catmgr_p, &new_row_mvcc_hdr, &a, 1, min_tx_id, &abort_error);
-				if(abort_error)
-				{
-					for(uint32_t j = 0; j < i; j++)
-						free(attribute_tuples[j]);
-					free(attribute_tuples);
-					goto ABORT_ERROR;
-				}
-			}
-			insert_in_catalog_heap_table(catmgr_p, &(catmgr_p->attributes_table), attribute_tuple_pointers, (void const * const *)attribute_tuples, attrs_count, min_tx_id, &abort_error);
-			for(uint32_t i = 0; i < attrs_count; i++)
-				free(attribute_tuples[i]);
-			free(attribute_tuples);
-			if(abort_error)
-				goto ABORT_ERROR;
-		}
-
-		// (5) owner_to_attributes_idx entries, one per attribute, pointing at each attribute's row
-		for(uint32_t i = 0; i < attrs_count; i++)
-		{
-			rhendb_owner_to_attributes_idx_entry o2aidx_ent = (rhendb_owner_to_attributes_idx_entry){.owner_id = type_id, .rel_pos_in_owner = i, .attributes_tuple_pointer = attribute_tuple_pointers[i]};
-			void* o2aidx_key_tuple = serialize_rhendb_owner_to_attributes_idx_entry(catmgr_p, &o2aidx_ent);
-			int inserted = insert_in_bplus_tree(catmgr_p->owner_to_attributes_idx.root_page_id, o2aidx_key_tuple, &(catmgr_p->owner_to_attributes_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
-			free(o2aidx_key_tuple);
-			if(abort_error)
-				goto ABORT_ERROR;
-			if(!inserted)
-			{
-				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
-				exit(-1);
-			}
-		}
-		free(attribute_tuple_pointers);
-		attribute_tuple_pointers = NULL;
-
-		// (6) name_idx and id_idx entries for the new type, pointing at its types_table row
-		{
-			rhendb_name_idx_entry name_idx_ent = (rhendb_name_idx_entry){.object_type = RHENDB_TYPE, .object_tuple_pointer = type_tuple_pointer};
-			strncpy(name_idx_ent.name, name, 64);
-			void* name_key_tuple = serialize_rhendb_name_idx_entry(catmgr_p, &name_idx_ent);
-			int inserted = insert_in_bplus_tree(catmgr_p->name_idx.root_page_id, name_key_tuple, &(catmgr_p->name_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
-			free(name_key_tuple);
-			if(abort_error)
-				goto ABORT_ERROR;
-			if(!inserted)
-			{
-				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
-				exit(-1);
-			}
-		}
-		{
-			rhendb_id_idx_entry id_idx_ent = (rhendb_id_idx_entry){.object_type = RHENDB_TYPE, .id = type_id, .object_tuple_pointer = type_tuple_pointer};
-			void* id_key_tuple = serialize_rhendb_id_idx_entry(catmgr_p, &id_idx_ent);
-			int inserted = insert_in_bplus_tree(catmgr_p->id_idx.root_page_id, id_key_tuple, &(catmgr_p->id_idx.index_defs), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
-			free(id_key_tuple);
-			if(abort_error)
-				goto ABORT_ERROR;
-			if(!inserted)
-			{
-				printf("BUG in (catalog_manager) :: a catalog b+tree insert failed for an already existing key, this must never happen\n");
-				exit(-1);
-			}
-		}
-
-		// commit the mini transaction and hand back the new type id
-		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
-		write_unlock(&(catmgr_p->catlog_manager_lock));
-		return type_id;
-
-		ABORT_ERROR:;
-		if(attribute_tuple_pointers != NULL)
-			free(attribute_tuple_pointers);
-		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
-	}
-}
-
 // the heavy lifting for dropping an index within an existing mini transaction : delete all of its index_fragments from the
 // clustered index_fragments index using a write iterator, write xmax on all of its attributes, then write xmax on its own
 // row. does nothing if the index is not visible to us. returns 1 if it was dropped, 0 otherwise. reports engine aborts.
@@ -4039,51 +3723,6 @@ static int drop_index_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_
 	ABORT_ERROR:;
 	if(bpi_p != NULL)
 		delete_bplus_tree_iterator(bpi_p, min_tx_id, abort_error);
-	if(attribute_tuple_pointers != NULL)
-		free(attribute_tuple_pointers);
-	return 0;
-}
-
-static int drop_type_simple(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t type_id, const void* min_tx_id, int* abort_error)
-{
-	tuple_pointer* attribute_tuple_pointers = NULL;
-
-	// (1) start at the type, find its own row and remember its tuple_pointer
-	tuple_pointer type_tuple_pointer;
-	rhendb_type* type = get_catalog_object_by_id(catmgr_p, ss_p, RHENDB_TYPE, type_id, 0, &type_tuple_pointer, min_tx_id, abort_error);
-	if(*abort_error)
-		return 0;
-	if(type == NULL) // no such visible type, nothing to drop
-		return 0;
-	free(type);
-
-	// (2) go to all of the type's attributes and write an xmax on each of their rows
-	{
-		uint64_t attrs_count = 0;
-		rhendb_attribute* attrs = get_attributes_for_catalog_object(catmgr_p, ss_p, type_id, 0, 0, &attribute_tuple_pointers, &attrs_count, min_tx_id, abort_error);
-		if(attrs != NULL)
-			free(attrs);
-		if(*abort_error)
-			goto ABORT_ERROR;
-
-		for(uint64_t i = 0; i < attrs_count; i++)
-		{
-			write_xmax_at(catmgr_p, ss_p, attribute_tuple_pointers[i], &(catmgr_p->attributes_table.record_def), min_tx_id, abort_error);
-			if(*abort_error)
-				goto ABORT_ERROR;
-		}
-		free(attribute_tuple_pointers);
-		attribute_tuple_pointers = NULL;
-	}
-
-	// (3) finally write an xmax on the type's own row
-	write_xmax_at(catmgr_p, ss_p, type_tuple_pointer, &(catmgr_p->types_table.record_def), min_tx_id, abort_error);
-	if(*abort_error)
-		goto ABORT_ERROR;
-
-	return 1;
-
-	ABORT_ERROR:;
 	if(attribute_tuple_pointers != NULL)
 		free(attribute_tuple_pointers);
 	return 0;
@@ -4268,38 +3907,6 @@ int drop_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t ta
 	return dropped;
 }
 
-int drop_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t type_id)
-{
-	rage_engine* engine = catmgr_p->catmgr_engine;
-
-	if(!ss_p->has_self_transaction_id)
-	{
-		printf("ISSUE in (catalog_manager) :: drop_type needs a snapshot that has a self transaction id\n");
-		exit(-1);
-	}
-
-	int dropped = 0;
-
-	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
-
-	// retry the whole mini transaction for as long as it aborts
-	while(1)
-	{
-		int abort_error = 0;
-		uint64_t page_latches_to_be_borrowed = 0;
-		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
-
-		dropped = drop_type_simple(catmgr_p, ss_p, type_id, min_tx_id, &abort_error);
-
-		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
-		if(abort_error == 0)
-			break;
-	}
-
-	write_unlock(&(catmgr_p->catlog_manager_lock));
-	return dropped;
-}
-
 // all these are read only, so they run with no mini transaction (min_tx_id is NULL), they only track abort_error and
 // retry the read for as long as it aborts. the returned blobs/arrays/objects are owned by the caller.
 
@@ -4336,13 +3943,13 @@ void* get_catalog_object_by_name_from_catalog(catalog_manager* catmgr_p, const m
 // returns the names of all catalog objects of object_type visible to ss_p as a malloc-ed array of char[64],
 // ordered by name (the name index is ordered by (object_type, name)). writes the count to (*names_count);
 // the caller frees the whole array with a single free(). RHENDB_INDEX is unsupported here on purpose.
-void* get_all_catalog_object_names_by_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, uint64_t* names_count)
+void* get_all_catalog_object_names_by_catalog_object_type(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, catalog_object_type object_type, uint64_t* names_count)
 {
 	// index names are unique only within their table, so there is no meaningful global name listing for indices;
 	// callers must go through get_indices_for_table_from_catalog instead
 	if(object_type == RHENDB_INDEX)
 	{
-		printf("BUG in (catalog_manager) :: get_all_catalog_object_names_by_type does not support RHENDB_INDEX, use get_indices_for_table_from_catalog instead\n");
+		printf("BUG in (catalog_manager) :: get_all_catalog_object_names_by_catalog_object_type does not support RHENDB_INDEX, use get_indices_for_table_from_catalog instead\n");
 		exit(-1);
 	}
 
@@ -4501,4 +4108,34 @@ data_type_info* get_data_type_info_for_rhendb_attribute_from_catalog(catalog_man
 	}
 	read_unlock(&(catmgr_p->catlog_manager_lock));
 	return attribute_data_type_info;
+}
+
+data_type_info* get_data_type_info_for_rhendb_table_partition_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_table_partition* partition)
+{
+	data_type_info* partition_data_type_info = NULL;
+	read_lock(&(catmgr_p->catlog_manager_lock), WRITE_PREFERRING, BLOCKING);
+	while(1)
+	{
+		int abort_error = 0;
+		partition_data_type_info = get_data_type_info_for_rhendb_table_partition(catmgr_p, ss_p, (*partition), NULL, &abort_error);
+		if(abort_error == 0)
+			break;
+	}
+	read_unlock(&(catmgr_p->catlog_manager_lock));
+	return partition_data_type_info;
+}
+
+data_type_info* get_data_type_info_for_rhendb_index_from_catalog(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_index* index)
+{
+	data_type_info* index_data_type_info = NULL;
+	read_lock(&(catmgr_p->catlog_manager_lock), WRITE_PREFERRING, BLOCKING);
+	while(1)
+	{
+		int abort_error = 0;
+		index_data_type_info = get_data_type_info_for_rhendb_index(catmgr_p, ss_p, (*index), NULL, &abort_error);
+		if(abort_error == 0)
+			break;
+	}
+	read_unlock(&(catmgr_p->catlog_manager_lock));
+	return index_data_type_info;
 }
