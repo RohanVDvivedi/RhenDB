@@ -232,6 +232,11 @@ datum numeric_to_primitive_numeral(const data_type_info* dti, const mpd_t* numer
 				(*error_code) = rc;
 				break;
 			}
+			if(compare_uint256(mag, get_bitmask_lower_n_bits_set_uint256(dti->size * CHAR_BIT)) > 0)
+			{
+				(*error_code) = NUMERIC_CONVERSION_UN_REPRESENTABLE;
+				break;
+			}
 			num = (datum){.large_uint_value = mag};
 			break;
 		}
@@ -245,25 +250,29 @@ datum numeric_to_primitive_numeral(const data_type_info* dti, const mpd_t* numer
 				break;
 			}
 			int neg = mpd_isnegative(numeric) && !mpd_iszero(numeric);
+			// a LARGE_INT of N bytes spans [-2^(8N-1), 2^(8N-1)-1]; the sign bit sits at position 8N-1.
+			// max positive magnitude is 2^(8N-1)-1, max negative magnitude is 2^(8N-1) (the lone value -2^(8N-1)).
+			uint32_t signbit_pos = (CHAR_BIT * dti->size) - 1;
 			int256 result;
 			if(!neg)
 			{
-				if(get_bit_from_uint256(mag, 255))
+				if(compare_uint256(mag, get_bitmask_lower_n_bits_set_uint256(signbit_pos)) > 0)
 				{
 					(*error_code) = NUMERIC_CONVERSION_UN_REPRESENTABLE;
 					break;
-				} // >= 2^255 positive
+				}
 				result = (int256){.raw_uint_value = mag};
 			}
 			else
 			{
-				uint256 raw;add_uint256(&raw, bitwise_not_uint256(mag), get_1_uint256()); // two's complement
-				result = (int256){.raw_uint_value = raw};
-				if(get_sign_bit_int256(result) != 1)
+				uint256 max_neg_mag = get_0_uint256(); set_bit_in_uint256(&max_neg_mag, signbit_pos);
+				if(compare_uint256(mag, max_neg_mag) > 0)
 				{
 					(*error_code) = NUMERIC_CONVERSION_UN_REPRESENTABLE;
 					break;
-				} // magnitude > 2^255
+				}
+				uint256 raw; add_uint256(&raw, bitwise_not_uint256(mag), get_1_uint256()); // two's complement over the full 256 bits; low 8N bytes are the stored value
+				result = (int256){.raw_uint_value = raw};
 			}
 			num = (datum){.large_int_value = result};
 			break;
