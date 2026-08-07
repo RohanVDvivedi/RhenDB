@@ -207,7 +207,7 @@ datum numeric_to_primitive_numeral(const data_type_info* dti, const mpd_t* numer
 				(*error_code) = NUMERIC_CONVERSION_UN_REPRESENTABLE;
 				break;
 			}
-			if(v >= get_UINT64_MAX(dti->size))
+			if(v > get_UINT64_MAX(dti->size))
 			{
 				(*error_code) = NUMERIC_CONVERSION_UN_REPRESENTABLE;
 				break;
