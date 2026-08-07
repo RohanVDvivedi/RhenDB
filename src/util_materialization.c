@@ -151,6 +151,7 @@ materialized_numeric materialize_numeric1(const datum uval, const data_type_info
 				{
 					if(!push_lsd_in_materialized_numeric(&mn, buf[i]))
 					{
+						nri.close_digits_stream(&nri);
 						(*error_code) = MATERIALIZED_RESULT_TOO_BIG;
 						deinitialize_materialized_numeric(&mn);
 						return mn;
