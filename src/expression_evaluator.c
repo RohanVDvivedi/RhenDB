@@ -1026,11 +1026,11 @@ static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context*
 		 * in-memory numeric/number. */
 		if(is_tuple_numeric(a) && is_tuple_numeric(b))
 		{
-			if(!can_compare_datum_rhendb(a->type_info.dti_p, b->type_info.dti_p))
-			{
-				*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
-				return 0;
-			}
+			/* Both operands carry numeric type infos, and can_compare_datum_rhendb() returns 1 for ANY
+			 * pair of numerics -- its "both numeric" branch is unconditional. The guard is therefore dead
+			 * on this path, so we skip it and compare directly, saving the call (and its type-name prefix
+			 * checks) on every numeric-vs-numeric comparison. See can_compare_datum_rhendb() in
+			 * function_compare.c: is_numeric_type_info(a) && is_numeric_type_info(b) => 1. */
 			return compare_datum_rhendb(&a->value, a->type_info.dti_p, &b->value, b->type_info.dti_p, tx_from_ctx(ec_p));
 		}
 
@@ -1066,11 +1066,11 @@ static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context*
 			data_type_info scratch;
 			const data_type_info* da = a_ext ? a->type_info.dti_p : plain_sb_dti(a, &scratch);
 			const data_type_info* db = b_ext ? b->type_info.dti_p : plain_sb_dti(b, &scratch);
-			if(!can_compare_datum_rhendb(da, db))
-			{
-				*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
-				return 0;
-			}
+			/* da and db are STRING / BINARY / extended-text / extended-blob type infos, and
+			 * can_compare_datum_rhendb() returns 1 for ANY such pair -- its "both text or blob" branch is
+			 * unconditional (is_text_type_info(STRING) == is_blob_type_info(BINARY) == 1). The guard is
+			 * dead on this path, so we skip it and compare directly, saving the call on every text/blob
+			 * comparison that touches an extended operand. */
 			return compare_datum_rhendb(&a->value, da, &b->value, db, tx);
 		}
 		/* both already in memory (or no engine available): plain byte compare, no engine needed */
