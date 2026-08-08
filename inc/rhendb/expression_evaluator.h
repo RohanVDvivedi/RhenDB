@@ -148,11 +148,19 @@ enum rhendb_expr_eval_error
 //
 // (2) LIFETIME -- THE EXPRESSIONS MUST OUTLIVE THE CONTEXT.
 //
-//     build the sql_expression(s)
-//       -> get_sql_expr_eval_context_for_rhendb(...)
+//     THE INVARIANT, stated once and precisely:
+//       * a context is always built FOR one or more already-existing expressions, and is only ever used
+//         to evaluate/infer THOSE expressions;
+//       * the context's lifespan must be fully CONTAINED WITHIN the lifespan of every expression it is
+//         used with -- create the context strictly after the expressions exist, and destroy it strictly
+//         before any of those expressions is destroyed.
+//       equivalently: expressions outlive the context; the context never outlives its expressions.
+//
+//     build the sql_expression(s)                          // the expression(s) come first ...
+//       -> get_sql_expr_eval_context_for_rhendb(...)       // ... then the context, built around them
 //       -> infer_type_sql_expr() / evaluate_sql_expr(), as many times, on as many expressions, as you like
-//       -> delete_context_p_for_sql_expr_eval_context_for_rhendb(...)
-//       -> delete_sql_expr(...)
+//       -> delete_context_p_for_sql_expr_eval_context_for_rhendb(...)   // context dies first ...
+//       -> delete_sql_expr(...)                            // ... only then may the expression(s) die
 //
 // the variable cache keys its entries on the identifier's BYTES IN MEMORY (address + length), taken
 // straight from the dstring inside the AST node -- that is what makes a variable lookup O(1) with no

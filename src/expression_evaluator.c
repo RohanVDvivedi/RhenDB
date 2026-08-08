@@ -198,6 +198,7 @@ static int et_is_num_or_numeric(expr_type t)
 static expr_type_info* new_type_sized(expr_type t, uint32_t width);
 static uint32_t combined_width_bytes(const expr_type_info* a, const expr_type_info* b);
 static expr_type effective_type(const expr_type_info* ti);
+static data_type_info* static_dti_for(expr_type t, uint32_t width);
 
 static expr_type num_result(expr_type a, expr_type b)
 {
@@ -232,7 +233,7 @@ static expr_type_info* num_result_sized(const expr_type_info* ta, const expr_typ
 	if(res == RHENDB_EXPR_NUMERIC || et_is_float(res))
 		return new_type_sized(res, 0);          /* numeric has no width; float width is implied by the kind */
 
-	uint32_t w = combined_width_bytes(ta, tb);  /* 0 -> unspecified -> widest, i.e. the old behaviour */
+	uint32_t w = combined_width_bytes(ta, tb);  /* 0 -> a side was unspecified -> widest */
 
 	if(res == RHENDB_EXPR_BIT_FIELD)
 	{
@@ -279,7 +280,10 @@ static expr_value* new_val(expr_type t, const sql_expr_eval_context* ec_p)
 	//   - capacity                    : rhendb_concat() reads it alongside buffer
 	// the `value` / `numeric_value` union is ALWAYS written by the caller before it is read.
 	v->type_info.type = t;
-	v->type_info.dti_p = NULL;
+	/* every primitive numeral must carry a data_type_info : default to the widest NULLABLE form of the
+	 * kind. static_dti_for() returns NULL for non-numerals (NUMERIC / STRING / BINARY / containers), which
+	 * keep dti_p NULL. callers that know the real width -- a column read or a cast -- overwrite it right after. */
+	v->type_info.dti_p = static_dti_for(t, 0);
 	v->type_info.should_free_dti_p = 0;
 	v->buffer = NULL;
 	v->capacity = 0;
@@ -309,18 +313,22 @@ static expr_type_info* new_type(expr_type t)
 /* ===================================================================================================
  * WIDTH-PRESERVING NATIVE TYPES
  *
- * a native scalar type may carry a dti_p that records its declared width, so that combining values does
+ * a native scalar type carries a dti_p that records its declared width, so that combining values does
  * not immediately widen everything to the maximum (8-byte int / 32-byte large / 64-bit bit-field).
  * uint(3 bytes) + uint(4 bytes) is a uint of 4 bytes, not of 8.
  *
  * every dti_p used here is either one of the static defaults or a type owned by an input tuple, so it is
  * never freed (should_free_dti_p stays 0) and can never leak.
  *
- * dti_p == NULL simply means "width unspecified" -- literals and booleans leave it NULL -- and is treated
- * as the widest form of that type, which is exactly the old behaviour.
+ * INVARIANT : every primitive numeral (BIT_FIELD / UINT / INT / LARGE_UINT / LARGE_INT / FLOAT / DOUBLE)
+ * ALWAYS carries a non-NULL dti_p -- either the one borrowed from its input tuple, or, when it originates
+ * in the evaluator (a literal or a computed result), the widest NULLABLE default for its kind (new_val()
+ * installs that default; static_dti_for(t, 0) picks it). dti_p == NULL therefore means "not a primitive
+ * numeral" : NUMERIC (its width is dynamic), STRING / BINARY, the containers, and the boolean singletons.
  * =================================================================================================== */
 
-/* declared width of a native type, in BITS for a bit-field and in BYTES otherwise; 0 when unspecified */
+/* declared width of a native type, in BITS for a bit-field and in BYTES otherwise; 0 for a non-native
+ * type_info (NUMERIC / STRING / BINARY / container) whose dti_p is NULL -- a primitive numeral always has one */
 static uint32_t native_width(const expr_type_info* ti)
 {
 	if(ti == NULL || ti->dti_p == NULL) return 0;
@@ -652,23 +660,16 @@ static int ee_materialize_numeric(expr_value* v, const sql_expr_eval_context* ec
 	return RHENDB_EE_OK;
 }
 
-/* build an mpd_t from a native number. integers up to 64 bits are exact; 256-bit and floating
- * operands go through the decimal string of a double, so they are only double-precise. */
+/* build an mpd_t from a native number by delegating to the shared conversion util : integers (native and
+ * 256-bit) are exact, floats go through their faithful decimal. caller releases the result with mpd_del(). */
 static int number_to_mpd(const expr_value* v, mpd_t* out)
 {
-	/* map the expr kind to the tuplestore type that names the same native member, then let the
-	 * shared numeric-conversion util build the mpd_t (returned by value, MPD_STATIC + heap coeff). */
-	const data_type_info* dti;
-	switch(v->type_info.type){
-		case RHENDB_EXPR_BIT_FIELD: dti = BIT_FIELD_NON_NULLABLE[64];  break;
-		case RHENDB_EXPR_UINT:      dti = UINT_NON_NULLABLE[8];        break;
-		case RHENDB_EXPR_INT:       dti = INT_NON_NULLABLE[8];         break;
-		case RHENDB_EXPR_FLOAT:     dti = FLOAT_float_NON_NULLABLE;    break; /* value in .float_value  */
-		case RHENDB_EXPR_DOUBLE:    dti = FLOAT_double_NON_NULLABLE;   break; /* value in .double_value */
-		case RHENDB_EXPR_LARGE_UINT: dti = LARGE_UINT_NON_NULLABLE[32]; break;
-		case RHENDB_EXPR_LARGE_INT:  dti = LARGE_INT_NON_NULLABLE[32];  break;
-		default: return 0;
-	}
+	/* a primitive numeral normally carries its data_type_info (the WIDTH-PRESERVING NATIVE TYPES invariant
+	 * above), which names the exact declared width and which datum member holds the value. the three shared
+	 * compile-time constants (zero / one / minus-one, used by sqltoast for unary minus and increments) are
+	 * the one exception -- they are typed INT with no dti_p -- so fall back to the kind's widest default,
+	 * which represents their small integer value exactly. */
+	const data_type_info* dti = v->type_info.dti_p ? v->type_info.dti_p : static_dti_for(v->type_info.type, 0);
 	int ec = 0;
 	mpd_t r = numeric_from_primitive_numeral(dti, &(v->value), &ec);
 	if(ec) return 0; /* on error the util has already released any resource it acquired */
@@ -747,19 +748,17 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 			case OP_SUB: mpd_qsub(&result, pa, pb, &ctx, &st); break;
 			case OP_MUL: mpd_qmul(&result, pa, pb, &ctx, &st); break;
 			case OP_DIV:
-				mpd_qdiv(&result, pa, pb, &ctx, &st);
-				/* maxcontext (prec ~ MPD_MAX_PREC) attempts an EXACT quotient; a non-terminating
-				 * division would need unbounded digits and fails (NaN, Malloc_error/Division_impossible).
-				 * Fall back to a bounded precision so the quotient rounds to a finite value, the way a
-				 * real DECIMAL engine does, instead of silently yielding NaN. */
-				if(mpd_isnan(&result) && !mpd_isnan(pa) && !mpd_isnan(pb))
-				{
-					mpd_context_t dctx = ctx;
-					dctx.prec = RHENDB_EE_DIV_PREC;   /* fixed working precision (value-, not representation-, dependent) */
-					st = 0;
-					mpd_qdiv(&result, pa, pb, &dctx, &st);
-				}
+			{
+				/* Divide at a precision bounded by the operands' own length (plus guard digits), NOT the
+				 * materialized-numeric context's multi-million-digit maximum. A terminating quotient still
+				 * comes out exact; a non-terminating one rounds to a finite length the way a real DECIMAL
+				 * engine does, instead of trying to emit millions of digits -- which made every inexact
+				 * division (e.g. 1/3) effectively hang. */
+				mpd_context_t dctx = ctx;
+				dctx.prec = pa->digits + pb->digits + RHENDB_EE_DIV_PREC;
+				mpd_qdiv(&result, pa, pb, &dctx, &st);
 				break;
+			}
 			case OP_MOD: mpd_qrem(&result, pa, pb, &ctx, &st); break;
 		}
 		if(oa)
@@ -1414,48 +1413,6 @@ static char* sb_to_cstring(const expr_value* a)
 	return s;
 }
 
-/* fold a run of decimal digits into a 256-bit value (mod 2^256); non-digits are skipped */
-static uint256 accumulate_decimal_uint256(const char* digits, uint32_t ndigits)
-{
-	uint256 acc = get_uint256(0);
-	uint256 ten = get_uint256(10);
-	for(uint32_t i = 0; i < ndigits; i++)
-	{
-		if(digits[i] < '0' || digits[i] > '9') continue;
-		uint256 t; mul_uint256(&t, acc, ten);
-		add_uint256(&acc, t, get_uint256((uint64_t)(digits[i] - '0')));
-	}
-	return acc;
-}
-
-/* a signed decimal integer string -> its 256-bit two's-complement bit pattern */
-static uint256 decimal_str_to_int_bits(const char* str)
-{
-	const char* p = str;
-	int neg = 0;
-	while(*p == ' ' || *p == '\t') p++;
-	if(*p == '+') p++;
-	else if(*p == '-'){ neg = 1; p++; }
-	uint256 bits = accumulate_decimal_uint256(p, (uint32_t)strlen(p));
-	if(neg) sub_uint256(&bits, get_uint256(0), bits);   /* negate (mod 2^256) */
-	return bits;
-}
-
-/* mpd_t -> 256-bit two's-complement bit pattern of its truncated (toward zero) integer part */
-static int numeric_to_int_bits(const mpd_t* m, uint256* out)
-{
-	mpd_t t;
-	if(!ee_mpd_new(&t)) return 0;
-	mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
-	mpd_qtrunc(&t, m, &ctx, &st);                  /* drop the fraction, toward zero */
-	char* s = mpd_qformat(&t, "f", &ctx, &st);     /* plain integer digits, never an exponent */
-	if(s == NULL){ mpd_del(&t); return 0; }
-	*out = decimal_str_to_int_bits(s);
-	mpd_free(s);
-	mpd_del(&t);
-	return 1;
-}
-
 /* trim ASCII whitespace and parse a decimal/scientific numeric string into an initialized mpd_t.
  * returns 1 on success (out set), 0 if the string is not a valid number (out untouched), -1 on OOM.
  * honours '.', 'e'/'E' and sign; "Infinity"/"NaN" parse to the mpd specials. an empty/whitespace-only
@@ -1480,63 +1437,6 @@ static int parse_numeric_string(const char* str, mpd_t* out)
 	if(st & MPD_Conversion_syntax){ mpd_del(out); return 0; }   /* not a valid numeric literal */
 	return 1;
 }
-
-/* store a 256-bit integer bit-pattern into an integer-typed value, narrowing to the target width */
-static void store_int_bits(expr_value* v, expr_type target, uint256 bits)
-{
-	switch(target)
-	{
-		case RHENDB_EXPR_BIT_FIELD:  v->value.bit_field_value  = bits.limbs[0];          break;
-		case RHENDB_EXPR_UINT:       v->value.uint_value       = bits.limbs[0];          break;
-		case RHENDB_EXPR_INT:        v->value.int_value        = (int64_t)bits.limbs[0]; break;
-		case RHENDB_EXPR_LARGE_UINT: v->value.large_uint_value = bits;                   break;
-		case RHENDB_EXPR_LARGE_INT:  v->value.large_int_value  = (int256){ bits };       break;
-		default: break;
-	}
-}
-
-/* narrow a cast integer result to the width its target type declares.
- *
- * without this the cast returns a full-width value while the type says (say) 2 bytes, and the
- * discrepancy is only resolved when the value is stored -- where the tuplestore silently wraps it
- * (70000 into an INT[2] reads back as 4464, with set_element_in_tuple still reporting success).
- * narrowing here makes the value the expression sees identical to the value that will be stored.
- * width 0 means "unspecified", which is the widest form and needs no narrowing. */
-static void narrow_int_to_declared_width(expr_value* v, expr_type kind, uint32_t width)
-{
-	if(width == 0) return;
-	switch(kind)
-	{
-		case RHENDB_EXPR_BIT_FIELD:
-			if(width < 64) v->value.bit_field_value &= ((1ULL << width) - 1ULL);
-			return;
-		case RHENDB_EXPR_UINT:
-			if(width < 8) v->value.uint_value &= ((1ULL << (width * 8)) - 1ULL);
-			return;
-		case RHENDB_EXPR_INT:
-			if(width < 8)
-			{
-				uint32_t sh = 64 - (width * 8);
-				v->value.int_value = (int64_t)(((uint64_t)v->value.int_value) << sh) >> sh;  /* sign-extend */
-			}
-			return;
-		case RHENDB_EXPR_LARGE_UINT:
-			if(width < 32)
-				for(uint32_t b = width; b < 32; b++) set_byte_in_uint256(&(v->value.large_uint_value), b, 0);
-			return;
-		case RHENDB_EXPR_LARGE_INT:
-			if(width < 32)
-			{
-				uint8_t top = get_byte_from_uint256(v->value.large_int_value.raw_uint_value, width - 1);
-				uint8_t fill = (top & 0x80) ? 0xFF : 0x00;                     /* sign-extend */
-				for(uint32_t b = width; b < 32; b++)
-					set_byte_in_uint256(&(v->value.large_int_value.raw_uint_value), b, fill);
-			}
-			return;
-		default: return;
-	}
-}
-
 
 /* plain decimal text of a number/numeric operand, as a malloc'd NUL-terminated string (caller frees with
  * free()). integers (native and 256-bit) are exact; floats and NUMERIC go through an mpd_t and the 'f'
@@ -1609,10 +1509,53 @@ static char* number_to_decimal_cstring(const expr_value* a)
 	}
 }
 
+/* resolve an already-materialized scalar cast source to an mpd_t. a NUMERIC is borrowed (*owns = 0); a
+ * native number or a parsed string builds a fresh mpd into *scratch (*owns = 1, release with mpd_del).
+ * returns 1 on success, 0 on OOM / unsupported source, -1 when a string source is not a number; sets
+ * *error_code on any failure. */
+static int cast_operand_to_mpd(expr_value* a, mpd_t* scratch, const mpd_t** m, int* owns, int* error_code)
+{
+	*owns = 0;
+	if(a->type_info.type == RHENDB_EXPR_NUMERIC){ *m = &(a->numeric_value); return 1; }
+	if(!is_tuple_form(a) && et_is_num(a->type_info.type))
+	{
+		if(!number_to_mpd(a, scratch)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
+		*m = scratch; *owns = 1; return 1;
+	}
+	if(a->type_info.type == RHENDB_EXPR_STRING || a->type_info.type == RHENDB_EXPR_BINARY)
+	{
+		char* s = sb_to_cstring(a);
+		if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
+		int pr = parse_numeric_string(s, scratch);   /* "1.939e5" -> 193900 */
+		free(s);
+		if(pr < 0){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
+		if(pr == 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return -1; }
+		*m = scratch; *owns = 1; return 1;
+	}
+	*error_code = RHENDB_EE_UNSUPPORTED_CAST; return 0;
+}
+
+/* the data_type_info of a cast's integer target : the declared one, or the widest form of the kind when
+ * the cast left the width unspecified. NULL when the target is not an integer kind. */
+static const data_type_info* integer_cast_target_dti(const expr_type_info* to)
+{
+	if(to->dti_p != NULL) return to->dti_p;
+	switch(to->type)
+	{
+		case RHENDB_EXPR_BIT_FIELD:  return BIT_FIELD_NON_NULLABLE[64];
+		case RHENDB_EXPR_UINT:       return UINT_NON_NULLABLE[8];
+		case RHENDB_EXPR_INT:        return INT_NON_NULLABLE[8];
+		case RHENDB_EXPR_LARGE_UINT: return LARGE_UINT_NON_NULLABLE[32];
+		case RHENDB_EXPR_LARGE_INT:  return LARGE_INT_NON_NULLABLE[32];
+		default:                     return NULL;
+	}
+}
+
 static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* a = data;
-	expr_type target = ((const expr_type_info*)to_type)->type;
+	const expr_type_info* to = to_type;
+	expr_type target = to->type;
 
 	/* bring an extended (tuple-form) source down to its scalar representation first */
 	if(is_numeric_operand(a)){ if(ee_materialize_numeric(a, ec_p, error_code)) return NULL; }
@@ -1622,74 +1565,44 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 	int src_is_number  = (!is_tuple_form(a) && et_is_num(a->type_info.type));   /* native bit/int/float */
 	int src_is_sb      = (a->type_info.type == RHENDB_EXPR_STRING || a->type_info.type == RHENDB_EXPR_BINARY);
 
-	/* integer targets : carry the value as a 256-bit two's-complement pattern, then narrow to width.
-	 * this keeps full precision for LARGE_* and avoids the old double round-trip that lost int64 bits. */
+	/* ---- integer target : EXPLICIT casts are STRICT -- the shared util rejects a fractional value or one
+	 *      outside the target's declared range (no silent truncation or wrap) ---- */
 	if(et_is_int(target))
 	{
-		uint256 bits;
-		if(src_is_numeric)
-		{
-			if(!numeric_to_int_bits(&(a->numeric_value), &bits)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-		}
-		else if(src_is_number)
-		{
-			if(et_is_float(a->type_info.type))
-			{
-				mpd_t d;
-				if(!number_to_mpd(a, &d)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-				int ok = numeric_to_int_bits(&d, &bits);
-				mpd_del(&d);
-				if(!ok){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			}
-			else
-				bits = to_i256(a).raw_uint_value;   /* native integer, sign/zero-extended to 256 bits */
-		}
-		else if(src_is_sb)
-		{
-			char* s = sb_to_cstring(a);
-			if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			mpd_t d;
-			int pr = parse_numeric_string(s, &d);   /* parses "1.939e5" as 193900 */
-			free(s);
-			if(pr < 0){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			if(pr == 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL; }   /* not a number */
-			if(!mpd_isfinite(&d)){ mpd_del(&d); *error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL; }   /* inf/NaN has no integer value */
-			int ok = numeric_to_int_bits(&d, &bits);   /* truncate toward zero */
-			mpd_del(&d);
-			if(!ok){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-		}
-		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
+		const data_type_info* tdti = integer_cast_target_dti(to);
+		if(tdti == NULL){ *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
 
+		mpd_t scratch; const mpd_t* m; int owns;
+		if(cast_operand_to_mpd(a, &scratch, &m, &owns, error_code) <= 0) return NULL;
+
+		int ec = 0;
+		datum result = numeric_to_primitive_numeral(tdti, m, &ec);
+		if(owns) mpd_del(&scratch);
+		if(ec != 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL; }
+
+		/* the util already produced a value that fits the target width. carry the declared width when the
+		 * cast named one; otherwise new_val() installed the widest NULLABLE default for the kind. */
 		expr_value* v = new_val(target, ec_p);
-		store_int_bits(v, target, bits);
-		/* the target type may declare a narrower width than the full-width bits we just stored
-		 * (CAST(x AS SMALLINT) is a 2-byte INT). narrow now, so the expression's value is exactly the
-		 * value that will be stored rather than one the tuplestore silently wraps later. */
-		narrow_int_to_declared_width(v, target, native_width((const expr_type_info*)to_type));
-		v->type_info.dti_p = ((const expr_type_info*)to_type)->dti_p;   /* carry the declared width */
+		v->value = result;
+		if(to->dti_p != NULL) v->type_info.dti_p = to->dti_p;
 		v->type_info.should_free_dti_p = 0;
 		return v;
 	}
 
-	/* FLOAT / DOUBLE target */
+	/* ---- FLOAT / DOUBLE target : a native number converts to double directly (exact IEEE rounding); a
+	 *      numeric / string goes through an mpd_t ---- */
 	if(et_is_float(target))
 	{
 		double d;
-		if(src_is_numeric)     d = mpd_to_double(&(a->numeric_value));
-		else if(src_is_number) d = to_dbl(a);
-		else if(src_is_sb)
+		if(src_is_number)
+			d = to_dbl(a);
+		else
 		{
-			char* s = sb_to_cstring(a);
-			if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			mpd_t m;
-			int pr = parse_numeric_string(s, &m);
-			free(s);
-			if(pr < 0){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			if(pr == 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL; }   /* not a number */
-			d = mpd_to_double(&m);   /* inf/NaN are valid floating-point values */
-			mpd_del(&m);
+			mpd_t scratch; const mpd_t* m; int owns;
+			if(cast_operand_to_mpd(a, &scratch, &m, &owns, error_code) <= 0) return NULL;
+			d = mpd_to_double(m);   /* inf/NaN are valid floating-point values */
+			if(owns) mpd_del(&scratch);
 		}
-		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
 		expr_value* v = new_val(target, ec_p); write_flt(v, target, d); return v;
 	}
 
