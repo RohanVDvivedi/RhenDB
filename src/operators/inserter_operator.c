@@ -137,6 +137,7 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 			continue; // leave the column NULL
 
 		const data_type_info* col_dti = inputs->partition_tuple_def->type_info->containees[i].al.type_info;
+		const data_type_info* src_dti =  get_type_info_for_element_from_tuple_def(inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1]);
 
 		if(is_primitive_numeral_type_info(col_dti))
 		{
@@ -172,7 +173,7 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 		if(is_numeric_type_info(col_dti))
 		{
 			int mrc = 0;
-			materialized_numeric m = materialize_numeric1(src, col_dti, tx, &mrc);
+			materialized_numeric m = materialize_numeric1(src, src_dti, tx, &mrc);
 			if(mrc)
 			{
 				for(uint32_t p = 0; p < (*ext_col_data_size); p++)
@@ -206,7 +207,7 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 		else // text / blob / jsonb
 		{
 			uint32_t len = 0, cap = 0; int mrc = 0;
-			char* bytes = materialize_tb(src, col_dti, tx, &len, &cap, &mrc);
+			char* bytes = materialize_tb(src, src_dti, tx, &len, &cap, &mrc);
 			if(mrc)
 			{
 				for(uint32_t p = 0; p < (*ext_col_data_size); p++)
@@ -347,7 +348,8 @@ static void execute(operator* o)
 			if(get_tuple_size(inputs->partition_tuple_def, heap_record_clone) > (0.3 * engine->pam_p->pas.page_size))
 			{
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("record_too_big"));
-				engine->mark_sub_transaction_aborted(engine->context, min_tx_id, -5001);
+				abort_error = -5001;
+				engine->mark_sub_transaction_aborted(engine->context, min_tx_id, abort_error);
 				should_retry = 0;
 				goto ABORT_ERROR;
 			}
