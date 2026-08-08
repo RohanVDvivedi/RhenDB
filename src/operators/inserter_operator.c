@@ -155,7 +155,11 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 			exit(-1);
 		}
 
-		set_element_in_tuple(inputs->partition_tuple_def, STATIC_POSITION(i), record, EMPTY_DATUM, UINT32_MAX);
+		while(!set_element_in_tuple(inputs->partition_tuple_def, STATIC_POSITION(i), record, EMPTY_DATUM, record_capacity - record_size))
+		{
+			record_capacity *= 2;
+			record = realloc(record, record_capacity);
+		}
 		record_size = get_tuple_size(inputs->partition_tuple_def, record);
 
 		extended_column_data e = {
