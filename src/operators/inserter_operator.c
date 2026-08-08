@@ -10,7 +10,17 @@
 
 #include<rhendb/nullable_type_info_maker.h>
 
+#include<tupleindexer/heap_page/heap_page.h>
+#include<tupleindexer/heap_table/heap_table.h>
+#include<tupleindexer/utils/heap_table_accumulative_notifier.h>
+
 #include<stdlib.h>
+
+// heap_table_accumulative_notifier: accumulate stale (page_id, unused_space) entries and only actually
+// fix them in the heap_table once at least FIX_THRESHOLD have piled up (write-amplification control).
+// CAPACITY is the ceiling the notifier is allowed to hold before we must drain it.
+#define HTAN_CAPACITY       50
+#define HTAN_FIX_THRESHOLD  25
 
 /*
 	heap table insertion operator
@@ -29,6 +39,13 @@ struct input_values
 
 	const tuple_def* partition_tuple_def;
 
+	// heap_table free-space defs for the partition's heap (record_def == partition_tuple_def)
+	heap_table_tuple_defs httd;
+
+	// accumulative notifiers: one for the partition's heap table, one for its blob store.
+	heap_table_accumulative_notifier heap_htan;
+	heap_table_accumulative_notifier blob_htan;
+
 	int output_flags; // same flags as table_operator_output_type.h
 	const tuple_def* output_tuple_def; // will remain set to NULL, if output_flags is 0
 
@@ -36,9 +53,114 @@ struct input_values
 	transaction* tx;
 };
 
+typedef struct extended_column_data extended_column_data;
+struct extended_column_data
+{
+	uint32_t index; // index of the attribute in heap row
+
+	// both will be non-NULL if they used even a single byte on the blob store of the table
+	tuple_pointer head_chunk_pointer;
+	tuple_pointer tail_chunk_pointer;
+
+	uint64_t written_size; // total_size - written_size are values pending to be written
+
+	uint64_t total_size;
+
+	// char* for blob, text and uint64_t* numeric
+	void* value;
+};
+
+static void fix_unused_space_entries_after_insertions(rage_engine* engine, heap_table_accumulative_notifier* htan_p, const heap_table_tuple_defs* httd_p)
+{
+	if(get_notification_count_for_heap_table_accumulative_notifier(htan_p) < HTAN_FIX_THRESHOLD)
+		return;
+
+	uint64_t page_latches_to_be_borrowed = 0;
+	int abort_error = 0;
+	void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
+
+	uint64_t root_page_id, page_id;
+	uint32_t unused_space;
+	while(pop_from_heap_table_accumulative_notifier(htan_p, &root_page_id, &unused_space, &page_id))
+	{
+		// do this in a separate mini transaction, even if it fail we will be just fine
+		uint64_t page_latches_to_be_borrowed = 0;
+		int abort_error = 0;
+		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
+
+		fix_unused_space_in_heap_table(root_page_id, unused_space, page_id, httd_p, engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed); // no lfushing needed
+	}
+}
+
+// builds the partition heap record for one input tuple, returning it (malloc'd, caller frees), or NULL
+// on failure:
+//   - position 0 is the mvcc header, stamped with this transaction's id as xmin (xmax NULL = live)
+//   - positions 1..n-1 are copied from the input tuple through the source positional accessors
+// BASIC VERSION: assumes every partition attribute is inline (its value fits in the heap tuple). An
+// extended (text/blob/numeric) attribute needs its prefix set here and its overflow appended to the
+// blob store after the heap insert -- that is the next step and is called out below.
+static void* build_heap_record(input_values* inputs, const void* input_tuple, extended_column_data** ext_col_data, uint32_t* ext_col_data_size)
+{
+	(*ext_col_data_size) = 0;
+	(*ext_col_data) = NULL;
+
+	uint32_t record_size = get_minimum_tuple_size(inputs->partition_tuple_def);
+	uint64_t record_capacity = record_size;
+	void* record = malloc(capacity);
+	init_tuple(inputs->partition_tuple_def, record);
+
+	// (0) -> mvcc header
+	{
+		tuple_def mvcc_def;
+		initialize_tuple_def(&mvcc_def, (data_type_info*)(inputs->partition_tuple_def->type_info->containees[0].al.type_info));
+
+		mvcc_header hdr = (mvcc_header){0};
+		hdr.is_xmin_NULL = 0;
+		hdr.xmin.transaction_id = inputs->tx->snapshot->self_transaction_id;
+		hdr.xmin.is_committed = 0; hdr.xmin.is_aborted = 0;
+		hdr.is_xmax_NULL = 1;
+
+		char mvcc_buf[sizeof(hdr)];
+		init_tuple(&mvcc_def, mvcc_buf);
+		write_mvcc_header(mvcc_buf, &mvcc_def, &hdr);
+
+		while(!set_element_in_tuple(inputs->partition_tuple_def, STATIC_POSITION(0), record, &(datum){.tuple_value = mvcc_buf}, record_capacity - record_size))
+		{
+			record_capacity *= 2;
+			record = realloc(record, record_capacity);
+		}
+		record_size = get_tuple_size(inputs->partition_tuple_def, record);
+	}
+
+	// (1..n-1) copy the source attributes through the positional accessors; skip / write NULL for absent
+	// add 1 entry in ext_col_data and write 2 page worth of bytes in it, and preserve the head and tail chunk pointers
+	// for now store in 20 bytes in the record, we will optimize this later
+	for(uint32_t i = 1; i < inputs->partition_tuple_def->type_info->element_count; i++)
+	{
+		datum src;
+		if(!get_value_from_element_from_tuple(&src, inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i - 1], input_tuple))
+			src = (*NULL_DATUM);
+
+		// NOTE: extended attributes would instead get a prefix here and be blob-appended after insert.
+		while(!set_element_in_tuple(inputs->partition_tuple_def, STATIC_POSITION(i), record, &src, record_capacity - record_size))
+		{
+			record_capacity *= 2;
+			record = realloc(record, record_capacity);
+		}
+		record_size = get_tuple_size(inputs->partition_tuple_def, record);
+	}
+
+	return record;
+}
+
 static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
+
+	// this function stores everything here in this persistent acid engine
+	rage_engine* engine = &(inputs->tx->rdb->persistent_acid_rage_engine);
 
 	while(1)
 	{
@@ -55,40 +177,127 @@ static void execute(operator* o)
 			return ;
 		}
 
-		if(tuple != NULL)
+		if(tuple == NULL)
+			break;
+
+		extended_column_data* ext_col_data = NULL;
+		uint32_t ext_col_data_size = 0;
+		void* heap_record = build_heap_record_without_extensions(inputs, tuple, &ext_col_data, &ext_col_data_size); // numeric -> sign_bits and exponent are populated here
+
+		int should_retry = 1;
+		while(should_retry)
 		{
-			// open a mini transaction
-			// need to do simple basic projections, let this be done by me OR expect the text is always text, and numeric is always numeric, and so on and projections are not needed
-			// compute how many prefix bytes will we need for each one of the extended attributes of partition_tuple_def, this computation will be done by me OR just make a wild guess and let prefix bytes be persistent_engine page size * 0.3 and subtract the basic min size and divide to have limited number of bytes in each minus the 20 bytes for the meta data of each field and divide by 5 five for the numerics
-			// construct all prefix containing heap table tuple, containing atmost 1 additonal page for each one of the extended attribute in it's blob store
-			// do the real projection of simple primitive types add attributes, skip the nulls, and set the prefix of the rest extended ones, do materialize the extended ones though and keep the pointers handy
-			// insert this heap table tuple, with it's fixed heap blob tuple pointer
-			// append all the remaining extended bytes from the extended attributes such that the head tuple pointers are left as is
-			// keep the heap table pointer handy we might need it to produce output
-			// now register the register_inserted_tuple_pointer to the transaction struct, right before commit
-			// commit the mini transaction
-			// in for loop now, append all the remaining extended bytes from the extended attributes such that the head tuple pointers are left as is
-			// each of this loop does complete insert in each single mini transaction and commits at the end
-			if(inputs->output_flags != 0)
+			uint64_t page_latches_to_be_borrowed = 0;
+			int abort_error = 0;
+			void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
+
+			// build the heap record for this input tuple (mvcc header + mapped attributes)
+			build_heap_record_with_prefix_bytes(inputs, tuple, heap_record, ext_col_data, ext_col_data_size, min_tx_id, &abort_error);
+			if(heap_record == NULL)
 			{
-				void* output_tuple = NULL;
-
-				// project the heap table tuple and the tuple pointer and table_id and partition_id into the output_tuple
-				// null objects in the heap table tuple should be skipped
-
-				int produced = produce_tuple_from_operator(o, output_tuple);
-				free(output_tuple);
-				if(!produced)
-				{
-					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
-					return ;
-				}
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_build_record"));
+				return ;
 			}
 
-			// finally free the heap table tuple that we kept handy
-		}
-		else
+			tuple_pointer tptr = get_NULL_tuple_pointer(&(engine->pam_p->pas));
+
+			// 1. find (or allocate) a heap page with room, insert the record, note the (page_id, index) pointer
+			uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(inputs->partition_tuple_def->size_def), heap_record);
+
+			int is_new_page = 0;
+			uint32_t unused_space_in_entry = 0;
+			persistent_page ppage = find_heap_page_with_enough_unused_space_from_heap_table(inputs->insertion_table_partition.heap_root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->heap_htan)), &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
+			if(abort_error)
+				goto ABORT_ERROR;
+
+			if(is_persistent_page_NULL(&ppage, engine->pam_p))
+			{
+				ppage = get_new_heap_page_with_write_lock(&(engine->pam_p->pas), inputs->partition_tuple_def, engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR;
+				is_new_page = 1;
+			}
+
+			uint32_t possible_insertion_index = 0;
+			uint32_t tuple_index = insert_in_heap_page(&ppage, heap_record, &possible_insertion_index, inputs->partition_tuple_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_id, &abort_error);
+			if(abort_error)
+				goto ABORT_ERROR;
+			if(tuple_index == INVALID_TUPLE_INDEX)   // record too big for even a fresh heap page
+			{
+				printf("FAILED (inserter) :: record too large for a heap page\n");
+				should_retry = 0;
+				goto ABORT_ERROR;
+			}
+			tptr = (tuple_pointer){.page_id = ppage.page_id, .tuple_index = tuple_index};
+
+			// 2. a fresh page must be tracked (reads the page, so before releasing the lock)
+			if(is_new_page)
+			{
+				track_unused_space_in_heap_table(inputs->insertion_table_partition.heap_root_page_id, &ppage, &(inputs->httd), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR;
+			}
+
+			// 3. release the page (sets ppage back to NULL). The now-stale free-space entries were pushed
+			//    to inputs->heap_htan during the search; they are fixed later, outside this mini transaction.
+			release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
+			if(abort_error)
+				goto ABORT_ERROR;
+
+			// 4. register the inserted tuple_pointer so scans skip it, then commit the insert mini transaction
+			register_inserted_tuple_pointer(inputs->tx, tptr);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 1 /* flush/commit */, NULL, 0, &page_latches_to_be_borrowed);
 			break;
+
+			ABORT_ERROR:
+			if(is_persistent_page_NULL(&ppage))
+				release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
+
+			if(should_retry == 0)
+				// kill with abort error and exit
+
+			continue;
+		}
+
+		// 5. now that the insert mini transaction is committed, opportunistically fix the accumulated
+		//    stale free-space entries -- in their OWN mini transaction(s), outside this insert, and only
+		//    once enough have piled up. Best effort: an abort here is fine, we just try again later.
+		fix_unused_space_entries_after_insertions(engine, &(inputs->heap_htan), &(inputs->httd));
+
+		// write the remaining bytes from ext_col_data, each in it's own transaction
+		for(uint32_t i = 0; i < ext_col_data_size; i++)
+		{
+
+		}
+
+		if(ext_col_data != NULL)
+		{
+			free(ext_col_data);
+			ext_col_data = NULL;
+		}
+
+		// (blob store, once extended attributes are written:)
+		fix_unused_space_entries_after_insertions(engine, &(inputs->blob_htan), &(engine->bstd.httd));
+
+		// 6. optionally emit the inserted tuple's identity + attributes for a chained operator
+		if(inputs->output_flags != 0)
+		{
+			void* output_tuple = NULL;
+			// TODO: project { table_id, partition_id, tuple_pointer=tptr, heap_tuple=heap_record }
+			// into output_tuple per inputs->output_flags (skipping NULLs in the heap tuple).
+			int produced = produce_tuple_from_operator(o, output_tuple);
+			free(output_tuple);
+			if(!produced)
+			{
+				free(heap_record);
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+				return ;
+			}
+		}
+
+		free(heap_record);
+		continue;
 	}
 
 	return ;
@@ -124,6 +333,11 @@ static void free_resources(operator* o)
 		free((void*)(inputs->output_tuple_def));
 		inputs->output_tuple_def = NULL;
 	}
+
+	// drain/destroy the two accumulative notifiers and the heap_table defs
+	deinitialize_heap_table_accumulative_notifier(&(inputs->heap_htan));
+	deinitialize_heap_table_accumulative_notifier(&(inputs->blob_htan));
+	deinit_heap_table_tuple_definitions(&(inputs->httd));
 
 	if(inputs->partition_tuple_def != NULL)
 	{
@@ -164,7 +378,11 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 
 	operator_resource_counter result = {.job_counter = 1};
 	if(o == NULL)
+	{
+		// counting pass: nothing is stored on `o`, so don't hold any allocations
+		// (partition_type_info / partition_tuple_def are pre-existing leaks on this path -- see note)
 		return result;
+	}
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -261,6 +479,14 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 		.output_tuple_def = output_tuple_def,
 		.tx = tx,
 	};
+
+	// all heap_table-specific structs are initialized after `inputs` exists, directly on it:
+	// the partition heap-table free-space defs and the two accumulative notifiers (heap + blob store),
+	// both drained (fixed) at HTAN_FIX_THRESHOLD and holding up to HTAN_CAPACITY entries.
+	input_values* inputs = o->inputs;
+	init_heap_table_tuple_definitions(&(inputs->httd), &(tx->rdb->persistent_acid_rage_engine.pam_p->pas), partition_tuple_def);
+	initialize_heap_table_accumulative_notifier(&(inputs->heap_htan), HTAN_CAPACITY);
+	initialize_heap_table_accumulative_notifier(&(inputs->blob_htan), HTAN_CAPACITY);
 
 	return result;
 }
