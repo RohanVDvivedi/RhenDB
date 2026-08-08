@@ -14,13 +14,13 @@
 #include<tupleindexer/heap_table/heap_table.h>
 #include<tupleindexer/utils/heap_table_accumulative_notifier.h>
 
-#include<stdlib.h>
+#include<tuplelargetypes/blob_extended.h>
+#include<tuplelargetypes/text_extended.h>
+#include<tuplelargetypes/numeric_extended.h>
 
-// heap_table_accumulative_notifier: accumulate stale (page_id, unused_space) entries and only actually
-// fix them in the heap_table once at least FIX_THRESHOLD have piled up (write-amplification control).
-// CAPACITY is the ceiling the notifier is allowed to hold before we must drain it.
-#define HTAN_CAPACITY       50
-#define HTAN_FIX_THRESHOLD  25
+#include<rhendb/util_materialization.h>
+
+#include<stdlib.h>
 
 /*
 	heap table insertion operator
@@ -64,54 +64,48 @@ struct extended_column_data
 
 	uint64_t written_size; // total_size - written_size are values pending to be written
 
-	uint64_t total_size;
+	uint64_t total_size; // in bytes for text/blob/jsonb, in base-10^12 digits for numeric
+
+	int is_numeric; // picks the write iterator: digit_write_iterator vs binary_write_iterator
 
 	// char* for blob, text and uint64_t* numeric
 	void* value;
 };
+
+#define HTAN_CAPACITY       50
+#define HTAN_FIX_THRESHOLD  25
 
 static void fix_unused_space_entries_after_insertions(rage_engine* engine, heap_table_accumulative_notifier* htan_p, const heap_table_tuple_defs* httd_p)
 {
 	if(get_notification_count_for_heap_table_accumulative_notifier(htan_p) < HTAN_FIX_THRESHOLD)
 		return;
 
-	uint64_t page_latches_to_be_borrowed = 0;
-	int abort_error = 0;
-	void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
-
 	uint64_t root_page_id, page_id;
 	uint32_t unused_space;
 	while(pop_from_heap_table_accumulative_notifier(htan_p, &root_page_id, &unused_space, &page_id))
 	{
-		// do this in a separate mini transaction, even if it fail we will be just fine
+		// do this in a separate mini transaction, even if it fails we will be just fine
 		uint64_t page_latches_to_be_borrowed = 0;
 		int abort_error = 0;
 		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
 
 		fix_unused_space_in_heap_table(root_page_id, unused_space, page_id, httd_p, engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
 
-		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed); // no lfushing needed
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 	}
 }
 
-// builds the partition heap record for one input tuple, returning it (malloc'd, caller frees), or NULL
-// on failure:
-//   - position 0 is the mvcc header, stamped with this transaction's id as xmin (xmax NULL = live)
-//   - positions 1..n-1 are copied from the input tuple through the source positional accessors
-// BASIC VERSION: assumes every partition attribute is inline (its value fits in the heap tuple). An
-// extended (text/blob/numeric) attribute needs its prefix set here and its overflow appended to the
-// blob store after the heap insert -- that is the next step and is called out below.
-static void* build_heap_record(input_values* inputs, const void* input_tuple, extended_column_data** ext_col_data, uint32_t* ext_col_data_size)
+static void* build_heap_record_without_extensions(input_values* inputs, const void* input_tuple, extended_column_data** ext_col_data, uint32_t* ext_col_data_size)
 {
 	(*ext_col_data_size) = 0;
-	(*ext_col_data) = NULL;
+	(*ext_col_data) = malloc(sizeof(extended_column_data) * inputs->partition_tuple_def->type_info->element_count);
 
+	uint64_t record_capacity = inputs->tx->rdb->persistent_acid_rage_engine.pam_p->pas.page_size;
 	uint32_t record_size = get_minimum_tuple_size(inputs->partition_tuple_def);
-	uint64_t record_capacity = record_size;
-	void* record = malloc(capacity);
+	void* record = malloc(record_capacity);
 	init_tuple(inputs->partition_tuple_def, record);
 
-	// (0) -> mvcc header
+	// (0) mvcc header
 	{
 		tuple_def mvcc_def;
 		initialize_tuple_def(&mvcc_def, (data_type_info*)(inputs->partition_tuple_def->type_info->containees[0].al.type_info));
@@ -122,7 +116,7 @@ static void* build_heap_record(input_values* inputs, const void* input_tuple, ex
 		hdr.xmin.is_committed = 0; hdr.xmin.is_aborted = 0;
 		hdr.is_xmax_NULL = 1;
 
-		char mvcc_buf[sizeof(hdr)];
+		char mvcc_buf[sizeof(mvcc_header)];
 		init_tuple(&mvcc_def, mvcc_buf);
 		write_mvcc_header(mvcc_buf, &mvcc_def, &hdr);
 
@@ -134,25 +128,161 @@ static void* build_heap_record(input_values* inputs, const void* input_tuple, ex
 		record_size = get_tuple_size(inputs->partition_tuple_def, record);
 	}
 
-	// (1..n-1) copy the source attributes through the positional accessors; skip / write NULL for absent
-	// add 1 entry in ext_col_data and write 2 page worth of bytes in it, and preserve the head and tail chunk pointers
-	// for now store in 20 bytes in the record, we will optimize this later
+	transaction* tx = inputs->tx;
+
 	for(uint32_t i = 1; i < inputs->partition_tuple_def->type_info->element_count; i++)
 	{
 		datum src;
-		if(!get_value_from_element_from_tuple(&src, inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i - 1], input_tuple))
-			src = (*NULL_DATUM);
+		if(!get_value_from_element_from_tuple(&src, inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1], input_tuple) || is_datum_NULL(&src))
+			continue; // leave the column NULL
 
-		// NOTE: extended attributes would instead get a prefix here and be blob-appended after insert.
-		while(!set_element_in_tuple(inputs->partition_tuple_def, STATIC_POSITION(i), record, &src, record_capacity - record_size))
+		const data_type_info* col_dti = inputs->partition_tuple_def->type_info->containees[i].al.type_info;
+
+		if(is_primitive_numeral_type_info(col_dti))
 		{
-			record_capacity *= 2;
-			record = realloc(record, record_capacity);
+			while(!set_element_in_tuple_from_tuple(inputs->partition_tuple_def, STATIC_POSITION(i), record, inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1], input_tuple, record_capacity - record_size))
+			{
+				record_capacity *= 2;
+				record = realloc(record, record_capacity);
+			}
+			record_size = get_tuple_size(inputs->partition_tuple_def, record);
+			continue;
 		}
+
+		if(!is_extended_type_info(col_dti))
+		{
+			printf("BUG (inserter) :: attribute %u is neither primitive-numeral nor extended\n", i);
+			exit(-1);
+		}
+
+		set_element_in_tuple(inputs->partition_tuple_def, STATIC_POSITION(i), record, EMPTY_DATUM, UINT32_MAX);
 		record_size = get_tuple_size(inputs->partition_tuple_def, record);
+
+		extended_column_data e = {
+			.index = i,
+			.head_chunk_pointer = get_NULL_tuple_pointer(&(tx->rdb->persistent_acid_rage_engine.pam_p->pas)),
+			.tail_chunk_pointer = get_NULL_tuple_pointer(&(tx->rdb->persistent_acid_rage_engine.pam_p->pas)),
+			.written_size = 0
+		};
+
+		if(is_numeric_type_info(col_dti))
+		{
+			int mrc = 0;
+			materialized_numeric m = materialize_numeric1(src, col_dti, tx, &mrc);
+			if(mrc)
+			{
+				for(uint32_t p = 0; p < (*ext_col_data_size); p++)
+					free((*ext_col_data)[p].value);
+				free(*ext_col_data);
+				(*ext_col_data) = NULL;
+				(*ext_col_data_size) = 0;
+				free(record);
+				return NULL;
+			}
+
+			numeric_sign_bits sign_bits; int16_t exponent;
+			get_sign_bits_and_exponent_for_materialized_numeric(&m, &sign_bits, &exponent);
+			set_sign_bits_and_exponent_for_numeric(sign_bits, exponent, record, inputs->partition_tuple_def, STATIC_POSITION(i));
+			record_size = get_tuple_size(inputs->partition_tuple_def, record);
+
+			uint32_t digit_count = get_digits_count_for_materialized_numeric(&m);
+			if(digit_count == 0)
+			{
+				deinitialize_materialized_numeric(&m);
+				continue; // sign+exponent fully describe it, nothing to stream
+			}
+
+			uint64_t* digits = malloc(sizeof(uint64_t) * digit_count);
+			for(uint32_t i = 0; i < digit_count; i++)
+				digits[i] = get_nth_digit_from_materialized_numeric(&m, i);
+			deinitialize_materialized_numeric(&m);
+
+			e.is_numeric = 1; e.total_size = digit_count; e.value = digits;
+		}
+		else // text / blob / jsonb
+		{
+			uint32_t len = 0, cap = 0; int mrc = 0;
+			char* bytes = materialize_tb(src, col_dti, tx, &len, &cap, &mrc);
+			if(mrc)
+			{
+				for(uint32_t p = 0; p < (*ext_col_data_size); p++)
+					free((*ext_col_data)[p].value);
+				free(*ext_col_data);
+				(*ext_col_data) = NULL;
+				(*ext_col_data_size) = 0;
+				free(record);
+				return NULL;
+			}
+			e.is_numeric = 0; e.total_size = len; e.value = bytes;
+		}
+
+		(*ext_col_data)[(*ext_col_data_size)++] = e;
 	}
 
 	return record;
+}
+
+#define PREFIX_BYTES   20
+#define PHASE2_BYTES   200
+
+static void build_heap_record_with_prefix_bytes(input_values* inputs, void* record, extended_column_data* ext_col_data, uint32_t ext_col_data_size, const void* min_tx_id, int* abort_error)
+{
+	rage_engine* engine = &(inputs->tx->rdb->persistent_acid_rage_engine);
+
+	for(uint32_t k = 0; k < ext_col_data_size; k++)
+	{
+		extended_column_data* e = &(ext_col_data[k]);
+		e->written_size = 0;
+
+		uint64_t prefix_size = e->is_numeric ? (PREFIX_BYTES / BYTES_PER_NUMERIC_DIGIT) : PREFIX_BYTES;
+		prefix_size = min(prefix_size, e->total_size);
+
+		uint64_t limit = e->is_numeric ? (PHASE2_BYTES / BYTES_PER_NUMERIC_DIGIT) : PHASE2_BYTES;
+		limit = min(limit, e->total_size);
+
+		if(e->is_numeric)
+		{
+			digit_write_iterator* it = get_new_digit_write_iterator(record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
+			while(e->written_size < limit)
+			{
+				uint32_t w = append_to_digit_write_iterator(it, ((uint64_t*)e->value) + e->written_size, (uint32_t)(limit - e->written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->blob_htan)), min_tx_id, abort_error);
+				if(*abort_error)
+				{
+					delete_digit_write_iterator(it, min_tx_id, abort_error);
+					return;
+				}
+				if(w == 0)
+					break;
+				e->written_size += w;
+			}
+			e->head_chunk_pointer = it->extension_head;
+			e->tail_chunk_pointer = it->extension_tail;
+			delete_digit_write_iterator(it, min_tx_id, abort_error);
+			if(*abort_error)
+				return;
+		}
+		else
+		{
+			binary_write_iterator* it = get_new_binary_write_iterator(record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
+			while(e->written_size < limit)
+			{
+				uint32_t w = append_to_binary_write_iterator(it, (const char*)e->value + e->written_size, (uint32_t)(limit - e->written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->blob_htan)), min_tx_id, abort_error);
+				if(*abort_error)
+				{
+					delete_binary_write_iterator(it, min_tx_id, abort_error);
+					return;
+				}
+				if(w == 0)
+					break;
+				e->written_size += w;
+			}
+			e->head_chunk_pointer = it->extension_head;
+			e->tail_chunk_pointer = it->extension_tail;
+			delete_binary_write_iterator(it, min_tx_id, abort_error);
+			if(*abort_error)
+				return;
+		}
+	}
 }
 
 static void execute(operator* o)
@@ -182,34 +312,47 @@ static void execute(operator* o)
 
 		extended_column_data* ext_col_data = NULL;
 		uint32_t ext_col_data_size = 0;
-		void* heap_record = build_heap_record_without_extensions(inputs, tuple, &ext_col_data, &ext_col_data_size); // numeric -> sign_bits and exponent are populated here
+		void* heap_record = build_heap_record_without_extensions(inputs, tuple, &ext_col_data, &ext_col_data_size); // numeric -> sign_bits and exponent are also populated here
+		if(heap_record == NULL)
+		{
+			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("insertion_failed_materialization"));
+			return;
+		}
+
+		tuple_pointer tptr = get_NULL_tuple_pointer(&(engine->pam_p->pas));
 
 		int should_retry = 1;
 		while(should_retry)
 		{
+			// clone heap record base, into a static/fixed insertable heap_record
+			void* heap_record_clone = malloc(engine->pam_p->pas.page_size);
+			memory_move(heap_record_clone, heap_record, get_tuple_size(inputs->partition_tuple_def, heap_record));
+
 			uint64_t page_latches_to_be_borrowed = 0;
 			int abort_error = 0;
 			void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
 
-			// build the heap record for this input tuple (mvcc header + mapped attributes)
-			build_heap_record_with_prefix_bytes(inputs, tuple, heap_record, ext_col_data, ext_col_data_size, min_tx_id, &abort_error);
-			if(heap_record == NULL)
+			// make it permanent with valid head_chunk pointers, if they are needed
+			build_heap_record_with_prefix_bytes(inputs, heap_record_clone, ext_col_data, ext_col_data_size, min_tx_id, &abort_error);
+			if(abort_error)
+				goto ABORT_ERROR;
+
+			if(get_tuple_size(inputs->partition_tuple_def, heap_record_clone) > (0.3 * engine->pam_p->pas.page_size))
 			{
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_build_record"));
-				return ;
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("record_too_big"));
+				engine->mark_sub_transaction_aborted(engine->context, min_tx_id, -5001);
+				goto ABORT_ERROR;
 			}
 
-			tuple_pointer tptr = get_NULL_tuple_pointer(&(engine->pam_p->pas));
+			// find the right amount of space this record will need
+			uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(inputs->partition_tuple_def->size_def), heap_record_clone);
 
-			// 1. find (or allocate) a heap page with room, insert the record, note the (page_id, index) pointer
-			uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(inputs->partition_tuple_def->size_def), heap_record);
-
+			// find the right page to insert this heap_record_clone it into
 			int is_new_page = 0;
 			uint32_t unused_space_in_entry = 0;
 			persistent_page ppage = find_heap_page_with_enough_unused_space_from_heap_table(inputs->insertion_table_partition.heap_root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->heap_htan)), &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR;
-
 			if(is_persistent_page_NULL(&ppage, engine->pam_p))
 			{
 				ppage = get_new_heap_page_with_write_lock(&(engine->pam_p->pas), inputs->partition_tuple_def, engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
@@ -218,19 +361,14 @@ static void execute(operator* o)
 				is_new_page = 1;
 			}
 
+			// insert tuple on the page, this would surely not fail
 			uint32_t possible_insertion_index = 0;
-			uint32_t tuple_index = insert_in_heap_page(&ppage, heap_record, &possible_insertion_index, inputs->partition_tuple_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_id, &abort_error);
+			uint32_t tuple_index = insert_in_heap_page(&ppage, heap_record_clone, &possible_insertion_index, inputs->partition_tuple_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_id, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR;
-			if(tuple_index == INVALID_TUPLE_INDEX)   // record too big for even a fresh heap page
-			{
-				printf("FAILED (inserter) :: record too large for a heap page\n");
-				should_retry = 0;
-				goto ABORT_ERROR;
-			}
 			tptr = (tuple_pointer){.page_id = ppage.page_id, .tuple_index = tuple_index};
 
-			// 2. a fresh page must be tracked (reads the page, so before releasing the lock)
+			// if it is new page, get it tracked
 			if(is_new_page)
 			{
 				track_unused_space_in_heap_table(inputs->insertion_table_partition.heap_root_page_id, &ppage, &(inputs->httd), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
@@ -238,54 +376,175 @@ static void execute(operator* o)
 					goto ABORT_ERROR;
 			}
 
-			// 3. release the page (sets ppage back to NULL). The now-stale free-space entries were pushed
-			//    to inputs->heap_htan during the search; they are fixed later, outside this mini transaction.
+			// release lock on this page
 			release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR;
 
-			// 4. register the inserted tuple_pointer so scans skip it, then commit the insert mini transaction
+			// register the inserted tuple_pointer so scans skip it, then commit the insert mini transaction
 			register_inserted_tuple_pointer(inputs->tx, tptr);
-			engine->complete_sub_transaction(engine->context, min_tx_id, 1 /* flush/commit */, NULL, 0, &page_latches_to_be_borrowed);
+			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
+
+			// everything went successfully now make heap_record_clone the read heap_record
+			free(heap_record);
+			heap_record = heap_record_clone;
 			break;
 
 			ABORT_ERROR:
-			if(is_persistent_page_NULL(&ppage))
+			free(heap_record_clone);
+			if(!is_persistent_page_NULL(&ppage, engine->pam_p))
 				release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
 			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 
 			if(should_retry == 0)
-				// kill with abort error and exit
+			{
+				free(heap_record);
+				for(uint32_t i = 0; i < ext_col_data_size; i++)
+					free(ext_col_data[i].value);
+				free(ext_col_data);
+				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("insert_failed"));
+				return ;
+			}
 
-			continue;
+			continue; // retry
 		}
 
-		// 5. now that the insert mini transaction is committed, opportunistically fix the accumulated
-		//    stale free-space entries -- in their OWN mini transaction(s), outside this insert, and only
-		//    once enough have piled up. Best effort: an abort here is fine, we just try again later.
+		// fix heap table htan
 		fix_unused_space_entries_after_insertions(engine, &(inputs->heap_htan), &(inputs->httd));
 
-		// write the remaining bytes from ext_col_data, each in it's own transaction
-		for(uint32_t i = 0; i < ext_col_data_size; i++)
-		{
-
-		}
-
-		if(ext_col_data != NULL)
-		{
-			free(ext_col_data);
-			ext_col_data = NULL;
-		}
-
-		// (blob store, once extended attributes are written:)
+		// fix blob store htan, we inserted there too
 		fix_unused_space_entries_after_insertions(engine, &(inputs->blob_htan), &(engine->bstd.httd));
 
-		// 6. optionally emit the inserted tuple's identity + attributes for a chained operator
+		// append the leftover bytes/digits from each extended column
+		for(uint32_t k = 0; k < ext_col_data_size; k++)
+		{
+			extended_column_data* e = &(ext_col_data[k]);
+
+			while(1)
+			{
+				uint64_t page_latches_to_be_borrowed = 0;
+				int abort_error = 0;
+				void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
+
+				uint32_t wrote = 0;
+				if(e->is_numeric)
+				{
+					digit_write_iterator* it = get_new_digit_write_iterator(heap_record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, e->tail_chunk_pointer, PREFIX_BYTES / BYTES_PER_NUMERIC_DIGIT, &(engine->bstd), engine->pam_p, engine->pmm_p);
+					uint64_t curr_written_size = e->written_size;
+					while(curr_written_size < e->total_size)
+					{
+						wrote = append_to_digit_write_iterator(it, ((uint64_t*)e->value) + curr_written_size, (uint32_t)(e->total_size - curr_written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->blob_htan)), min_tx_id, &abort_error);
+						if(abort_error)
+						{
+							delete_digit_write_iterator(it, min_tx_id, &abort_error);
+							goto ABORT_ERROR1;
+						}
+						curr_written_size += wrote;
+						if(wrote == 0)
+							break;
+					}
+					delete_digit_write_iterator(it, min_tx_id, &abort_error);
+					if(abort_error)
+						goto ABORT_ERROR1;
+				}
+				else
+				{
+					binary_write_iterator* it = get_new_binary_write_iterator(heap_record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, e->tail_chunk_pointer, PREFIX_BYTES, &(engine->bstd), engine->pam_p, engine->pmm_p);
+					uint64_t curr_written_size = e->written_size;
+					while(curr_written_size < e->total_size)
+					{
+						wrote = append_to_binary_write_iterator(it, (const char*)e->value + curr_written_size, (uint32_t)(e->total_size - curr_written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->blob_htan)), min_tx_id, &abort_error);
+						if(abort_error)
+						{
+							delete_binary_write_iterator(it, min_tx_id, &abort_error);\
+							goto ABORT_ERROR1;
+						}
+						curr_written_size += wrote;
+						if(wrote == 0)
+							break;
+					}
+					delete_binary_write_iterator(it, min_tx_id, &abort_error);
+					if(abort_error)
+						goto ABORT_ERROR1;
+				}
+
+				engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
+				break;
+
+				ABORT_ERROR1:;
+				engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
+				continue;
+			}
+
+			// keep the blob store's free-space entries in check as we go (best effort, own mini txns)
+			fix_unused_space_entries_after_insertions(engine, &(inputs->blob_htan), &(engine->bstd.httd));
+
+			free(e->value);
+		}
+
+		free(ext_col_data);
+		ext_col_data = NULL;
+
+		fix_unused_space_entries_after_insertions(engine, &(inputs->blob_htan), &(engine->bstd.httd));
+
+		// optionally emit the inserted tuple's identity + attributes for a chained operator
 		if(inputs->output_flags != 0)
 		{
-			void* output_tuple = NULL;
-			// TODO: project { table_id, partition_id, tuple_pointer=tptr, heap_tuple=heap_record }
-			// into output_tuple per inputs->output_flags (skipping NULLs in the heap tuple).
+			uint32_t output_tuple_size = get_minimum_tuple_size(inputs->output_tuple_def);
+			uint64_t output_tuple_capacity = output_tuple_size;
+			void* output_tuple = malloc(output_tuple_capacity);
+			init_tuple(inputs->output_tuple_def, output_tuple);
+
+			uint32_t attr_index = 0;
+
+			if(MUST_OUTPUT_TABLE_ID(inputs->output_flags))
+			{
+				// ensure there are enough bytes in the output_tuple, as we try to insert this datum
+				while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.uint_value = inputs->insertion_table_partition.table_id}), output_tuple_capacity - output_tuple_size))
+				{
+					output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+					output_tuple = realloc(output_tuple, output_tuple_capacity);
+				}
+
+				// recompute tuple_size
+				output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+
+				attr_index++;
+			}
+
+			if(MUST_OUTPUT_PARTITION_ID(inputs->output_flags))
+			{
+				// ensure there are enough bytes in the output_tuple, as we try to insert this datum
+				while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.uint_value = inputs->insertion_table_partition.partition_id}), output_tuple_capacity - output_tuple_size))
+				{
+					output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+					output_tuple = realloc(output_tuple, output_tuple_capacity);
+				}
+
+				// recompute tuple_size
+				output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+
+				attr_index++;
+			}
+
+			if(MUST_OUTPUT_TUPLE_POINTER_ID(inputs->output_flags))
+			{
+				char tptr_tpl[sizeof(tuple_pointer)];
+				set_tuple_pointer(tptr_tpl, tptr, &(engine->pam_p->pas));
+
+				// ensure there are enough bytes in the output_tuple, as we try to insert this datum
+				while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.tuple_value = tptr_tpl}), output_tuple_capacity - output_tuple_size))
+				{
+					output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+					output_tuple = realloc(output_tuple, output_tuple_capacity);
+				}
+
+				// recompute tuple_size
+				output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+
+				attr_index++;
+			}
+
 			int produced = produce_tuple_from_operator(o, output_tuple);
 			free(output_tuple);
 			if(!produced)
