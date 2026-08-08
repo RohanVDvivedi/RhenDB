@@ -2,7 +2,6 @@ PICKED TASKS
 
 HEAP TABLE OPERATORS SOURCE/SINK
  * don't let create these operators it they donot have a right snapshot or a valid self transaction_id
-  * insert accepts (tuple) and on a flag registers tuple pointer that was inserted, it may optionally return (table_id, partition_id, tuple_pointer, tuple_with_mvcc_version)
   * delete accepts (table_id, partition_id, tuple_pointer), it will write the right xmax there
  * don't let create these operators it they do not have a right snapshot
   * scan a table and do mvcc checks and is not registered insert check (pass a flag for this) and return (table_id, partition_id, tuple_pointer, tuple_with_mvcc_version)
