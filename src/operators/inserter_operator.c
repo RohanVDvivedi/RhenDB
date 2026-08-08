@@ -545,6 +545,38 @@ static void execute(operator* o)
 				attr_index++;
 			}
 
+			if(MUST_OUTPUT_PARTITION_ID(inputs->output_flags))
+			{
+				// first set it to empty
+				{
+					// ensure there are enough bytes in the output_tuple, as we try to insert this datum
+					while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, EMPTY_DATUM, output_tuple_capacity - output_tuple_size))
+					{
+						output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+						output_tuple = realloc(output_tuple, output_tuple_capacity);
+					}
+
+					// recompute tuple_size
+					output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+				}
+
+				// then set the attributes
+				for(uint32_t i = 0; i < inputs->partition_tuple_def->type_info->element_count; i++)
+				{
+					// ensure there are enough bytes in the output_tuple, as we try to insert this datum
+					while(!set_element_in_tuple_from_tuple(inputs->output_tuple_def, STATIC_POSITION(attr_index, i), output_tuple, inputs->partition_tuple_def, STATIC_POSITION(i), heap_record, output_tuple_capacity - output_tuple_size))
+					{
+						output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+						output_tuple = realloc(output_tuple, output_tuple_capacity);
+					}
+
+					// recompute tuple_size
+					output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+				}
+
+				attr_index++;
+			}
+
 			int produced = produce_tuple_from_operator(o, output_tuple);
 			free(output_tuple);
 			if(!produced)
