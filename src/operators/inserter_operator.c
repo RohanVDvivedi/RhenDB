@@ -57,12 +57,35 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
-			int produced = produce_tuple_from_operator(o, (void*)tuple);
-			if(!produced)
+			// open a mini transaction
+			// need to do simple basic projections, let this be done by me OR expect the text is always text, and numeric is always numeric, and so on and projections are not needed
+			// compute how many prefix bytes will we need for each one of the extended attributes of partition_tuple_def, this computation will be done by me OR just make a wild guess and let prefix bytes be persistent_engine page size * 0.3 and subtract the basic min size and divide to have limited number of bytes in each minus the 20 bytes for the meta data of each field and divide by 5 five for the numerics
+			// construct all prefix containing heap table tuple, containing atmost 1 additonal page for each one of the extended attribute in it's blob store
+			// do the real projection of simple primitive types add attributes, skip the nulls, and set the prefix of the rest extended ones, do materialize the extended ones though and keep the pointers handy
+			// insert this heap table tuple, with it's fixed heap blob tuple pointer
+			// append all the remaining extended bytes from the extended attributes such that the head tuple pointers are left as is
+			// keep the heap table pointer handy we might need it to produce output
+			// now register the register_inserted_tuple_pointer to the transaction struct, right before commit
+			// commit the mini transaction
+			// in for loop now, append all the remaining extended bytes from the extended attributes such that the head tuple pointers are left as is
+			// each of this loop does complete insert in each single mini transaction and commits at the end
+			if(inputs->output_flags != 0)
 			{
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
-				return ;
+				void* output_tuple = NULL;
+
+				// project the heap table tuple and the tuple pointer and table_id and partition_id into the output_tuple
+				// null objects in the heap table tuple should be skipped
+
+				int produced = produce_tuple_from_operator(o, output_tuple);
+				free(output_tuple);
+				if(!produced)
+				{
+					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+					return ;
+				}
 			}
+
+			// finally free the heap table tuple that we kept handy
 		}
 		else
 			break;
@@ -108,6 +131,8 @@ static void free_resources(operator* o)
 		free((void*)(inputs->partition_tuple_def));
 		inputs->partition_tuple_def = NULL;
 	}
+
+	free(inputs);
 }
 
 operator_resource_counter setup_insertion_operator(operator* o, operator* input_operator, positional_accessor* insertion_from_source_positional_accessors, rhendb_table_partition* table_partition, int output_flags)
@@ -211,8 +236,8 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 			}
 
 			// insert this new type_info that has each of it's elements nullable as the last attribute
-			sprintf(output_dti->containees[output_dti_element_count].field_name, partition_type_info->type_name, output_dti_element_count);
-			output_dti->containees[output_dti_element_count].al.type_info = &(tx->rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_type_info);
+			strncpy(output_dti->containees[output_dti_element_count].field_name, partition_type_info->type_name, 64);
+			output_dti->containees[output_dti_element_count].al.type_info = intermediate_table_data_type_info;
 
 			output_tuple_max_size += intermediate_table_data_type_info->max_size + 8;
 			output_dti_element_count++;
