@@ -332,6 +332,9 @@ static void execute(operator* o)
 			int abort_error = 0;
 			void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
 
+			// init an empty persistent page
+			persistent_page ppage = get_NULL_persistent_page(engine->pam_p);
+
 			// make it permanent with valid head_chunk pointers, if they are needed
 			build_heap_record_with_prefix_bytes(inputs, heap_record_clone, ext_col_data, ext_col_data_size, min_tx_id, &abort_error);
 			if(abort_error)
@@ -341,6 +344,7 @@ static void execute(operator* o)
 			{
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("record_too_big"));
 				engine->mark_sub_transaction_aborted(engine->context, min_tx_id, -5001);
+				should_retry = 0;
 				goto ABORT_ERROR;
 			}
 
@@ -350,7 +354,7 @@ static void execute(operator* o)
 			// find the right page to insert this heap_record_clone it into
 			int is_new_page = 0;
 			uint32_t unused_space_in_entry = 0;
-			persistent_page ppage = find_heap_page_with_enough_unused_space_from_heap_table(inputs->insertion_table_partition.heap_root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->heap_htan)), &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
+			ppage = find_heap_page_with_enough_unused_space_from_heap_table(inputs->insertion_table_partition.heap_root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->heap_htan)), &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR;
 			if(is_persistent_page_NULL(&ppage, engine->pam_p))
@@ -456,7 +460,7 @@ static void execute(operator* o)
 						wrote = append_to_binary_write_iterator(it, (const char*)e->value + curr_written_size, (uint32_t)(e->total_size - curr_written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->blob_htan)), min_tx_id, &abort_error);
 						if(abort_error)
 						{
-							delete_binary_write_iterator(it, min_tx_id, &abort_error);\
+							delete_binary_write_iterator(it, min_tx_id, &abort_error);
 							goto ABORT_ERROR1;
 						}
 						curr_written_size += wrote;
@@ -545,7 +549,7 @@ static void execute(operator* o)
 				attr_index++;
 			}
 
-			if(MUST_OUTPUT_PARTITION_ID(inputs->output_flags))
+			if(MUST_OUTPUT_HEAP_TUPLE(inputs->output_flags))
 			{
 				// first set it to empty
 				{
@@ -667,7 +671,7 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 	tuple_def* partition_tuple_def = malloc(sizeof(tuple_def));
 	initialize_tuple_def(partition_tuple_def, partition_type_info);
 
-	operator_resource_counter result = {.job_counter = 1};
+	operator_resource_counter result = {.buffer_counter = 8, .job_counter = 1}; // 8 maximum buffers as we do not expect any btree in the system to exceed this height
 	if(o == NULL)
 	{
 		// counting pass: nothing is stored on `o`, so don't hold any allocations

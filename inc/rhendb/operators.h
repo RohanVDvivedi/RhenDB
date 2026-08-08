@@ -80,4 +80,9 @@ operator_resource_counter setup_selection_operator(operator* o, operator* input_
 // projection operator
 operator_resource_counter setup_projection_operator(operator* o, operator* input_operator, projection_description* projection_descriptions, uint32_t projection_descriptions_count);
 
+#include<rhendb/table_operator_output_type>
+
+// insert into heap table's partition, as per the catalog manager
+operator_resource_counter setup_insertion_operator(operator* o, operator* input_operator, positional_accessor* insertion_from_source_positional_accessors, rhendb_table_partition* table_partition, int output_flags);
+
 #endif
