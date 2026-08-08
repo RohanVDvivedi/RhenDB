@@ -137,7 +137,7 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 			continue; // leave the column NULL
 
 		const data_type_info* col_dti = inputs->partition_tuple_def->type_info->containees[i].al.type_info;
-		const data_type_info* src_dti =  get_type_info_for_element_from_tuple_def(inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1]);
+		const data_type_info* src_dti = get_type_info_for_element_from_tuple_def(inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1]);
 
 		if(is_primitive_numeral_type_info(col_dti))
 		{
