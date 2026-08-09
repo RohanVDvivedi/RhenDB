@@ -14,9 +14,10 @@
 #include<tupleindexer/heap_table/heap_table.h>
 #include<tupleindexer/utils/heap_table_accumulative_notifier.h>
 
-#include<tuplelargetypes/blob_extended.h>
 #include<tuplelargetypes/text_extended.h>
+#include<tuplelargetypes/blob_extended.h>
 #include<tuplelargetypes/numeric_extended.h>
+#include<tuplelargetypes/jsonb_extended.h>
 
 #include<rhendb/util_materialization.h>
 
@@ -679,8 +680,8 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 
 	for(uint32_t i = 0; i < partition_tuple_def->type_info->element_count - 1; i++)
 	{
-		data_type_info* col_dti = get_type_info_for_element_from_tuple_def(partition_tuple_def, STATIC_POSITION(i+1));
-		data_type_info* inp_dti = get_type_info_for_element_from_tuple_def(input_tuple_def, inputs->insertion_from_source_positional_accessors[i]);
+		const data_type_info* col_dti = get_type_info_for_element_from_tuple_def(partition_tuple_def, STATIC_POSITION(i+1));
+		const data_type_info* inp_dti = get_type_info_for_element_from_tuple_def(input_tuple_def, insertion_from_source_positional_accessors[i]);
 		if(is_primitive_numeral_type_info(col_dti))
 		{
 			if(!is_primitive_numeral_type_info(inp_dti))
@@ -713,9 +714,9 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 				exit(-1);
 			}
 		}
-		else if(is_jsonb_type_info(col_dti))
+		else if(is_jsonb_extended_type_info(col_dti))
 		{
-			if(!is_jsonb_type_info(inp_dti))
+			if(!is_jsonb_extended_type_info(inp_dti))
 			{
 				printf("incompatible type info for jsonb column of table_partition for insertion_operator\n");
 				exit(-1);
