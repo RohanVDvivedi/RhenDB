@@ -461,7 +461,15 @@ static void execute(operator* o)
 		// append the leftover bytes/digits from each extended column
 		for(uint32_t k = 0; k < ext_col_data_size; k++)
 		{
-			extended_column_data* e = &(ext_col_data[k]);
+			const extended_column_data* e = &(ext_col_data[k]);
+
+			if(e->written_size == e->total_size)
+				continue;
+			else if(e->written_size > e->total_size)
+			{
+				printf("BUG (inserter) :: written more than total size by the inserter operator\n");
+				exit(-1);
+			}
 
 			while(1)
 			{
