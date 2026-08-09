@@ -405,14 +405,18 @@ static void execute(operator* o)
 						ppage = acquire_persistent_page_with_lock(engine->pam_p, min_tx_id, inputs->optimistic_insertion_page_id, WRITE_LOCK, &abort_error);
 						if(abort_error)
 							goto ABORT_ERROR;
+						is_new_page = 0;
 						break;
 					}
 
 					// find the right amount of space this record will need
-					uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(inputs->partition_tuple_def->size_def), heap_record_clone);
-					ppage = find_heap_page_with_enough_unused_space_from_heap_table(inputs->insertion_table_partition.heap_root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->heap_htan)), &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
-					if(abort_error)
-						goto ABORT_ERROR;
+					{
+						uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(inputs->partition_tuple_def->size_def), heap_record_clone);
+						ppage = find_heap_page_with_enough_unused_space_from_heap_table(inputs->insertion_table_partition.heap_root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->heap_htan)), &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+						is_new_page = 0;
+					}
 					if(is_persistent_page_NULL(&ppage, engine->pam_p))
 					{
 						ppage = get_new_heap_page_with_write_lock(&(engine->pam_p->pas), inputs->partition_tuple_def, engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
@@ -421,6 +425,7 @@ static void execute(operator* o)
 						is_new_page = 1;
 					}
 
+					// populate optimistically finding path for the next insert
 					inputs->optimistic_insertion_page_id = ppage.page_id;
 					inputs->possible_insertion_index = 0;
 					break;
