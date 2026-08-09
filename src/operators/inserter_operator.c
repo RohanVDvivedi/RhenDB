@@ -671,17 +671,68 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 	data_type_info* partition_type_info = get_data_type_info_for_rhendb_table_partition_from_catalog(&(tx->rdb->cat_mgr), tx->snapshot, table_partition);
 	if(!are_identical_type_info(partition_type_info->containees[0].al.type_info, tx->rdb->mvcc_hdr_type_info))
 	{
-		printf("must have mvcc_header for insertion_operator in the tuples of table_partition\n");
+		printf("must have mvcc_header for insertion_operator in the tuples of table_partition for insertion_operator\n");
 		exit(-1);
 	}
 	tuple_def* partition_tuple_def = malloc(sizeof(tuple_def));
 	initialize_tuple_def(partition_tuple_def, partition_type_info);
 
+	for(uint32_t i = 0; i < partition_tuple_def->type_info->element_count - 1; i++)
+	{
+		data_type_info* col_dti = get_type_info_for_element_from_tuple_def(partition_tuple_def, STATIC_POSITION(i+1));
+		data_type_info* inp_dti = get_type_info_for_element_from_tuple_def(input_tuple_def, inputs->insertion_from_source_positional_accessors[i]);
+		if(is_primitive_numeral_type_info(col_dti))
+		{
+			if(!is_primitive_numeral_type_info(inp_dti))
+			{
+				printf("incompatible type info for primitive_numeral column of table_partition for insertion_operator\n");
+				exit(-1);
+			}
+		}
+		else if(is_text_extended_type_info(col_dti))
+		{
+			if(!is_text_type_info(inp_dti))
+			{
+				printf("incompatible type info for text column of table_partition for insertion_operator\n");
+				exit(-1);
+			}
+		}
+		else if(is_blob_extended_type_info(col_dti))
+		{
+			if(!is_blob_type_info(inp_dti))
+			{
+				printf("incompatible type info for blob column of table_partition for insertion_operator\n");
+				exit(-1);
+			}
+		}
+		else if(is_numeric_extended_type_info(col_dti))
+		{
+			if(!is_numeric_type_info(inp_dti))
+			{
+				printf("incompatible type info for numeric column of table_partition for insertion_operator\n");
+				exit(-1);
+			}
+		}
+		else if(is_jsonb_type_info(col_dti))
+		{
+			if(!is_jsonb_type_info(inp_dti))
+			{
+				printf("incompatible type info for jsonb column of table_partition for insertion_operator\n");
+				exit(-1);
+			}
+		}
+		else
+		{
+			printf("unsupported type info in column of table_partition for insertion_operator\n");
+			exit(-1);
+		}
+	}
+
 	operator_resource_counter result = {.buffer_counter = 8, .job_counter = 1}; // 8 maximum buffers as we do not expect any btree in the system to exceed this height
 	if(o == NULL)
 	{
-		// counting pass: nothing is stored on `o`, so don't hold any allocations
-		// (partition_type_info / partition_tuple_def are pre-existing leaks on this path -- see note)
+		destroy_type_info_recursively(partition_tuple_def->type_info, NULL);
+		free((partition_tuple_def));
 		return result;
 	}
 

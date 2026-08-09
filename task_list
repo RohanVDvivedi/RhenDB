@@ -1,7 +1,7 @@
 PICKED TASKS
 
 inserter operator
- * loop to ensure that inserts to partition_tuple_def will succeed with right input tuple from the given positional accessor in rhendb
+ * calculate prefix bytes and make phase 2 bytes a one more page worth of data
 
 HEAP TABLE OPERATORS SOURCE/SINK
  * don't let create these operators it they donot have a right snapshot or a valid self transaction_id
