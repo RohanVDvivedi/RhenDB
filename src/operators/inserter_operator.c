@@ -29,6 +29,8 @@
 
 #define PAGE_FILL_PER_TUPLE 0.4
 
+// minimum tuple_size for the partition's tuple_def + 32 * number of extended types must fit PAGE_FILL_PER_TUPLE * page_size of the persistent rage engine
+
 typedef struct input_values input_values;
 struct input_values
 {
