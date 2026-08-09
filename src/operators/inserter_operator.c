@@ -81,8 +81,8 @@ struct extended_column_data
 	void* value;
 };
 
-#define HTAN_CAPACITY       50
-#define HTAN_FIX_THRESHOLD  25
+#define HTAN_CAPACITY       30
+#define HTAN_FIX_THRESHOLD  13
 
 static void fix_unused_space_entries_after_insertions(rage_engine* engine, heap_table_accumulative_notifier* htan_p, const heap_table_tuple_defs* httd_p)
 {
