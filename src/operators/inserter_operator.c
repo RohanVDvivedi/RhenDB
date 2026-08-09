@@ -478,6 +478,10 @@ static void execute(operator* o)
 				release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
 			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 
+			// reset the optimistic path parameters as we might end up using pages allocated as part of the aborted transaction
+			inputs->optimistic_insertion_page_id = engine->pam_p->pas.NULL_PAGE_ID;
+			inputs->possible_insertion_index = 0;
+
 			if(should_retry == 0)
 			{
 				free(heap_record);
