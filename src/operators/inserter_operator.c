@@ -56,6 +56,9 @@ struct input_values
 
 	// cached here for snapshot and transaction_id
 	transaction* tx;
+
+	uint64_t optimistic_insertion_page_id;
+	uint32_t possible_insertion_index;
 };
 
 typedef struct extended_column_data extended_column_data;
@@ -389,29 +392,58 @@ static void execute(operator* o)
 				goto ABORT_ERROR;
 			}
 
-			// find the right amount of space this record will need
-			uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(inputs->partition_tuple_def->size_def), heap_record_clone);
-
 			// find the right page to insert this heap_record_clone it into
 			int is_new_page = 0;
 			uint32_t unused_space_in_entry = 0;
-			ppage = find_heap_page_with_enough_unused_space_from_heap_table(inputs->insertion_table_partition.heap_root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->heap_htan)), &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
-			if(abort_error)
-				goto ABORT_ERROR;
-			if(is_persistent_page_NULL(&ppage, engine->pam_p))
+
+			while(1) // keep finding a new page until insertion succeeds
 			{
-				ppage = get_new_heap_page_with_write_lock(&(engine->pam_p->pas), inputs->partition_tuple_def, engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+				while(is_persistent_page_NULL(&ppage, engine->pam_p))
+				{
+					if(inputs->optimistic_insertion_page_id != engine->pam_p->pas.NULL_PAGE_ID)
+					{
+						ppage = acquire_persistent_page_with_lock(engine->pam_p, min_tx_id, inputs->optimistic_insertion_page_id, WRITE_LOCK, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+						break;
+					}
+
+					// find the right amount of space this record will need
+					uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(inputs->partition_tuple_def->size_def), heap_record_clone);
+					ppage = find_heap_page_with_enough_unused_space_from_heap_table(inputs->insertion_table_partition.heap_root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->heap_htan)), &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
+					if(abort_error)
+						goto ABORT_ERROR;
+					if(is_persistent_page_NULL(&ppage, engine->pam_p))
+					{
+						ppage = get_new_heap_page_with_write_lock(&(engine->pam_p->pas), inputs->partition_tuple_def, engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
+						if(abort_error)
+							goto ABORT_ERROR;
+						is_new_page = 1;
+					}
+
+					inputs->optimistic_insertion_page_id = ppage.page_id;
+					inputs->possible_insertion_index = 0;
+					break;
+				}
+
+				// insert tuple on the page, this would surely not fail
+				uint32_t tuple_index = insert_in_heap_page(&ppage, heap_record_clone, &(inputs->possible_insertion_index), inputs->partition_tuple_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_id, &abort_error);
 				if(abort_error)
 					goto ABORT_ERROR;
-				is_new_page = 1;
-			}
+				if(tuple_index == INVALID_TUPLE_INDEX)
+				{
+					// release lock on this page
+					release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
+					if(abort_error)
+						goto ABORT_ERROR;
 
-			// insert tuple on the page, this would surely not fail
-			uint32_t possible_insertion_index = 0;
-			uint32_t tuple_index = insert_in_heap_page(&ppage, heap_record_clone, &possible_insertion_index, inputs->partition_tuple_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_id, &abort_error);
-			if(abort_error)
-				goto ABORT_ERROR;
-			tptr = (tuple_pointer){.page_id = ppage.page_id, .tuple_index = tuple_index};
+					inputs->optimistic_insertion_page_id = engine->pam_p->pas.NULL_PAGE_ID;
+					inputs->possible_insertion_index = 0;
+					continue; // try again, with a new page
+				}
+				tptr = (tuple_pointer){.page_id = ppage.page_id, .tuple_index = tuple_index};
+				break;
+			}
 
 			// if it is new page, get it tracked
 			if(is_new_page)
@@ -873,6 +905,8 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 		.output_flags = output_flags,
 		.output_tuple_def = output_tuple_def,
 		.tx = tx,
+		.optimistic_insertion_page_id = tx->rdb->persistent_acid_rage_engine.pam_p->pas.NULL_PAGE_ID,
+		.possible_insertion_index = 0,
 	};
 
 	// all heap_table-specific structs are initialized after `inputs` exists, directly on it:
