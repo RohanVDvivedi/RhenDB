@@ -1,8 +1,5 @@
 PICKED TASKS
 
-inserter operator
- * calculate prefix bytes and make phase 2 bytes a one more page worth of data
-
 HEAP TABLE OPERATORS SOURCE/SINK
  * don't let create these operators it they donot have a right snapshot or a valid self transaction_id
   * delete accepts (table_id, partition_id, tuple_pointer), it will write the right xmax there

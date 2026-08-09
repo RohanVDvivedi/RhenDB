@@ -27,6 +27,8 @@
 	heap table insertion operator
 */
 
+#define PAGE_FILL_PER_TUPLE 0.4
+
 typedef struct input_values input_values;
 struct input_values
 {
@@ -60,6 +62,7 @@ struct extended_column_data
 	uint32_t index; // index of the attribute in heap row
 
 	// both will be non-NULL if they used even a single byte on the blob store of the table
+	uint32_t prefix_size; // in bytes for text/blob/jsonb, in base-10^12 digits for numeric
 	tuple_pointer head_chunk_pointer;
 	tuple_pointer tail_chunk_pointer;
 
@@ -228,10 +231,7 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 	return record;
 }
 
-#define PREFIX_BYTES   20
-#define PHASE2_BYTES   200
-
-static void build_heap_record_with_prefix_bytes(input_values* inputs, void* record, extended_column_data* ext_col_data, uint32_t ext_col_data_size, const void* min_tx_id, int* abort_error)
+static void build_heap_record_with_prefix_bytes(input_values* inputs, void* record, extended_column_data* ext_col_data, uint32_t ext_col_data_size, void* min_tx_id, int* abort_error, int* should_retry)
 {
 	rage_engine* engine = &(inputs->tx->rdb->persistent_acid_rage_engine);
 
@@ -240,15 +240,47 @@ static void build_heap_record_with_prefix_bytes(input_values* inputs, void* reco
 		extended_column_data* e = &(ext_col_data[k]);
 		e->written_size = 0;
 
-		uint64_t prefix_size = e->is_numeric ? (PREFIX_BYTES / BYTES_PER_NUMERIC_DIGIT) : PREFIX_BYTES;
-		prefix_size = min(prefix_size, e->total_size);
+		e->prefix_size = 0;
+		{
+			// calculate remaining size for prefix, if negative skip
+			int64_t remaining_space = (engine->pam_p->pas.page_size * PAGE_FILL_PER_TUPLE) - get_tuple_size(inputs->partition_tuple_def, record);
+			if(remaining_space < 0)
+			{
+				(*abort_error) = -5002;
+				(*should_retry) = 0;
+				engine->mark_sub_transaction_aborted(engine->context, min_tx_id, *abort_error);
+				return;
+			}
 
-		uint64_t limit = e->is_numeric ? (PHASE2_BYTES / BYTES_PER_NUMERIC_DIGIT) : PHASE2_BYTES;
+			// calculate agains if it is less than 4, i.e. no space for it's size then fail
+			int64_t remaining_space_per_element = remaining_space / (ext_col_data_size - k);
+			if(remaining_space_per_element < 4)
+			{
+				(*abort_error) = -5002;
+				(*should_retry) = 0;
+				engine->mark_sub_transaction_aborted(engine->context, min_tx_id, *abort_error);
+				return;
+			}
+
+			// calculate actual prefix size, can be 0
+			e->prefix_size = remaining_space_per_element - 4;
+		}
+		if(e->is_numeric) // if numeric count the number of digits it has
+			e->prefix_size /= BYTES_PER_NUMERIC_DIGIT;
+		e->prefix_size = min(e->prefix_size, e->total_size); // cap it by the total size
+
+
+		// calculate the limit for phase 2
+		uint64_t limit = 0;
+		if(e->is_numeric)
+			limit = e->prefix_size + (engine->bstd.max_data_bytes_in_chunk / BYTES_PER_NUMERIC_DIGIT);
+		else
+			limit = e->prefix_size + engine->bstd.max_data_bytes_in_chunk;
 		limit = min(limit, e->total_size);
 
 		if(e->is_numeric)
 		{
-			digit_write_iterator* it = get_new_digit_write_iterator(record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
+			digit_write_iterator* it = get_new_digit_write_iterator(record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 			while(e->written_size < limit)
 			{
 				uint32_t w = append_to_digit_write_iterator(it, ((uint64_t*)e->value) + e->written_size, (uint32_t)(limit - e->written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->blob_htan)), min_tx_id, abort_error);
@@ -269,7 +301,7 @@ static void build_heap_record_with_prefix_bytes(input_values* inputs, void* reco
 		}
 		else
 		{
-			binary_write_iterator* it = get_new_binary_write_iterator(record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
+			binary_write_iterator* it = get_new_binary_write_iterator(record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 			while(e->written_size < limit)
 			{
 				uint32_t w = append_to_binary_write_iterator(it, (const char*)e->value + e->written_size, (uint32_t)(limit - e->written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->blob_htan)), min_tx_id, abort_error);
@@ -342,11 +374,11 @@ static void execute(operator* o)
 			persistent_page ppage = get_NULL_persistent_page(engine->pam_p);
 
 			// make it permanent with valid head_chunk pointers, if they are needed
-			build_heap_record_with_prefix_bytes(inputs, heap_record_clone, ext_col_data, ext_col_data_size, min_tx_id, &abort_error);
+			build_heap_record_with_prefix_bytes(inputs, heap_record_clone, ext_col_data, ext_col_data_size, min_tx_id, &abort_error, &should_retry);
 			if(abort_error)
 				goto ABORT_ERROR;
 
-			if(get_tuple_size(inputs->partition_tuple_def, heap_record_clone) > (0.3 * engine->pam_p->pas.page_size))
+			if(get_tuple_size(inputs->partition_tuple_def, heap_record_clone) > (PAGE_FILL_PER_TUPLE * engine->pam_p->pas.page_size))
 			{
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("record_too_big"));
 				abort_error = -5001;
@@ -440,7 +472,7 @@ static void execute(operator* o)
 				uint32_t wrote = 0;
 				if(e->is_numeric)
 				{
-					digit_write_iterator* it = get_new_digit_write_iterator(heap_record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, e->tail_chunk_pointer, PREFIX_BYTES / BYTES_PER_NUMERIC_DIGIT, &(engine->bstd), engine->pam_p, engine->pmm_p);
+					digit_write_iterator* it = get_new_digit_write_iterator(heap_record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, e->tail_chunk_pointer, e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 					uint64_t curr_written_size = e->written_size;
 					while(curr_written_size < e->total_size)
 					{
@@ -460,7 +492,7 @@ static void execute(operator* o)
 				}
 				else
 				{
-					binary_write_iterator* it = get_new_binary_write_iterator(heap_record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, e->tail_chunk_pointer, PREFIX_BYTES, &(engine->bstd), engine->pam_p, engine->pmm_p);
+					binary_write_iterator* it = get_new_binary_write_iterator(heap_record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, e->tail_chunk_pointer, e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 					uint64_t curr_written_size = e->written_size;
 					while(curr_written_size < e->total_size)
 					{
