@@ -47,9 +47,12 @@ struct input_values
 	// heap_table free-space defs for the partition's heap (record_def == partition_tuple_def)
 	heap_table_tuple_defs httd;
 
+	// global notifier is used for finding the right page for insertion, otherwise inserts will reorder pages being scanned by the scan operators
+	heap_table_notifier* global_heap_notifier;
+
 	// accumulative notifiers: one for the partition's heap table, one for its blob store.
-	heap_table_accumulative_notifier heap_htan;
-	heap_table_accumulative_notifier blob_htan;
+	heap_table_accumulative_notifier local_heap_htan;
+	heap_table_accumulative_notifier local_blob_htan;
 
 	int output_flags; // same flags as table_operator_output_type.h
 	const tuple_def* output_tuple_def; // will remain set to NULL, if output_flags is 0
@@ -57,8 +60,11 @@ struct input_values
 	// cached here for snapshot and transaction_id
 	transaction* tx;
 
-	uint64_t optimistic_insertion_page_id;
+	uint64_t optimistic_insertion_page_id; // optimistic attributes below are only valid if this page_id is not NULL_PAGE_ID
 	uint32_t possible_insertion_index;
+
+	int is_optimistic_page_self_created_new_page;
+	uint32_t optimistic_insertion_page_unused_space_in_entry;
 };
 
 typedef struct extended_column_data extended_column_data;
@@ -84,10 +90,13 @@ struct extended_column_data
 #define HTAN_CAPACITY       30
 #define HTAN_FIX_THRESHOLD  13
 
-static void fix_unused_space_entries_after_insertions(rage_engine* engine, heap_table_accumulative_notifier* htan_p, const heap_table_tuple_defs* httd_p)
+static void fix_unused_space_entries_after_insertions(rage_engine* engine, heap_table_accumulative_notifier* htan_p, const heap_table_tuple_defs* httd_p, int force_fix)
 {
-	if(get_notification_count_for_heap_table_accumulative_notifier(htan_p) < HTAN_FIX_THRESHOLD)
-		return;
+	if(!force_fix)
+	{
+		if(get_notification_count_for_heap_table_accumulative_notifier(htan_p) < HTAN_FIX_THRESHOLD)
+			return;
+	}
 
 	uint64_t root_page_id, page_id;
 	uint32_t unused_space;
@@ -288,7 +297,7 @@ static void build_heap_record_with_prefix_bytes(input_values* inputs, void* reco
 			digit_write_iterator* it = get_new_digit_write_iterator(record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 			while(e->written_size < limit)
 			{
-				uint32_t w = append_to_digit_write_iterator(it, ((uint64_t*)e->value) + e->written_size, (uint32_t)(limit - e->written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->blob_htan)), min_tx_id, abort_error);
+				uint32_t w = append_to_digit_write_iterator(it, ((uint64_t*)e->value) + e->written_size, (uint32_t)(limit - e->written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, abort_error);
 				if(*abort_error)
 				{
 					delete_digit_write_iterator(it, min_tx_id, abort_error);
@@ -309,7 +318,7 @@ static void build_heap_record_with_prefix_bytes(input_values* inputs, void* reco
 			binary_write_iterator* it = get_new_binary_write_iterator(record, inputs->partition_tuple_def, STATIC_POSITION(e->index), inputs->insertion_table_partition.blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 			while(e->written_size < limit)
 			{
-				uint32_t w = append_to_binary_write_iterator(it, (const char*)e->value + e->written_size, (uint32_t)(limit - e->written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->blob_htan)), min_tx_id, abort_error);
+				uint32_t w = append_to_binary_write_iterator(it, (const char*)e->value + e->written_size, (uint32_t)(limit - e->written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, abort_error);
 				if(*abort_error)
 				{
 					delete_binary_write_iterator(it, min_tx_id, abort_error);
@@ -393,8 +402,7 @@ static void execute(operator* o)
 			}
 
 			// find the right page to insert this heap_record_clone it into
-			int is_new_page = 0;
-			uint32_t unused_space_in_entry = 0;
+			int is_new_page = 0; // flag to suggest of this is new page for this iteration
 
 			while(1) // keep finding a new page until insertion succeeds
 			{
@@ -406,13 +414,15 @@ static void execute(operator* o)
 						if(abort_error)
 							goto ABORT_ERROR;
 						is_new_page = 0;
+						inputs->is_optimistic_page_self_created_new_page = 0;
 						break;
 					}
 
 					// find the right amount of space this record will need
 					{
 						uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(inputs->partition_tuple_def->size_def), heap_record_clone);
-						ppage = find_heap_page_with_enough_unused_space_from_heap_table(inputs->insertion_table_partition.heap_root_page_id, required_space, &unused_space_in_entry, &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->heap_htan)), &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
+						uint32_t unused_space_in_entry = 0;
+						ppage = find_heap_page_with_enough_unused_space_from_heap_table(inputs->insertion_table_partition.heap_root_page_id, required_space, &unused_space_in_entry, inputs->global_heap_notifier, &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
 						if(abort_error)
 							goto ABORT_ERROR;
 						is_new_page = 0;
@@ -428,6 +438,11 @@ static void execute(operator* o)
 					// populate optimistically finding path for the next insert
 					inputs->optimistic_insertion_page_id = ppage.page_id;
 					inputs->possible_insertion_index = 0;
+
+					if(is_new_page)
+						inputs->is_optimistic_page_self_created_new_page = 1; // only valid if optimistic_insertion_page_id is not NULL_PAGE_ID
+					else
+						inputs->is_optimistic_page_self_created_new_page = 0;
 					break;
 				}
 
@@ -437,6 +452,13 @@ static void execute(operator* o)
 					goto ABORT_ERROR;
 				if(tuple_index == INVALID_TUPLE_INDEX)
 				{
+					if(!is_new_page && inputs->is_optimistic_page_self_created_new_page) // this also implies new_page was surely put into tracking in some previous iteration
+					{
+						// and it's unused space varied from what it is being tracked at, so put it in local htan, this is out new page it's entries in it's free space can be fixed
+						if(inputs->optimistic_insertion_page_unused_space_in_entry != get_unused_space_on_heap_page(&ppage, &(engine->pam_p->pas), inputs->partition_tuple_def))
+							push_to_heap_table_accumulative_notifier(&(inputs->local_heap_htan), inputs->insertion_table_partition.heap_root_page_id, inputs->optimistic_insertion_page_unused_space_in_entry, inputs->optimistic_insertion_page_id);
+					}
+
 					// release lock on this page
 					release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
 					if(abort_error)
@@ -450,9 +472,10 @@ static void execute(operator* o)
 				break;
 			}
 
-			// if it is new page, get it tracked
+			// if it is new page created in this iteration, get it tracked
 			if(is_new_page)
 			{
+				inputs->optimistic_insertion_page_unused_space_in_entry = get_unused_space_on_heap_page(&ppage, &(engine->pam_p->pas), inputs->partition_tuple_def);
 				track_unused_space_in_heap_table(inputs->insertion_table_partition.heap_root_page_id, &ppage, &(inputs->httd), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
 				if(abort_error)
 					goto ABORT_ERROR;
@@ -496,10 +519,10 @@ static void execute(operator* o)
 		}
 
 		// fix heap table htan
-		fix_unused_space_entries_after_insertions(engine, &(inputs->heap_htan), &(inputs->httd));
+		fix_unused_space_entries_after_insertions(engine, &(inputs->local_heap_htan), &(inputs->httd), 1);
 
 		// fix blob store htan, we inserted there too
-		fix_unused_space_entries_after_insertions(engine, &(inputs->blob_htan), &(engine->bstd.httd));
+		fix_unused_space_entries_after_insertions(engine, &(inputs->local_blob_htan), &(engine->bstd.httd), 0);
 
 		// append the leftover bytes/digits from each extended column
 		for(uint32_t k = 0; k < ext_col_data_size; k++)
@@ -527,7 +550,7 @@ static void execute(operator* o)
 					uint64_t curr_written_size = e->written_size;
 					while(curr_written_size < e->total_size)
 					{
-						wrote = append_to_digit_write_iterator(it, ((uint64_t*)e->value) + curr_written_size, (uint32_t)(e->total_size - curr_written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->blob_htan)), min_tx_id, &abort_error);
+						wrote = append_to_digit_write_iterator(it, ((uint64_t*)e->value) + curr_written_size, (uint32_t)(e->total_size - curr_written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, &abort_error);
 						if(abort_error)
 						{
 							delete_digit_write_iterator(it, min_tx_id, &abort_error);
@@ -547,7 +570,7 @@ static void execute(operator* o)
 					uint64_t curr_written_size = e->written_size;
 					while(curr_written_size < e->total_size)
 					{
-						wrote = append_to_binary_write_iterator(it, (const char*)e->value + curr_written_size, (uint32_t)(e->total_size - curr_written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->blob_htan)), min_tx_id, &abort_error);
+						wrote = append_to_binary_write_iterator(it, (const char*)e->value + curr_written_size, (uint32_t)(e->total_size - curr_written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, &abort_error);
 						if(abort_error)
 						{
 							delete_binary_write_iterator(it, min_tx_id, &abort_error);
@@ -571,15 +594,13 @@ static void execute(operator* o)
 			}
 
 			// keep the blob store's free-space entries in check as we go (best effort, own mini txns)
-			fix_unused_space_entries_after_insertions(engine, &(inputs->blob_htan), &(engine->bstd.httd));
+			fix_unused_space_entries_after_insertions(engine, &(inputs->local_blob_htan), &(engine->bstd.httd), 0);
 
 			free(e->value);
 		}
 
 		free(ext_col_data);
 		ext_col_data = NULL;
-
-		fix_unused_space_entries_after_insertions(engine, &(inputs->blob_htan), &(engine->bstd.httd));
 
 		// optionally emit the inserted tuple's identity + attributes for a chained operator
 		if(inputs->output_flags != 0)
@@ -720,8 +741,8 @@ static void free_resources(operator* o)
 	}
 
 	// drain/destroy the two accumulative notifiers and the heap_table defs
-	deinitialize_heap_table_accumulative_notifier(&(inputs->heap_htan));
-	deinitialize_heap_table_accumulative_notifier(&(inputs->blob_htan));
+	deinitialize_heap_table_accumulative_notifier(&(inputs->local_heap_htan));
+	deinitialize_heap_table_accumulative_notifier(&(inputs->local_blob_htan));
 	deinit_heap_table_tuple_definitions(&(inputs->httd));
 
 	if(inputs->partition_tuple_def != NULL)
@@ -734,7 +755,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-operator_resource_counter setup_insertion_operator(operator* o, operator* input_operator, positional_accessor* insertion_from_source_positional_accessors, rhendb_table_partition* table_partition, int output_flags)
+operator_resource_counter setup_insertion_operator(operator* o, operator* input_operator, positional_accessor* insertion_from_source_positional_accessors, rhendb_table_partition* table_partition, int output_flags, heap_table_notifier* global_heap_notifier)
 {
 	transaction* tx = input_operator->self_query_plan->curr_tx;
 
@@ -912,6 +933,7 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 		.insertion_from_source_positional_accessors = insertion_from_source_positional_accessors,
 		.partition_tuple_def = partition_tuple_def,
 		.output_flags = output_flags,
+		.global_heap_notifier = global_heap_notifier,
 		.output_tuple_def = output_tuple_def,
 		.tx = tx,
 		.optimistic_insertion_page_id = tx->rdb->persistent_acid_rage_engine.pam_p->pas.NULL_PAGE_ID,
@@ -923,8 +945,8 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 	// both drained (fixed) at HTAN_FIX_THRESHOLD and holding up to HTAN_CAPACITY entries.
 	input_values* inputs = o->inputs;
 	init_heap_table_tuple_definitions(&(inputs->httd), &(tx->rdb->persistent_acid_rage_engine.pam_p->pas), partition_tuple_def);
-	initialize_heap_table_accumulative_notifier(&(inputs->heap_htan), HTAN_CAPACITY);
-	initialize_heap_table_accumulative_notifier(&(inputs->blob_htan), HTAN_CAPACITY);
+	initialize_heap_table_accumulative_notifier(&(inputs->local_heap_htan), HTAN_CAPACITY);
+	initialize_heap_table_accumulative_notifier(&(inputs->local_blob_htan), HTAN_CAPACITY);
 
 	return result;
 }
