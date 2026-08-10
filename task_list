@@ -1,11 +1,13 @@
 PICKED TASKS
 
 HEAP TABLE OPERATORS SOURCE/SINK
- * don't let create these operators it they donot have a right snapshot or a valid self transaction_id
-  * delete accepts (table_id, partition_id, tuple_pointer), it will write the right xmax there
+ * function to convert a row of older partition given it's attributes to an intermediate row output of newer partition given it's attributes
+   * final tuple_def of the latest_partition is also provided
+   * there should also be a way to convert a attributes array to the intermediate tuple definition in this very same module
+   * use this function in insertion and deleter also
+   * just loop over the attributes matching their rel_pos_in_owner
  * don't let create these operators it they do not have a right snapshot
   * scan a table and do mvcc checks and is not registered insert check (pass a flag for this) and return (table_id, partition_id, tuple_pointer, tuple_with_mvcc_version)
- * hook to lock the older version in shared or exclusive mode
 
 
 
@@ -30,6 +32,9 @@ DB acess operators
 
  * for auto_increment store a counter in the db_table object and increment it and return it
  * for unique constraint maintain a lock in lock_manager and hold lock on the 80-bit serialized hash value and then only check the unique btree index
+
+ * hook to lock the older version in shared or exclusive mode upon scan
+ * deletion may be allowed to wait or skip tuple it can not delete, decie on this policy and get back
 
 PRIORITY HIGH LEVEL TASKS (not yet prioritized)
 
