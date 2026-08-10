@@ -414,7 +414,6 @@ static void execute(operator* o)
 						if(abort_error)
 							goto ABORT_ERROR;
 						is_new_page = 0;
-						inputs->is_optimistic_page_self_created_new_page = 0;
 						break;
 					}
 
