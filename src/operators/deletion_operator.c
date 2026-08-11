@@ -77,7 +77,7 @@ static int compare_pending_deletions_by_partition_id_and_tuple_pointer(const voi
 
 // produces the output tuple for a pending_deletion that was just marked deleted,
 // returns 0, only if the tuple could not be produced, in which case the caller must kill itself
-static int produce_output_for_pending_deletion(operator* o, const pending_deletion* pd)
+static int produce_output_for_pending_deletion(operator* o, const pending_deletion* pd, const void* heap_record, uint64_t partition_index_in_info)
 {
 	input_values* inputs = o->inputs;
 
@@ -95,7 +95,7 @@ static int produce_output_for_pending_deletion(operator* o, const pending_deleti
 
 	if(MUST_OUTPUT_TABLE_ID(inputs->output_flags))
 	{
-		while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.uint_value = inputs->table_id}), output_tuple_capacity - output_tuple_size))
+		while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.uint_value = inputs->ftabl->table_info.id}), output_tuple_capacity - output_tuple_size))
 		{
 			output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
 			output_tuple = realloc(output_tuple, output_tuple_capacity);
@@ -134,7 +134,7 @@ static int produce_output_for_pending_deletion(operator* o, const pending_deleti
 
 	if(MUST_OUTPUT_HEAP_TUPLE(inputs->output_flags))
 	{
-		void* final_readers_heap_record = project_to_final_readers_tuple_def(inputs->ftabl, heap_record, inputs->ftabl->partitions_count - 1);
+		void* final_readers_heap_record = project_to_final_readers_tuple_def(inputs->ftabl, heap_record, partition_index_in_info);
 		
 		// ensure there are enough bytes in the output_tuple, as we try to insert this datum
 		while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.tuple_value = final_readers_heap_record}), output_tuple_capacity - output_tuple_size))
@@ -177,16 +177,16 @@ static int mark_buffered_tuples_deleted(operator* o, const char** kill_reason)
 		uint64_t partition_id = get_from_front_of_pending_deletions(&(inputs->to_be_deleted), i)->partition_id;
 
 		// advance over all the partitions that no tuple is to be deleted from
-		while(p < inputs->partitions_count && inputs->table_partitions[p].partition_id < partition_id)
+		while(p < inputs->ftabl->partitions_count && inputs->ftabl->table_partitions_info[p].partition_id < partition_id)
 			p++;
 
-		if(p == inputs->partitions_count || inputs->table_partitions[p].partition_id != partition_id)
+		if(p == inputs->ftabl->partitions_count || inputs->ftabl->table_partitions_info[p].partition_id != partition_id)
 		{
-			printf("ISSUE in (deleter_operator) :: no partition with partition_id = %" PRIu64 " in table with table_id = %" PRIu64 "\n", partition_id, inputs->table_id);
+			printf("ISSUE in (deleter_operator) :: no partition with partition_id = %" PRIu64 " in table with table_id = %" PRIu64 "\n", partition_id, inputs->ftabl->table_info.id);
 			exit(-1);
 		}
 
-		const tuple_def* partition_tuple_def = inputs->partition_tuple_defs[p];
+		const tuple_def* partition_tuple_def = &(inputs->ftabl->table_partition_tuple_defs[p]);
 
 		// the mvcc_header is always the first element of the record of any partition
 		tuple_def mvcc_def;
@@ -245,23 +245,26 @@ static int mark_buffered_tuples_deleted(operator* o, const char** kill_reason)
 				i++;
 			}
 
-			// release lock on this page
-			release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
-			if(abort_error)
-				goto ABORT_ERROR;
-
 			// all the tuples on this page are marked deleted now, so commit this mini transaction
 			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
+
+			// ppage is still locked we will release this lock after we are done reading all the rows
 
 			// only now that they are committed, produce the outputs for all the tuples deleted on this page
 			for(cy_uint j = page_first_index; j < i; j++)
 			{
-				if(!produce_output_for_pending_deletion(o, get_from_front_of_pending_deletions(&(inputs->to_be_deleted), j)))
+				const pending_deletion* pd = get_from_front_of_pending_deletions(&(inputs->to_be_deleted), j);
+				const void* record = get_nth_tuple_on_persistent_page(&ppage, engine->pam_p->pas.page_size, &(partition_tuple_def->size_def), pd->tptr.tuple_index);
+				if(!produce_output_for_pending_deletion(o, pd, record, p))
 				{
 					(*kill_reason) = "could_not_produce";
 					return 0;
 				}
 			}
+
+			// release lock on this page
+			// we can release locks on the page after compoletion of the mini transaction, this is allowed and will not report an abort_error as long as FREE_PAGE options is not passed
+			release_lock_on_persistent_page(engine->pam_p, NULL, &ppage, NONE_OPTION, &abort_error);
 
 			continue;
 
