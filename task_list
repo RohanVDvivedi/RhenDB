@@ -1,13 +1,12 @@
 PICKED TASKS
 
 HEAP TABLE OPERATORS SOURCE/SINK
- * function to convert a row of older partition given it's attributes to an intermediate row output of newer partition given it's attributes
-   * final tuple_def of the latest_partition is also provided
-   * there should also be a way to convert a attributes array to the intermediate tuple definition in this very same module
-   * use this function in insertion and deleter also
-   * just loop over the attributes matching their rel_pos_in_owner
  * don't let create these operators it they do not have a right snapshot
-  * scan a table and do mvcc checks and is not registered insert check (pass a flag for this) and return (table_id, partition_id, tuple_pointer, tuple_with_mvcc_version)
+  * scan_operator
+    * scans all partitions for the table, maintains/needs 2 buffers per max_worker_count, and worker_count number of threads
+  * pointer_lookup_operator, lookup by fixed table_id, partition_id and tuple_pointer provided as positional_accessors
+    * just like deleter also takes in lookup_batch_size
+    * and also max_worker_count as input
 
 
 
