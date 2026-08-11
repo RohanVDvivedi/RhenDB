@@ -128,7 +128,7 @@ void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void*
 	// the mvcc_header at position 0 is common to every partition, so it is always copied over
 	while(!set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(0), projected_tuple, partition_tuple_def, STATIC_POSITION(0), partition_tuple, projected_tuple_capacity - projected_tuple_size))
 	{
-		projected_tuple_capacity = projected_tuple_capacity * 2;
+		projected_tuple_capacity = min(projected_tuple_capacity * 2, get_maximum_tuple_size(final_readers_tuple_def));
 		projected_tuple = realloc(projected_tuple, projected_tuple_capacity);
 	}
 	projected_tuple_size = get_tuple_size(final_readers_tuple_def, projected_tuple);
@@ -158,7 +158,7 @@ void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void*
 		// identical rel_pos_in_owner, so this is the very same attribute, insert it
 		while(!set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(f), projected_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, projected_tuple_capacity - projected_tuple_size))
 		{
-			projected_tuple_capacity = projected_tuple_capacity * 2;
+			projected_tuple_capacity = min(projected_tuple_capacity * 2, get_maximum_tuple_size(final_readers_tuple_def));
 			projected_tuple = realloc(projected_tuple, projected_tuple_capacity);
 		}
 		projected_tuple_size = get_tuple_size(final_readers_tuple_def, projected_tuple);
