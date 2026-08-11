@@ -81,11 +81,12 @@ operator_resource_counter setup_selection_operator(operator* o, operator* input_
 operator_resource_counter setup_projection_operator(operator* o, operator* input_operator, projection_description* projection_descriptions, uint32_t projection_descriptions_count);
 
 #include<rhendb/table_operator_output_type.h>
+#include<rhendb/fetched_table.h>
 
 // insert into heap table's latest visible partition, as per the catalog manager
-operator_resource_counter setup_insertion_operator(operator* o, operator* input_operator, positional_accessor* insertion_from_source_positional_accessors, rhendb_table_partition* table_partition, int output_flags, heap_table_notifier* global_heap_notifier);
+operator_resource_counter setup_insertion_operator(operator* o, operator* input_operator, positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier);
 
 // deletes (marks deleted) operator for the tuples of the heap table
-operator_resource_counter setup_deletion_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, uint64_t table_id, uint64_t deletion_batch_size, int output_flags);
+operator_resource_counter setup_deletion_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags);
 
 #endif

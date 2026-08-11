@@ -12,7 +12,7 @@ struct fetched_table
 	// will always be non zero
 	uint64_t partitions_count;
 
-	rhendb_table_partition* table_partitons_info;
+	rhendb_table_partition* table_partitions_info;
 
 	uint32_t* attributes_count_per_partition;
 
@@ -31,7 +31,7 @@ struct fetched_table
 // table_name if NULL, then we will use table_id
 fetched_table* fetch_table_from_catalog_manager(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* table_name, uint64_t table_id);
 
-// partition_index_in_info is not partition_id, this is index of the corresponding partition in the table_partitons_info array
+// partition_index_in_info is not partition_id, this is index of the corresponding partition in the table_partitions_info array
 void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void* partition_tuple, uint64_t partition_index_in_info);
 
 void destroy_fetched_table(fetched_table* ftabl);

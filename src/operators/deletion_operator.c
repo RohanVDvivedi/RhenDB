@@ -7,6 +7,7 @@
 #include<rhendb/mvcc_header.h>
 
 #include<rhendb/table_operator_output_type.h>
+#include<rhendb/fetched_table.h>
 
 #include<tupleindexer/heap_page/heap_page.h>
 
@@ -37,13 +38,7 @@ struct input_values
 
 	consumption_iterator* input_iterator;
 
-	uint64_t table_id;
-
-	// all the partitions of the above table, and their respective record definitions
-	// both of the below arrays are partitions_count in length, and are ordered by partition_id
-	rhendb_table_partition* table_partitions;
-	tuple_def** partition_tuple_defs;
-	uint64_t partitions_count;
+	const fetched_table* ftabl;
 
 	positional_accessor* partition_id_from_source_positional_accessor;
 	positional_accessor* tuple_pointer_from_source_positional_accessor;
@@ -133,6 +128,22 @@ static int produce_output_for_pending_deletion(operator* o, const pending_deleti
 			output_tuple = realloc(output_tuple, output_tuple_capacity);
 		}
 		output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+
+		attr_index++;
+	}
+
+	if(MUST_OUTPUT_HEAP_TUPLE(inputs->output_flags))
+	{
+		void* final_readers_heap_record = project_to_final_readers_tuple_def(inputs->ftabl, heap_record, inputs->ftabl->partitions_count - 1);
+		
+		// ensure there are enough bytes in the output_tuple, as we try to insert this datum
+		while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.tuple_value = final_readers_heap_record}), output_tuple_capacity - output_tuple_size))
+		{
+			output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(inputs->output_tuple_def));
+			output_tuple = realloc(output_tuple, output_tuple_capacity);
+		}
+		output_tuple_size = get_tuple_size(inputs->output_tuple_def, output_tuple);
+		free(final_readers_heap_record);
 
 		attr_index++;
 	}
@@ -354,12 +365,6 @@ static void clean_up_resources(operator* o)
 	}
 
 	deinitialize_pending_deletions(&(inputs->to_be_deleted));
-
-	if(inputs->table_partitions != NULL)
-	{
-		free(inputs->table_partitions);
-		inputs->table_partitions = NULL;
-	}
 }
 
 static void free_resources(operator* o)
@@ -368,27 +373,15 @@ static void free_resources(operator* o)
 
 	if(inputs->output_tuple_def != NULL)
 	{
-		// all the possible outputs are static types
 		free((void*)(inputs->output_tuple_def->type_info));
 		free((void*)(inputs->output_tuple_def));
 		inputs->output_tuple_def = NULL;
 	}
 
-	if(inputs->partition_tuple_defs != NULL)
-	{
-		for(uint64_t i = 0; i < inputs->partitions_count; i++)
-		{
-			destroy_type_info_recursively(inputs->partition_tuple_defs[i]->type_info, NULL);
-			free((void*)(inputs->partition_tuple_defs[i]));
-		}
-		free(inputs->partition_tuple_defs);
-		inputs->partition_tuple_defs = NULL;
-	}
-
 	free(inputs);
 }
 
-operator_resource_counter setup_deletion_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, uint64_t table_id, uint64_t deletion_batch_size, int output_flags)
+operator_resource_counter setup_deletion_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags)
 {
 	transaction* tx = input_operator->self_query_plan->curr_tx;
 
@@ -412,42 +405,9 @@ operator_resource_counter setup_deletion_operator(operator* o, operator* input_o
 
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
-	// fetch all the partitions of this table, and a record definition for each one of them
-	uint64_t partitions_count = 0;
-	rhendb_table_partition* table_partitions = get_partitions_for_table_from_catalog(&(tx->rdb->cat_mgr), tx->snapshot, table_id, &partitions_count);
-	if(table_partitions == NULL || partitions_count == 0)
-	{
-		printf("no partitions for the table to be deleted from for deletion_operator\n");
-		exit(-1);
-	}
-
-	tuple_def** partition_tuple_defs = malloc(sizeof(tuple_def*) * partitions_count);
-	if(partition_tuple_defs == NULL)
-		exit(-1);
-	for(uint64_t i = 0; i < partitions_count; i++)
-	{
-		data_type_info* partition_type_info = get_data_type_info_for_rhendb_table_partition_from_catalog(&(tx->rdb->cat_mgr), tx->snapshot, &(table_partitions[i]));
-		if(!are_identical_type_info(partition_type_info->containees[0].al.type_info, tx->rdb->mvcc_hdr_type_info))
-		{
-			printf("must have mvcc_header for deletion_operator in the tuples of table_partition for deletion_operator\n");
-			exit(-1);
-		}
-		partition_tuple_defs[i] = malloc(sizeof(tuple_def));
-		initialize_tuple_def(partition_tuple_defs[i], partition_type_info);
-	}
-
 	operator_resource_counter result = {.buffer_counter = 1, .job_counter = 1, .thread_counter = 1}; // lock a page delete tuples and exit, so 1 buffer atmost
 	if(o == NULL)
-	{
-		for(uint64_t i = 0; i < partitions_count; i++)
-		{
-			destroy_type_info_recursively(partition_tuple_defs[i]->type_info, NULL);
-			free((partition_tuple_defs[i]));
-		}
-		free(partition_tuple_defs);
-		free(table_partitions);
 		return result;
-	}
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -492,8 +452,11 @@ operator_resource_counter setup_deletion_operator(operator* o, operator* input_o
 
 		if(MUST_OUTPUT_HEAP_TUPLE(output_flags))
 		{
-			printf("outputting the deleted heap tuple is not supported by deletion_operator\n");
-			exit(-1);
+			strncpy(output_dti->containees[output_dti_element_count].field_name, ftabl->table_info.name, 64);
+			output_dti->containees[output_dti_element_count].al.type_info = ftabl->final_readers_tuple_def.type_info;
+
+			output_tuple_max_size += 8 + get_maximum_tuple_size(&(ftabl->final_readers_tuple_def));
+			output_dti_element_count++;
 		}
 
 		initialize_tuple_data_type_info(output_dti, "deleted_tuple_context", 0, output_tuple_max_size, output_dti_element_count);
@@ -507,10 +470,7 @@ operator_resource_counter setup_deletion_operator(operator* o, operator* input_o
 	*((input_values*)(o->inputs)) = (input_values){
 		.input_tuple_def = input_tuple_def,
 		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
-		.table_id = table_id,
-		.table_partitions = table_partitions,
-		.partition_tuple_defs = partition_tuple_defs,
-		.partitions_count = partitions_count,
+		.ftabl = ftabl,
 		.partition_id_from_source_positional_accessor = partition_id_from_source_positional_accessor,
 		.tuple_pointer_from_source_positional_accessor = tuple_pointer_from_source_positional_accessor,
 		.deletion_batch_size = deletion_batch_size,

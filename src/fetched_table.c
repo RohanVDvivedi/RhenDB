@@ -39,7 +39,6 @@ static void initialize_final_readers_tuple_def(fetched_table* ftabl, const data_
 	}
 
 	initialize_tuple_data_type_info(final_readers_data_type_info, ftabl->table_info.name, 0, final_readers_data_type_info_max_size, last_partition_type_info->element_count);
-	finalize_type_info(final_readers_data_type_info);
 
 	initialize_tuple_def(&(ftabl->final_readers_tuple_def), final_readers_data_type_info);
 }
@@ -66,8 +65,8 @@ fetched_table* fetch_table_from_catalog_manager(catalog_manager* catmgr_p, const
 
 	// fetch all the partitions of this table, there is always atleast one of them
 	ftabl->partitions_count = 0;
-	ftabl->table_partitons_info = get_partitions_for_table_from_catalog(catmgr_p, ss_p, ftabl->table_info.id, &(ftabl->partitions_count));
-	if(ftabl->table_partitons_info == NULL || ftabl->partitions_count == 0)
+	ftabl->table_partitions_info = get_partitions_for_table_from_catalog(catmgr_p, ss_p, ftabl->table_info.id, &(ftabl->partitions_count));
+	if(ftabl->table_partitions_info == NULL || ftabl->partitions_count == 0)
 	{
 		free(ftabl);
 		return NULL;
@@ -89,7 +88,7 @@ fetched_table* fetch_table_from_catalog_manager(catalog_manager* catmgr_p, const
 	for(uint64_t i = 0; i < ftabl->partitions_count; i++)
 	{
 		uint64_t temp;
-		ftabl->table_partitions_attributes_info[i] = get_attributes_for_catalog_object_from_catalog(catmgr_p, ss_p, ftabl->table_info.id, ftabl->table_partitons_info[i].partition_id, &temp);
+		ftabl->table_partitions_attributes_info[i] = get_attributes_for_catalog_object_from_catalog(catmgr_p, ss_p, ftabl->table_info.id, ftabl->table_partitions_info[i].partition_id, &temp);
 		if(temp > UINT32_MAX)
 		{
 			printf("ISSUE (in fetched_table) more than UINT32_MAX attributes in a table for some partition\n");
@@ -97,7 +96,7 @@ fetched_table* fetch_table_from_catalog_manager(catalog_manager* catmgr_p, const
 		}
 		ftabl->attributes_count_per_partition[i] = temp;
 
-		data_type_info* partition_type_info = get_data_type_info_for_rhendb_table_partition_from_catalog(catmgr_p, ss_p, &(ftabl->table_partitons_info[i]));
+		data_type_info* partition_type_info = get_data_type_info_for_rhendb_table_partition_from_catalog(catmgr_p, ss_p, &(ftabl->table_partitions_info[i]));
 		initialize_tuple_def(&(ftabl->table_partition_tuple_defs[i]), partition_type_info);
 	}
 
@@ -198,7 +197,7 @@ void destroy_fetched_table(fetched_table* ftabl)
 	free(ftabl->table_partition_tuple_defs);
 	free(ftabl->attributes_count_per_partition);
 	free(ftabl->table_partitions_attributes_info);
-	free(ftabl->table_partitons_info);
+	free(ftabl->table_partitions_info);
 
 	free(ftabl);
 }
