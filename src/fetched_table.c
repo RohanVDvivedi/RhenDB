@@ -119,7 +119,7 @@ void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void*
 	uint32_t final_element_count = ftabl->attributes_count_per_partition[ftabl->partitions_count - 1];
 
 	uint32_t projected_tuple_size = get_minimum_tuple_size(final_readers_tuple_def);
-	uint32_t projected_tuple_capacity = projected_tuple_size;
+	uint64_t projected_tuple_capacity = projected_tuple_size;
 	void* projected_tuple = malloc(projected_tuple_capacity);
 	if(projected_tuple == NULL)
 		exit(-1);
@@ -128,10 +128,8 @@ void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void*
 	// the mvcc_header at position 0 is common to every partition, so it is always copied over
 	while(!set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(0), projected_tuple, partition_tuple_def, STATIC_POSITION(0), partition_tuple, projected_tuple_capacity - projected_tuple_size))
 	{
-		projected_tuple_capacity = min(projected_tuple_capacity * 2, get_maximum_tuple_size(final_readers_tuple_def));
+		projected_tuple_capacity = projected_tuple_capacity * 2;
 		projected_tuple = realloc(projected_tuple, projected_tuple_capacity);
-		if(projected_tuple == NULL)
-			exit(-1);
 	}
 	projected_tuple_size = get_tuple_size(final_readers_tuple_def, projected_tuple);
 
@@ -150,18 +148,9 @@ void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void*
 			continue;
 		}
 
-		// this attribute was added after this partition (or dropped and re-added), so it must be NULL
+		// skipping is equal to setting it to NULL
 		if(final_attrs[f].rel_pos_in_owner < partition_attrs[p].rel_pos_in_owner)
 		{
-			while(!set_element_in_tuple(final_readers_tuple_def, STATIC_POSITION(f), projected_tuple, NULL_DATUM, projected_tuple_capacity - projected_tuple_size))
-			{
-				projected_tuple_capacity = min(projected_tuple_capacity * 2, get_maximum_tuple_size(final_readers_tuple_def));
-				projected_tuple = realloc(projected_tuple, projected_tuple_capacity);
-				if(projected_tuple == NULL)
-					exit(-1);
-			}
-			projected_tuple_size = get_tuple_size(final_readers_tuple_def, projected_tuple);
-
 			f++;
 			continue;
 		}
@@ -169,10 +158,8 @@ void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void*
 		// identical rel_pos_in_owner, so this is the very same attribute, insert it
 		while(!set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(f), projected_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, projected_tuple_capacity - projected_tuple_size))
 		{
-			projected_tuple_capacity = min(projected_tuple_capacity * 2, get_maximum_tuple_size(final_readers_tuple_def));
+			projected_tuple_capacity = projected_tuple_capacity * 2;
 			projected_tuple = realloc(projected_tuple, projected_tuple_capacity);
-			if(projected_tuple == NULL)
-				exit(-1);
 		}
 		projected_tuple_size = get_tuple_size(final_readers_tuple_def, projected_tuple);
 
@@ -180,21 +167,7 @@ void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void*
 		f++;
 	}
 
-	// every attribute of the final_readers_tuple_def that was not matched above was added after this
-	// partition, so it must explicitly be set to NULL, init_tuple does not necessarily leave it so
-	while(f < final_element_count)
-	{
-		while(!set_element_in_tuple(final_readers_tuple_def, STATIC_POSITION(f), projected_tuple, NULL_DATUM, projected_tuple_capacity - projected_tuple_size))
-		{
-			projected_tuple_capacity = min(projected_tuple_capacity * 2, get_maximum_tuple_size(final_readers_tuple_def));
-			projected_tuple = realloc(projected_tuple, projected_tuple_capacity);
-			if(projected_tuple == NULL)
-				exit(-1);
-		}
-		projected_tuple_size = get_tuple_size(final_readers_tuple_def, projected_tuple);
-
-		f++;
-	}
+	// skip the rest i.e. let then be NULL
 
 	return projected_tuple;
 }
