@@ -71,7 +71,7 @@ struct catalog_manager
 	// table_part_id_* will remain 0 if owner_id is not a table
 
 	catalog_clust_table index_fragments_table;
-	// only supports insert/delete no updates to any attribute, fully delete the data structures here at the root_page_ids on garbage ciollection
+	// only supports insert/delete no updates to any attribute, fully delete the data structures here at the root_page_ids on garbage collection
 	// key(table_id, index_id, partition_id) -> mvcc_hdr, root_page_id
 
 	catalog_heap_table indices_table;
@@ -79,7 +79,7 @@ struct catalog_manager
 	// mvcc_hdr, id, name, table_id, access_methos(btree or hash), predicate_expr
 
 	catalog_clust_table table_partitions_table;
-	// only supports insert/delete no updates to any attribute, fully delete the data structures here at the root_page_ids on garbage ciollection
+	// only supports insert/delete no updates to any attribute, fully delete the data structures here at the root_page_ids on garbage collection
 	// key(table_id, partition_id) -> mvcc_hdr, heap_root_page_id, blobs_root_page_id
 	// partition_id starts with 1 and is not globally unique, but is per table unique
 

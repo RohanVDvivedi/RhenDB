@@ -1,9 +1,11 @@
 PICKED TASKS
 
 HEAP TABLE OPERATORS SOURCE/SINK
- * don't let create these operators it they do not have a right snapshot
+ * don't let create these operators it they do not have a valid snapshot
   * scan_operator
-    * scans all partitions for the table, maintains/needs 2 buffers per max_worker_count, and worker_count number of threads
+    * scans all partitions for the table, maintains/needs 2 buffers per max_concurrent_jobs_count, and max_concurrent_jobs_count number of threads
+    * inputs maintains the next_partition_index_to_scan startong at 0, iterating everytime a jobs picks one, take a lock and increment it
+    * just like inserter and deleter take fetched_table* ftabl as input
   * pointer_lookup_operator, lookup by fixed table_id, partition_id and tuple_pointer provided as positional_accessors
     * just like deleter also takes in lookup_batch_size
     * and also max_worker_count as input
@@ -33,12 +35,13 @@ DB acess operators
  * for unique constraint maintain a lock in lock_manager and hold lock on the 80-bit serialized hash value and then only check the unique btree index
 
  * hook to lock the older version in shared or exclusive mode upon scan
- * deletion may be allowed to wait or skip tuple it can not delete, decie on this policy and get back
+ * deletion may be allowed to wait or skip tuple it can not delete, decide on this policy and get back
 
 PRIORITY HIGH LEVEL TASKS (not yet prioritized)
 
 * aggregate functions
  * group_concat -> canctaenate all strings in same group, into a volatile string
+ * aggregate_into_array -> put all composite types into a jsonb array
  * gcd -> same return type for the number (ponder over support for lcm)
  * bitwise_and/or/xor -> only integer types wiuth same number of bytes/bits in them
  * logical_and/or/xor -> single bit number, doen after type casting to bool
