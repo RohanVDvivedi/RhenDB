@@ -61,6 +61,9 @@ struct input_values
 
 	// cached here for snapshot and transaction_id
 	transaction* tx;
+
+	// this is the tuple_size at which finding free page, we previously failed
+	uint32_t will_fail_finding_free_enough_page_on_required_space;
 };
 
 typedef struct extended_column_data extended_column_data;
@@ -446,12 +449,17 @@ static void execute(operator* o)
 				while(is_persistent_page_NULL(&ppage, engine->pam_p))
 				{
 					// find the right amount of space this record will need
+					uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(partition_tuple_def->size_def), heap_record_clone);
+					if(required_space < inputs->will_fail_finding_free_enough_page_on_required_space) // try only if we are attempting to insert an even smaller tuple
 					{
-						uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(partition_tuple_def->size_def), heap_record_clone);
 						ppage = find_heap_page_with_enough_unused_space_from_heap_table(insertion_table_partition->heap_root_page_id, required_space, &ppage_unused_space_in_entry, inputs->global_heap_notifier, &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
 						if(abort_error)
 							goto ABORT_ERROR;
 						is_new_page = 0;
+
+						// if we just failed mark that we failed at this size
+						if(is_persistent_page_NULL(&ppage, engine->pam_p))
+							inputs->will_fail_finding_free_enough_page_on_required_space = min(required_space, inputs->will_fail_finding_free_enough_page_on_required_space);
 					}
 					if(is_persistent_page_NULL(&ppage, engine->pam_p))
 					{
@@ -901,6 +909,7 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 		.output_tuple_def = output_tuple_def,
 		.additional_flags = additional_flags,
 		.tx = tx,
+		.will_fail_finding_free_enough_page_on_required_space = tx->rdb->persistent_acid_rage_engine.pam_p->pas.page_size, // assume we will always succeed
 	};
 
 	// all heap_table-specific structs are initialized after `inputs` exists, directly on it:
