@@ -77,6 +77,19 @@ struct transaction
 	temporary_extension_store temp_ext_stores[TEMPORARY_EXTENSION_STORE_COUNT];
 };
 
+// additional_flags for the insertion operator and scan operator, they toggle the additional book keeping
+// that the operator is expected to perform, over and above the insert itself
+#define RESCAN_PROTECTION_ENABLED   1
+// used when the same query scans and inserts OR updates to the same table, only insertion or only scan on the same table does not need it
+// when passed insertion operator inserts inserted tuple pointers to inserted_tuple_pointers, and the same query scans checks if it needs to skip them
+#define SAVEPOINT_LOGGING_ENABLED   2
+// used when there is a savepoint defined prior to this call
+// when passed every insertion and deletion is logged in the savepoint_log as (takble_id, partition_id, tuple_pointer), so that it can be rolled back, by null-ing the xmin or xmax
+
+#define IS_RESCAN_PROTECTION_ENABLED(flags)  ((flags) & RESCAN_PROTECTION_ENABLED)
+
+#define IS_SAVEPOINT_LOGGING_ENABLED(flags)  ((flags) & SAVEPOINT_LOGGING_ENABLED)
+
 transaction initialize_transaction(rhendb* rdb);
 
 // registers that there was an insert at the given tuple_pointer for the current query

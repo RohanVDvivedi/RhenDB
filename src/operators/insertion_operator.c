@@ -54,7 +54,10 @@ struct input_values
 	heap_table_accumulative_notifier local_blob_htan;
 
 	int output_flags; // same flags as table_operator_output_type.h
+
 	const tuple_def* output_tuple_def; // will remain set to NULL, if output_flags is 0
+
+	int additional_flags; // same flags as given in transaction.h, toggles the additional book keeping this operator performs
 
 	// cached here for snapshot and transaction_id
 	transaction* tx;
@@ -494,8 +497,11 @@ static void execute(operator* o)
 			if(abort_error)
 				goto ABORT_ERROR;
 
-			// register the inserted tuple_pointer so scans skip it, then commit the insert mini transaction
-			register_inserted_tuple_pointer(inputs->tx, tptr);
+			// register the inserted tuple_pointer, only if rescan protection was asked for, so that the
+			// scans in this very query do not rescan it, then commit the mini transaction
+			if(IS_RESCAN_PROTECTION_ENABLED(inputs->additional_flags))
+				register_inserted_tuple_pointer(inputs->tx, tptr);
+
 			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 
 			// everything went successfully now make heap_record_clone the read heap_record
@@ -724,7 +730,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-operator_resource_counter setup_insertion_operator(operator* o, operator* input_operator, positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier)
+operator_resource_counter setup_insertion_operator(operator* o, operator* input_operator, positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags)
 {
 	transaction* tx = input_operator->self_query_plan->curr_tx;
 
@@ -861,9 +867,10 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
 		.ftabl = ftabl,
 		.insertion_from_source_positional_accessors = insertion_from_source_positional_accessors,
-		.output_flags = output_flags,
 		.global_heap_notifier = global_heap_notifier,
+		.output_flags = output_flags,
 		.output_tuple_def = output_tuple_def,
+		.additional_flags = additional_flags,
 		.tx = tx,
 		.optimistic_insertion_page_id = tx->rdb->persistent_acid_rage_engine.pam_p->pas.NULL_PAGE_ID,
 		.possible_insertion_index = 0,

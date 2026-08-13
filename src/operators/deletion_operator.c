@@ -53,6 +53,8 @@ struct input_values
 
 	const tuple_def* output_tuple_def;
 
+	int additional_flags; // same flags as given in transaction.h, toggles the additional book keeping this operator performs
+
 	transaction* tx;
 };
 
@@ -384,7 +386,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-operator_resource_counter setup_deletion_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags)
+operator_resource_counter setup_deletion_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags)
 {
 	transaction* tx = input_operator->self_query_plan->curr_tx;
 
@@ -479,6 +481,7 @@ operator_resource_counter setup_deletion_operator(operator* o, operator* input_o
 		.deletion_batch_size = deletion_batch_size,
 		.output_flags = output_flags,
 		.output_tuple_def = output_tuple_def,
+		.additional_flags = additional_flags,
 		.tx = tx,
 	};
 
