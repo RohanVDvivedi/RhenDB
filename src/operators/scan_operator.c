@@ -228,11 +228,7 @@ static int scan_partition(operator* o, uint64_t partition_index_in_info)
 	kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("scanner_read_only_mini_tx_aborted"));
 
 	if(hti_p != NULL)
-	{
 		delete_heap_table_iterator(hti_p, NULL, &abort_error);
-		if(abort_error)
-			goto ABORT_ERROR;
-	}
 
 	deinit_heap_table_tuple_definitions(&httd);
 
