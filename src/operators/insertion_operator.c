@@ -28,7 +28,7 @@
 	heap table insertion operator
 */
 
-#define PAGE_FILL_PER_TUPLE 0.4
+#define PAGE_FILL_PER_TUPLE 0.47
 
 // minimum tuple_size for the partition's tuple_def + 32 * number of extended types must fit PAGE_FILL_PER_TUPLE * page_size of the persistent rage engine
 
