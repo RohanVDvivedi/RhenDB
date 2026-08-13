@@ -61,12 +61,6 @@ struct input_values
 
 	// cached here for snapshot and transaction_id
 	transaction* tx;
-
-	uint64_t optimistic_insertion_page_id; // optimistic attributes below are only valid if this page_id is not NULL_PAGE_ID
-	uint32_t possible_insertion_index;
-
-	int is_optimistic_page_self_created_new_page;
-	uint32_t optimistic_insertion_page_unused_space_in_entry;
 };
 
 typedef struct extended_column_data extended_column_data;
@@ -356,17 +350,43 @@ static void execute(operator* o)
 
 	const tuple_def* partition_tuple_def = &(inputs->ftabl->table_partition_tuple_defs[inputs->ftabl->partitions_count-1]);
 
+	// ppage to be release on every return path if it is not NULL
+	// use this heap_page between tuple_inserts
+	persistent_page ppage = get_NULL_persistent_page(engine->pam_p);
+	uint32_t possible_insertion_index = 0;
+	int is_ppage_self_created_new_page = 0;
+	uint32_t ppage_unused_space_in_entry = 0;
+
+	// for heap_table insertions (does not concern blob_store insertions)
+	uint64_t page_latches_to_be_borrowed = 0;
+
 	while(1)
 	{
 		int no_more_data = 0;
 		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
 		{
+			// release ppage
+			if(!is_persistent_page_NULL(&ppage, engine->pam_p))
+			{
+				int abort_error = 0;
+				release_lock_on_persistent_page(engine->pam_p, NULL, &ppage, NONE_OPTION, &abort_error);
+				page_latches_to_be_borrowed--; // done customarily
+			}
+
 			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
 			return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
 		{
+			// release ppage
+			if(!is_persistent_page_NULL(&ppage, engine->pam_p))
+			{
+				int abort_error = 0;
+				release_lock_on_persistent_page(engine->pam_p, NULL, &ppage, NONE_OPTION, &abort_error);
+				page_latches_to_be_borrowed--; // done customarily
+			}
+
 			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_consume"));
 			return ;
 		}
@@ -379,6 +399,14 @@ static void execute(operator* o)
 		void* heap_record = build_heap_record_without_extensions(inputs, tuple, &ext_col_data, &ext_col_data_size); // numeric -> sign_bits and exponent are also populated here
 		if(heap_record == NULL)
 		{
+			// release ppage
+			if(!is_persistent_page_NULL(&ppage, engine->pam_p))
+			{
+				int abort_error = 0;
+				release_lock_on_persistent_page(engine->pam_p, NULL, &ppage, NONE_OPTION, &abort_error);
+				page_latches_to_be_borrowed--; // done customarily
+			}
+
 			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("insertion_failed_materialization"));
 			return;
 		}
@@ -392,12 +420,8 @@ static void execute(operator* o)
 			void* heap_record_clone = malloc(engine->pam_p->pas.page_size);
 			memory_move(heap_record_clone, heap_record, get_tuple_size(partition_tuple_def, heap_record));
 
-			uint64_t page_latches_to_be_borrowed = 0;
 			int abort_error = 0;
 			void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
-
-			// init an empty persistent page
-			persistent_page ppage = get_NULL_persistent_page(engine->pam_p);
 
 			// make it permanent with valid head_chunk pointers, if they are needed
 			build_heap_record_with_prefix_bytes(inputs, heap_record_clone, ext_col_data, ext_col_data_size, min_tx_id, &abort_error, &should_retry);
@@ -418,22 +442,13 @@ static void execute(operator* o)
 
 			while(1) // keep finding a new page until insertion succeeds
 			{
+				is_new_page = 0;
 				while(is_persistent_page_NULL(&ppage, engine->pam_p))
 				{
-					if(inputs->optimistic_insertion_page_id != engine->pam_p->pas.NULL_PAGE_ID)
-					{
-						ppage = acquire_persistent_page_with_lock(engine->pam_p, min_tx_id, inputs->optimistic_insertion_page_id, WRITE_LOCK, &abort_error);
-						if(abort_error)
-							goto ABORT_ERROR;
-						is_new_page = 0;
-						break;
-					}
-
 					// find the right amount of space this record will need
 					{
 						uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(partition_tuple_def->size_def), heap_record_clone);
-						uint32_t unused_space_in_entry = 0;
-						ppage = find_heap_page_with_enough_unused_space_from_heap_table(insertion_table_partition->heap_root_page_id, required_space, &unused_space_in_entry, inputs->global_heap_notifier, &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
+						ppage = find_heap_page_with_enough_unused_space_from_heap_table(insertion_table_partition->heap_root_page_id, required_space, &ppage_unused_space_in_entry, inputs->global_heap_notifier, &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
 						if(abort_error)
 							goto ABORT_ERROR;
 						is_new_page = 0;
@@ -446,37 +461,34 @@ static void execute(operator* o)
 						is_new_page = 1;
 					}
 
-					// populate optimistically finding path for the next insert
-					inputs->optimistic_insertion_page_id = ppage.page_id;
-					inputs->possible_insertion_index = 0;
+					// populate this call related locals
+					possible_insertion_index = 0;
+					is_ppage_self_created_new_page = is_new_page;
 
-					if(is_new_page)
-						inputs->is_optimistic_page_self_created_new_page = 1; // only valid if optimistic_insertion_page_id is not NULL_PAGE_ID
-					else
-						inputs->is_optimistic_page_self_created_new_page = 0;
 					break;
 				}
 
 				// insert tuple on the page, this would surely not fail
-				uint32_t tuple_index = insert_in_heap_page(&ppage, heap_record_clone, &(inputs->possible_insertion_index), partition_tuple_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_id, &abort_error);
+				uint32_t tuple_index = insert_in_heap_page(&ppage, heap_record_clone, &possible_insertion_index, partition_tuple_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_id, &abort_error);
 				if(abort_error)
 					goto ABORT_ERROR;
 				if(tuple_index == INVALID_TUPLE_INDEX)
 				{
-					if(!is_new_page && inputs->is_optimistic_page_self_created_new_page) // this also implies new_page was surely put into tracking in some previous iteration
+					if(!is_new_page && is_ppage_self_created_new_page) // this also implies new_page was surely put into tracking in some previous iteration
 					{
 						// and it's unused space varied from what it is being tracked at, so put it in local htan, this is out new page it's entries in it's free space can be fixed
-						if(inputs->optimistic_insertion_page_unused_space_in_entry != get_unused_space_on_heap_page(&ppage, &(engine->pam_p->pas), partition_tuple_def))
-							push_to_heap_table_accumulative_notifier(&(inputs->local_heap_htan), insertion_table_partition->heap_root_page_id, inputs->optimistic_insertion_page_unused_space_in_entry, inputs->optimistic_insertion_page_id);
+						if(ppage_unused_space_in_entry != get_unused_space_on_heap_page(&ppage, &(engine->pam_p->pas), partition_tuple_def))
+							push_to_heap_table_accumulative_notifier(&(inputs->local_heap_htan), insertion_table_partition->heap_root_page_id, ppage_unused_space_in_entry, ppage.page_id);
 					}
 
 					// release lock on this page
 					release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
 					if(abort_error)
 						goto ABORT_ERROR;
+					possible_insertion_index = 0;
+					is_ppage_self_created_new_page = 0;
+					ppage_unused_space_in_entry = 0;
 
-					inputs->optimistic_insertion_page_id = engine->pam_p->pas.NULL_PAGE_ID;
-					inputs->possible_insertion_index = 0;
 					continue; // try again, with a new page
 				}
 				tptr = (tuple_pointer){.page_id = ppage.page_id, .tuple_index = tuple_index};
@@ -486,22 +498,18 @@ static void execute(operator* o)
 			// if it is new page created in this iteration, get it tracked
 			if(is_new_page)
 			{
-				inputs->optimistic_insertion_page_unused_space_in_entry = get_unused_space_on_heap_page(&ppage, &(engine->pam_p->pas), partition_tuple_def);
+				ppage_unused_space_in_entry = get_unused_space_on_heap_page(&ppage, &(engine->pam_p->pas), partition_tuple_def);
 				track_unused_space_in_heap_table(insertion_table_partition->heap_root_page_id, &ppage, &(inputs->httd), engine->pam_p, engine->pmm_p, min_tx_id, &abort_error);
 				if(abort_error)
 					goto ABORT_ERROR;
 			}
-
-			// release lock on this page
-			release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
-			if(abort_error)
-				goto ABORT_ERROR;
 
 			// register the inserted tuple_pointer, only if rescan protection was asked for, so that the
 			// scans in this very query do not rescan it, then commit the mini transaction
 			if(IS_RESCAN_PROTECTION_ENABLED(inputs->additional_flags))
 				register_inserted_tuple_pointer(inputs->tx, tptr);
 
+			// complete commit
 			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 
 			// everything went successfully now make heap_record_clone the read heap_record
@@ -510,14 +518,18 @@ static void execute(operator* o)
 			break;
 
 			ABORT_ERROR:
+
 			free(heap_record_clone);
+
+			// release ppage
 			if(!is_persistent_page_NULL(&ppage, engine->pam_p))
 				release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
-			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
+			possible_insertion_index = 0;
+			is_ppage_self_created_new_page = 0;
+			ppage_unused_space_in_entry = 0;
 
-			// reset the optimistic path parameters as we might end up using pages allocated as part of the aborted transaction
-			inputs->optimistic_insertion_page_id = engine->pam_p->pas.NULL_PAGE_ID;
-			inputs->possible_insertion_index = 0;
+			// complete abort
+			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 
 			if(should_retry == 0)
 			{
@@ -526,7 +538,7 @@ static void execute(operator* o)
 					free(ext_col_data[i].value);
 				free(ext_col_data);
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("insert_failed"));
-				return ;
+				return ; // ppage is surely released on this path
 			}
 
 			continue; // retry
@@ -553,9 +565,9 @@ static void execute(operator* o)
 
 			while(1)
 			{
-				uint64_t page_latches_to_be_borrowed = 0;
+				uint64_t page_latches_to_be_borrowed2 = 0; // another one for the minitransactions concerning the blob_store, always starts with 0
 				int abort_error = 0;
-				void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
+				void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed2);
 
 				uint32_t wrote = 0;
 				if(e->is_numeric)
@@ -599,11 +611,11 @@ static void execute(operator* o)
 						goto ABORT_ERROR1;
 				}
 
-				engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
+				engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed2);
 				break;
 
 				ABORT_ERROR1:;
-				engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
+				engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed2);
 				continue;
 			}
 
@@ -689,6 +701,15 @@ static void execute(operator* o)
 			if(!produced)
 			{
 				free(heap_record);
+
+				// release ppage
+				if(!is_persistent_page_NULL(&ppage, engine->pam_p))
+				{
+					int abort_error = 0;
+					release_lock_on_persistent_page(engine->pam_p, NULL, &ppage, NONE_OPTION, &abort_error);
+					page_latches_to_be_borrowed--; // done customarily
+				}
+
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
 				return ;
 			}
@@ -696,6 +717,14 @@ static void execute(operator* o)
 
 		free(heap_record);
 		continue;
+	}
+
+	// release ppage
+	if(!is_persistent_page_NULL(&ppage, engine->pam_p))
+	{
+		int abort_error = 0;
+		release_lock_on_persistent_page(engine->pam_p, NULL, &ppage, NONE_OPTION, &abort_error);
+		page_latches_to_be_borrowed--; // done customarily
 	}
 
 	return ;
@@ -872,8 +901,6 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 		.output_tuple_def = output_tuple_def,
 		.additional_flags = additional_flags,
 		.tx = tx,
-		.optimistic_insertion_page_id = tx->rdb->persistent_acid_rage_engine.pam_p->pas.NULL_PAGE_ID,
-		.possible_insertion_index = 0,
 	};
 
 	// all heap_table-specific structs are initialized after `inputs` exists, directly on it:
