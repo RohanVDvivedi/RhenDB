@@ -89,4 +89,7 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 // deletes (marks deleted) operator for the tuples of the heap table
 operator_resource_counter setup_deletion_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags);
 
+// scan operator
+operator_resource_counter setup_scan_operator(operator* o, query_plan* qp, const fetched_table* ftabl, uint32_t max_concurrent_jobs_count, int output_flags, int additional_flags);
+
 #endif
