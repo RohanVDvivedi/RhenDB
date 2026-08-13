@@ -512,6 +512,25 @@ static void execute(operator* o)
 					goto ABORT_ERROR;
 			}
 
+			// now if we are sure that no other tuple will fit on this page, then we will release lock on this page in advance
+			// this allows concurrent transactions to proceed without stalling
+			if(get_minimum_tuple_size(partition_tuple_def) > get_unused_space_on_heap_page(&ppage, &(engine->pam_p->pas), partition_tuple_def))
+			{
+				if(!is_new_page && is_ppage_self_created_new_page) // this also implies new_page was surely put into tracking in some previous iteration
+				{
+					// and it's unused space varied from what it is being tracked at, so put it in local htan, this is out new page it's entries in it's free space can be fixed
+					if(ppage_unused_space_in_entry != get_unused_space_on_heap_page(&ppage, &(engine->pam_p->pas), partition_tuple_def))
+						push_to_heap_table_accumulative_notifier(&(inputs->local_heap_htan), insertion_table_partition->heap_root_page_id, ppage_unused_space_in_entry, ppage.page_id);
+				}
+
+				release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
+				if(abort_error)
+					goto ABORT_ERROR;
+				possible_insertion_index = 0;
+				is_ppage_self_created_new_page = 0;
+				ppage_unused_space_in_entry = 0;
+			}
+
 			// register the inserted tuple_pointer, only if rescan protection was asked for, so that the
 			// scans in this very query do not rescan it, then commit the mini transaction
 			if(IS_RESCAN_PROTECTION_ENABLED(inputs->additional_flags))
