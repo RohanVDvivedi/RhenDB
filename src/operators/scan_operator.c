@@ -200,6 +200,8 @@ static int scan_partition(operator* o, uint64_t partition_index_in_info)
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
 				release_lock_on_persistent_page(engine->pam_p, NULL, &ppage, NONE_OPTION, &abort_error);
 				delete_heap_table_iterator(hti_p, NULL, &abort_error);
+				hti_p = NULL;
+				deinit_heap_table_tuple_definitions(&httd);
 				return 0;
 			}
 		}
@@ -216,6 +218,7 @@ static int scan_partition(operator* o, uint64_t partition_index_in_info)
 	}
 
 	delete_heap_table_iterator(hti_p, NULL, &abort_error);
+	hti_p = NULL;
 	if(abort_error)
 		goto ABORT_ERROR;
 
