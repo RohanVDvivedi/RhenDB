@@ -32,6 +32,16 @@
 
 // minimum tuple_size for the partition's tuple_def + 32 * number of extended types must fit PAGE_FILL_PER_TUPLE * page_size of the persistent rage engine
 
+typedef enum column_kind column_kind;
+enum column_kind
+{
+	PRIMITIVE_NUMERAL_INSERTION_CASE,
+	TEXT_INSERTION_CASE,
+	BLOB_INSERTION_CASE,
+	NUMERIC_INSERTION_CASE,
+	JSONB_INSERTION_CASE,
+};
+
 typedef struct input_values input_values;
 struct input_values
 {
@@ -42,6 +52,9 @@ struct input_values
 	const fetched_table* ftabl; // fetched_table contains everything about the table
 
 	positional_accessor* insertion_from_source_positional_accessors;
+
+	// array to quickly select a particular case for column insertion, for each one of the columns in partition vs insertion_from_source_positional_accessors
+	column_kind* column_kinds;
 
 	// heap_table free-space defs for the partition's heap (record_def == partition_tuple_def)
 	heap_table_tuple_defs httd;
@@ -155,92 +168,111 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 		if(!get_value_from_element_from_tuple(&src, inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1], input_tuple) || is_datum_NULL(&src))
 			continue; // leave the column NULL
 
-		const data_type_info* col_dti = partition_tuple_def->type_info->containees[i].al.type_info;
+		// const data_type_info* col_dti = partition_tuple_def->type_info->containees[i].al.type_info;
 		const data_type_info* src_dti = get_type_info_for_element_from_tuple_def(inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1]);
 
-		if(is_primitive_numeral_type_info(col_dti))
+		switch(inputs->column_kinds[i])
 		{
-			while(!set_element_in_tuple_from_tuple(partition_tuple_def, STATIC_POSITION(i), record, inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1], input_tuple, record_capacity - record_size))
+			case PRIMITIVE_NUMERAL_INSERTION_CASE :
 			{
-				record_capacity *= 2;
-				record = realloc(record, record_capacity);
+				while(!set_element_in_tuple_from_tuple(partition_tuple_def, STATIC_POSITION(i), record, inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1], input_tuple, record_capacity - record_size))
+				{
+					record_capacity *= 2;
+					record = realloc(record, record_capacity);
+				}
+				record_size = get_tuple_size(partition_tuple_def, record);
+				break;
 			}
-			record_size = get_tuple_size(partition_tuple_def, record);
-			continue;
-		}
-
-		if(!is_extended_type_info(col_dti))
-		{
-			printf("BUG (inserter) :: attribute %u is neither primitive-numeral nor extended\n", i);
-			exit(-1);
-		}
-
-		while(!set_element_in_tuple(partition_tuple_def, STATIC_POSITION(i), record, EMPTY_DATUM, record_capacity - record_size))
-		{
-			record_capacity *= 2;
-			record = realloc(record, record_capacity);
-		}
-		record_size = get_tuple_size(partition_tuple_def, record);
-
-		extended_column_data e = {
-			.index = i,
-			.head_chunk_pointer = get_NULL_tuple_pointer(&(tx->rdb->persistent_acid_rage_engine.pam_p->pas)),
-			.tail_chunk_pointer = get_NULL_tuple_pointer(&(tx->rdb->persistent_acid_rage_engine.pam_p->pas)),
-			.written_size = 0
-		};
-
-		if(is_numeric_type_info(col_dti))
-		{
-			int mrc = 0;
-			materialized_numeric m = materialize_numeric1(src, src_dti, tx, &mrc);
-			if(mrc)
+			case NUMERIC_INSERTION_CASE :
 			{
-				for(uint32_t p = 0; p < (*ext_col_data_size); p++)
-					free((*ext_col_data)[p].value);
-				free(*ext_col_data);
-				(*ext_col_data) = NULL;
-				(*ext_col_data_size) = 0;
-				free(record);
-				return NULL;
-			}
+				while(!set_element_in_tuple(partition_tuple_def, STATIC_POSITION(i), record, EMPTY_DATUM, record_capacity - record_size))
+				{
+					record_capacity *= 2;
+					record = realloc(record, record_capacity);
+				}
+				record_size = get_tuple_size(partition_tuple_def, record);
 
-			numeric_sign_bits sign_bits; int16_t exponent;
-			get_sign_bits_and_exponent_for_materialized_numeric(&m, &sign_bits, &exponent);
-			set_sign_bits_and_exponent_for_numeric(sign_bits, exponent, record, partition_tuple_def, STATIC_POSITION(i));
-			record_size = get_tuple_size(partition_tuple_def, record);
+				extended_column_data e = {
+					.index = i,
+					.head_chunk_pointer = get_NULL_tuple_pointer(&(tx->rdb->persistent_acid_rage_engine.pam_p->pas)),
+					.tail_chunk_pointer = get_NULL_tuple_pointer(&(tx->rdb->persistent_acid_rage_engine.pam_p->pas)),
+					.written_size = 0
+				};
 
-			uint32_t digit_count = get_digits_count_for_materialized_numeric(&m);
-			if(digit_count == 0)
-			{
+				int mrc = 0;
+				materialized_numeric m = materialize_numeric1(src, src_dti, tx, &mrc);
+				if(mrc)
+				{
+					for(uint32_t p = 0; p < (*ext_col_data_size); p++)
+						free((*ext_col_data)[p].value);
+					free(*ext_col_data);
+					(*ext_col_data) = NULL;
+					(*ext_col_data_size) = 0;
+					free(record);
+					return NULL;
+				}
+
+				numeric_sign_bits sign_bits; int16_t exponent;
+				get_sign_bits_and_exponent_for_materialized_numeric(&m, &sign_bits, &exponent);
+				set_sign_bits_and_exponent_for_numeric(sign_bits, exponent, record, partition_tuple_def, STATIC_POSITION(i));
+				record_size = get_tuple_size(partition_tuple_def, record);
+
+				uint32_t digit_count = get_digits_count_for_materialized_numeric(&m);
+				if(digit_count == 0)
+				{
+					deinitialize_materialized_numeric(&m);
+					continue; // sign+exponent fully describe it, nothing to stream
+				}
+
+				uint64_t* digits = malloc(sizeof(uint64_t) * digit_count);
+				for(uint32_t i = 0; i < digit_count; i++)
+					digits[i] = get_nth_digit_from_materialized_numeric(&m, i);
 				deinitialize_materialized_numeric(&m);
-				continue; // sign+exponent fully describe it, nothing to stream
+
+				e.is_numeric = 1; e.total_size = digit_count; e.value = digits;
+
+				(*ext_col_data)[(*ext_col_data_size)++] = e;
+
+				break;
 			}
-
-			uint64_t* digits = malloc(sizeof(uint64_t) * digit_count);
-			for(uint32_t i = 0; i < digit_count; i++)
-				digits[i] = get_nth_digit_from_materialized_numeric(&m, i);
-			deinitialize_materialized_numeric(&m);
-
-			e.is_numeric = 1; e.total_size = digit_count; e.value = digits;
-		}
-		else // text / blob / jsonb
-		{
-			uint32_t len = 0, cap = 0; int mrc = 0;
-			char* bytes = materialize_tb(src, src_dti, tx, &len, &cap, &mrc);
-			if(mrc)
+			case TEXT_INSERTION_CASE :
+			case BLOB_INSERTION_CASE :
+			case JSONB_INSERTION_CASE :
+			// text / blob / jsonb
 			{
-				for(uint32_t p = 0; p < (*ext_col_data_size); p++)
-					free((*ext_col_data)[p].value);
-				free(*ext_col_data);
-				(*ext_col_data) = NULL;
-				(*ext_col_data_size) = 0;
-				free(record);
-				return NULL;
-			}
-			e.is_numeric = 0; e.total_size = len; e.value = bytes;
-		}
+				while(!set_element_in_tuple(partition_tuple_def, STATIC_POSITION(i), record, EMPTY_DATUM, record_capacity - record_size))
+				{
+					record_capacity *= 2;
+					record = realloc(record, record_capacity);
+				}
+				record_size = get_tuple_size(partition_tuple_def, record);
 
-		(*ext_col_data)[(*ext_col_data_size)++] = e;
+				extended_column_data e = {
+					.index = i,
+					.head_chunk_pointer = get_NULL_tuple_pointer(&(tx->rdb->persistent_acid_rage_engine.pam_p->pas)),
+					.tail_chunk_pointer = get_NULL_tuple_pointer(&(tx->rdb->persistent_acid_rage_engine.pam_p->pas)),
+					.written_size = 0
+				};
+
+				uint32_t len = 0, cap = 0; int mrc = 0;
+				char* bytes = materialize_tb(src, src_dti, tx, &len, &cap, &mrc);
+				if(mrc)
+				{
+					for(uint32_t p = 0; p < (*ext_col_data_size); p++)
+						free((*ext_col_data)[p].value);
+					free(*ext_col_data);
+					(*ext_col_data) = NULL;
+					(*ext_col_data_size) = 0;
+					free(record);
+					return NULL;
+				}
+				e.is_numeric = 0; e.total_size = len; e.value = bytes;
+
+				(*ext_col_data)[(*ext_col_data_size)++] = e;
+
+				break;
+			}
+		}
 	}
 
 	return record;
@@ -767,6 +799,12 @@ static void clean_up_resources(operator* o)
 		inputs->input_iterator = NULL;
 	}
 
+	if(inputs->column_kinds != NULL)
+	{
+		free(inputs->column_kinds);
+		inputs->column_kinds = NULL;
+	}
+
 	deinitialize_heap_table_accumulative_notifier(&(inputs->local_heap_htan));
 	deinitialize_heap_table_accumulative_notifier(&(inputs->local_blob_htan));
 	deinit_heap_table_tuple_definitions(&(inputs->httd));
@@ -918,11 +956,13 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 	init_tuple_transformers(&(o->output_tuple_transformers), output_tuple_def);
 
 	o->inputs = malloc(sizeof(input_values));
-	*((input_values*)(o->inputs)) = (input_values){
+	input_values* inputs = o->inputs;
+	(*inputs) = (input_values){
 		.input_tuple_def = input_tuple_def,
 		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
 		.ftabl = ftabl,
 		.insertion_from_source_positional_accessors = insertion_from_source_positional_accessors,
+		.column_kinds = malloc(partition_tuple_def->type_info->element_count * sizeof(column_kind)),
 		.global_heap_notifier = global_heap_notifier,
 		.output_flags = output_flags,
 		.output_tuple_def = output_tuple_def,
@@ -931,10 +971,29 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 		.will_fail_finding_free_enough_page_on_required_space = tx->rdb->persistent_acid_rage_engine.pam_p->pas.page_size, // assume we will always succeed
 	};
 
+	for(uint32_t i = 1; i < partition_tuple_def->type_info->element_count; i++)
+	{
+		const data_type_info* col_dti = get_type_info_for_element_from_tuple_def(partition_tuple_def, STATIC_POSITION(i));
+		if(is_primitive_numeral_type_info(col_dti))
+			inputs->column_kinds[i] = PRIMITIVE_NUMERAL_INSERTION_CASE;
+		else if(is_text_extended_type_info(col_dti))
+			inputs->column_kinds[i] = TEXT_INSERTION_CASE;
+		else if(is_blob_extended_type_info(col_dti))
+			inputs->column_kinds[i] = BLOB_INSERTION_CASE;
+		else if(is_numeric_extended_type_info(col_dti))
+			inputs->column_kinds[i] = NUMERIC_INSERTION_CASE;
+		else if(is_jsonb_extended_type_info(col_dti))
+			inputs->column_kinds[i] = JSONB_INSERTION_CASE;
+		else
+		{
+			printf("unsupported type info in column of table_partition for insertion_operator (not possible)\n");
+			exit(-1);
+		}
+	}
+
 	// all heap_table-specific structs are initialized after `inputs` exists, directly on it:
 	// the partition heap-table free-space defs and the two accumulative notifiers (heap + blob store),
 	// both drained (fixed) at HTAN_FIX_THRESHOLD and holding up to HTAN_CAPACITY entries.
-	input_values* inputs = o->inputs;
 	init_heap_table_tuple_definitions(&(inputs->httd), &(tx->rdb->persistent_acid_rage_engine.pam_p->pas), partition_tuple_def);
 	initialize_heap_table_accumulative_notifier(&(inputs->local_heap_htan), HTAN_CAPACITY);
 	initialize_heap_table_accumulative_notifier(&(inputs->local_blob_htan), HTAN_CAPACITY);
