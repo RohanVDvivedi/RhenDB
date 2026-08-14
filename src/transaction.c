@@ -177,8 +177,8 @@ extension_reader_iterator_callback* get_callback_and_engine_for_extended_type(tr
 
 	if(ext_sub_type_len != 1)
 	{
-		(*ex_engine) = NULL;
-		return NULL;
+		printf("BUG in storing extended type, ext_sub_type not identified, it is %.*s\n", (int)ext_sub_type_len, (ext_sub_type_len == 0) ? "" : ext_sub_type);
+		exit(-1);
 	}
 
 	if(ext_sub_type[0] == PERSISTENT_EXT_SUB_TYPE[0])
@@ -199,8 +199,8 @@ extension_reader_iterator_callback* get_callback_and_engine_for_extended_type(tr
 		return pass_through;
 	}
 
-	(*ex_engine) = NULL;
-	return NULL;
+	printf("BUG in storing extended type, ext_sub_type not identified, it is %.*s\n", (int)ext_sub_type_len, (ext_sub_type_len == 0) ? "" : ext_sub_type);
+	exit(-1);
 }
 
 void fix_unused_space_entries_in_store(transaction* tx, temporary_extension_store* temp_ext_store)

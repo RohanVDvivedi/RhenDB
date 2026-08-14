@@ -206,7 +206,10 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 				if(mrc)
 				{
 					for(uint32_t p = 0; p < (*ext_col_data_size); p++)
-						free((*ext_col_data)[p].value);
+					{
+						if((*ext_col_data)[p].must_free_value)
+							free((*ext_col_data)[p].value);
+					}
 					free(*ext_col_data);
 					(*ext_col_data) = NULL;
 					(*ext_col_data_size) = 0;
@@ -261,7 +264,10 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 				if(mrc)
 				{
 					for(uint32_t p = 0; p < (*ext_col_data_size); p++)
-						free((*ext_col_data)[p].value);
+					{
+						if((*ext_col_data)[p].must_free_value)
+							free((*ext_col_data)[p].value);
+					}
 					free(*ext_col_data);
 					(*ext_col_data) = NULL;
 					(*ext_col_data_size) = 0;
@@ -596,7 +602,10 @@ static void execute(operator* o)
 			{
 				free(heap_record);
 				for(uint32_t i = 0; i < ext_col_data_size; i++)
-					free(ext_col_data[i].value);
+				{
+					if(ext_col_data[i].must_free_value)
+						free(ext_col_data[i].value);
+				}
 				free(ext_col_data);
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("insert_failed"));
 				return ; // ppage is surely released on this path
