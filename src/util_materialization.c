@@ -161,30 +161,46 @@ materialized_numeric materialize_numeric1(const datum uval, const data_type_info
 
 		if(sb == POSITIVE_NUMERIC || sb == NEGATIVE_NUMERIC)   /* only finite non-zero values carry digits */
 		{
-			uint64_t buf[256];
+			uint64_t valid_digits_count = 0;
 			while(1)
 			{
+				// first expand capacity, if it is full
+				if(valid_digits_count == get_capacity_digits_list(&(mn.digits)) && !expand_digits_list(&(mn.digits)))
+				{
+					nri.close_digits_stream(&nri);
+					(*error_code) = MATERIALIZED_RESULT_TOO_BIG;
+					deinitialize_materialized_numeric(&mn);
+					return mn;
+				}
+
+				// now expand element count to fully fill it up
+				if(valid_digits_count == get_element_count_digits_list(&(mn.digits)) && !make_room_from_front_in_digits_list(&(mn.digits), get_element_count_digits_list(&(mn.digits)), get_capacity_digits_list(&(mn.digits)) - get_element_count_digits_list(&(mn.digits))))
+				{
+					nri.close_digits_stream(&nri);
+					(*error_code) = MATERIALIZED_RESULT_TOO_BIG;
+					deinitialize_materialized_numeric(&mn);
+					return mn;
+				}
+
+				cy_uint contiguous_digit_slots_count = 0;
+				const uint64_t* digit_slots = peek_all_contiguous_from_front_in_digits_list(&(mn.digits), valid_digits_count, &contiguous_digit_slots_count);
+
 				int err = 0;
-				uint32_t digits_read = nri.read_digits_as_stream(&nri, buf, 256, &err);
+				uint32_t digits_read = nri.read_digits_as_stream(&nri, (uint64_t*)digit_slots, min(UINT32_MAX, contiguous_digit_slots_count), &err);
 				if(err)
 				{
 					printf("experienced abort_error while materializing numeric type\n");
 					exit(-1);
 				}
+
 				if(digits_read == 0)
 					break;
-				/* digits stream MSD-first; push_lsd appends, keeping the MSD at the front */
-				for(uint32_t i = 0; i < digits_read; i++)
-				{
-					if(!push_lsd_in_materialized_numeric(&mn, buf[i]))
-					{
-						nri.close_digits_stream(&nri);
-						(*error_code) = MATERIALIZED_RESULT_TOO_BIG;
-						deinitialize_materialized_numeric(&mn);
-						return mn;
-					}
-				}
+				valid_digits_count += digits_read;
 			}
+
+			// discard unused digits that now happen to have garbage
+			if(get_element_count_digits_list(&(mn.digits)) > valid_digits_count)
+				remove_elements_from_back_of_digits_list(&(mn.digits), 0, get_element_count_digits_list(&(mn.digits)) - valid_digits_count);
 		}
 		nri.close_digits_stream(&nri);
 	}

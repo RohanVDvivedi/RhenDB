@@ -77,15 +77,7 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 
 	if(mn.sign_bits == POSITIVE_NUMERIC || mn.sign_bits == NEGATIVE_NUMERIC)
 	{
-		// copy all digits outside in an array
 		uint32_t digits_count = get_digits_count_for_materialized_numeric(&mn);
-		uint64_t* digits = malloc(digits_count * sizeof(uint64_t));
-
-		for(uint32_t i = 0; i < digits_count; i++)
-			digits[i] = get_nth_digit_from_materialized_numeric(&mn, i);
-
-		// destroy the intermediate result
-		deinitialize_materialized_numeric(&mn);
 
 		{
 			int abort_error_dummy = 0;
@@ -99,8 +91,11 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 			// write just the prefix
 			while(digits_written < digits_count && wr->digits_written_to_prefix < wr->digits_to_be_written_to_prefix)
 			{
-				uint32_t digits_to_write_this_iteration = min(wr->digits_to_be_written_to_prefix - wr->digits_written_to_prefix, digits_count - digits_written);
-				uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, digits + digits_written, digits_to_write_this_iteration, NULL, NULL, &abort_error_dummy);
+				uint32_t next_digits_count = 0;
+				const uint64_t* next_digits = peek_all_contiguous_digits_from_materialized_numeric(&mn, digits_written, &next_digits_count);
+
+				uint32_t digits_to_write_this_iteration = min(min(wr->digits_to_be_written_to_prefix - wr->digits_written_to_prefix, digits_count - digits_written), next_digits_count);
+				uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, (uint64_t*)next_digits, digits_to_write_this_iteration, NULL, NULL, &abort_error_dummy);
 				if(digits_written_this_iteration == 0)
 					break;
 				digits_written += digits_written_this_iteration;
@@ -119,7 +114,10 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 
 				while(digits_written < digits_count)
 				{
-					uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, digits + digits_written, digits_count - digits_written, htan_p, NULL, &abort_error_dummy);
+					uint32_t next_digits_count = 0;
+					const uint64_t* next_digits = peek_all_contiguous_digits_from_materialized_numeric(&mn, digits_written, &next_digits_count);
+
+					uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, (uint64_t*)next_digits, min(next_digits_count, digits_count - digits_written), htan_p, NULL, &abort_error_dummy);
 					if(digits_written_this_iteration == 0)
 						break;
 					digits_written += digits_written_this_iteration;
@@ -136,7 +134,8 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 			}
 		}
 
-		free(digits);
+		// the materialized_numeric was streamed from directly, release it now
+		deinitialize_materialized_numeric(&mn);
 	}
 	else // only positive/negative numbers have digits
 	{

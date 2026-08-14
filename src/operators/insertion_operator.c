@@ -95,11 +95,28 @@ struct extended_column_data
 
 	int is_numeric; // picks the write iterator: digit_write_iterator vs binary_write_iterator
 
-	// char* for blob, text and uint64_t* numeric
-	void* value;
+	// selected by is_numeric
+	union
+	{
+		struct
+		{
+			void* value;       // char* for blob, text and jsonb
+			int must_free_value;
+		};
 
-	int must_free_value;
+		// only digits of numeric, if any required
+		digits_list digits;
+	};
 };
+
+// releases whatever the union holds, for the case selected by is_numeric
+static void deinit_extended_column_data(extended_column_data* e)
+{
+	if(e->is_numeric)
+		deinitialize_digits_list(&(e->digits));
+	else if(e->must_free_value)
+		free(e->value);
+}
 
 #define HTAN_CAPACITY       30
 #define HTAN_FIX_THRESHOLD  13
@@ -206,10 +223,7 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 				if(mrc)
 				{
 					for(uint32_t p = 0; p < (*ext_col_data_size); p++)
-					{
-						if((*ext_col_data)[p].must_free_value)
-							free((*ext_col_data)[p].value);
-					}
+						deinit_extended_column_data(&((*ext_col_data)[p]));
 					free(*ext_col_data);
 					(*ext_col_data) = NULL;
 					(*ext_col_data_size) = 0;
@@ -229,12 +243,7 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 					continue; // sign+exponent fully describe it, nothing to stream
 				}
 
-				uint64_t* digits = malloc(sizeof(uint64_t) * digit_count);
-				for(uint32_t i = 0; i < digit_count; i++)
-					digits[i] = get_nth_digit_from_materialized_numeric(&m, i);
-				deinitialize_materialized_numeric(&m);
-
-				e.is_numeric = 1; e.total_size = digit_count; e.value = digits; e.must_free_value = 1;
+				e.is_numeric = 1; e.total_size = digit_count; e.digits = m.digits;
 
 				(*ext_col_data)[(*ext_col_data_size)++] = e;
 
@@ -264,10 +273,7 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 				if(mrc)
 				{
 					for(uint32_t p = 0; p < (*ext_col_data_size); p++)
-					{
-						if((*ext_col_data)[p].must_free_value)
-							free((*ext_col_data)[p].value);
-					}
+						deinit_extended_column_data(&((*ext_col_data)[p]));
 					free(*ext_col_data);
 					(*ext_col_data) = NULL;
 					(*ext_col_data_size) = 0;
@@ -342,7 +348,10 @@ static void build_heap_record_with_prefix_bytes(input_values* inputs, void* reco
 			digit_write_iterator* it = get_new_digit_write_iterator(record, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 			while(e->written_size < limit)
 			{
-				uint32_t w = append_to_digit_write_iterator(it, ((uint64_t*)e->value) + e->written_size, (uint32_t)(limit - e->written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, abort_error);
+				cy_uint next_digits_count = 0;
+				const uint64_t* next_digits = peek_all_contiguous_from_front_in_digits_list(&(e->digits), e->written_size, &next_digits_count); // there will be non-empty returned if the counts up above are correct
+
+				uint32_t w = append_to_digit_write_iterator(it, next_digits, min((uint32_t)(limit - e->written_size), next_digits_count) , &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, abort_error);
 				if(*abort_error)
 				{
 					delete_digit_write_iterator(it, min_tx_id, abort_error);
@@ -602,10 +611,7 @@ static void execute(operator* o)
 			{
 				free(heap_record);
 				for(uint32_t i = 0; i < ext_col_data_size; i++)
-				{
-					if(ext_col_data[i].must_free_value)
-						free(ext_col_data[i].value);
-				}
+					deinit_extended_column_data(&(ext_col_data[i]));
 				free(ext_col_data);
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("insert_failed"));
 				return ; // ppage is surely released on this path
@@ -626,7 +632,10 @@ static void execute(operator* o)
 			const extended_column_data* e = &(ext_col_data[k]);
 
 			if(e->written_size == e->total_size)
+			{
+				deinit_extended_column_data((extended_column_data*)e);
 				continue;
+			}
 			else if(e->written_size > e->total_size)
 			{
 				printf("BUG (inserter) :: written more than total size by the inserter operator\n");
@@ -646,7 +655,10 @@ static void execute(operator* o)
 					uint64_t curr_written_size = e->written_size;
 					while(curr_written_size < e->total_size)
 					{
-						wrote = append_to_digit_write_iterator(it, ((uint64_t*)e->value) + curr_written_size, (uint32_t)(e->total_size - curr_written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, &abort_error);
+						cy_uint next_digits_count = 0;
+						const uint64_t* next_digits = peek_all_contiguous_from_front_in_digits_list(&(e->digits), curr_written_size, &next_digits_count); // there will be non-empty returned if the counts up above are correct
+
+						wrote = append_to_digit_write_iterator(it, next_digits, min((uint32_t)(e->total_size - curr_written_size), next_digits_count), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, &abort_error);
 						if(abort_error)
 						{
 							delete_digit_write_iterator(it, min_tx_id, &abort_error);
@@ -692,8 +704,7 @@ static void execute(operator* o)
 			// keep the blob store's free-space entries in check as we go (best effort, own mini txns)
 			fix_unused_space_entries_after_insertions(engine, &(inputs->local_blob_htan), &(engine->bstd.httd), 0);
 
-			if(e->must_free_value)
-				free(e->value);
+			deinit_extended_column_data((extended_column_data*)e);
 		}
 
 		free(ext_col_data);
