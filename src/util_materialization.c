@@ -21,7 +21,7 @@ char* materialize_tb(const datum uval, const data_type_info* dti, transaction* t
 
 	char* buffer = NULL;
 
-	if(dti == NULL)
+	if(dti == NULL || !is_extended_type_info(dti))
 	{
 		(*length) = uval.string_or_binary_size;
 		(*capacity) = 0;
