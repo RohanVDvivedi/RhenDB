@@ -37,23 +37,30 @@ char* materialize_tb(const datum uval, const data_type_info* dti, transaction* t
 		extension_reader_iterator_callback* callbacks = get_callback_and_engine_for_extended_type(tx, dti, &ex_engine, &temp);
 
 		// now it is surely extended, but if it is all inlined then we can get away with not making allocation
-		if(ex_engine == NULL) // tuple pointer is null for an extended type, it's all inline
+		if(ex_engine != NULL)
 		{
-			const data_type_info* prefix_dti;
-			datum prefix;
-			if(get_nested_containee_from_datum(&prefix, &prefix_dti, &uval, dti, EXTENDED_PREFIX_POS_ACC))
+			const data_type_info* temp;
+			datum tpl_ptr;
+			if(get_nested_containee_from_datum(&tpl_ptr, &temp, &uval, dti, EXTENSION_HEAD_POS_ACC))
 			{
-				if(is_datum_NULL(&prefix)) // uval datum is not NULL, but the prefix it, so consider this as empty string
+				if(is_datum_NULL(&tpl_ptr) || is_tuple_pointer_NULL2(tpl_ptr.tuple_value, &(ex_engine->pam_p->pas))) // tuple pointer is null, it's all inline
 				{
-					(*length) = 0;
-					(*capacity) = 0;
-					return NULL;
-				}
-				else
-				{
-					(*length) = prefix.string_or_binary_size;
-					(*capacity) = 0;
-					return (char*)prefix.string_or_binary_value;
+					datum prefix;
+					if(get_nested_containee_from_datum(&prefix, &temp, &uval, dti, EXTENDED_PREFIX_POS_ACC))
+					{
+						if(is_datum_NULL(&prefix)) // uval datum is not NULL, but the prefix it, so consider this as empty string
+						{
+							(*length) = 0;
+							(*capacity) = 0;
+							return NULL;
+						}
+						else
+						{
+							(*length) = prefix.string_or_binary_size;
+							(*capacity) = 0;
+							return (char*)prefix.string_or_binary_value;
+						}
+					}
 				}
 			}
 		}
