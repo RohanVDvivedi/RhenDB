@@ -608,8 +608,8 @@ static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, i
 		destroy_type_info_recursively(v->type_info.dti_p, NULL);
 	if(v->buffer)
 		free(v->buffer);
-	v->buffer = buf;
-	v->capacity = len;
+	v->buffer = (cap > 0) ? buf : NULL;
+	v->capacity = cap;
 	v->value = (datum){.string_or_binary_value = buf, .string_or_binary_size = len};
 	v->type_info = (expr_type_info){.type = target, .dti_p = NULL, .should_free_dti_p = 0};
 	return RHENDB_EE_OK;

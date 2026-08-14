@@ -97,6 +97,8 @@ struct extended_column_data
 
 	// char* for blob, text and uint64_t* numeric
 	void* value;
+
+	int must_free_value;
 };
 
 #define HTAN_CAPACITY       30
@@ -229,7 +231,7 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 					digits[i] = get_nth_digit_from_materialized_numeric(&m, i);
 				deinitialize_materialized_numeric(&m);
 
-				e.is_numeric = 1; e.total_size = digit_count; e.value = digits;
+				e.is_numeric = 1; e.total_size = digit_count; e.value = digits; e.must_free_value = 1;
 
 				(*ext_col_data)[(*ext_col_data_size)++] = e;
 
@@ -266,7 +268,7 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 					free(record);
 					return NULL;
 				}
-				e.is_numeric = 0; e.total_size = len; e.value = bytes;
+				e.is_numeric = 0; e.total_size = len; e.value = bytes; e.must_free_value = (cap > 0);
 
 				(*ext_col_data)[(*ext_col_data_size)++] = e;
 
@@ -681,7 +683,8 @@ static void execute(operator* o)
 			// keep the blob store's free-space entries in check as we go (best effort, own mini txns)
 			fix_unused_space_entries_after_insertions(engine, &(inputs->local_blob_htan), &(engine->bstd.httd), 0);
 
-			free(e->value);
+			if(e->must_free_value)
+				free(e->value);
 		}
 
 		free(ext_col_data);
