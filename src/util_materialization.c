@@ -39,8 +39,9 @@ char* materialize_tb(const datum uval, const data_type_info* dti, transaction* t
 		// now it is surely extended, but if it is all inlined then we can get away with not making allocation
 		if(ex_engine == NULL) // tuple pointer is null for an extended type, it's all inline
 		{
+			const data_type_info* prefix_dti;
 			datum prefix;
-			if(get_nested_containee_from_datum(&prefix, &temp, &uval, dti, EXTENDED_PREFIX_POS_ACC))
+			if(get_nested_containee_from_datum(&prefix, &prefix_dti, &uval, dti, EXTENDED_PREFIX_POS_ACC))
 			{
 				if(is_datum_NULL(&prefix)) // uval datum is not NULL, but the prefix it, so consider this as empty string
 				{
