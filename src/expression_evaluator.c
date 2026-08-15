@@ -604,6 +604,14 @@ static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, i
 		return *error_code;
 	}
 
+	if(cap == 0 && v->buffer != NULL) // if cap == 0 (returned buffer is owned by v itself) and v->buffer != NULL (is present is suppossed to be freed)
+	{ // then make it owned
+		char* temp = malloc(len);
+		memory_move(temp, buf, len);
+		cap = len;
+		buf = temp;
+	}
+
 	if(v->type_info.should_free_dti_p && v->type_info.dti_p)
 		destroy_type_info_recursively(v->type_info.dti_p, NULL);
 	if(v->buffer)
