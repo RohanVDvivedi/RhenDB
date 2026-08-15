@@ -94,7 +94,7 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 				uint32_t next_digits_count = 0;
 				const uint64_t* next_digits = peek_all_contiguous_digits_from_materialized_numeric(&mn, digits_written, &next_digits_count);
 
-				uint32_t digits_to_write_this_iteration = min(min(wr->digits_to_be_written_to_prefix - wr->digits_written_to_prefix, digits_count - digits_written), next_digits_count);
+				uint32_t digits_to_write_this_iteration = min(min(min(wr->digits_to_be_written_to_prefix - wr->digits_written_to_prefix, digits_count - digits_written), next_digits_count), UINT32_MAX);
 				uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, (uint64_t*)next_digits, digits_to_write_this_iteration, NULL, NULL, &abort_error_dummy);
 				if(digits_written_this_iteration == 0)
 					break;
@@ -117,7 +117,7 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 					uint32_t next_digits_count = 0;
 					const uint64_t* next_digits = peek_all_contiguous_digits_from_materialized_numeric(&mn, digits_written, &next_digits_count);
 
-					uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, (uint64_t*)next_digits, min(next_digits_count, digits_count - digits_written), htan_p, NULL, &abort_error_dummy);
+					uint32_t digits_written_this_iteration = append_to_digit_write_iterator(wr, (uint64_t*)next_digits, min(min(next_digits_count, digits_count - digits_written), UINT32_MAX), htan_p, NULL, &abort_error_dummy);
 					if(digits_written_this_iteration == 0)
 						break;
 					digits_written += digits_written_this_iteration;

@@ -658,7 +658,7 @@ static void execute(operator* o)
 						cy_uint next_digits_count = 0;
 						const uint64_t* next_digits = peek_all_contiguous_from_front_in_digits_list(&(e->digits), curr_written_size, &next_digits_count); // there will be non-empty returned if the counts up above are correct
 
-						wrote = append_to_digit_write_iterator(it, next_digits, min((uint32_t)(e->total_size - curr_written_size), next_digits_count), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, &abort_error);
+						wrote = append_to_digit_write_iterator(it, next_digits, min(min(e->total_size - curr_written_size, next_digits_count), UINT32_MAX), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, &abort_error);
 						if(abort_error)
 						{
 							delete_digit_write_iterator(it, min_tx_id, &abort_error);
@@ -678,7 +678,7 @@ static void execute(operator* o)
 					uint64_t curr_written_size = e->written_size;
 					while(curr_written_size < e->total_size)
 					{
-						wrote = append_to_binary_write_iterator(it, (const char*)e->value + curr_written_size, (uint32_t)(e->total_size - curr_written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, &abort_error);
+						wrote = append_to_binary_write_iterator(it, (const char*)e->value + curr_written_size, min(e->total_size - curr_written_size, UINT32_MAX), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, &abort_error);
 						if(abort_error)
 						{
 							delete_binary_write_iterator(it, min_tx_id, &abort_error);
