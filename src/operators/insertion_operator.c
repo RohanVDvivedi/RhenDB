@@ -330,7 +330,7 @@ static void build_heap_record_with_prefix_bytes(input_values* inputs, void* reco
 			// calculate actual prefix size, can be 0
 			e->prefix_size = remaining_space_per_element - 4;
 		}
-		e->prefix_size = min(e->prefix_size, engine->max_prefix_size_in_bytes);
+		e->prefix_size = min(e->prefix_size, engine->max_prefix_size_in_bytes); // cap it by what the engine supports in it's prefix at best
 		if(e->is_numeric) // if numeric count the number of digits it has
 			e->prefix_size /= BYTES_PER_NUMERIC_DIGIT;
 		e->prefix_size = min(e->prefix_size, e->total_size); // cap it by the total size
