@@ -8,9 +8,6 @@ HEAP TABLE OPERATORS SOURCE/SINK
     * input params just like delete operator, but checks mvcc visibility, before producing output
     * in additional flags add option to skip MVCC_VISIBILITY_CHECK_ENABLED
 
-  * catalog_manager to create a new partition just for speeding up scan queries
-
-
 
 
 
