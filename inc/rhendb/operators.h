@@ -92,4 +92,8 @@ operator_resource_counter setup_deletion_operator(operator* o, operator* input_o
 // scan operator
 operator_resource_counter setup_scan_operator(operator* o, query_plan* qp, const fetched_table* ftabl, uint32_t max_concurrent_jobs_count, int output_flags, int additional_flags);
 
+// looks up tuples by the (partition_id, tuple_pointer) pair for the tuples of the heap table
+// does the same thing as deletion_operator but does not delete the tuples returned
+operator_resource_counter setup_pointer_lookup_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags);
+
 #endif
