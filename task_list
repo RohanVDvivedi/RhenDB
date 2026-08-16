@@ -1,9 +1,5 @@
 PICKED TASKS
 
-
-
-* implement constant folding in expression_evaluator
- * store this constants in context in hashmap and
 * also materialized values by chunk_pointer and by what engine they live in
  * resets everytime new input_tuples are set
 
