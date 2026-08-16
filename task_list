@@ -28,7 +28,7 @@ PICKED TASKS
         }
       };
    }
-   * maintain ans store this as a record in linked_page_list maintained as a stack, push and pop only at the head, also we will need a rollback_to_savepoint function, and a set of save_point name maintained as a set
+   * maintain and store this as a record in linked_page_list maintained as a stack, push and pop only at the head, also we will need a rollback_to_savepoint function, and a set of save_point name maintained as a set
    * only pushes and pops are done using rwlock here, and inserts are only doen if there is atleast 1 savepoint name alive in the savepoint_names set\
    * no reset function will be needed here
    * we will let trash_cleaner do it's task of cleaning up inserts later in time
@@ -104,7 +104,7 @@ PRIORITY HIGH LEVEL TASKS (not yet prioritized)
  * implement a function to convert a byte to it's ascii value, can also allow type cast to do it
  * implement get date, time, with timezone, and time in string to unix epoch
  * implement concat and substring
- * implement double/numeric funtions, sin, cos, tan, asin, acos, atan, log, expr
+ * implement double/numeric funtions, sin, cos, tan, asin, acos, atan, log, exp
 
 * make composite_reference types, composed of persistent and volatile extended and inline components, like a union
   * for are_hashably_equivalent and can_compare, cross check all n^2 types
