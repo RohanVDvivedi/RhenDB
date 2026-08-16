@@ -122,7 +122,7 @@ int main(int argc, char** argv)
 		operator* smj = NULL;
 		{
 			operator* input_sorted_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_external_sort_operator(input_sorted_operator, TUPLES_DOWN_COUNTER_INF, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+			setup_sort_operator(input_sorted_operator, TUPLES_DOWN_COUNTER_INF, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 			printf("sorter for smj operator %p\n", input_sorted_operator);
 
 			smj = get_new_registered_operator_for_query_plan(qp);
@@ -140,15 +140,15 @@ int main(int argc, char** argv)
 		// match phase
 		{
 			operator* output_bnlj_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_external_sort_operator(output_bnlj_operator, TUPLES_DOWN_COUNTER_INF, bnlj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+			setup_sort_operator(output_bnlj_operator, TUPLES_DOWN_COUNTER_INF, bnlj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 			printf("sorter for output of bnlj operator %p\n", output_bnlj_operator);
 
 			operator* output_smj_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_external_sort_operator(output_smj_operator, TUPLES_DOWN_COUNTER_INF, smj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+			setup_sort_operator(output_smj_operator, TUPLES_DOWN_COUNTER_INF, smj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 			printf("sorter for output of smj operator %p\n", output_smj_operator);
 
 			operator* output_hj_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_external_sort_operator(output_hj_operator, TUPLES_DOWN_COUNTER_INF, hj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+			setup_sort_operator(output_hj_operator, TUPLES_DOWN_COUNTER_INF, hj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 			printf("sorter for output of hj operator %p\n", output_hj_operator);
 
 			operator* matcher1 = get_new_registered_operator_for_query_plan(qp);

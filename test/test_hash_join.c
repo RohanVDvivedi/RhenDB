@@ -158,7 +158,7 @@ int main(int argc, char** argv)
 		printf("join operator %p\n", join_operator);
 
 		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_external_sort_operator(sorter_operator, TUPLES_DOWN_COUNTER_INF, join_operator, 2, FINAL_KEY_POS, FINAL_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		setup_sort_operator(sorter_operator, TUPLES_DOWN_COUNTER_INF, join_operator, 2, FINAL_KEY_POS, FINAL_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 		printf("sorter for output operator %p\n", sorter_operator);
 
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);

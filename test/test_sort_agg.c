@@ -97,7 +97,7 @@ int main(int argc, char** argv)
 		printf("source operator %p\n", input_operator);
 
 		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_external_sort_operator(sorter_operator, TUPLES_DOWN_COUNTER_INF, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		setup_sort_operator(sorter_operator, TUPLES_DOWN_COUNTER_INF, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 		printf("sorter operator %p\n", sorter_operator);
 
 		operator* aggregate_operator = get_new_registered_operator_for_query_plan(qp);
@@ -105,7 +105,7 @@ int main(int argc, char** argv)
 		printf("aggregate operator %p\n", aggregate_operator);
 
 		operator* sorter_operator2 = get_new_registered_operator_for_query_plan(qp);
-		setup_external_sort_operator(sorter_operator2, TUPLES_DOWN_COUNTER_INF, aggregate_operator, 1, FINAL_SORT_KEY, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		setup_sort_operator(sorter_operator2, TUPLES_DOWN_COUNTER_INF, aggregate_operator, 1, FINAL_SORT_KEY, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 		printf("sorter operator %p\n", sorter_operator2);
 
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);

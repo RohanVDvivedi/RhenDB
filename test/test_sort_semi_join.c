@@ -146,7 +146,7 @@ int main(int argc, char** argv)
 		printf("source left operator %p\n", left_input_operator);
 
 		operator* left_sorter_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_external_sort_operator(left_sorter_operator, TUPLES_DOWN_COUNTER_INF, left_input_operator, RECORD_S_KEY_ELEMENT_COUNT, LEFT_KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		setup_sort_operator(left_sorter_operator, TUPLES_DOWN_COUNTER_INF, left_input_operator, RECORD_S_KEY_ELEMENT_COUNT, LEFT_KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 		printf("sorter for left operator %p\n", left_sorter_operator);
 
 		operator* right_input_operator = get_new_registered_operator_for_query_plan(qp);
@@ -154,7 +154,7 @@ int main(int argc, char** argv)
 		printf("source right operator %p\n", right_input_operator);
 
 		operator* right_sorter_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_external_sort_operator(right_sorter_operator, TUPLES_DOWN_COUNTER_INF, right_input_operator, RECORD_S_KEY_ELEMENT_COUNT, RIGHT_KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		setup_sort_operator(right_sorter_operator, TUPLES_DOWN_COUNTER_INF, right_input_operator, RECORD_S_KEY_ELEMENT_COUNT, RIGHT_KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 		printf("sorter for right operator %p\n", right_sorter_operator);
 
 		operator* join_operator = get_new_registered_operator_for_query_plan(qp);

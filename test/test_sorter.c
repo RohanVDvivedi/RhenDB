@@ -84,7 +84,7 @@ int main(int argc, char** argv)
 		#endif
 
 		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_external_sort_operator(sorter_operator, sorter_result_counter, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		setup_sort_operator(sorter_operator, sorter_result_counter, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 		printf("sorter operator %p\n", sorter_operator);
 
 		operator* result_operator = sorter_operator;
