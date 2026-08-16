@@ -2,19 +2,6 @@ PICKED TASKS
 
 
 
-
-HEAP TABLE OPERATORS SOURCE/SINK
-  * pointer_lookup_operator, lookup by fixed table_id, partition_id and tuple_pointer provided as positional_accessors
-    * input params just like delete operator, but checks mvcc visibility, before producing output
-    * in additional flags add option to skip MVCC_VISIBILITY_CHECK_ENABLED
-
-
-
-
------------------------------------------------------------------
-
-
-
 * implement constant folding in expression_evaluator
  * store this constants in context in hashmap and
 * also materialized values by chunk_pointer and by what engine they live in
@@ -134,19 +121,19 @@ PRIORITY HIGH LEVEL TASKS (not yet prioritized)
 
 FUTURE TASKS
 
- 2.* define statistics tables (*future and (low priority)) - persistent
+ 1.* define statistics tables (*future and (low priority)) - persistent
    * same structurally and composed of indexes and heap_tables
 
- 3.* lock_manager remaining tasks (*future)
+ 2.* lock_manager remaining tasks (*future)
    * deadlock detection and resolution task job (*future, for now rely on timeouts to back off and abort)
    * define basic lock martix for row, heap_table (ordering_lock), simple reader writer lock (*future, do it when query optimizer and catalog tables are ready)
 
- 4.* catalog_manager remaining tasks (*future)
+ 3.* catalog_manager remaining tasks (*future)
    * trash cleaner for catalog manager
 
- 5.* always sum up all the operator_resource_counter-s after making the operators and request that many resources from the rhendb's resource_usage_limiter-s
+ 4.* always sum up all the operator_resource_counter-s after making the operators and request that many resources from the rhendb's resource_usage_limiter-s
    * once the query is done and shutdown, free up all the resources
    * if required store the buffers_allotted and thread_alloted in the query plan, and free the resources when not needed by some means later
    * finally before we do all this, make sure that the operator actually calculates the right number of resources for bufferpool and threadpool
 
- 6.*trash cleaner to heap tables, locks the right partition and permanently deletes the tuples and discards the index entries in the same mini transaction, always in the same order
+ 5.*trash cleaner to heap tables, locks the right partition and permanently deletes the tuples and discards the index entries in the same mini transaction, always in the same order
