@@ -3004,6 +3004,62 @@ uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot*
 	}
 }
 
+uint64_t alter_table_new_partition(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id)
+{
+	rage_engine* engine = catmgr_p->catmgr_engine;
+
+	if(!ss_p->has_self_transaction_id)
+	{
+		printf("ISSUE in (catalog_manager) :: alter_table_new_partition needs a snapshot that has a self transaction id\n");
+		exit(-1);
+	}
+
+	// mvcc_header stamped on every catalog row born from this transaction, and not yet deleted
+	mvcc_header new_row_mvcc_hdr = (mvcc_header){
+		.is_xmin_NULL = 0,
+		.xmin = {.is_committed = 0, .is_aborted = 0, .transaction_id = ss_p->self_transaction_id},
+		.is_xmax_NULL = 1,
+	};
+
+	write_lock(&(catmgr_p->catlog_manager_lock), BLOCKING);
+
+	// retry the whole mini transaction for as long as it aborts, we return only on success or a logical failure
+	while(1)
+	{
+		uint64_t new_partition_id = 0; // returned, 0 == failure
+
+		int abort_error = 0;
+		uint64_t page_latches_to_be_borrowed = 0;
+		void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
+
+		// the schema is untouched, so no attribute rows are read, bounded or inserted here.
+		// an attribute applies to a partition when table_part_id_from <= partition_id and
+		// (table_part_id_to == 0 or partition_id < table_part_id_to), so every attribute that is
+		// still live (to == 0) automatically applies to the partition we are about to create.
+
+		// create the new partition, its heap and blob roots, and a fresh fragment of every index
+		// on this table, inserting all of their rows into the corresponding catalog tables
+		new_partition_id = create_new_partition_and_index_fragments(catmgr_p, ss_p, table_id, &new_row_mvcc_hdr, min_tx_id, &abort_error);
+		if(abort_error)
+			goto ABORT_ERROR;
+
+		// a table that does not exist (or is not visible to us) can not be given a new partition
+		if(new_partition_id == 0)
+		{
+			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
+			write_unlock(&(catmgr_p->catlog_manager_lock));
+			return 0;
+		}
+
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
+		write_unlock(&(catmgr_p->catlog_manager_lock));
+		return new_partition_id;
+
+		ABORT_ERROR:;
+		engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
+	}
+}
+
 int alter_table_rename_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t rel_pos_in_owner, char* new_name)
 {
 	rage_engine* engine = catmgr_p->catmgr_engine;

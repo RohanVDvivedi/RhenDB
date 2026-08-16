@@ -257,6 +257,10 @@ uint64_t alter_table_add_column(catalog_manager* catmgr_p, const mvcc_snapshot* 
 // returns 0 if this call fails
 uint64_t alter_table_drop_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t rel_pos_in_owner_to_drop);
 
+// returns new partition_id, and also creates new partitions of existing indices on the table for this partition, with new root_page_id-s
+// returns 0 if this call fails
+uint64_t alter_table_new_partition(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id);
+
 // rename a column to a new one
 int alter_table_rename_column(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, uint64_t table_id, uint64_t rel_pos_in_owner_to_drop, char* new_name);
 
