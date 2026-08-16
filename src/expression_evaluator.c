@@ -2378,14 +2378,10 @@ static void* rhendb_post_eval(const sql_expr_eval_context* ec_p, const sql_expre
 		rhendb_expr_eval_context* fctx = ec_p->context_p;
 
 		// record the node first, so that a value is only ever cached if it can also be released
-		if(fctx->folded_expressions_count == fctx->folded_expressions_capacity)
-		{
-			uint64_t nc = (fctx->folded_expressions_capacity == 0) ? 16 : (fctx->folded_expressions_capacity * 2);
-			void** ne = realloc(fctx->folded_expressions, sizeof(void*) * nc);
-			if(ne != NULL){ fctx->folded_expressions = ne; fctx->folded_expressions_capacity = nc; }
-		}
+		if(get_element_count_arraylist(&(fctx->folded_expressions)) == get_capacity_arraylist(&(fctx->folded_expressions)))
+			expand_arraylist(&(fctx->folded_expressions));   // no-op on failure, the push below then fails
 
-		if(fctx->folded_expressions_count < fctx->folded_expressions_capacity)
+		if(push_back_to_arraylist(&(fctx->folded_expressions), expr))
 		{
 			int error_code = 0;
 			expr_value* shallow = clone_cached_expr_value(result, ec_p, &error_code);
@@ -2393,9 +2389,10 @@ static void* rhendb_post_eval(const sql_expr_eval_context* ec_p, const sql_expre
 			{
 				// the result is kept, it owns its buffer and its mpd digits, the caller gets the copy
 				((sql_expression*)expr)->user_meta_value = result;
-				fctx->folded_expressions[fctx->folded_expressions_count++] = (void*)expr;
 				return shallow;
 			}
+			// could not make the copy, so do not cache either : take the node back off the list
+			pop_back_from_arraylist(&(fctx->folded_expressions));
 			if(shallow != NULL)
 				rhendb_delete_data(shallow, ec_p);
 		}
@@ -2494,9 +2491,7 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 
 	context_p->free_list_for_expr_value = NULL;
 
-	context_p->folded_expressions = NULL;
-	context_p->folded_expressions_count = 0;
-	context_p->folded_expressions_capacity = 0;
+	initialize_arraylist(&(context_p->folded_expressions), 16);
 
 	context_p->tx = tx;
 
@@ -2517,9 +2512,9 @@ void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_cont
 {
 	// release every constant that was folded onto the AST, and put those nodes back as they were,
 	// this MUST happen before the free list is drained, because the values go back onto it
-	for(uint64_t i = 0; i < context_p->folded_expressions_count; i++)
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(context_p->folded_expressions)); i++)
 	{
-		sql_expression* fe = context_p->folded_expressions[i];
+		sql_expression* fe = (sql_expression*)get_from_front_of_arraylist(&(context_p->folded_expressions), i);
 		if(fe->user_meta_value != NULL)
 		{
 			sql_expr_eval_context tmp = (sql_expr_eval_context){.context_p = context_p};
@@ -2528,10 +2523,7 @@ void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_cont
 		}
 		fe->user_meta_flags = 0;
 	}
-	free(context_p->folded_expressions);
-	context_p->folded_expressions = NULL;
-	context_p->folded_expressions_count = 0;
-	context_p->folded_expressions_capacity = 0;
+	deinitialize_arraylist(&(context_p->folded_expressions));
 
 	remove_all_from_hashmap(&(context_p->var_cache), &((notifier_interface){NULL, notify_removal_for_cache_entry}));
 	drain_free_list_for_expr_value(context_p);          /* the ONLY place the free list is released */

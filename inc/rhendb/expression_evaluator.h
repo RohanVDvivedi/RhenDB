@@ -17,6 +17,7 @@
 #include<mpdecimal.h>
 
 #include<cutlery/hashmap.h>
+#include<cutlery/arraylist.h>
 
 #include<rhendb/transaction.h>
 
@@ -101,9 +102,7 @@ struct rhendb_expr_eval_context
 	// recorded here, and delete_context_p_for_sql_expr_eval_context_for_rhendb() frees each value and
 	// clears the node again. that keeps the existing lifetime rule intact : the context dies before
 	// the expression does, and the expression is left exactly as it was found.
-	void** folded_expressions;
-	uint64_t folded_expressions_count;
-	uint64_t folded_expressions_capacity;
+	arraylist folded_expressions;
 
 	// FREE LIST OF RECYCLED expr_value-s, owned by this context.
 	//
