@@ -95,6 +95,16 @@ struct rhendb_expr_eval_context
 	// and to access the catalog_manager, for user defined types and functions
 	transaction* tx;
 
+	// CONSTANT FOLDING CACHE OWNERSHIP.
+	// the folded values themselves live on the AST, in sql_expression::user_meta_value, but the AST
+	// can not free them, it has no idea what an expr_value is. so every node we hang a cache on is
+	// recorded here, and delete_context_p_for_sql_expr_eval_context_for_rhendb() frees each value and
+	// clears the node again. that keeps the existing lifetime rule intact : the context dies before
+	// the expression does, and the expression is left exactly as it was found.
+	void** folded_expressions;
+	uint64_t folded_expressions_count;
+	uint64_t folded_expressions_capacity;
+
 	// FREE LIST OF RECYCLED expr_value-s, owned by this context.
 	//
 	// every AST node of an expression allocates one expr_value and frees it again, so evaluating a

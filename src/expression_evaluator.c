@@ -2263,6 +2263,148 @@ static void notify_removal_for_cache_entry(void* resource_p, const void* data_p)
 
 /* ------------------------------ context ------------------------------ */
 
+
+//
+//
+// CONSTANT UNFOLDING
+//
+// user_meta_flags bit RHENDB_EXPR_IS_CONSTANT records that this node has been proven constant, and
+// user_meta_value then holds the expr_value it always evaluates to, owned by the AST node.
+//
+// pre_eval  : a node already proven constant hands back a NON OWNING copy of its cached value and
+//             returns NULL, so evaluate_sql_expr never walks the subtree again.
+//             otherwise it optimistically marks the node constant and returns &user_meta_flags as
+//             the interim_context, so child_eval can clear that very bit.
+// child_eval: any child that is not itself constant makes this node not constant.
+// post_eval : if the node is still marked constant, the result is cached on it.
+// destroy   : nothing is ever allocated for the interim_context, so there is nothing to destroy,
+//             which is why destroy_process_context is left NULL in the context.
+//
+
+#define RHENDB_EXPR_IS_CONSTANT 1
+
+// a copy of a cached value that OWNS NOTHING : buffer is NULL and the dti is borrowed, so that
+// rhendb_delete_data() on it frees nothing that the cache still points at
+static expr_value* clone_cached_expr_value(const expr_value* src, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expr_value* v = new_val(src->type_info.type, ec_p);
+	if(v == NULL){ (*error_code) = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+
+	// a straight shallow copy : the copy points at exactly the same bytes as the cached value
+	v->type_info = src->type_info;
+	v->type_info.should_free_dti_p = 0;   // the dti belongs to the cached value, never to the copy
+
+	if(src->type_info.type == RHENDB_EXPR_NUMERIC)
+	{
+		// the mpd_t is copied as is, digits and all, and then its data is marked STATIC so that
+		// mpd_del() on this copy leaves the cached value's digits untouched. no deep copy needed.
+		v->numeric_value = src->numeric_value;
+		mpd_set_static_data(&(v->numeric_value));
+	}
+	else
+		v->value = src->value;
+
+	v->buffer = NULL;     // owns no bytes, so rhendb_delete_data() frees nothing
+	v->capacity = 0;
+	return v;
+}
+
+// the values that the evaluator hands around as shared singletons must never be cached or cloned
+static int is_rhendb_sentinel_value(const void* d)
+{
+	return d == NULL
+	    || d == (const void*)(&rhendb_true_bool)
+	    || d == (const void*)(&rhendb_false_bool)
+	    || d == (const void*)(&rhendb_unknown_bool)
+	    || d == (const void*)(&rhendb_one_number)
+	    || d == (const void*)(&rhendb_zero_number)
+	    || d == (const void*)(&rhendb_minus_one_number);
+}
+
+// function calls and sub queries are not handled by the constant folder yet
+static void reject_unfoldable_expression(const sql_expression* expr, const char* which)
+{
+	if(expr->type == SQL_FUNCTION_CALL || expr->type == SQL_SUB_QUERY || expr->type == SQL_EXISTS)
+	{
+		printf("ISSUE in (expression_evaluator) :: constant unfolding is not implemented for function calls and sub queries, hit in %s\n", which);
+		exit(-1);
+	}
+}
+
+static void* rhendb_pre_eval(const sql_expr_eval_context* ec_p, const sql_expression* expr, void** result)
+{
+	reject_unfoldable_expression(expr, "pre_eval");
+
+	// already proven constant : answer straight from the cache, and skip the whole subtree
+	if((expr->user_meta_flags & RHENDB_EXPR_IS_CONSTANT) && expr->user_meta_value != NULL)
+	{
+		int error_code = 0;
+		(*result) = clone_cached_expr_value(expr->user_meta_value, ec_p, &error_code);
+		return NULL;
+	}
+
+	// assume constant, every child that is not constant will clear this bit through child_eval
+	((sql_expression*)expr)->user_meta_flags |= RHENDB_EXPR_IS_CONSTANT;
+	return &(((sql_expression*)expr)->user_meta_flags);
+}
+
+static void rhendb_child_eval(const sql_expr_eval_context* ec_p, const sql_expression* expr, const sql_expression* child_expr, void* child_result, void* interim_context)
+{
+	(void)ec_p; (void)expr; (void)child_result;
+	reject_unfoldable_expression(child_expr, "child_eval");
+
+	// a child that could not be proven constant makes this whole expression non constant
+	if(!(child_expr->user_meta_flags & RHENDB_EXPR_IS_CONSTANT))
+		(*((int*)interim_context)) &= ~RHENDB_EXPR_IS_CONSTANT;
+}
+
+static void* rhendb_post_eval(const sql_expr_eval_context* ec_p, const sql_expression* expr, void* result, void* interim_context)
+{
+	reject_unfoldable_expression(expr, "post_eval");
+
+	// a literal is constant by construction, whatever its children may have said
+	if(expr->type == SQL_NUM || expr->type == SQL_STR)
+		(*((int*)interim_context)) |= RHENDB_EXPR_IS_CONSTANT;
+
+	// a variable read is never constant
+	if(expr->type == SQL_VAR)
+		(*((int*)interim_context)) &= ~RHENDB_EXPR_IS_CONSTANT;
+
+	// still constant, and there is a real value to keep : the RESULT ITSELF becomes the cache, so
+	// nothing is copied here, and what we hand back to the caller is the cheap shallow copy
+	if(((*((int*)interim_context)) & RHENDB_EXPR_IS_CONSTANT) && !is_rhendb_sentinel_value(result)
+		&& expr->user_meta_value == NULL)
+	{
+		rhendb_expr_eval_context* fctx = ec_p->context_p;
+
+		// record the node first, so that a value is only ever cached if it can also be released
+		if(fctx->folded_expressions_count == fctx->folded_expressions_capacity)
+		{
+			uint64_t nc = (fctx->folded_expressions_capacity == 0) ? 16 : (fctx->folded_expressions_capacity * 2);
+			void** ne = realloc(fctx->folded_expressions, sizeof(void*) * nc);
+			if(ne != NULL){ fctx->folded_expressions = ne; fctx->folded_expressions_capacity = nc; }
+		}
+
+		if(fctx->folded_expressions_count < fctx->folded_expressions_capacity)
+		{
+			int error_code = 0;
+			expr_value* shallow = clone_cached_expr_value(result, ec_p, &error_code);
+			if(shallow != NULL && !error_code)
+			{
+				// the result is kept, it owns its buffer and its mpd digits, the caller gets the copy
+				((sql_expression*)expr)->user_meta_value = result;
+				fctx->folded_expressions[fctx->folded_expressions_count++] = (void*)expr;
+				return shallow;
+			}
+			if(shallow != NULL)
+				rhendb_delete_data(shallow, ec_p);
+		}
+	}
+
+	// nothing was allocated for the interim_context, it points into the expression itself
+	return result;
+}
+
 sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, transaction* tx)
 {
 	sql_expr_eval_context eval_context = (sql_expr_eval_context){
@@ -2312,6 +2454,11 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 
 		.get_variable = rhendb_get_variable,
 
+		.pre_eval = rhendb_pre_eval,
+		.child_eval = rhendb_child_eval,
+		.post_eval = rhendb_post_eval,
+		.destroy_process_context = NULL,   // the interim_context is &user_meta_flags, nothing to destroy
+
 		.bool_type = (void*)(&rhendb_bool_type),
 
 		.can_compare_types = rhendb_can_compare_types,
@@ -2347,6 +2494,10 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 
 	context_p->free_list_for_expr_value = NULL;
 
+	context_p->folded_expressions = NULL;
+	context_p->folded_expressions_count = 0;
+	context_p->folded_expressions_capacity = 0;
+
 	context_p->tx = tx;
 
 	return eval_context;
@@ -2364,6 +2515,24 @@ int has_reference_to_persistent_extended_type_from_expression(const rhendb_expr_
 
 void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_context* context_p)
 {
+	// release every constant that was folded onto the AST, and put those nodes back as they were,
+	// this MUST happen before the free list is drained, because the values go back onto it
+	for(uint64_t i = 0; i < context_p->folded_expressions_count; i++)
+	{
+		sql_expression* fe = context_p->folded_expressions[i];
+		if(fe->user_meta_value != NULL)
+		{
+			sql_expr_eval_context tmp = (sql_expr_eval_context){.context_p = context_p};
+			rhendb_delete_data(fe->user_meta_value, &tmp);
+			fe->user_meta_value = NULL;
+		}
+		fe->user_meta_flags = 0;
+	}
+	free(context_p->folded_expressions);
+	context_p->folded_expressions = NULL;
+	context_p->folded_expressions_count = 0;
+	context_p->folded_expressions_capacity = 0;
+
 	remove_all_from_hashmap(&(context_p->var_cache), &((notifier_interface){NULL, notify_removal_for_cache_entry}));
 	drain_free_list_for_expr_value(context_p);          /* the ONLY place the free list is released */
 
