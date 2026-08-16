@@ -94,6 +94,7 @@ operator_resource_counter setup_scan_operator(operator* o, query_plan* qp, const
 
 // looks up tuples by the (partition_id, tuple_pointer) pair for the tuples of the heap table
 // does the same thing as deletion_operator but does not delete the tuples returned
+// ideally to be used for tuple lookups
 operator_resource_counter setup_pointer_lookup_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags);
 
 #endif
