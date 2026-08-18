@@ -8,8 +8,7 @@
 
 static void* get_new_page_with_write_lock_mtx(void* context, const void* transaction_id, uint64_t* page_id_returned, int* abort_error)
 {
-	void* result = get_new_page_with_write_latch_for_mini_tx(context, (void*)transaction_id, page_id_returned);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	void* result = get_new_page_with_write_latch_for_mini_tx(context, (void*)transaction_id, page_id_returned, abort_error);
 	if(result == NULL && (*abort_error) == 0)
 	{
 		printf("Bug in get_new_page_with_write_lock_mtx, result failed but abort error not set\n");
@@ -19,27 +18,17 @@ static void* get_new_page_with_write_lock_mtx(void* context, const void* transac
 }
 static void* acquire_page_with_reader_lock_mtx(void* context, const void* transaction_id, uint64_t page_id, int* abort_error)
 {
-	void* result = acquire_page_with_reader_latch_for_mini_tx(context, (void*)transaction_id, page_id);
-	if(transaction_id != NULL)
+	void* result = acquire_page_with_reader_latch_for_mini_tx(context, (void*)transaction_id, page_id, abort_error);
+	if(result == NULL && (*abort_error) == 0)
 	{
-		(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
-		if(result == NULL && (*abort_error) == 0)
-		{
-			printf("Bug in acquire_page_with_reader_lock_mtx, result failed but abort error not set\n");
-			exit(-1);
-		}
-	}
-	else // transaction_id can be NULL for this function, if so set abort_error if the function call failed
-	{
-		if(result == NULL)
-			(*abort_error) = -100;
+		printf("Bug in acquire_page_with_reader_lock_mtx, result failed but abort error not set\n");
+		exit(-1);
 	}
 	return result;
 }
 static void* acquire_page_with_writer_lock_mtx(void* context, const void* transaction_id, uint64_t page_id, int* abort_error)
 {
-	void* result = acquire_page_with_writer_latch_for_mini_tx(context, (void*)transaction_id, page_id);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	void* result = acquire_page_with_writer_latch_for_mini_tx(context, (void*)transaction_id, page_id, abort_error);
 	if(result == NULL && (*abort_error) == 0)
 	{
 		printf("Bug in acquire_page_with_writer_lock_mtx, result failed but abort error not set\n");
@@ -49,8 +38,7 @@ static void* acquire_page_with_writer_lock_mtx(void* context, const void* transa
 }
 static int downgrade_writer_lock_to_reader_lock_on_page_mtx(void* context, const void* transaction_id, void* pg_ptr, int opts, int* abort_error)
 {
-	int result = downgrade_writer_latch_to_reader_latch_on_page_for_mini_tx(context, (void*)transaction_id, pg_ptr);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	int result = downgrade_writer_latch_to_reader_latch_on_page_for_mini_tx(context, (void*)transaction_id, pg_ptr, abort_error);
 	if(result == 0 && (*abort_error) == 0)
 	{
 		printf("Bug in downgrade_writer_lock_to_reader_lock_on_page_mtx, result failed but abort error not set\n");
@@ -60,8 +48,7 @@ static int downgrade_writer_lock_to_reader_lock_on_page_mtx(void* context, const
 }
 static int upgrade_reader_lock_to_writer_lock_on_page_mtx(void* context, const void* transaction_id, void* pg_ptr, int* abort_error)
 {
-	int result = upgrade_reader_latch_to_writer_latch_on_page_for_mini_tx(context, (void*)transaction_id, pg_ptr);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	int result = upgrade_reader_latch_to_writer_latch_on_page_for_mini_tx(context, (void*)transaction_id, pg_ptr, abort_error);
 	if(result == 0 && (*abort_error) == 0)
 	{
 		printf("Bug in upgrade_reader_lock_to_writer_lock_on_page_mtx, result failed but abort error not set\n");
@@ -71,46 +58,27 @@ static int upgrade_reader_lock_to_writer_lock_on_page_mtx(void* context, const v
 }
 static int release_reader_lock_on_page_mtx(void* context, const void* transaction_id, void* pg_ptr, int opts, int* abort_error)
 {
-	int result = release_reader_latch_on_page_for_mini_tx(context, (void*)transaction_id, pg_ptr, !!(opts & FREE_PAGE));
-	if(transaction_id != NULL)
+	int result = release_reader_latch_on_page_for_mini_tx(context, (void*)transaction_id, pg_ptr, !!(opts & FREE_PAGE), abort_error);
+	if(result == 0 && (*abort_error) == 0)
 	{
-		(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
-		if(result == 0 && (*abort_error) == 0)
-		{
-			printf("Bug in release_reader_lock_on_page_mtx, result failed but abort error not set\n");
-			exit(-1);
-		}
-	}
-	else // transaction_id can be NULL for this function, if so set abort_error if the function call failed
-	{
-		if(result == 0)
-			(*abort_error) = -100;
+		printf("Bug in release_reader_lock_on_page_mtx, result failed but abort error not set\n");
+		exit(-1);
 	}
 	return result;
 }
 static int release_writer_lock_on_page_mtx(void* context, const void* transaction_id, void* pg_ptr, int opts, int* abort_error)
 {
-	int result = release_writer_latch_on_page_for_mini_tx(context, (void*)transaction_id, pg_ptr, !!(opts & FREE_PAGE));
-	if(transaction_id != NULL)
+	int result = release_writer_latch_on_page_for_mini_tx(context, (void*)transaction_id, pg_ptr, !!(opts & FREE_PAGE), abort_error);
+	if(result == 0 && (*abort_error) == 0)
 	{
-		(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
-		if(result == 0 && (*abort_error) == 0)
-		{
-			printf("Bug in release_writer_lock_on_page_mtx, result failed but abort error not set\n");
-			exit(-1);
-		}
-	}
-	else // transaction_id can be NULL for this function, if so set abort_error if the function call failed
-	{
-		if(result == 0)
-			(*abort_error) = -100;
+		printf("Bug in release_writer_lock_on_page_mtx, result failed but abort error not set\n");
+		exit(-1);
 	}
 	return result;
 }
 static int free_page_mtx(void* context, const void* transaction_id, uint64_t page_id, int* abort_error)
 {
-	int result = free_page_for_mini_tx(context, (void*)transaction_id, page_id);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	int result = free_page_for_mini_tx(context, (void*)transaction_id, page_id, abort_error);
 	if(result == 0 && (*abort_error) == 0)
 	{
 		printf("Bug in free_page_mtx, result failed but abort error not set\n");
@@ -138,74 +106,62 @@ static void initialize_pam_for_mte(page_access_methods* pam_p, mini_transaction_
 
 static int init_page_mtx(void* context, const void* transaction_id, void* page, uint32_t page_size, uint32_t page_header_size, const tuple_size_def* tpl_sz_d, int* abort_error)
 {
-	int result = init_page_for_mini_tx(context, (void*)transaction_id, page, page_header_size, tpl_sz_d);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	int result = init_page_for_mini_tx(context, (void*)transaction_id, page, page_header_size, tpl_sz_d, abort_error);
 	return result;
 }
 static void set_page_header_mtx(void* context, const void* transaction_id, void* page, uint32_t page_size, const void* hdr, int* abort_error)
 {
-	set_page_header_for_mini_tx(context, (void*)transaction_id, page, hdr);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	set_page_header_for_mini_tx(context, (void*)transaction_id, page, hdr, abort_error);
 	return ;
 }
 static int append_tuple_on_page_mtx(void* context, const void* transaction_id, void* page, uint32_t page_size, const tuple_size_def* tpl_sz_d, const void* external_tuple, int* abort_error)
 {
-	int result = append_tuple_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, external_tuple);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	int result = append_tuple_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, external_tuple, abort_error);
 	return result;
 }
 static int insert_tuple_on_page_mtx(void* context, const void* transaction_id, void* page, uint32_t page_size, const tuple_size_def* tpl_sz_d, uint32_t index, const void* external_tuple, int* abort_error)
 {
-	int result = insert_tuple_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, index, external_tuple);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	int result = insert_tuple_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, index, external_tuple, abort_error);
 	return result;
 }
 static int update_tuple_on_page_mtx(void* context, const void* transaction_id, void* page, uint32_t page_size, const tuple_size_def* tpl_sz_d, uint32_t index, const void* external_tuple, int* abort_error)
 {
-	int result = update_tuple_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, index, external_tuple);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	int result = update_tuple_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, index, external_tuple, abort_error);
 	return result;
 }
 static int discard_tuple_on_page_mtx(void* context, const void* transaction_id, void* page, uint32_t page_size, const tuple_size_def* tpl_sz_d, uint32_t index, int* abort_error)
 {
-	int result = discard_tuple_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, index);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	int result = discard_tuple_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, index, abort_error);
 	return result;
 }
 static void discard_all_tuples_on_page_mtx(void* context, const void* transaction_id, void* page, uint32_t page_size, const tuple_size_def* tpl_sz_d, int* abort_error)
 {
-	discard_all_tuples_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	discard_all_tuples_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, abort_error);
 	return ;
 }
 static uint32_t discard_trailing_tomb_stones_on_page_mtx(void* context, const void* transaction_id, void* page, uint32_t page_size, const tuple_size_def* tpl_sz_d, int* abort_error)
 {
-	uint32_t result = discard_trailing_tomb_stones_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	uint32_t result = discard_trailing_tomb_stones_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, abort_error);
 	return result;
 }
 static int swap_tuples_on_page_mtx(void* context, const void* transaction_id, void* page, uint32_t page_size, const tuple_size_def* tpl_sz_d, uint32_t i1, uint32_t i2, int* abort_error)
 {
-	int result = swap_tuples_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, i1, i2);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	int result = swap_tuples_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, i1, i2, abort_error);
 	return result;
 }
 static int set_element_in_tuple_in_place_on_page_mtx(void* context, const void* transaction_id, void* page, uint32_t page_size, const tuple_def* tpl_d, uint32_t tuple_index, positional_accessor element_index, const datum* value, int* abort_error)
 {
-	int result = set_element_in_tuple_in_place_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_d, tuple_index, element_index, value);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	int result = set_element_in_tuple_in_place_on_page_for_mini_tx(context, (void*)transaction_id, page, tpl_d, tuple_index, element_index, value, abort_error);
 	return result;
 }
 static void clone_page_mtx(void* context, const void* transaction_id, void* page, uint32_t page_size, const tuple_size_def* tpl_sz_d, const void* page_src, int* abort_error)
 {
-	clone_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, page_src);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	clone_page_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, page_src, abort_error);
 	return ;
 }
 static int run_page_compaction_mtx(void* context, const void* transaction_id, void* page, uint32_t page_size, const tuple_size_def* tpl_sz_d, int* abort_error)
 {
-	int result = run_page_compaction_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d);
-	(*abort_error) = get_abort_error_for_mini_tx(context, (void*)transaction_id);
+	int result = run_page_compaction_for_mini_tx(context, (void*)transaction_id, page, tpl_sz_d, abort_error);
 	return result;
 }
 
