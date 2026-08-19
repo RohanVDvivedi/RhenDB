@@ -42,43 +42,6 @@ enum column_kind
 	JSONB_INSERTION_CASE,
 };
 
-typedef struct input_values input_values;
-struct input_values
-{
-	const tuple_def* input_tuple_def;
-
-	consumption_iterator* input_iterator;
-
-	const fetched_table* ftabl; // fetched_table contains everything about the table
-
-	positional_accessor* insertion_from_source_positional_accessors;
-
-	// array to quickly select a particular case for column insertion, for each one of the columns in partition vs insertion_from_source_positional_accessors
-	column_kind* column_kinds;
-
-	// heap_table free-space defs for the partition's heap (record_def == partition_tuple_def)
-	heap_table_tuple_defs httd;
-
-	// global notifier is used for finding the right page for insertion, otherwise inserts will reorder pages being scanned by the scan operators
-	heap_table_notifier* global_heap_notifier;
-
-	// accumulative notifiers: one for the partition's heap table, one for its blob store.
-	heap_table_accumulative_notifier local_heap_htan;
-	heap_table_accumulative_notifier local_blob_htan;
-
-	int output_flags; // same flags as table_operator_output_type.h
-
-	const tuple_def* output_tuple_def; // will remain set to NULL, if output_flags is 0
-
-	int additional_flags; // same flags as given in transaction.h, toggles the additional book keeping this operator performs
-
-	// cached here for snapshot and transaction_id
-	transaction* tx;
-
-	// this is the tuple_size at which finding free page, we previously failed
-	uint32_t will_fail_finding_free_enough_page_on_required_space;
-};
-
 typedef struct extended_column_data extended_column_data;
 struct extended_column_data
 {
@@ -118,6 +81,51 @@ static void deinit_extended_column_data(extended_column_data* e)
 		free(e->value);
 }
 
+typedef struct input_values input_values;
+struct input_values
+{
+	const tuple_def* input_tuple_def;
+
+	consumption_iterator* input_iterator;
+
+	const fetched_table* ftabl; // fetched_table contains everything about the table
+
+	positional_accessor* insertion_from_source_positional_accessors;
+
+	// array to quickly select a particular case for column insertion, for each one of the columns in partition vs insertion_from_source_positional_accessors
+	column_kind* column_kinds;
+
+	// heap_table free-space defs for the partition's heap (record_def == partition_tuple_def)
+	heap_table_tuple_defs httd;
+
+	// global notifier is used for finding the right page for insertion, otherwise inserts will reorder pages being scanned by the scan operators
+	heap_table_notifier* global_heap_notifier;
+
+	// accumulative notifiers: one for the partition's heap table, one for its blob store.
+	heap_table_accumulative_notifier local_heap_htan;
+	heap_table_accumulative_notifier local_blob_htan;
+
+	int output_flags; // same flags as table_operator_output_type.h
+
+	const tuple_def* output_tuple_def; // will remain set to NULL, if output_flags is 0
+
+	int additional_flags; // same flags as given in transaction.h, toggles the additional book keeping this operator performs
+
+	// cached here for snapshot and transaction_id
+	transaction* tx;
+
+	// this is the tuple_size at which finding free page, we previously failed
+	uint32_t will_fail_finding_free_enough_page_on_required_space;
+
+	// tuple builder's context
+	void* inited_heap_record;
+	uint32_t inited_heap_record_size;
+	void* heap_record_without_extensions;
+	void* heap_record_with_extensions;
+	extended_column_data* ext_col_data;
+	uint32_t ext_col_data_size;
+};
+
 #define HTAN_CAPACITY       30
 #define HTAN_FIX_THRESHOLD  13
 
@@ -144,40 +152,13 @@ static void fix_unused_space_entries_after_insertions(rage_engine* engine, heap_
 	}
 }
 
-static void* build_heap_record_without_extensions(input_values* inputs, const void* input_tuple, extended_column_data** ext_col_data, uint32_t* ext_col_data_size)
+static int build_heap_record_without_extensions(input_values* inputs, const void* input_tuple)
 {
 	const tuple_def* partition_tuple_def = &(inputs->ftabl->table_partition_tuple_defs[inputs->ftabl->partitions_count-1]);
 
-	(*ext_col_data_size) = 0;
-	(*ext_col_data) = malloc(sizeof(extended_column_data) * partition_tuple_def->type_info->element_count);
+	inputs->ext_col_data_size = 0;
 
-	uint64_t record_capacity = inputs->tx->rdb->persistent_acid_rage_engine.pam_p->pas.page_size;
-	uint32_t record_size = get_minimum_tuple_size(partition_tuple_def);
-	void* record = malloc(record_capacity);
-	init_tuple(partition_tuple_def, record);
-
-	// (0) mvcc header
-	{
-		tuple_def mvcc_def;
-		initialize_tuple_def(&mvcc_def, (data_type_info*)(partition_tuple_def->type_info->containees[0].al.type_info));
-
-		mvcc_header hdr = (mvcc_header){0};
-		hdr.is_xmin_NULL = 0;
-		hdr.xmin.transaction_id = inputs->tx->snapshot->self_transaction_id;
-		hdr.xmin.is_committed = 0; hdr.xmin.is_aborted = 0;
-		hdr.is_xmax_NULL = 1;
-
-		char mvcc_buf[sizeof(mvcc_header)];
-		init_tuple(&mvcc_def, mvcc_buf);
-		write_mvcc_header(mvcc_buf, &mvcc_def, &hdr);
-
-		while(!set_element_in_tuple(partition_tuple_def, STATIC_POSITION(0), record, &(datum){.tuple_value = mvcc_buf}, record_capacity - record_size))
-		{
-			record_capacity *= 2;
-			record = realloc(record, record_capacity);
-		}
-		record_size = get_tuple_size(partition_tuple_def, record);
-	}
+	memory_move(inputs->heap_record_without_extensions, inputs->inited_heap_record, inputs->inited_heap_record_size);
 
 	transaction* tx = inputs->tx;
 
@@ -194,22 +175,12 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 		{
 			case PRIMITIVE_NUMERAL_INSERTION_CASE :
 			{
-				while(!set_element_in_tuple_from_tuple(partition_tuple_def, STATIC_POSITION(i), record, inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1], input_tuple, record_capacity - record_size))
-				{
-					record_capacity *= 2;
-					record = realloc(record, record_capacity);
-				}
-				record_size = get_tuple_size(partition_tuple_def, record);
+				set_element_in_tuple_from_tuple(partition_tuple_def, STATIC_POSITION(i), inputs->heap_record_without_extensions, inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1], input_tuple, UINT32_MAX);
 				break;
 			}
 			case NUMERIC_INSERTION_CASE :
 			{
-				while(!set_element_in_tuple(partition_tuple_def, STATIC_POSITION(i), record, EMPTY_DATUM, record_capacity - record_size))
-				{
-					record_capacity *= 2;
-					record = realloc(record, record_capacity);
-				}
-				record_size = get_tuple_size(partition_tuple_def, record);
+				set_element_in_tuple(partition_tuple_def, STATIC_POSITION(i), inputs->heap_record_without_extensions, EMPTY_DATUM, UINT32_MAX);
 
 				extended_column_data e = {
 					.index = i,
@@ -221,20 +192,11 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 				int mrc = 0;
 				materialized_numeric m = materialize_numeric1(src, src_dti, tx, &mrc);
 				if(mrc)
-				{
-					for(uint32_t p = 0; p < (*ext_col_data_size); p++)
-						deinit_extended_column_data(&((*ext_col_data)[p]));
-					free(*ext_col_data);
-					(*ext_col_data) = NULL;
-					(*ext_col_data_size) = 0;
-					free(record);
-					return NULL;
-				}
+					return 0;
 
 				numeric_sign_bits sign_bits; int16_t exponent;
 				get_sign_bits_and_exponent_for_materialized_numeric(&m, &sign_bits, &exponent);
-				set_sign_bits_and_exponent_for_numeric(sign_bits, exponent, record, partition_tuple_def, STATIC_POSITION(i));
-				record_size = get_tuple_size(partition_tuple_def, record);
+				set_sign_bits_and_exponent_for_numeric(sign_bits, exponent, inputs->heap_record_without_extensions, partition_tuple_def, STATIC_POSITION(i));
 
 				uint32_t digit_count = get_digits_count_for_materialized_numeric(&m);
 				if(digit_count == 0)
@@ -245,7 +207,7 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 
 				e.is_numeric = 1; e.total_size = digit_count; e.digits = m.digits;
 
-				(*ext_col_data)[(*ext_col_data_size)++] = e;
+				inputs->ext_col_data[inputs->ext_col_data_size++] = e;
 
 				break;
 			}
@@ -254,12 +216,7 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 			case JSONB_INSERTION_CASE :
 			// text / blob / jsonb
 			{
-				while(!set_element_in_tuple(partition_tuple_def, STATIC_POSITION(i), record, EMPTY_DATUM, record_capacity - record_size))
-				{
-					record_capacity *= 2;
-					record = realloc(record, record_capacity);
-				}
-				record_size = get_tuple_size(partition_tuple_def, record);
+				set_element_in_tuple(partition_tuple_def, STATIC_POSITION(i), inputs->heap_record_without_extensions, EMPTY_DATUM, UINT32_MAX);
 
 				extended_column_data e = {
 					.index = i,
@@ -271,28 +228,20 @@ static void* build_heap_record_without_extensions(input_values* inputs, const vo
 				uint32_t len = 0, cap = 0; int mrc = 0;
 				char* bytes = materialize_tb(src, src_dti, tx, &len, &cap, &mrc);
 				if(mrc)
-				{
-					for(uint32_t p = 0; p < (*ext_col_data_size); p++)
-						deinit_extended_column_data(&((*ext_col_data)[p]));
-					free(*ext_col_data);
-					(*ext_col_data) = NULL;
-					(*ext_col_data_size) = 0;
-					free(record);
-					return NULL;
-				}
+					return 0;
 				e.is_numeric = 0; e.total_size = len; e.value = bytes; e.must_free_value = (cap > 0);
 
-				(*ext_col_data)[(*ext_col_data_size)++] = e;
+				inputs->ext_col_data[inputs->ext_col_data_size++] = e;
 
 				break;
 			}
 		}
 	}
 
-	return record;
+	return 1;
 }
 
-static void build_heap_record_with_prefix_bytes(input_values* inputs, void* record, extended_column_data* ext_col_data, uint32_t ext_col_data_size, void* min_tx_id, int* abort_error, int* should_retry)
+static void build_heap_record_with_prefix_bytes(input_values* inputs, void* min_tx_id, int* abort_error, int* should_retry)
 {
 	rage_engine* engine = &(inputs->tx->rdb->persistent_acid_rage_engine);
 
@@ -300,15 +249,17 @@ static void build_heap_record_with_prefix_bytes(input_values* inputs, void* reco
 
 	const rhendb_table_partition* insertion_table_partition = &(inputs->ftabl->table_partitions_info[inputs->ftabl->partitions_count-1]);
 
-	for(uint32_t k = 0; k < ext_col_data_size; k++)
+	memory_move(inputs->heap_record_with_extensions, inputs->heap_record_without_extensions, get_tuple_size(partition_tuple_def, inputs->heap_record_with_extensions));
+
+	for(uint32_t k = 0; k < inputs->ext_col_data_size; k++)
 	{
-		extended_column_data* e = &(ext_col_data[k]);
+		extended_column_data* e = &(inputs->ext_col_data[k]);
 		e->written_size = 0;
 
 		e->prefix_size = 0;
 		{
 			// calculate remaining size for prefix, if negative skip
-			int64_t remaining_space = (engine->pam_p->pas.page_size * PAGE_FILL_PER_TUPLE) - get_tuple_size(partition_tuple_def, record);
+			int64_t remaining_space = (engine->pam_p->pas.page_size * PAGE_FILL_PER_TUPLE) - get_tuple_size(partition_tuple_def, inputs->heap_record_with_extensions);
 			if(remaining_space < 0)
 			{
 				(*abort_error) = -5002;
@@ -318,7 +269,7 @@ static void build_heap_record_with_prefix_bytes(input_values* inputs, void* reco
 			}
 
 			// calculate agains if it is less than 4, i.e. no space for it's size then fail
-			int64_t remaining_space_per_element = remaining_space / (ext_col_data_size - k);
+			int64_t remaining_space_per_element = remaining_space / (inputs->ext_col_data_size - k);
 			if(remaining_space_per_element < 4)
 			{
 				(*abort_error) = -5002;
@@ -346,7 +297,7 @@ static void build_heap_record_with_prefix_bytes(input_values* inputs, void* reco
 
 		if(e->is_numeric)
 		{
-			digit_write_iterator* it = get_new_digit_write_iterator(record, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
+			digit_write_iterator* it = get_new_digit_write_iterator(inputs->heap_record_with_extensions, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 			while(e->written_size < limit)
 			{
 				cy_uint next_digits_count = 0;
@@ -370,7 +321,7 @@ static void build_heap_record_with_prefix_bytes(input_values* inputs, void* reco
 		}
 		else
 		{
-			binary_write_iterator* it = get_new_binary_write_iterator(record, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
+			binary_write_iterator* it = get_new_binary_write_iterator(inputs->heap_record_with_extensions, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 			while(e->written_size < limit)
 			{
 				uint32_t w = append_to_binary_write_iterator(it, (const char*)e->value + e->written_size, (uint32_t)(limit - e->written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(inputs->local_blob_htan)), min_tx_id, abort_error);
@@ -447,10 +398,7 @@ static void execute(operator* o)
 		if(tuple == NULL)
 			break;
 
-		extended_column_data* ext_col_data = NULL;
-		uint32_t ext_col_data_size = 0;
-		void* heap_record = build_heap_record_without_extensions(inputs, tuple, &ext_col_data, &ext_col_data_size); // numeric -> sign_bits and exponent are also populated here
-		if(heap_record == NULL)
+		if(!build_heap_record_without_extensions(inputs, tuple)) // numeric -> sign_bits and exponent are also populated here
 		{
 			// release ppage
 			if(!is_persistent_page_NULL(&ppage, engine->pam_p))
@@ -469,19 +417,15 @@ static void execute(operator* o)
 		int should_retry = 1;
 		while(should_retry)
 		{
-			// clone heap record base, into a static/fixed insertable heap_record
-			void* heap_record_clone = malloc(engine->pam_p->pas.page_size);
-			memory_move(heap_record_clone, heap_record, get_tuple_size(partition_tuple_def, heap_record));
-
 			int abort_error = 0;
 			void* min_tx_id = engine->allot_new_sub_transaction_id(engine->context, page_latches_to_be_borrowed);
 
 			// make it permanent with valid head_chunk pointers, if they are needed
-			build_heap_record_with_prefix_bytes(inputs, heap_record_clone, ext_col_data, ext_col_data_size, min_tx_id, &abort_error, &should_retry);
+			build_heap_record_with_prefix_bytes(inputs, min_tx_id, &abort_error, &should_retry);
 			if(abort_error)
 				goto ABORT_ERROR;
 
-			if(get_tuple_size(partition_tuple_def, heap_record_clone) > (PAGE_FILL_PER_TUPLE * engine->pam_p->pas.page_size))
+			if(get_tuple_size(partition_tuple_def, inputs->heap_record_with_extensions) > (PAGE_FILL_PER_TUPLE * engine->pam_p->pas.page_size))
 			{
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("record_too_big"));
 				abort_error = -5001;
@@ -490,7 +434,7 @@ static void execute(operator* o)
 				goto ABORT_ERROR;
 			}
 
-			// find the right page to insert this heap_record_clone it into
+			// find the right page to insert this inputs->heap_record_with_extensions it into
 			int is_new_page = 0; // flag to suggest of this is new page for this iteration
 
 			while(1) // keep finding a new page until insertion succeeds
@@ -499,7 +443,7 @@ static void execute(operator* o)
 				while(is_persistent_page_NULL(&ppage, engine->pam_p))
 				{
 					// find the right amount of space this record will need
-					uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(partition_tuple_def->size_def), heap_record_clone);
+					uint32_t required_space = get_space_to_be_occupied_by_tuple_on_persistent_page(engine->pam_p->pas.page_size, &(partition_tuple_def->size_def), inputs->heap_record_with_extensions);
 					if(required_space < inputs->will_fail_finding_free_enough_page_on_required_space) // try only if we are attempting to insert an even smaller tuple
 					{
 						ppage = find_heap_page_with_enough_unused_space_from_heap_table(insertion_table_partition->heap_root_page_id, required_space, &ppage_unused_space_in_entry, inputs->global_heap_notifier, &(inputs->httd), engine->pam_p, min_tx_id, &abort_error);
@@ -527,7 +471,7 @@ static void execute(operator* o)
 				}
 
 				// insert tuple on the page, this would surely not fail
-				uint32_t tuple_index = insert_in_heap_page(&ppage, heap_record_clone, &possible_insertion_index, partition_tuple_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_id, &abort_error);
+				uint32_t tuple_index = insert_in_heap_page(&ppage, inputs->heap_record_with_extensions, &possible_insertion_index, partition_tuple_def, &(engine->pam_p->pas), engine->pmm_p, min_tx_id, &abort_error);
 				if(abort_error)
 					goto ABORT_ERROR;
 				if(tuple_index == INVALID_TUPLE_INDEX)
@@ -588,15 +532,9 @@ static void execute(operator* o)
 
 			// complete commit
 			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
-
-			// everything went successfully now make heap_record_clone the read heap_record
-			free(heap_record);
-			heap_record = heap_record_clone;
 			break;
 
 			ABORT_ERROR:
-
-			free(heap_record_clone);
 
 			// release ppage
 			if(!is_persistent_page_NULL(&ppage, engine->pam_p))
@@ -610,10 +548,9 @@ static void execute(operator* o)
 
 			if(should_retry == 0)
 			{
-				free(heap_record);
-				for(uint32_t i = 0; i < ext_col_data_size; i++)
-					deinit_extended_column_data(&(ext_col_data[i]));
-				free(ext_col_data);
+				for(uint32_t i = 0; i < inputs->ext_col_data_size; i++)
+					deinit_extended_column_data(&(inputs->ext_col_data[i]));
+				inputs->ext_col_data_size = 0;
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("insert_failed"));
 				return ; // ppage is surely released on this path
 			}
@@ -628,9 +565,9 @@ static void execute(operator* o)
 		fix_unused_space_entries_after_insertions(engine, &(inputs->local_blob_htan), &(engine->bstd.httd), 0);
 
 		// append the leftover bytes/digits from each extended column
-		for(uint32_t k = 0; k < ext_col_data_size; k++)
+		for(uint32_t k = 0; k < inputs->ext_col_data_size; k++)
 		{
-			const extended_column_data* e = &(ext_col_data[k]);
+			const extended_column_data* e = &(inputs->ext_col_data[k]);
 
 			if(e->written_size == e->total_size)
 			{
@@ -652,7 +589,7 @@ static void execute(operator* o)
 				uint32_t wrote = 0;
 				if(e->is_numeric)
 				{
-					digit_write_iterator* it = get_new_digit_write_iterator(heap_record, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, e->tail_chunk_pointer, e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
+					digit_write_iterator* it = get_new_digit_write_iterator(inputs->heap_record_with_extensions, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, e->tail_chunk_pointer, e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 					uint64_t curr_written_size = e->written_size;
 					while(curr_written_size < e->total_size)
 					{
@@ -675,7 +612,7 @@ static void execute(operator* o)
 				}
 				else
 				{
-					binary_write_iterator* it = get_new_binary_write_iterator(heap_record, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, e->tail_chunk_pointer, e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
+					binary_write_iterator* it = get_new_binary_write_iterator(inputs->heap_record_with_extensions, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, e->tail_chunk_pointer, e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 					uint64_t curr_written_size = e->written_size;
 					while(curr_written_size < e->total_size)
 					{
@@ -707,9 +644,6 @@ static void execute(operator* o)
 
 			deinit_extended_column_data((extended_column_data*)e);
 		}
-
-		free(ext_col_data);
-		ext_col_data = NULL;
 
 		// optionally emit the inserted tuple's identity + attributes for a chained operator
 		if(inputs->output_flags != 0)
@@ -765,7 +699,7 @@ static void execute(operator* o)
 
 			if(MUST_OUTPUT_HEAP_TUPLE(inputs->output_flags))
 			{
-				void* final_readers_heap_record = project_to_final_readers_tuple_def(inputs->ftabl, heap_record, inputs->ftabl->partitions_count - 1);
+				void* final_readers_heap_record = project_to_final_readers_tuple_def(inputs->ftabl, inputs->heap_record_with_extensions, inputs->ftabl->partitions_count - 1);
 				
 				// ensure there are enough bytes in the output_tuple, as we try to insert this datum
 				while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.tuple_value = final_readers_heap_record}), output_tuple_capacity - output_tuple_size))
@@ -783,8 +717,6 @@ static void execute(operator* o)
 			free(output_tuple);
 			if(!produced)
 			{
-				free(heap_record);
-
 				// release ppage
 				if(!is_persistent_page_NULL(&ppage, engine->pam_p))
 				{
@@ -798,7 +730,6 @@ static void execute(operator* o)
 			}
 		}
 
-		free(heap_record);
 		continue;
 	}
 
@@ -832,6 +763,15 @@ static void clean_up_resources(operator* o)
 	deinitialize_heap_table_accumulative_notifier(&(inputs->local_heap_htan));
 	deinitialize_heap_table_accumulative_notifier(&(inputs->local_blob_htan));
 	deinit_heap_table_tuple_definitions(&(inputs->httd));
+
+	for(uint32_t p = 0; p < inputs->ext_col_data_size; p++)
+		deinit_extended_column_data(&(inputs->ext_col_data[p]));
+	inputs->ext_col_data_size = 0;
+
+	free(inputs->inited_heap_record);
+	free(inputs->heap_record_without_extensions);
+	free(inputs->heap_record_with_extensions);
+	free(inputs->ext_col_data);
 }
 
 static void free_resources(operator* o)
@@ -1021,6 +961,31 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 	init_heap_table_tuple_definitions(&(inputs->httd), &(tx->rdb->persistent_acid_rage_engine.pam_p->pas), partition_tuple_def);
 	initialize_heap_table_accumulative_notifier(&(inputs->local_heap_htan), HTAN_CAPACITY);
 	initialize_heap_table_accumulative_notifier(&(inputs->local_blob_htan), HTAN_CAPACITY);
+
+	// init the repeated allocation state for this operator
+	inputs->inited_heap_record_size = get_minimum_tuple_size(partition_tuple_def);
+	inputs->inited_heap_record = malloc(inputs->inited_heap_record_size);
+	init_tuple(partition_tuple_def, inputs->inited_heap_record);
+	{
+		tuple_def mvcc_def;
+		initialize_tuple_def(&mvcc_def, (data_type_info*)(partition_tuple_def->type_info->containees[0].al.type_info));
+
+		mvcc_header hdr = (mvcc_header){0};
+		hdr.is_xmin_NULL = 0;
+		hdr.xmin.transaction_id = inputs->tx->snapshot->self_transaction_id;
+		hdr.xmin.is_committed = 0; hdr.xmin.is_aborted = 0;
+		hdr.is_xmax_NULL = 1;
+
+		char mvcc_buf[sizeof(mvcc_header)];
+		init_tuple(&mvcc_def, mvcc_buf);
+		write_mvcc_header(mvcc_buf, &mvcc_def, &hdr);
+
+		set_element_in_tuple(partition_tuple_def, STATIC_POSITION(0), inputs->inited_heap_record, &(datum){.tuple_value = mvcc_buf}, UINT32_MAX);
+	}
+	inputs->heap_record_without_extensions = malloc(tx->rdb->persistent_acid_rage_engine.pam_p->pas.page_size);
+	inputs->heap_record_with_extensions = malloc(tx->rdb->persistent_acid_rage_engine.pam_p->pas.page_size);
+	inputs->ext_col_data = malloc(sizeof(extended_column_data) * partition_tuple_def->type_info->element_count);
+	inputs->ext_col_data_size = 0;
 
 	return result;
 }
