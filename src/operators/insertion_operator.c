@@ -764,14 +764,32 @@ static void clean_up_resources(operator* o)
 	deinitialize_heap_table_accumulative_notifier(&(inputs->local_blob_htan));
 	deinit_heap_table_tuple_definitions(&(inputs->httd));
 
-	for(uint32_t p = 0; p < inputs->ext_col_data_size; p++)
-		deinit_extended_column_data(&(inputs->ext_col_data[p]));
-	inputs->ext_col_data_size = 0;
+	if(inputs->inited_heap_record)
+	{
+		free(inputs->inited_heap_record);
+		inputs->inited_heap_record = NULL;
+	}
 
-	free(inputs->inited_heap_record);
-	free(inputs->heap_record_without_extensions);
-	free(inputs->heap_record_with_extensions);
-	free(inputs->ext_col_data);
+	if(inputs->heap_record_without_extensions != NULL)
+	{
+		free(inputs->heap_record_without_extensions);
+		inputs->heap_record_without_extensions = NULL;
+	}
+
+	if(inputs->heap_record_with_extensions != NULL)
+	{
+		free(inputs->heap_record_with_extensions);
+		inputs->heap_record_with_extensions = NULL;
+	}
+
+	if(inputs->ext_col_data != NULL)
+	{
+		for(uint32_t p = 0; p < inputs->ext_col_data_size; p++)
+			deinit_extended_column_data(&(inputs->ext_col_data[p]));
+		inputs->ext_col_data_size = 0;
+		free(inputs->ext_col_data);
+		inputs->ext_col_data = NULL;
+	}
 }
 
 static void free_resources(operator* o)
