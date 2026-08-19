@@ -645,6 +645,8 @@ static void execute(operator* o)
 			deinit_extended_column_data((extended_column_data*)e);
 		}
 
+		inputs->ext_col_data_size = 0;
+
 		// optionally emit the inserted tuple's identity + attributes for a chained operator
 		if(inputs->output_flags != 0)
 		{
