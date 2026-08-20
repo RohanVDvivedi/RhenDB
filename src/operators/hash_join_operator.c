@@ -16,7 +16,7 @@
 #include<stdlib.h>
 
 #define INIT_BUCKET_COUNT 64
-#define MAX_LOAD_FACTOR 2.5
+#define MAX_LOAD_FACTOR 1.3
 
 typedef struct rash_table_partition rash_table_partition;
 struct rash_table_partition
