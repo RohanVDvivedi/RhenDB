@@ -214,6 +214,18 @@ rage_engine get_rage_engine_for_min_tx_engine(const char* database_file_name, ui
 
 	e.mark_sub_transaction_aborted = (int (*)(void*, void*, int))mark_aborted_for_mini_tx;
 
+	if(!init_worm_tuple_definitions(&(e.wtd), &(e.pam_p->pas)))
+	{
+		printf("FAILED to initialize persistent store's wtd\n");
+		exit(-1);
+	}
+
+	if(!init_page_table_tuple_definitions(&(e.pttd), &(e.pam_p->pas)))
+	{
+		printf("FAILED to initialize persistent store's pttd\n");
+		exit(-1);
+	}
+
 	if(!init_blob_store_tuple_definitions(&(e.bstd), &(e.pam_p->pas)))
 	{
 		printf("FAILED to initialize persistent store's bstd\n");
@@ -240,12 +252,6 @@ rage_engine get_rage_engine_for_min_tx_engine(const char* database_file_name, ui
 	finalize_type_info(e.jsonb_extended_type_info);
 
 	e.max_prefix_size_in_bytes = MAX_PREFIX_SIZE;
-
-	if(!init_worm_tuple_definitions(&(e.wtd), &(e.pam_p->pas)))
-	{
-		printf("FAILED to initialize persistent store's wtd\n");
-		exit(-1);
-	}
 
 	return e;
 }

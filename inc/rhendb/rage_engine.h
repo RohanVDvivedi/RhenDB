@@ -19,8 +19,9 @@
 #include<tupleindexer/interface/opaque_page_access_methods.h>
 #include<tupleindexer/interface/opaque_page_modification_methods.h>
 
-#include<tupleindexer/blob_store/blob_store.h>
 #include<tupleindexer/worm/worm.h>
+#include<tupleindexer/page_table/page_table.h>
+#include<tupleindexer/blob_store/blob_store.h>
 
 #include<tuplelargetypes/text_extended.h>
 #include<tuplelargetypes/blob_extended.h>
@@ -48,6 +49,12 @@ struct rage_engine
 
 	page_modification_methods* pmm_p;
 
+	// required for worms
+	worm_tuple_defs wtd;
+
+	// required for page_tables
+	page_table_tuple_defs pttd;
+
 	// required for accessing extended types
 	blob_store_tuple_defs bstd;
 
@@ -58,9 +65,6 @@ struct rage_engine
 	data_type_info* jsonb_extended_type_info;
 
 	uint32_t max_prefix_size_in_bytes;
-
-	// required for accessing extended types
-	worm_tuple_defs wtd;
 };
 
 #endif
