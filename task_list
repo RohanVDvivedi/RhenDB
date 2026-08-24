@@ -1,6 +1,6 @@
 PICKED TASKS
 
-* also materialized values by chunk_pointer and by what engine they live in
+* also cache materialized values by chunk_pointer and by what rage_engine pointer they live in
  * resets everytime new input_tuples are set
 
 
@@ -112,8 +112,6 @@ PRIORITY HIGH LEVEL TASKS (not yet prioritized)
   * everything will need to change now and every operator need to be composite_reference aware
   * expression_evaluators when they get a composite_reference, they will need to decode how to treat it, both for evaluation and inference
   * this will help with the union and merge_sorted_inputs operators and will not need us to materialize all of the extended types that are on the disk, because this could be a big copy
-
-* constant folding to be done in sqltoast, by storing a pointer at every expression node, which is non NULL if the expression evaluates to a constant
 
 FUTURE TASKS
 
