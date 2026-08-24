@@ -945,9 +945,6 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 	pthread_mutex_init(&(catmgr_p->global_unique_schema_id_lock), NULL);
 
-	page_table_tuple_defs pttd;
-	init_page_table_tuple_definitions(&pttd, &(catmgr_engine->pam_p->pas));
-
 	if((*root_page_id) == catmgr_engine->pam_p->pas.NULL_PAGE_ID) // create a catalog
 	{
 		// create and initialize the root page for the page table
@@ -963,11 +960,11 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 				// we are fine with waiting for atmost a second, and we hold no latches
 				void* min_tx_id = catmgr_engine->allot_new_sub_transaction_id(catmgr_engine->context, page_latches_to_be_borrowed);
 
-				(*root_page_id) = get_new_page_table(&pttd, catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+				(*root_page_id) = get_new_page_table(&(catmgr_engine->pttd), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
 				if(abort_error)
 					goto ABORT_ERROR;
 
-				ptrl_p = get_new_page_table_range_locker((*root_page_id), WHOLE_BUCKET_RANGE, &pttd, catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
+				ptrl_p = get_new_page_table_range_locker((*root_page_id), WHOLE_BUCKET_RANGE, &(catmgr_engine->pttd), catmgr_engine->pam_p, catmgr_engine->pmm_p, min_tx_id, &abort_error);
 				if(abort_error)
 					goto ABORT_ERROR;
 
@@ -1095,7 +1092,7 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 			page_table_range_locker* ptrl_p = NULL;
 			uint64_t vaccum_bucket_id; int vaccum_needed;
 
-			ptrl_p = get_new_page_table_range_locker((*root_page_id), WHOLE_BUCKET_RANGE, &pttd, catmgr_engine->pam_p, NULL, NULL, &abort_error);
+			ptrl_p = get_new_page_table_range_locker((*root_page_id), WHOLE_BUCKET_RANGE, &(catmgr_engine->pttd), catmgr_engine->pam_p, NULL, NULL, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR_1;
 
@@ -1201,8 +1198,6 @@ void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_i
 
 		catmgr_p->catalog_root_page_id = (*root_page_id);
 	}
-
-	deinit_page_table_tuple_definitions(&pttd);
 }
 
 // utilities for the catalog objects

@@ -70,7 +70,7 @@ static int get_transaction_status_from_table(transaction_table* ttbl, uint256 tr
 		page_table_range_locker* ptrl_p = NULL;
 		persistent_page bucket_page = get_NULL_persistent_page(ttbl->ttbl_engine->pam_p);
 
-		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = bucket_id, .last_bucket_id = bucket_id}, ttbl->pttd_p, ttbl->ttbl_engine->pam_p, NULL, NULL, &abort_error);
+		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = bucket_id, .last_bucket_id = bucket_id}, &(ttbl->ttbl_engine->pttd), ttbl->ttbl_engine->pam_p, NULL, NULL, &abort_error);
 		if(abort_error)
 			goto ABORT_ERROR;
 
@@ -130,7 +130,7 @@ static void get_min_unassigned_transaction_id(transaction_table* ttbl, uint256* 
 		persistent_page bucket_page = get_NULL_persistent_page(ttbl->ttbl_engine->pam_p);
 
 		// lock the complete table
-		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = 0, .last_bucket_id = UINT64_MAX}, ttbl->pttd_p, ttbl->ttbl_engine->pam_p, NULL, NULL, &abort_error);
+		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = 0, .last_bucket_id = UINT64_MAX}, &(ttbl->ttbl_engine->pttd), ttbl->ttbl_engine->pam_p, NULL, NULL, &abort_error);
 		if(abort_error)
 			goto ABORT_ERROR;
 
@@ -218,7 +218,7 @@ static int set_transaction_status_in_table(transaction_table* ttbl, uint256 tran
 		// we are fine with waiting for atmost a second, and we hold no latches
 		void* sub_transaction_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, page_latches_to_be_borrowed);
 
-		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = bucket_id, .last_bucket_id = bucket_id}, ttbl->pttd_p, ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
+		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = bucket_id, .last_bucket_id = bucket_id}, &(ttbl->ttbl_engine->pttd), ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
 		if(abort_error)
 			goto ABORT_ERROR;
 
@@ -398,16 +398,6 @@ void initialize_transaction_table(transaction_table* ttbl, uint64_t* root_page_i
 	// set the provided transaction table engine, the persistent rage engine possibly MinTxEngine
 	ttbl->ttbl_engine = ttbl_engine;
 
-	// intitialize the pttd_p
-	ttbl->pttd_p = malloc(sizeof(page_table_tuple_defs));
-	if(ttbl->pttd_p == NULL)
-		exit(-1);
-	if(!init_page_table_tuple_definitions(ttbl->pttd_p, &(ttbl->ttbl_engine->pam_p->pas)))
-	{
-		printf("BUG (in transaction_table) :: could not initialize page_table_tuple_defs\n");
-		exit(-1);
-	}
-
 	// initialize the bitmap page tuple def for each of the buckets
 	ttbl->bitmap_page_tuple_def_p = get_tuple_definition_for_bitmap_page(&(ttbl->ttbl_engine->pam_p->pas), 2, &(ttbl->transaction_statuses_per_bitmap_page));
 	if(ttbl->bitmap_page_tuple_def_p == NULL)
@@ -425,7 +415,7 @@ void initialize_transaction_table(transaction_table* ttbl, uint64_t* root_page_i
 
 				void* sub_transaction_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, page_latches_to_be_borrowed);
 
-				(*root_page_id) = get_new_page_table(ttbl->pttd_p, ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
+				(*root_page_id) = get_new_page_table(&(ttbl->ttbl_engine->pttd), ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
 				if(abort_error)
 					goto ABORT_ERROR;
 
