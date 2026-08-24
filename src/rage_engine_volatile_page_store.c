@@ -100,7 +100,7 @@ rage_engine get_rage_engine_for_volatile_page_store(uint32_t page_size, uint8_t 
 
 	if(!init_page_table_tuple_definitions(&(e.pttd), &(e.pam_p->pas)))
 	{
-		printf("FAILED to initialize persistent store's pttd\n");
+		printf("FAILED to initialize volatile store's pttd\n");
 		exit(-1);
 	}
 
