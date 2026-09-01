@@ -1,15 +1,5 @@
 PICKED TASKS
 
-* test the following pipeline
-  * create table my_table(str key, blob val_bin, int val_int) commit
-  * const_dataset_operator -> insertion commit
-  * table_a ->                                }
-  * const_data_set_operator same as before -> } -> union -> hash aggregate on key -> print count(key) and sum(val_int)
-                                              } -> sort both -> merge_sorted -> sorted aggregate on key -> print count(key) and sum(val_int)
-
-
-----------------------------------------------------------------
-
 * group_concat -> canctaenate all strings in same group, into a volatile string
   * supports prefix and suffix and delimeter also
 
