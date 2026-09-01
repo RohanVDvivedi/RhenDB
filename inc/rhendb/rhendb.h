@@ -22,6 +22,8 @@
 
 #define VOLATILE_EXT_SUB_TYPE      "V" // for temporary data generated from expressions, are stored in this type, in volatile_rage_engine
 
+#define UNION_TYPE_SUFFIX          "union"
+
 typedef struct rhendb rhendb;
 struct rhendb
 {
@@ -80,6 +82,8 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 		uint32_t page_size_vps,
 			uint64_t truncator_period_us,
 		uint64_t max_concurrent_users_count);
+
+int is_unified_type_info(const data_type_info* dti_p);
 
 void deinitialize_rhendb(rhendb* rdb);
 

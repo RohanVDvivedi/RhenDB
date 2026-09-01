@@ -12,11 +12,13 @@ int are_hashably_equivalent_rhendb(const data_type_info* dti1, const data_type_i
 		return 1;
 	else if(!is_container_type_info(dti1) && !is_container_type_info(dti2)) // non container types, primitive numbers: bit_field, uint, int, large_uint, large_int, float, they hash to same value only if they are same type and size
 		return are_hashably_equivalent(dti1, dti2);
-	else if((is_text_type_info(dti1) || is_blob_type_info(dti1)) && (is_text_type_info(dti2) || is_blob_type_info(dti2))) // both are text or blob
+	else if((is_text_type_info(dti1) || is_blob_type_info(dti1)) && (is_text_type_info(dti2) || is_blob_type_info(dti2))) // both are text or blob, includes tests for their corresponding union types
 		return 1;
-	else if(is_numeric_type_info(dti1) && is_numeric_type_info(dti2)) // both are numeric
+	else if(is_numeric_type_info(dti1) && is_numeric_type_info(dti2)) // both are numeric, includes tests for their corresponding union types
 		return 1;
 	else if(is_extended_type_info(dti1) || is_extended_type_info(dti2)) // one of them is some not comparable extended types, like jsonb or tuple_list
+		return 0;
+	else if(is_unified_type_info(dti1) || is_unified_type_info(dti2)) // one of them is some not comparable union types, like jsonb or tuple_list
 		return 0;
 	else if((dti1->type == STRING || dti1->type == BINARY || dti1->type == ARRAY) && (dti2->type == STRING || dti2->type == BINARY || dti2->type == ARRAY)) // STRING, BINARY and ARRAY are internally comparable, if their containee types are comparable
 		return are_hashably_equivalent_rhendb(dti1->containee, dti2->containee); // recursive call, so 2 inline arrays of extended-text types are comparable

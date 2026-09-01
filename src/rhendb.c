@@ -247,7 +247,7 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 	strcpy(rdb->union_text_type_info->containees[1].field_name, "persistent");
 	rdb->union_text_type_info->containees[1].al.type_info = rdb->persistent_acid_rage_engine.text_extended_type_info;
 	rdb->union_text_type_info->is_static = 1;
-	initialize_tuple_data_type_info(rdb->union_text_type_info, "text_union", 0, max(rdb->volatile_rage_engine.text_extended_type_info->max_size, rdb->persistent_acid_rage_engine.text_extended_type_info->max_size) + 24, 2);
+	initialize_tuple_data_type_info(rdb->union_text_type_info, TEXT_TYPE_PREFIX "_" UNION_TYPE_SUFFIX, 0, max(rdb->volatile_rage_engine.text_extended_type_info->max_size, rdb->persistent_acid_rage_engine.text_extended_type_info->max_size) + 24, 2);
 	finalize_type_info(rdb->union_text_type_info);
 
 	rdb->union_blob_type_info = malloc(sizeof_tuple_data_type_info(2));
@@ -256,7 +256,7 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 	strcpy(rdb->union_blob_type_info->containees[1].field_name, "persistent");
 	rdb->union_blob_type_info->containees[1].al.type_info = rdb->persistent_acid_rage_engine.blob_extended_type_info;
 	rdb->union_blob_type_info->is_static = 1;
-	initialize_tuple_data_type_info(rdb->union_blob_type_info, "blob_union", 0, max(rdb->volatile_rage_engine.blob_extended_type_info->max_size, rdb->persistent_acid_rage_engine.blob_extended_type_info->max_size) + 24, 2);
+	initialize_tuple_data_type_info(rdb->union_blob_type_info, BLOB_TYPE_PREFIX "_" UNION_TYPE_SUFFIX, 0, max(rdb->volatile_rage_engine.blob_extended_type_info->max_size, rdb->persistent_acid_rage_engine.blob_extended_type_info->max_size) + 24, 2);
 	finalize_type_info(rdb->union_blob_type_info);
 
 	rdb->union_numeric_type_info = malloc(sizeof_tuple_data_type_info(2));
@@ -265,7 +265,7 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 	strcpy(rdb->union_numeric_type_info->containees[1].field_name, "persistent");
 	rdb->union_numeric_type_info->containees[1].al.type_info = rdb->persistent_acid_rage_engine.numeric_extended_type_info;
 	rdb->union_numeric_type_info->is_static = 1;
-	initialize_tuple_data_type_info(rdb->union_numeric_type_info, "numeric_union", 0, max(rdb->volatile_rage_engine.numeric_extended_type_info->max_size, rdb->persistent_acid_rage_engine.numeric_extended_type_info->max_size) + 24, 2);
+	initialize_tuple_data_type_info(rdb->union_numeric_type_info, NUMERIC_TYPE_PREFIX "_" UNION_TYPE_SUFFIX, 0, max(rdb->volatile_rage_engine.numeric_extended_type_info->max_size, rdb->persistent_acid_rage_engine.numeric_extended_type_info->max_size) + 24, 2);
 	finalize_type_info(rdb->union_numeric_type_info);
 
 	rdb->union_jsonb_type_info = malloc(sizeof_tuple_data_type_info(2));
@@ -274,8 +274,13 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 	strcpy(rdb->union_jsonb_type_info->containees[1].field_name, "persistent");
 	rdb->union_jsonb_type_info->containees[1].al.type_info = rdb->persistent_acid_rage_engine.jsonb_extended_type_info;
 	rdb->union_jsonb_type_info->is_static = 1;
-	initialize_tuple_data_type_info(rdb->union_jsonb_type_info, "jsonb_union", 0, max(rdb->volatile_rage_engine.jsonb_extended_type_info->max_size, rdb->persistent_acid_rage_engine.jsonb_extended_type_info->max_size) + 24, 2);
+	initialize_tuple_data_type_info(rdb->union_jsonb_type_info, JSONB_TYPE_PREFIX "_" UNION_TYPE_SUFFIX, 0, max(rdb->volatile_rage_engine.jsonb_extended_type_info->max_size, rdb->persistent_acid_rage_engine.jsonb_extended_type_info->max_size) + 24, 2);
 	finalize_type_info(rdb->union_jsonb_type_info);
+}
+
+int is_unified_type_info(const data_type_info* dti_p)
+{
+	return (dti_p->type == TUPLE) && is_suffix_of_dstring(&get_dstring_pointing_to_cstring(dti_p->type_name), &get_dstring_pointing_to_literal_cstring(UNION_TYPE_SUFFIX));
 }
 
 void deinitialize_rhendb(rhendb* rdb)
