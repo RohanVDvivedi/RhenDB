@@ -85,6 +85,8 @@ int main(int argc, char** argv)
 
 		get_min_max_aggregate_function(&tx, record_def.type_info, 1),
 		get_min_max_aggregate_function(&tx, record_def.type_info, 0),
+
+		get_concat_aggregate_function(&tx, record_def.type_info->containees[2].al.type_info, get_dstring_pointing_to_literal_cstring("[ "), get_dstring_pointing_to_literal_cstring(" , "), get_dstring_pointing_to_literal_cstring(" ]")),
 	};
 
 	const positional_accessor aggregate_input_positions_SELF[] = {SELF};
@@ -129,6 +131,8 @@ int main(int argc, char** argv)
 
 		aggregate_input_positions_SELF,
 		aggregate_input_positions_SELF,
+
+		aggregate_input_positions_2,
 	};
 
 	printf("Building pipeline :\n");

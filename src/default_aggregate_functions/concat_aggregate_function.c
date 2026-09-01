@@ -64,7 +64,10 @@ static int append_bytes(const aggregate_function* af_p, concat_state* state, con
 
 	rage_engine* ex_engine = &(cc->tx->rdb->volatile_rage_engine);
 
-	binary_write_iterator* wr = get_new_binary_write_iterator(state->result, &(cc->output_tuple_def), SELF, 0 /*dummy root*/, state->tail_pointer, ex_engine->max_prefix_size_in_bytes, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
+	binary_write_iterator* wr = get_new_binary_write_iterator(state->result, &(cc->output_tuple_def), SELF, (state->temp_ext_store == NULL) ? 0 /*dummy root*/ : state->temp_ext_store->blob_store_root_page_id, state->tail_pointer, ex_engine->max_prefix_size_in_bytes, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
+
+	if(state->temp_ext_store != NULL)
+		write_lock(&(state->temp_ext_store->blob_store_lock), BLOCKING);
 
 	int abort_error_dummy = 0;
 
@@ -86,13 +89,14 @@ static int append_bytes(const aggregate_function* af_p, concat_state* state, con
 				}
 
 				if(state->bytes_appended == ex_engine->max_prefix_size_in_bytes)
+				{
 					state->temp_ext_store = &(cc->tx->temp_ext_stores[hash_element_within_tuple(state->result, &(cc->output_tuple_def), EXTENDED_PREFIX_POS_ACC, FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT]);
+					write_lock(&(state->temp_ext_store->blob_store_lock), BLOCKING);
+					wr->blob_store_root_page_id = state->temp_ext_store->blob_store_root_page_id;
+				}
 			}
 			else
 			{
-				write_lock(&(state->temp_ext_store->blob_store_lock), BLOCKING);
-				wr->blob_store_root_page_id = state->temp_ext_store->blob_store_root_page_id;
-
 				const heap_table_notifier* htan_p = &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(state->temp_ext_store->htan));
 
 				while(bytes_written < data_size)
@@ -114,10 +118,7 @@ static int append_bytes(const aggregate_function* af_p, concat_state* state, con
 	delete_binary_write_iterator(wr, NULL, &abort_error_dummy);
 
 	if(state->temp_ext_store != NULL)
-	{
-		fix_unused_space_entries_in_store(cc->tx, state->temp_ext_store);
 		write_unlock(&(state->temp_ext_store->blob_store_lock));
-	}
 
 	return 1;
 }
@@ -143,7 +144,7 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 		{
 			if(!append_bytes(af_p, state, get_byte_array_dstring(&(cc->delimeter)), get_char_count_dstring(&(cc->delimeter))))
 				return 0;
-		}
+		}printf("appended prior bytes\n");
 
 		uint32_t length = 0;
 		uint32_t capacity = 0;
