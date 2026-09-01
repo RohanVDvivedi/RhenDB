@@ -45,6 +45,7 @@ static concat_state* create_concat_state(const aggregate_function* af_p)
 	state->concats_completed = 0;
 	state->bytes_appended = 0;
 	state->result = malloc(af_p->output_type_info->max_size);
+	init_tuple(&(cc->output_tuple_def), state->result);
 	state->tail_pointer = get_NULL_tuple_pointer(&(cc->tx->rdb->volatile_rage_engine.pam_p->pas));
 	state->temp_ext_store = NULL;
 

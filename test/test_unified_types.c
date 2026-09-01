@@ -193,6 +193,9 @@ int main()
 			get_min_max_aggregate_function(&tx, rdb.union_numeric_type_info, 0), // 0 as last param means max
 
 			get_sum_aggregate_function(&tx, rdb.union_numeric_type_info),
+
+			get_concat_aggregate_function(&tx, rdb.union_text_type_info, get_dstring_pointing_to_literal_cstring("[ "), get_dstring_pointing_to_literal_cstring(" ,"), get_dstring_pointing_to_literal_cstring(" ]")),
+			get_concat_aggregate_function(&tx, rdb.union_blob_type_info, get_dstring_pointing_to_literal_cstring("\x12\x23"), get_dstring_pointing_to_literal_cstring("\x45\x56"), get_dstring_pointing_to_literal_cstring("\x78\x89")),
 		};
 
 		const positional_accessor aggregate_input_positions_0[] = {STATIC_POSITION(0)};
@@ -204,6 +207,8 @@ int main()
 			aggregate_input_positions_2,
 			aggregate_input_positions_2,
 			aggregate_input_positions_2,
+			aggregate_input_positions_0,
+			aggregate_input_positions_1,
 		};
 
 		compare_direction CMP_DIR[1] = {ASC};
