@@ -182,6 +182,30 @@ int main()
 	{
 		qp = get_new_query_plan(&tx, 30);
 
+		const positional_accessor key_pos[] = {STATIC_POSITION(0)};
+
+		aggregate_function* const AGGREGATES[] = {
+			get_count_aggregate_function(rdb.union_numeric_type_info),
+
+			get_min_max_aggregate_function(&tx, rdb.union_numeric_type_info, 1), // 1 is min
+			get_min_max_aggregate_function(&tx, rdb.union_numeric_type_info, 0), // 0 as last param means max
+
+			get_sum_aggregate_function(&tx, rdb.union_numeric_type_info),
+		};
+
+		const positional_accessor aggregate_input_positions_0[] = {STATIC_POSITION(0)};
+		const positional_accessor aggregate_input_positions_1[] = {STATIC_POSITION(1)};
+		const positional_accessor aggregate_input_positions_2[] = {STATIC_POSITION(2)};
+
+		const positional_accessor* AGGREGATE_INPUTS[] = {
+			aggregate_input_positions_2,
+			aggregate_input_positions_2,
+			aggregate_input_positions_2,
+			aggregate_input_positions_2,
+		};
+
+		compare_direction CMP_DIR[1] = {ASC};
+
 		positional_accessor* projections_for_table[3] = {&STATIC_POSITION(0,1), &STATIC_POSITION(0,2), &STATIC_POSITION(0,3)};
 		{
 			operator* input_operator1 = get_new_registered_operator_for_query_plan(qp);
@@ -197,8 +221,14 @@ int main()
 			operator* union_operator = get_new_registered_operator_for_query_plan(qp);
 			setup_union_operator(union_operator, (operator* []){input_operator1, input_operator2}, 2);
 
+			operator* aggregate_operator = get_new_registered_operator_for_query_plan(qp);
+			setup_hash_aggregation_operator(aggregate_operator, union_operator, 1, key_pos, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, 4, 1, 1, 1000);
+
+			operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
+			setup_sort_operator(sorter_operator, TUPLES_DOWN_COUNTER_INF, aggregate_operator, 1, key_pos, CMP_DIR, 10, 2, 1);
+
 			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_consumer_operator(print_operator, union_operator, print_consumer, NULL);
+			setup_consumer_operator(print_operator, sorter_operator, print_consumer, NULL);
 		}
 
 		start_all_operators_for_query_plan(qp);
