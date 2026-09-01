@@ -144,7 +144,7 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 		{
 			if(!append_bytes(af_p, state, get_byte_array_dstring(&(cc->delimeter)), get_char_count_dstring(&(cc->delimeter))))
 				return 0;
-		}printf("appended prior bytes\n");
+		}
 
 		uint32_t length = 0;
 		uint32_t capacity = 0;
