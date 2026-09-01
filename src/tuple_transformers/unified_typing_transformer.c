@@ -24,9 +24,13 @@ static void* process(tuple_transformer* tt_p, void* tuple)
 		const data_type_info* input_dti = get_type_info_for_element_from_tuple_def(tt_p->input_def, STATIC_POSITION(i));
 		const data_type_info* output_dti = get_type_info_for_element_from_tuple_def(tt_p->output_def, STATIC_POSITION(i));
 
-		positional_accessor output_pos;
+		positional_accessor pos_i = STATIC_POSITION(i);
+		positional_accessor pos_i_0 = STATIC_POSITION(i, 0);
+		positional_accessor pos_i_1 = STATIC_POSITION(i, 1);
+
+		positional_accessor* output_pos;
 		if(input_dti == output_dti) // fast path
-			output_pos = STATIC_POSITION(i);
+			output_pos = &pos_i;
 		else
 		{
 			// output_dti must be a union type_info and input being some extended type
@@ -38,13 +42,13 @@ static void* process(tuple_transformer* tt_p, void* tuple)
 			output_tuple_size = get_tuple_size(tt_p->output_def, output_tuple);
 
 			if(has_extended_type_info(input_dti, VOLATILE_EXT_SUB_TYPE))
-				output_pos = STATIC_POSITION(i, 0);
+				output_pos = &pos_i_0;
 			else if(has_extended_type_info(input_dti, PERSISTENT_EXT_SUB_TYPE))
-				output_pos = STATIC_POSITION(i, 1);
+				output_pos = &pos_i_1;
 		}
 
 
-		while(!set_element_in_tuple(tt_p->output_def, output_pos, output_tuple, &input_uval, output_tuple_capacity - output_tuple_size))
+		while(!set_element_in_tuple(tt_p->output_def, *output_pos, output_tuple, &input_uval, output_tuple_capacity - output_tuple_size))
 		{
 			output_tuple_capacity = min(output_tuple_capacity * 2, get_maximum_tuple_size(tt_p->output_def));
 			output_tuple = realloc(output_tuple, output_tuple_capacity);

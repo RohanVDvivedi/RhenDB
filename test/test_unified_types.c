@@ -145,11 +145,6 @@ int main()
 	// a query completed so reset it's ext stores
 	reset_temp_ext_stores_in_transaction(&tx);
 
-	// create another dataset for constant dataset operator
-	/*its_p = get_new_interim_tuple_store(4096);
-	insert_in_interim_tuple_store(its_p, "Rohan", "\xdd\x11\xdd\x11", "29.5");
-	insert_in_interim_tuple_store(its_p, "Devashree", "\x44\x10\x01\x55\x11\x11", "40.2");*/
-
 	// run a sample pipeline
 	{
 		qp = get_new_query_plan(&tx, 30);
@@ -160,6 +155,50 @@ int main()
 
 			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
 			setup_consumer_operator(print_operator, input_operator, print_consumer, NULL);
+		}
+
+		start_all_operators_for_query_plan(qp);
+
+		wait_for_shutdown_of_query_plan(qp);
+
+		dstring kill_reasons = new_dstring("", 0);
+		destroy_query_plan(qp, &kill_reasons);
+
+		printf("\n\nKILL REASONS : \n");
+		printf_dstring(&kill_reasons);
+		deinit_dstring(&kill_reasons);
+		printf("\n\nKILL REASONS END\n\n");
+	}
+
+	// a query completed so reset it's ext stores
+	reset_temp_ext_stores_in_transaction(&tx);
+
+	// create another dataset for constant dataset operator
+	its_p = get_new_interim_tuple_store(4096);
+	insert_in_interim_tuple_store(its_p, "Rohan", "\xdd\x11\xdd\x11", "29.5");
+	insert_in_interim_tuple_store(its_p, "Devashree", "\x44\x10\x01\x55\x11\x11", "40.2");
+
+	// run a sample pipeline
+	{
+		qp = get_new_query_plan(&tx, 30);
+
+		positional_accessor* projections_for_table[3] = {&STATIC_POSITION(0,1), &STATIC_POSITION(0,2), &STATIC_POSITION(0,3)};
+		{
+			operator* input_operator1 = get_new_registered_operator_for_query_plan(qp);
+			setup_scan_operator(input_operator1, qp, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0);
+			tuple_transformer* projs = get_new_simple_projection_transformer("projecteds", get_tuple_def_for_tuples_to_be_consumed_from(input_operator1), 3, projections_for_table, ((char const *[]){"column1", "column2", "column3"}));
+			append_tuple_transformer(&(input_operator1->output_tuple_transformers), projs);
+			append_tuple_transformer(&(input_operator1->output_tuple_transformers), get_new_unified_typing_transformer(get_tuple_def_for_tuples_to_be_consumed_from(input_operator1), &tx, (uint32_t[]){0,1,2}, 3));
+
+			operator* input_operator2 = get_new_registered_operator_for_query_plan(qp);
+			setup_constant_dataset_operator(input_operator2, its_p, &record_def);
+			append_tuple_transformer(&(input_operator2->output_tuple_transformers), get_new_unified_typing_transformer(get_tuple_def_for_tuples_to_be_consumed_from(input_operator2), &tx, (uint32_t[]){0,1,2}, 3));
+
+			operator* union_operator = get_new_registered_operator_for_query_plan(qp);
+			setup_union_operator(union_operator, (operator* []){input_operator1, input_operator2}, 2);
+
+			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
+			setup_consumer_operator(print_operator, union_operator, print_consumer, NULL);
 		}
 
 		start_all_operators_for_query_plan(qp);
