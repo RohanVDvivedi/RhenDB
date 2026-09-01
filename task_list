@@ -1,9 +1,5 @@
 PICKED TASKS
 
-test concat aggregation operator
-
------------------------------------------------------------------
-
 * implement savepoint logging
   * linked_page_list that stores table_id, partition_id and tuple_pointer OR stores save_point_name
   * and a hash_table acting like a hash set that suggests if the save point is in the transaction
