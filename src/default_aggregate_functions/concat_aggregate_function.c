@@ -198,7 +198,7 @@ static void destroy_state(const aggregate_function* af_p, void** state_p)
 	concat_state* state = (*state_p);
 	free(state->result);
 	free(state);
-	state_p = NULL;
+	(*state_p) = NULL;
 }
 
 static void destroy_aggregate_function(aggregate_function* af_p)
