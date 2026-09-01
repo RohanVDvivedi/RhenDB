@@ -19,4 +19,6 @@ tuple_transformer* get_new_row_identifier_prepender_transformer(const tuple_def*
 
 tuple_transformer* get_new_expressioned_selection_transformer(const tuple_def* input_def, transaction* tx, sql_expression* expr);
 
+tuple_transformer* get_new_unified_typing_transformer(const tuple_def* input_def, uint32_t* column_ids_to_transform, uint32_t column_to_transform_count);
+
 #endif
