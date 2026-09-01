@@ -4,6 +4,8 @@
 #include<rhendb/operators.h>
 #include<rhendb/tuple_transformers.h>
 
+#include<rhendb/util_materialization.h>
+
 #include<test_dataset_tuple_def.h>
 
 #include<cutlery/stream_for_file_descriptor.h>
@@ -25,7 +27,7 @@ void intHandler(int dummy)
 	shutdown_query_plan(qp, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
 }
 
-int print_consumer(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def)
+int print_consumer_custom(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def)
 {
 	datum uval;
 	if(!get_value_from_element_from_tuple(&uval, input_tuple_def, STATIC_POSITION(21), tuple))
@@ -34,7 +36,7 @@ int print_consumer(void* consumer_context, const void* tuple, const tuple_def* i
 	int error_code = 0;
 	uint32_t length = 0;
 	uint32_t capacity = 0;
-	char* group_concat_data = materialize_tb(uval, qp->tx->rdb->volatile_rage_engine->text_extended_type_info, qp->tx, &length, &capacity, &error_code);
+	char* group_concat_data = materialize_tb(uval, qp->curr_tx->rdb->volatile_rage_engine.text_extended_type_info, qp->curr_tx, &length, &capacity, &error_code);
 
 	if(error_code)
 	{
