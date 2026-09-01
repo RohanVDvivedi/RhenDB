@@ -115,6 +115,7 @@ int main()
 	interim_tuple_store* its_p = get_new_interim_tuple_store(4096);
 	insert_in_interim_tuple_store(its_p, "Rohan", "\xdd\x11\xdd\x11", "29.5");
 	insert_in_interim_tuple_store(its_p, "Devashree", "\x44\x10\x01\x55\x11\x11", "40.2");
+	insert_in_interim_tuple_store(its_p, "Rupa", "\x44\x10\x01\x55\x11\x11\xdd\x11\xdd\x11", "60");
 
 	{
 		qp = get_new_query_plan(&tx, 30);
@@ -177,6 +178,7 @@ int main()
 	its_p = get_new_interim_tuple_store(4096);
 	insert_in_interim_tuple_store(its_p, "Rohan", "\xdd\x11\xdd\x11", "29.5");
 	insert_in_interim_tuple_store(its_p, "Devashree", "\x44\x10\x01\x55\x11\x11", "40.2");
+	insert_in_interim_tuple_store(its_p, "Vipulkumar", "\x44\xdd\x11\xdd\x11", "59.6");
 
 	// run a sample pipeline
 	{
