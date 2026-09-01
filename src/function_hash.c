@@ -49,10 +49,9 @@ uint64_t hash_datum_rhendb(const datum* uval, const data_type_info* dti, tuple_h
 		{
 			const data_type_info* child_dti;
 			datum child_value;
-			if(!get_containee_from_datum(&child_value, &child_dti, uval, dti, i))
+			if(!get_containee_from_datum(&child_value, &child_dti, uval, dti, i) || is_datum_NULL(&child_value))
 				continue;
-			if(!is_datum_NULL(&child_value)) // if the child is non-NULL, return it's hash
-				return hash_datum_rhendb(&child_value, child_dti, th, tx); // nestedly hash it using the very same function
+			return hash_datum_rhendb(&child_value, child_dti, th, tx); // nestedly hash it using the very same function
 		}
 		return th->hash; // fall back return 
 	}

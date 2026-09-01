@@ -46,6 +46,37 @@ int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const d
 	else if(!is_datum_NULL(uval1) && is_datum_NULL(uval2))
 		return 1;
 
+	datum child_value1;
+	if(is_unified_type_info(dti1))
+	{
+		for(uint32_t i = 0; i < get_element_count_for_datum(uval1, dti1); i++)
+		{
+			const data_type_info* child_dti1;
+			if(!get_containee_from_datum(&child_value1, &child_dti1, uval1, dti1, i) || is_datum_NULL(&child_value1))
+				continue;
+			uval1 = &child_value1;
+			dti1 = child_dti1;
+			break;
+		}
+	}
+
+	datum child_value2;
+	if(is_unified_type_info(dti2))
+	{
+		for(uint32_t i = 0; i < get_element_count_for_datum(uval2, dti2); i++)
+		{
+			const data_type_info* child_dti2;
+			if(!get_containee_from_datum(&child_value2, &child_dti2, uval2, dti2, i) || is_datum_NULL(&child_value2))
+				continue;
+			uval2 = &child_value2;
+			dti2 = child_dti2;
+			break;
+		}
+	}
+
+	if(dti1 == dti2)
+		return compare_datum2_rhendb(uval1, uval2, dti1, tx);
+
 	if(!is_container_type_info(dti1) && !is_container_type_info(dti2)) // non container types, primitive numbers: bit_field, uint, int, large_uint, large_int, float
 		return compare_datum(uval1, dti1, uval2, dti2);
 	else if((is_text_type_info(dti1) || is_blob_type_info(dti1)) && (is_text_type_info(dti2) || is_blob_type_info(dti2))) // both are text or blob
@@ -185,6 +216,9 @@ int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_typ
 		return -1;
 	else if(!is_datum_NULL(uval1) && is_datum_NULL(uval2))
 		return 1;
+
+	if(is_unified_type_info(dti))
+		return compare_datum_rhendb(uval1, dti, uval2, dti, tx);
 
 	if(!is_container_type_info(dti)) // non container types, primitive numbers: bit_field, uint, int, large_uint, large_int, float
 		return compare_datum2(uval1, uval2, dti);
