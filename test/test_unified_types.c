@@ -194,7 +194,7 @@ int main()
 
 			get_sum_aggregate_function(&tx, rdb.union_numeric_type_info),
 
-			get_concat_aggregate_function(&tx, rdb.union_text_type_info, get_dstring_pointing_to_literal_cstring("[ "), get_dstring_pointing_to_literal_cstring(" ,"), get_dstring_pointing_to_literal_cstring(" ]")),
+			get_concat_aggregate_function(&tx, rdb.union_text_type_info, get_dstring_pointing_to_literal_cstring("[ "), get_dstring_pointing_to_literal_cstring(" , "), get_dstring_pointing_to_literal_cstring(" ]")),
 			get_concat_aggregate_function(&tx, rdb.union_blob_type_info, get_dstring_pointing_to_literal_cstring("\x12\x23"), get_dstring_pointing_to_literal_cstring("\x45\x56"), get_dstring_pointing_to_literal_cstring("\x78\x89")),
 		};
 
