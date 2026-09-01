@@ -2,7 +2,6 @@ PICKED TASKS
 
 
 * need changes for supporting them in
-  * sum_aggregate_function -> needs to take care and use the right type
   * there are only two operators below that can create these 2 types
    * union_operator
    * merge_sorted_inputs_opertator
