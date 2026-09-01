@@ -1,7 +1,23 @@
 PICKED TASKS
 
-* also cache materialized values by chunk_pointer and by what rage_engine pointer they live in
- * resets everytime new input_tuples are set
+* implement savepoint logging
+  * linked_page_list that stores table_id, partition_id and tuple_pointer OR stores save_point_name
+  * and a hash_table acting like a hash set that suggests if the save point is in the transaction
+   * savepoints on undo will flip the is_xmin_NULL bit to 1 to undo an insert and will flip the is_xmax_NULL bit to 1 to undo a delete
+   * then we will do this until we hit a ROLLBACK to savepoint is hit
+   * savepoint_log_record{
+      savepoint_log_record_type type; {SAVEPOINT_INSERTION_LOG, SAVEPOINT_DELETION_LOG, NEW_SAVEPOINT_LOG}
+      char savepoint_name[64];
+      uint64_t table_id;
+      uint64_t partition_id;
+      tuple_pointer tuple_pointer;
+   }
+   * savepoint name of no more than 64 characters is allowed
+   * no reset function will be needed here
+   * insert_savepoint_log_for_transaction();
+   * insert_new_savepoint_in_transaction();
+   * rollback_to_savepoint();
+
 
 
 
@@ -11,33 +27,42 @@ PICKED TASKS
 
 
 
-* implement savepoint logging
-  * linkedlist that stores table_id, partition_id and tuple_pointer OR stores save_point_name
-     1.* maintain the inserts and deletes log as a stack in volatile page store and allow save points (*future)
-   * savepoints will flip the is_xmin_NULL bit to 1 to undo an insert
-   * and will flip the is_xmax_NULL bit to 1 to undo a delete
-   * then we will do this until we hit a ROLLBACK to savepoint is hit
-   * savepoint_log_record{
-      savepoint_log_record_type type; {INSERT, DELETE, SAVEPOINT_NAME}
-      union {
-        char savepoint_name[64];
-        struct { // for insertion or deletion
-          uint64_t table_id;
-          uint64_t partition_id;
-          tuple_pointer tuple_pointer;
-        }
-      };
-   }
-   * maintain and store this as a record in linked_page_list maintained as a stack, push and pop only at the head, also we will need a rollback_to_savepoint function, and a set of save_point name maintained as a set
-   * only pushes and pops are done using rwlock here, and inserts are only doen if there is atleast 1 savepoint name alive in the savepoint_names set\
-   * no reset function will be needed here
-   * we will let trash_cleaner do it's task of cleaning up inserts later in time
-   * this stack will be in volatile page store and upon a crash we will just consider this transaction as aborted and we will never need this information
+
+* add new union datatypes in rhendb_struct composed of corresponding types from volatile and acid rage engines
+  * text_union
+  * blob_union
+  * numeric_union
+  * jsonb_union -> only supported for namesake
+* need changes for supporting them in
+  * function_compare -> at the top if it is union, type, point the params to the first non-NULL
+  * function_hash    -> at the top if it is union, type, point the params to the first non-NULL
+  * util_materialization -> same thing, if the top level type is a union, then point to the first non-NULL
+  * sum_aggregate_function -> needs to take care and use the right type
+  * there are only two operators below that can create these 2 types
+   * union_operator
+   * merge_sorted_inputs_opertator
+   * write a function to test for compatibility for the output, and a function to produce output tuple from any of the input tuple
+
+
+
+----------------------------------------------------------------
+
+
+* group_concat -> canctaenate all strings in same group, into a volatile string
+  * supports prefix and suffix and delimeter also
+
+
+
+
+----------------------------------------------------------------
 
 
 
 
 
+
+* also cache materialized values by chunk_pointer and by what rage_engine pointer they live in
+ * resets everytime new input_tuples are set
 
 
 
@@ -91,7 +116,6 @@ DB acess operators
 PRIORITY HIGH LEVEL TASKS (not yet prioritized)
 
 * aggregate functions
- * group_concat -> canctaenate all strings in same group, into a volatile string
  * aggregate_into_array -> put all composite types into a jsonb array
  * gcd -> same return type for the number (ponder over support for lcm)
  * bitwise_and/or/xor -> only integer types wiuth same number of bytes/bits in them
@@ -105,13 +129,6 @@ PRIORITY HIGH LEVEL TASKS (not yet prioritized)
  * implement get date, time, with timezone, and time in string to unix epoch
  * implement concat and substring
  * implement double/numeric funtions, sin, cos, tan, asin, acos, atan, log, exp
-
-* make composite_reference types, composed of persistent and volatile extended and inline components, like a union
-  * for are_hashably_equivalent and can_compare, cross check all n^2 types
-  * and for hash and compare hash/compare operate only on the only first non-NULL element in them
-  * everything will need to change now and every operator need to be composite_reference aware
-  * expression_evaluators when they get a composite_reference, they will need to decode how to treat it, both for evaluation and inference
-  * this will help with the union and merge_sorted_inputs operators and will not need us to materialize all of the extended types that are on the disk, because this could be a big copy
 
 FUTURE TASKS
 
