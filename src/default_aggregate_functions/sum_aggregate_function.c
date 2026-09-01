@@ -32,7 +32,7 @@ static data_type_info* get_sum_output_type_info(const data_type_info* input_type
 
 		case TUPLE :
 		{
-			if(is_numeric_type_info(input_type_info))
+			if(is_numeric_type_info(input_type_info)) // tests for union numeric type too
 				return tx->rdb->volatile_rage_engine.numeric_extended_type_info;
 			return NULL;
 		}
