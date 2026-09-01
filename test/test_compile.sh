@@ -20,3 +20,5 @@ gcc -Wall -O3 -flto -I. ./test_match_joins.c -o test_match_joins.out -lrhendb -l
 gcc -Wall -O3 -flto -I. ./test_const_data.c -o test_const_data.out -lrhendb -lsqltoast -lmintxengine -ltuplelargetypes -lmpdec -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lm -lz
 gcc -Wall -O3 -flto -I. ./test_filter.c -o test_filter.out -lrhendb -lsqltoast -lmintxengine -ltuplelargetypes -lmpdec -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lm -lz
 gcc -Wall -O3 -flto -I. ./test_proj.c -o test_proj.out -lrhendb -lsqltoast -lmintxengine -ltuplelargetypes -lmpdec -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lm -lz
+
+gcc -Wall -O3 -flto -I. -I../inc ./test_unified_types.c -o test_unified_types.out -lrhendb -lsqltoast -lmintxengine -ltuplelargetypes -lmpdec -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lm -lz
