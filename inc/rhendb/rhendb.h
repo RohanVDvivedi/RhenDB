@@ -60,6 +60,16 @@ struct rhendb
 
 	// hash_table_tuple+defs for use internal to the rash_table
 	hash_table_tuple_defs rash_httd;
+
+	// union type infos that are composed of volatile_rage_engine->*_extended_type_info and persistent_acid_rage_engine->*_extended_type_info
+	// the selected type will always be non-NULL, it acts like a union and when it is NULL, the whole type is NULL
+	// they only are created and come into existence as part of union_operator and merge_sorted_inputs_operator
+	// always compare then with their first non-NULL attribute
+	// they will always be named as *_union and just like the types from tuple large types
+	data_type_info* union_text_type_info;
+	data_type_info* union_blobtype_info;
+	data_type_info* union_numeric_type_info;
+	data_type_info* union_jsonb_type_info;
 };
 
 void initialize_rhendb(rhendb* rdb, const char* database_file_name,
