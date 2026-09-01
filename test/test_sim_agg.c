@@ -25,6 +25,30 @@ void intHandler(int dummy)
 	shutdown_query_plan(qp, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
 }
 
+int print_consumer(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def)
+{
+	datum uval;
+	if(!get_value_from_element_from_tuple(&uval, input_tuple_def, STATIC_POSITION(21), tuple))
+		return 0;
+
+	int error_code = 0;
+	uint32_t length = 0;
+	uint32_t capacity = 0;
+	char* group_concat_data = materialize_tb(uval, qp->tx->rdb->volatile_rage_engine->text_extended_type_info, qp->tx, &length, &capacity, &error_code);
+
+	if(error_code)
+	{
+		printf("group_concate materialization error %d\n", error_code);
+		return 0;
+	}
+
+	printf("group concat = <%.*s>\n", length, group_concat_data);
+	if(capacity > 0)
+		free(group_concat_data);
+
+	return 1;
+}
+
 int main(int argc, char** argv)
 {
 	stream rs, ws;
@@ -148,6 +172,10 @@ int main(int argc, char** argv)
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
 		setup_consumer_operator(print_operator, aggregate_operator, print_consumer, NULL);
 		printf("output print operator %p\n", print_operator);
+
+		operator* print_operator2 = get_new_registered_operator_for_query_plan(qp);
+		setup_consumer_operator(print_operator2, aggregate_operator, print_consumer_custom, NULL);
+		printf("output print operator2 %p\n", print_operator2);
 	}
 	printf("\n\n");
 

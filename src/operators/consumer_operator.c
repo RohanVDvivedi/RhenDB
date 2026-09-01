@@ -62,7 +62,6 @@ int print_consumer(void* consumer_context, const void* tuple, const tuple_def* i
 {
 	print_tuple(tuple, input_tuple_def);
 
-	// always print
 	return 1;
 }
 

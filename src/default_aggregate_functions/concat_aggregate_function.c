@@ -150,6 +150,8 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 		uint32_t capacity = 0;
 		int error_code = 0;
 		char* data = materialize_tb(inputs[0], af_p->input_type_infos[0], cc->tx, &length, &capacity, &error_code);
+		if(error_code)
+			return 0;
 
 		if(!append_bytes(af_p, state, data, length))
 		{
