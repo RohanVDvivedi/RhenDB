@@ -1,11 +1,7 @@
 PICKED TASKS
 
 
-* need changes for supporting them in
-  * there are only two operators below that can create these 2 types
-   * union_operator
-   * merge_sorted_inputs_opertator
-   * write a function to test for compatibility for the output, and a function to produce output tuple from any of the input tuple
+
 
 ----------------------------------------------------------------
 
