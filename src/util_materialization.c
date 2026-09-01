@@ -2,7 +2,7 @@
 
 #include<stdlib.h>
 
-char* materialize_tb(const datum uval, const data_type_info* dti, transaction* tx, uint32_t* length, uint32_t* capacity, int* error_code)
+char* materialize_tb(datum uval, const data_type_info* dti, transaction* tx, uint32_t* length, uint32_t* capacity, int* error_code)
 {
 	(*error_code) = MATERIALIZED_SUCCESSFULLY;
 
@@ -17,6 +17,21 @@ char* materialize_tb(const datum uval, const data_type_info* dti, transaction* t
 			(*error_code) = MATERIALIZATION_TYPE_INVALID;
 
 		return NULL;
+	}
+
+	// if it is a union type info, make it point to the right extended type
+	if(is_unified_type_info(dti))
+	{
+		for(uint32_t i = 0; i < get_element_count_for_datum(&uval, dti); i++)
+		{
+			datum child_value;
+			const data_type_info* child_dti;
+			if(!get_containee_from_datum(&child_value, &child_dti, &uval, dti, i) || is_datum_NULL(&child_value))
+				continue;
+			uval = child_value;
+			dti = child_dti;
+			break;
+		}
 	}
 
 	char* buffer = NULL;
@@ -119,7 +134,7 @@ char* materialize_tb(const datum uval, const data_type_info* dti, transaction* t
 	return buffer;
 }
 
-materialized_numeric materialize_numeric1(const datum uval, const data_type_info* dti, transaction* tx, int* error_code)
+materialized_numeric materialize_numeric1(datum uval, const data_type_info* dti, transaction* tx, int* error_code)
 {
 	(*error_code) = MATERIALIZED_SUCCESSFULLY;
 
@@ -133,6 +148,21 @@ materialized_numeric materialize_numeric1(const datum uval, const data_type_info
 			(*error_code) = MATERIALIZATION_TYPE_INVALID;
 
 		return mn;
+	}
+
+	// if it is a union type info, make it point to the right extended type
+	if(is_unified_type_info(dti))
+	{
+		for(uint32_t i = 0; i < get_element_count_for_datum(&uval, dti); i++)
+		{
+			datum child_value;
+			const data_type_info* child_dti;
+			if(!get_containee_from_datum(&child_value, &child_dti, &uval, dti, i) || is_datum_NULL(&child_value))
+				continue;
+			uval = child_value;
+			dti = child_dti;
+			break;
+		}
 	}
 
 	// perform minimal initialization
@@ -208,7 +238,7 @@ materialized_numeric materialize_numeric1(const datum uval, const data_type_info
 	return mn;
 }
 
-mpd_t materialize_numeric(const datum uval, const data_type_info* dti, transaction* tx, int* error_code)
+mpd_t materialize_numeric(datum uval, const data_type_info* dti, transaction* tx, int* error_code)
 {
 	(*error_code) = MATERIALIZED_SUCCESSFULLY;
 
