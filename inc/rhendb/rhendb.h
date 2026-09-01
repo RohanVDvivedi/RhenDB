@@ -67,7 +67,7 @@ struct rhendb
 	// always compare then with their first non-NULL attribute
 	// they will always be named as *_union and just like the types from tuple large types
 	data_type_info* union_text_type_info;
-	data_type_info* union_blobtype_info;
+	data_type_info* union_blob_type_info;
 	data_type_info* union_numeric_type_info;
 	data_type_info* union_jsonb_type_info;
 };

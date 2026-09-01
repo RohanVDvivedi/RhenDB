@@ -239,6 +239,43 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 
 	// for hash based query executions (hash-join, hash-groupby), we will need rash_table which needs rash_httd, hich get's initialized here, in this function
 	initialize_hash_table_tuple_defs_for_using_rash_table(rdb);
+
+	// construct union types
+	rdb->union_text_type_info = malloc(sizeof_tuple_data_type_info(2));
+	strcpy(rdb->union_text_type_info->containees[0].field_name, "volatile");
+	rdb->union_text_type_info->containees[0].al.type_info = rdb->volatile_rage_engine.text_extended_type_info;
+	strcpy(rdb->union_text_type_info->containees[1].field_name, "persistent");
+	rdb->union_text_type_info->containees[1].al.type_info = rdb->persistent_acid_rage_engine.text_extended_type_info;
+	rdb->union_text_type_info->is_static = 1;
+	initialize_tuple_data_type_info(rdb->union_text_type_info, "text_union", 0, max(rdb->volatile_rage_engine.text_extended_type_info->max_size, rdb->persistent_acid_rage_engine.text_extended_type_info->max_size) + 24, 2);
+	finalize_type_info(rdb->union_text_type_info);
+
+	rdb->union_blob_type_info = malloc(sizeof_tuple_data_type_info(2));
+	strcpy(rdb->union_blob_type_info->containees[0].field_name, "volatile");
+	rdb->union_blob_type_info->containees[0].al.type_info = rdb->volatile_rage_engine.blob_extended_type_info;
+	strcpy(rdb->union_blob_type_info->containees[1].field_name, "persistent");
+	rdb->union_blob_type_info->containees[1].al.type_info = rdb->persistent_acid_rage_engine.blob_extended_type_info;
+	rdb->union_blob_type_info->is_static = 1;
+	initialize_tuple_data_type_info(rdb->union_blob_type_info, "blob_union", 0, max(rdb->volatile_rage_engine.blob_extended_type_info->max_size, rdb->persistent_acid_rage_engine.blob_extended_type_info->max_size) + 24, 2);
+	finalize_type_info(rdb->union_blob_type_info);
+
+	rdb->union_numeric_type_info = malloc(sizeof_tuple_data_type_info(2));
+	strcpy(rdb->union_numeric_type_info->containees[0].field_name, "volatile");
+	rdb->union_numeric_type_info->containees[0].al.type_info = rdb->volatile_rage_engine.numeric_extended_type_info;
+	strcpy(rdb->union_numeric_type_info->containees[1].field_name, "persistent");
+	rdb->union_numeric_type_info->containees[1].al.type_info = rdb->persistent_acid_rage_engine.numeric_extended_type_info;
+	rdb->union_numeric_type_info->is_static = 1;
+	initialize_tuple_data_type_info(rdb->union_numeric_type_info, "numeric_union", 0, max(rdb->volatile_rage_engine.numeric_extended_type_info->max_size, rdb->persistent_acid_rage_engine.numeric_extended_type_info->max_size) + 24, 2);
+	finalize_type_info(rdb->union_numeric_type_info);
+
+	rdb->union_jsonb_type_info = malloc(sizeof_tuple_data_type_info(2));
+	strcpy(rdb->union_jsonb_type_info->containees[0].field_name, "volatile");
+	rdb->union_jsonb_type_info->containees[0].al.type_info = rdb->volatile_rage_engine.jsonb_extended_type_info;
+	strcpy(rdb->union_jsonb_type_info->containees[1].field_name, "persistent");
+	rdb->union_jsonb_type_info->containees[1].al.type_info = rdb->persistent_acid_rage_engine.jsonb_extended_type_info;
+	rdb->union_jsonb_type_info->is_static = 1;
+	initialize_tuple_data_type_info(rdb->union_jsonb_type_info, "jsonb_union", 0, max(rdb->volatile_rage_engine.jsonb_extended_type_info->max_size, rdb->persistent_acid_rage_engine.jsonb_extended_type_info->max_size) + 24, 2);
+	finalize_type_info(rdb->union_jsonb_type_info);
 }
 
 void deinitialize_rhendb(rhendb* rdb)
