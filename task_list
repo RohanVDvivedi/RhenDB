@@ -3,6 +3,11 @@ PICKED TASKS
 * group_concat -> canctaenate all strings in same group, into a volatile string
   * supports prefix and suffix and delimeter also
   * works only on text and blob types, be it inline, extended (P or V) or even union text and blob
+  * before first element append prefix, if not NULL
+  * before every other element append delimeter, if not NULL
+  * at the end append suffix
+  * append every thing and while doing that cache the attributes that should go into the creation of the binary_write_iterator, and recreate every append call
+  * call it states like APPENDING_PREFIX, APPENDING_REMAINING_DATA in the operator state 
 
 -----------------------------------------------------------------
 
