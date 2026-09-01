@@ -2,6 +2,7 @@ PICKED TASKS
 
 * group_concat -> canctaenate all strings in same group, into a volatile string
   * supports prefix and suffix and delimeter also
+  * works only on text and blob types, be it inline, extended (P or V) or even union text and blob
 
 -----------------------------------------------------------------
 
