@@ -162,6 +162,44 @@ int main()
 		print_hash_table(&(tx.savepoint_logs.savepoint_names_set_handle), &(tx.savepoint_logs.savepoint_names_set_tuple_defs), tx.rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 		print_linked_page_list(tx.savepoint_logs.savepoint_log_root, &(tx.savepoint_logs.savepoint_log_defs), tx.rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 	}
+	// perform some peek and pop and print again
+	{
+		for(int l = 0; l < 2; l++)
+		{
+			savepoint_log_type type;
+			dstring savepoint_name = get_dstring_pointing_to_literal_cstring("");
+			uint64_t table_id;
+			uint64_t partition_id;
+			tuple_pointer tptr;
+			int peeked = peek_top_of_savepoint_log(&tx, &type, &savepoint_name, &table_id, &partition_id, &tptr);
+			int popped = pop_top_of_savepoint_log(&tx);
+			printf("peeked = %d, popped = %d\n", peeked, popped);
+			if(peeked)
+				printf("%d "printf_dstring_format" %lu %lu %lu %u\n", type, printf_dstring_params(&savepoint_name), table_id, partition_id, tptr.page_id, tptr.tuple_index);
+		}
+	}
+	{
+		printf("savepoints = %lu, savepoint_logs = %lu\b", tx.savepoint_logs.savepoint_names_count, tx.savepoint_logs.savepoint_logs_count);
+		int abort_error_dummy = 0;
+		print_hash_table(&(tx.savepoint_logs.savepoint_names_set_handle), &(tx.savepoint_logs.savepoint_names_set_tuple_defs), tx.rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
+		print_linked_page_list(tx.savepoint_logs.savepoint_log_root, &(tx.savepoint_logs.savepoint_log_defs), tx.rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
+	}
+	{
+		do
+		{
+			int popped = pop_top_of_savepoint_log(&tx);
+			printf("popped = %d\n", popped);
+			if(!popped)
+				break;
+		}
+		while(1);
+	}
+	{
+		printf("savepoints = %lu, savepoint_logs = %lu\b", tx.savepoint_logs.savepoint_names_count, tx.savepoint_logs.savepoint_logs_count);
+		int abort_error_dummy = 0;
+		print_hash_table(&(tx.savepoint_logs.savepoint_names_set_handle), &(tx.savepoint_logs.savepoint_names_set_tuple_defs), tx.rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
+		print_linked_page_list(tx.savepoint_logs.savepoint_log_root, &(tx.savepoint_logs.savepoint_log_defs), tx.rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
+	}
 
 	// run a sample pipeline
 	{

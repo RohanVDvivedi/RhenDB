@@ -406,7 +406,7 @@ int peek_top_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring
 		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(0), log_tuple))
 			(*type) = uval.uint_value;
 
-		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(1), log_tuple))
+		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(1), log_tuple) && !is_datum_NULL(&uval))
 			init_dstring(savepoint_name, uval.string_value, uval.string_size);
 
 		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(2), log_tuple))
