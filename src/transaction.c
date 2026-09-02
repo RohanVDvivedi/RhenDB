@@ -318,17 +318,12 @@ void delete_savepoint(transaction* tx, const dstring* savepoint_name)
 	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
 }
 
-int exists_savepoint(transaction* tx, const dstring* savepoint_name)
+static int exists_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_name)
 {
-	if(get_char_count_dstring(savepoint_name) > 64)
-		return 0;
-
 	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
 	int exists = 0;
-
-	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
 
 	char savepoint_name_tuple[80];
 	init_tuple(tx->savepoint_logs.savepoint_name_def, savepoint_name_tuple);
@@ -356,6 +351,18 @@ int exists_savepoint(transaction* tx, const dstring* savepoint_name)
 
 	hash_table_vaccum_params htvp;
 	delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
+
+	return exists;
+}
+
+int exists_savepoint(transaction* tx, const dstring* savepoint_name)
+{
+	if(get_char_count_dstring(savepoint_name) > 64)
+		return 0;
+
+	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
+
+	int exists = exists_savepoint_UNSAFE(tx, savepoint_name);
 
 	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
 
