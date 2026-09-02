@@ -145,14 +145,17 @@ void reset_inserted_tuple_pointers(transaction* tx);
 // this function allows only type = INSERTION_SAVEPOINT_LOG or DELETION_SAVEPOINT_LOG
 void log_to_savepoint_log(transaction* tx, savepoint_log_type type, uint64_t table_id, uint64_t partition_id, tuple_pointer tptr);
 
-// the below 4 savepoint functions although guarded by savepoint_lock, must be called only while no query plan is active on the transaction
+// the below 7 savepoint functions although guarded by savepoint_lock, must be called only while no query plan is active on the transaction
 
 // this function inserts NEW_SAVEPOINT_NAME_LOG, and a savepoint name entry in savepoint_names_set
 int insert_new_savepoint(transaction* tx, const dstring* savepoint_name); // fails if the savepoint name is more than 64 bytes long
+
+// below 2 functions are not like the above two functions they only modify/read the savepoint_names_set, and do not touch the savepoint_log
 void delete_savepoint(transaction* tx, const dstring* savepoint_name); // and this one only deleted from savepoint_names_set
 int exists_savepoint(transaction* tx, const dstring* savepoint_name);
 
-// if the return value is 1 and returned type is NEW_SAVEPOINT_NAME_LOG, then deinit_dstring must be called on the savepoint_name
+// below 4 functions are not like the insert functions above, they only modify/read the savepoint_log, and do not touch the savepoint_names_set
+// if the return value is 1 and returned type is NEW_SAVEPOINT_NAME_LOG on peen, then deinit_dstring must be called on the savepoint_name
 int peek_top_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring* savepoint_name, uint64_t* table_id, uint64_t* partition_id, tuple_pointer* tptr);
 int pop_top_of_savepoint_log(transaction* tx);
 // same functions as above but work with the bottom

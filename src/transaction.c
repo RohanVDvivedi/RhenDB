@@ -392,7 +392,7 @@ int peek_top_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring
 	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
 
 	// open iterator to savepoint_log_root
-	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, NULL, transaction_id, &abort_error_dummy);
 
 	if(!is_empty_linked_page_list(lpli_p))
 	{
@@ -473,7 +473,7 @@ int peek_bottom_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstr
 	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
 
 	// open iterator to savepoint_log_root
-	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, NULL, transaction_id, &abort_error_dummy);
 
 	if(!is_empty_linked_page_list(lpli_p))
 	{
