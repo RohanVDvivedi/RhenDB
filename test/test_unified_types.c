@@ -176,6 +176,9 @@ int main()
 			printf("peeked = %d, popped = %d\n", peeked, popped);
 			if(peeked)
 				printf("%d "printf_dstring_format" %lu %lu %lu %u\n", type, printf_dstring_params(&savepoint_name), table_id, partition_id, tptr.page_id, tptr.tuple_index);
+			if(popped && type == NEW_SAVEPOINT_NAME_LOG)
+				delete_savepoint(&tx, &savepoint_name);
+			deinit_dstring(&savepoint_name);
 		}
 	}
 	{
@@ -187,8 +190,19 @@ int main()
 	{
 		do
 		{
+			savepoint_log_type type;
+			dstring savepoint_name = get_dstring_pointing_to_literal_cstring("");
+			uint64_t table_id;
+			uint64_t partition_id;
+			tuple_pointer tptr;
+			int peeked = peek_top_of_savepoint_log(&tx, &type, &savepoint_name, &table_id, &partition_id, &tptr);
 			int popped = pop_top_of_savepoint_log(&tx);
-			printf("popped = %d\n", popped);
+			printf("peeked = %d, popped = %d\n", peeked, popped);
+			if(peeked)
+				printf("%d "printf_dstring_format" %lu %lu %lu %u\n", type, printf_dstring_params(&savepoint_name), table_id, partition_id, tptr.page_id, tptr.tuple_index);
+			if(popped && type == NEW_SAVEPOINT_NAME_LOG)
+				delete_savepoint(&tx, &savepoint_name);
+			deinit_dstring(&savepoint_name);
 			if(!popped)
 				break;
 		}
