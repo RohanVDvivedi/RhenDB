@@ -108,6 +108,9 @@ int main()
 		},
 	}, 4);
 
+	// append 1 savepoint
+	insert_new_savepoint(&tx, &get_dstring_pointing_to_literal_cstring("savepoint-1"));
+
 	// read cache version of the table called ftbl
 	fetched_table* ftbl = fetch_table_from_catalog_manager(&(rdb.cat_mgr), tx.snapshot, "my_table", table_id);
 
@@ -148,6 +151,17 @@ int main()
 
 	// a query completed so reset it's ext stores
 	reset_temp_ext_stores_in_transaction(&tx);
+
+	// append another savepoint
+	insert_new_savepoint(&tx, &get_dstring_pointing_to_literal_cstring("savepoint-2"));
+
+	// print savepoint log
+	{
+		printf("savepoints = %lu, savepoint_logs = %lu\b", tx.savepoint_logs.savepoint_names_count, tx.savepoint_logs.savepoint_logs_count);
+		int abort_error_dummy = 0;
+		print_hash_table(&(tx.savepoint_logs.savepoint_names_set_handle), &(tx.savepoint_logs.savepoint_names_set_tuple_defs), tx.rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
+		print_linked_page_list(tx.savepoint_logs.savepoint_log_root, &(tx.savepoint_logs.savepoint_log_defs), tx.rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
+	}
 
 	// run a sample pipeline
 	{

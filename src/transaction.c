@@ -210,8 +210,8 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
 	// iterate over the hash set and fail if the savepoint name already exists 
 	{
 		char savepoint_name_tuple[80];
-		init_tuple(tx->savepoint_logs.savepoint_name_def, savepoint_name_tuple);
-		set_element_in_tuple(tx->savepoint_logs.savepoint_name_def, SELF, savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 0);
+		init_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, savepoint_name_tuple);
+		set_element_in_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, STATIC_POSITION(0), savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
 
 		// iterate over the hash set and
 		// if savepoint_name exists exit the loop and fail
@@ -235,6 +235,9 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
 					break;
 			}
 		}
+
+		init_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.lpltd.record_def, savepoint_name_tuple);
+		set_element_in_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.lpltd.record_def, SELF, savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
 
 		insert_in_hash_table_iterator(hti_p, savepoint_name_tuple, transaction_id, &abort_error_dummy);
 		tx->savepoint_logs.savepoint_names_count++;
@@ -287,8 +290,8 @@ static void delete_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_na
 	int abort_error_dummy = 0;
 
 	char savepoint_name_tuple[80];
-	init_tuple(tx->savepoint_logs.savepoint_name_def, savepoint_name_tuple);
-	set_element_in_tuple(tx->savepoint_logs.savepoint_name_def, SELF, savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 0);
+	init_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, savepoint_name_tuple);
+	set_element_in_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, STATIC_POSITION(0), savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
 
 	// iterate over the hash set and
 	// if savepoint_name exists remove it and break out of the loop
@@ -335,8 +338,8 @@ static int exists_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_nam
 	int exists = 0;
 
 	char savepoint_name_tuple[80];
-	init_tuple(tx->savepoint_logs.savepoint_name_def, savepoint_name_tuple);
-	set_element_in_tuple(tx->savepoint_logs.savepoint_name_def, SELF, savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 0);
+	init_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, savepoint_name_tuple);
+	set_element_in_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, STATIC_POSITION(0), savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
 
 	// iterate over the hash set and
 	// check if savepoint_name exists
