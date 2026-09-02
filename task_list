@@ -78,3 +78,5 @@ FUTURE TASKS
    * finally before we do all this, make sure that the operator actually calculates the right number of resources for bufferpool and threadpool
 
  5.*trash cleaner to heap tables, locks the right partition and permanently deletes the tuples and discards the index entries in the same mini transaction, always in the same order
+
+ 6.*functions implemented but need high level functions to orchestrate the savepoint management
