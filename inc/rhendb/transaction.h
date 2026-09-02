@@ -152,9 +152,9 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name); // fai
 void delete_savepoint(transaction* tx, const dstring* savepoint_name); // and this one only deleted from savepoint_names_set
 int exists_savepoint(transaction* tx, const dstring* savepoint_name);
 
-// rollback to previous point in time, fails only if the savepoint does not exists
-// it will need 1 buffer
-int rollback_to_savepoint(transaction* tx, const dstring* savepoint_name);
+// if the return value is 1 and returned type is NEW_SAVEPOINT_NAME_LOG, then deinit_dstring must be called on the savepoint_name
+int peek_top_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring* savepoint_name, uint64_t* table_id, uint64_t* partition_id, tuple_pointer* tptr);
+int pop_top_of_savepoint_log(transaction* tx);
 
 // deletes the old temp_ext_stores and creates new blobs for them
 // this needs to be done after completion of the current query, after which the temporary memory for the extended objects produced for this query is no longer needed
