@@ -1,9 +1,5 @@
 PICKED TASKS
 
-test savepoint logging
-
-----------------------------------------------------------------
-
 * also cache materialized values by chunk_pointer and by what rage_engine pointer they live in
  * resets everytime new input_tuples are set
 
