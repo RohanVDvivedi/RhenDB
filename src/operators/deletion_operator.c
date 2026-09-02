@@ -250,17 +250,31 @@ static int mark_buffered_tuples_deleted(operator* o, const char** kill_reason)
 			// all the tuples on this page are marked deleted now, so commit this mini transaction
 			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 
+			// if savepoint logging is enables then inserting a savepoint log record is mandatory
+			// so that savepoint undo can undo this particular insertion
+			if(IS_SAVEPOINT_LOGGING_ENABLED(inputs->additional_flags))
+			{
+				for(cy_uint j = page_first_index; j < i; j++) // emit savepoint log for all the tuples deleted
+				{
+					const pending_deletion* pd = get_from_front_of_pending_deletions(&(inputs->to_be_deleted), j);
+					log_to_savepoint_log(inputs->tx, DELETION_SAVEPOINT_LOG, inputs->ftabl->table_info.id, pd->partition_id, pd->tptr);
+				}
+			}
+
 			// ppage is still locked we will release this lock after we are done reading all the rows
 
 			// only now that they are committed, produce the outputs for all the tuples deleted on this page
-			for(cy_uint j = page_first_index; j < i; j++)
+			if(inputs->output_flags != 0)
 			{
-				const pending_deletion* pd = get_from_front_of_pending_deletions(&(inputs->to_be_deleted), j);
-				const void* record = get_nth_tuple_on_persistent_page(&ppage, engine->pam_p->pas.page_size, &(partition_tuple_def->size_def), pd->tptr.tuple_index);
-				if(!produce_output_for_pending_deletion(o, pd, record, p))
+				for(cy_uint j = page_first_index; j < i; j++)
 				{
-					(*kill_reason) = "could_not_produce";
-					return 0;
+					const pending_deletion* pd = get_from_front_of_pending_deletions(&(inputs->to_be_deleted), j);
+					const void* record = get_nth_tuple_on_persistent_page(&ppage, engine->pam_p->pas.page_size, &(partition_tuple_def->size_def), pd->tptr.tuple_index);
+					if(!produce_output_for_pending_deletion(o, pd, record, p))
+					{
+						(*kill_reason) = "could_not_produce";
+						return 0;
+					}
 				}
 			}
 
