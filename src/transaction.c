@@ -209,14 +209,14 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
 
 	// iterate over the hash set and fail if the savepoint name already exists 
 	{
-		char savepoint_name_tuple[80];
-		init_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, savepoint_name_tuple);
-		set_element_in_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, STATIC_POSITION(0), savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
+		char savepoint_name_key_tuple[80];
+		init_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, savepoint_name_key_tuple);
+		set_element_in_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, STATIC_POSITION(0), savepoint_name_key_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
 
 		// iterate over the hash set and
 		// if savepoint_name exists exit the loop and fail
 
-		hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_key_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
 
 		if(!is_curr_bucket_empty_for_hash_table_iterator(hti_p))
 		{
@@ -236,6 +236,7 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
 			}
 		}
 
+		char savepoint_name_tuple[80];
 		init_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.lpltd.record_def, savepoint_name_tuple);
 		set_element_in_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.lpltd.record_def, SELF, savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
 
@@ -289,14 +290,14 @@ static void delete_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_na
 	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
-	char savepoint_name_tuple[80];
-	init_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, savepoint_name_tuple);
-	set_element_in_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, STATIC_POSITION(0), savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
+	char savepoint_name_key_tuple[80];
+	init_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, savepoint_name_key_tuple);
+	set_element_in_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, STATIC_POSITION(0), savepoint_name_key_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
 
 	// iterate over the hash set and
 	// if savepoint_name exists remove it and break out of the loop
 
-	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_key_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
 
 	if(!is_curr_bucket_empty_for_hash_table_iterator(hti_p))
 	{
@@ -337,14 +338,14 @@ static int exists_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_nam
 
 	int exists = 0;
 
-	char savepoint_name_tuple[80];
-	init_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, savepoint_name_tuple);
-	set_element_in_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, STATIC_POSITION(0), savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
+	char savepoint_name_key_tuple[80];
+	init_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, savepoint_name_key_tuple);
+	set_element_in_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.key_def, STATIC_POSITION(0), savepoint_name_key_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
 
 	// iterate over the hash set and
 	// check if savepoint_name exists
 
-	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, NULL, transaction_id, &abort_error_dummy);
+	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_key_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, NULL, transaction_id, &abort_error_dummy);
 
 	if(!is_curr_bucket_empty_for_hash_table_iterator(hti_p))
 	{
