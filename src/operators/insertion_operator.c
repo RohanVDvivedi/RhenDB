@@ -534,6 +534,11 @@ static void execute(operator* o)
 			engine->complete_sub_transaction(engine->context, min_tx_id, 0, NULL, 0, &page_latches_to_be_borrowed);
 			break;
 
+			// if savepoint logging is enables then inserting a savepoint log record is mandatory
+			// so that savepoint undo can undo this particular insertion
+			if(IS_SAVEPOINT_LOGGING_ENABLED(inputs->additional_flags))
+				log_to_savepoint_log(inputs->tx, INSERTION_SAVEPOINT_LOG, insertion_table_partition->table_id, insertion_table_partition->partition_id, tptr);
+
 			ABORT_ERROR:
 
 			// release ppage
