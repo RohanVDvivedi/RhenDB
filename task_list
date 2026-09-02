@@ -1,22 +1,6 @@
 PICKED TASKS
 
-* implement savepoint logging
-  * linked_page_list that stores table_id, partition_id and tuple_pointer OR stores save_point_name
-  * and a hash_table acting like a hash set that suggests if the save point is in the transaction
-   * savepoints on undo will flip the is_xmin_NULL bit to 1 to undo an insert and will flip the is_xmax_NULL bit to 1 to undo a delete
-   * then we will do this until we hit a ROLLBACK to savepoint is hit
-   * savepoint_log_record{
-      savepoint_log_record_type type; {SAVEPOINT_INSERTION_LOG, SAVEPOINT_DELETION_LOG, NEW_SAVEPOINT_LOG}
-      char savepoint_name[64];
-      uint64_t table_id;
-      uint64_t partition_id;
-      tuple_pointer tuple_pointer;
-   }
-   * savepoint name of no more than 64 characters is allowed
-   * no reset function will be needed here
-   * insert_savepoint_log_for_transaction();
-   * insert_new_savepoint_in_transaction();
-   * rollback_to_savepoint();
+test savepoint logging
 
 ----------------------------------------------------------------
 
