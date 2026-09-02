@@ -195,9 +195,128 @@ void log_to_savepoint_log(transaction* tx, savepoint_log_type type, uint64_t tab
 	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
 }
 
-int insert_new_savepoint(transaction* tx, const dstring* savepoint_name);
+int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
+{
+	if(get_char_count_dstring(savepoint_name) > 64)
+		return 0;
 
-void delete_savepoint(transaction* tx, const dstring* savepoint_name);
+	const void* transaction_id = NULL;
+	int abort_error_dummy = 0;
+
+	int inserted = 0;
+
+	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
+
+	// iterate over the hash set and fail if the savepoint name already exists 
+	{
+		char savepoint_name_tuple[80];
+		init_tuple(tx->savepoint_logs.savepoint_name_def, savepoint_name_tuple);
+		set_element_in_tuple(tx->savepoint_logs.savepoint_name_def, SELF, savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 0);
+
+		// iterate over the hash set and
+		// if savepoint_name exists exit the loop and fail
+
+		hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+
+		if(!is_curr_bucket_empty_for_hash_table_iterator(hti_p))
+		{
+			while(1)
+			{
+				if(get_tuple_hash_table_iterator(hti_p) != NULL) // we found this exact savepoint_name
+				{
+					inserted = 0;
+					hash_table_vaccum_params htvp;
+					delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
+					pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
+					return 0;
+				}
+
+				if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, transaction_id, &abort_error_dummy)) // if we can not go to the next one in the same bucket, we are done searching
+					break;
+			}
+		}
+
+		insert_in_hash_table_iterator(hti_p, savepoint_name_tuple, transaction_id, &abort_error_dummy);
+		tx->savepoint_logs.savepoint_names_count++;
+		inserted = 1;
+
+		hash_table_vaccum_params htvp;
+		delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
+	}
+
+	{
+		// open iterator to savepoint_log_root
+		linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+
+		// unconditionally go to tail, by going previous
+		prev_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+
+		// create savepoint log tuple
+		char log_tuple[8 + 4 + 80 + 8 + 8 + 8 + sizeof(tuple_pointer)];
+		init_tuple(tx->savepoint_logs.savepoint_log_def, log_tuple);
+		set_element_in_tuple(tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(0), log_tuple, &((datum){.uint_value = NEW_SAVEPOINT_NAME_LOG}), 0);
+		set_element_in_tuple(tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(1), log_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
+
+		// insert after the tail
+		insert_at_linked_page_list_iterator(lpli_p, log_tuple, INSERT_AFTER_LINKED_PAGE_LIST_ITERATOR, transaction_id, &abort_error_dummy);
+
+		// increment savepoint_logs_count
+		tx->savepoint_logs.savepoint_logs_count++;
+
+		// delete the iterator
+		delete_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+	}
+
+	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
+
+	return inserted;
+}
+
+static void delete_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_name)
+{
+	const void* transaction_id = NULL;
+	int abort_error_dummy = 0;
+
+	char savepoint_name_tuple[80];
+	init_tuple(tx->savepoint_logs.savepoint_name_def, savepoint_name_tuple);
+	set_element_in_tuple(tx->savepoint_logs.savepoint_name_def, SELF, savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 0);
+
+	// iterate over the hash set and
+	// if savepoint_name exists remove it and break out of the loop
+
+	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+
+	if(!is_curr_bucket_empty_for_hash_table_iterator(hti_p))
+	{
+		while(1)
+		{
+			if(get_tuple_hash_table_iterator(hti_p) != NULL) // we found this exact savepoint_name
+			{
+				remove_from_hash_table_iterator(hti_p, transaction_id, &abort_error_dummy);
+				tx->savepoint_logs.savepoint_names_count--;
+				break;
+			}
+
+			if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, transaction_id, &abort_error_dummy)) // if we can not go to the next one in the same bucket, we are done searching
+				break;
+		}
+	}
+
+	hash_table_vaccum_params htvp;
+	delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
+}
+
+void delete_savepoint(transaction* tx, const dstring* savepoint_name)
+{
+	if(get_char_count_dstring(savepoint_name) > 64)
+		return;
+
+	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
+
+	delete_savepoint_UNSAFE(tx, savepoint_name);
+
+	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
+}
 
 int exists_savepoint(transaction* tx, const dstring* savepoint_name);
 
