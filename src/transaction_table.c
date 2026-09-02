@@ -216,36 +216,36 @@ static int set_transaction_status_in_table(transaction_table* ttbl, uint256 tran
 		persistent_page bucket_page = get_NULL_persistent_page(ttbl->ttbl_engine->pam_p);
 
 		// we are fine with waiting for atmost a second, and we hold no latches
-		void* sub_transaction_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, page_latches_to_be_borrowed);
+		void* min_tx_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, page_latches_to_be_borrowed);
 
 		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = bucket_id, .last_bucket_id = bucket_id}, &(ttbl->ttbl_engine->pttd), ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
 		if(abort_error)
 			goto ABORT_ERROR;
 
-		uint64_t bucket_page_id = get_from_page_table(ptrl_p, bucket_id, sub_transaction_id, &abort_error);
+		uint64_t bucket_page_id = get_from_page_table(ptrl_p, bucket_id, min_tx_id, &abort_error);
 		if(abort_error)
 			goto ABORT_ERROR;
 
 		if(bucket_page_id == ttbl->ttbl_engine->pam_p->pas.NULL_PAGE_ID)
 		{
 			// bucket_page for this bucket does not exists, so allocate 1 and insert it into the page_table
-			bucket_page = get_new_bitmap_page_with_write_lock(&(ttbl->ttbl_engine->pam_p->pas), ttbl->bitmap_page_tuple_def_p, ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
+			bucket_page = get_new_bitmap_page_with_write_lock(&(ttbl->ttbl_engine->pam_p->pas), ttbl->bitmap_page_tuple_def_p, ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, min_tx_id, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR;
 
 			// set bucket_id -> bucket_page_id mapping for the new page
-			set_in_page_table(ptrl_p, bucket_id, bucket_page.page_id, sub_transaction_id, &abort_error);
+			set_in_page_table(ptrl_p, bucket_id, bucket_page.page_id, min_tx_id, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR;
 		}
 		else
 		{
-			bucket_page = acquire_persistent_page_with_lock(ttbl->ttbl_engine->pam_p, sub_transaction_id, bucket_page_id, WRITE_LOCK, &abort_error);
+			bucket_page = acquire_persistent_page_with_lock(ttbl->ttbl_engine->pam_p, min_tx_id, bucket_page_id, WRITE_LOCK, &abort_error);
 			if(abort_error)
 				goto ABORT_ERROR;
 		}
 
-		set_bit_field_on_bitmap_page(&bucket_page, sub_bucket_id, (uint64_t)(status), &(ttbl->ttbl_engine->pam_p->pas), ttbl->bitmap_page_tuple_def_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
+		set_bit_field_on_bitmap_page(&bucket_page, sub_bucket_id, (uint64_t)(status), &(ttbl->ttbl_engine->pam_p->pas), ttbl->bitmap_page_tuple_def_p, ttbl->ttbl_engine->pmm_p, min_tx_id, &abort_error);
 		if(abort_error)
 			goto ABORT_ERROR;
 
@@ -253,15 +253,15 @@ static int set_transaction_status_in_table(transaction_table* ttbl, uint256 tran
 		ABORT_ERROR:;
 		if(!is_persistent_page_NULL(&bucket_page, ttbl->ttbl_engine->pam_p))
 		{
-			release_lock_on_persistent_page(ttbl->ttbl_engine->pam_p, sub_transaction_id, &bucket_page, NONE_OPTION, &abort_error);
+			release_lock_on_persistent_page(ttbl->ttbl_engine->pam_p, min_tx_id, &bucket_page, NONE_OPTION, &abort_error);
 			bucket_page = get_NULL_persistent_page(ttbl->ttbl_engine->pam_p);
 		}
 		if(ptrl_p != NULL)
 		{
-			delete_page_table_range_locker(ptrl_p, NULL, NULL, sub_transaction_id, &abort_error);
+			delete_page_table_range_locker(ptrl_p, NULL, NULL, min_tx_id, &abort_error);
 			ptrl_p = NULL;
 		}
-		ttbl->ttbl_engine->complete_sub_transaction(ttbl->ttbl_engine->context, sub_transaction_id, flush, NULL, 0, &page_latches_to_be_borrowed);
+		ttbl->ttbl_engine->complete_sub_transaction(ttbl->ttbl_engine->context, min_tx_id, flush, NULL, 0, &page_latches_to_be_borrowed);
 
 		// if read done, i.e. no abort_error, then return result
 		if(abort_error == 0)
@@ -413,14 +413,14 @@ void initialize_transaction_table(transaction_table* ttbl, uint64_t* root_page_i
 			{
 				int abort_error = 0;
 
-				void* sub_transaction_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, page_latches_to_be_borrowed);
+				void* min_tx_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, page_latches_to_be_borrowed);
 
-				(*root_page_id) = get_new_page_table(&(ttbl->ttbl_engine->pttd), ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
+				(*root_page_id) = get_new_page_table(&(ttbl->ttbl_engine->pttd), ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, min_tx_id, &abort_error);
 				if(abort_error)
 					goto ABORT_ERROR;
 
 				ABORT_ERROR:
-				ttbl->ttbl_engine->complete_sub_transaction(ttbl->ttbl_engine->context, sub_transaction_id, 1, NULL, 0, &page_latches_to_be_borrowed);
+				ttbl->ttbl_engine->complete_sub_transaction(ttbl->ttbl_engine->context, min_tx_id, 1, NULL, 0, &page_latches_to_be_borrowed);
 
 				if(abort_error == 0)
 					break;
