@@ -378,7 +378,26 @@ int exists_savepoint(transaction* tx, const dstring* savepoint_name)
 	return exists;
 }
 
-int rollback_to_savepoint(transaction* tx, const dstring* savepoint_name);
+int rollback_to_savepoint(transaction* tx, const dstring* savepoint_name)
+{
+	if(get_char_count_dstring(savepoint_name) > 64)
+		return 0;
+
+	const void* transaction_id = NULL;
+	int abort_error_dummy = 0;
+
+	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
+
+	if(!exists_savepoint_UNSAFE(tx, savepoint_name))
+	{
+		pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
+		return 0;
+	}
+
+	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
+
+	return 1;
+}
 
 void reset_temp_ext_stores_in_transaction(transaction* tx)
 {
