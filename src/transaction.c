@@ -245,6 +245,15 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
 	}
 
 	{
+		// expand if required, we do not want to lookup more than a single page, 70% page fill works better for speed and efficient memory utilization, hence the 0.7
+		if( ((double)(tx->savepoint_logs.savepoint_names_count) * 64.0)
+			/ ((double)(tx->savepoint_logs.savepoint_names_set_handle.bucket_count))
+			/ ((double)(tx->rdb->volatile_rage_engine.pam_p->pas.page_size))     > 0.7)
+			expand_hash_table(&(tx->savepoint_logs.savepoint_names_set_handle), &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+
+	}
+
+	{
 		// open iterator to savepoint_log_root
 		linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
 
