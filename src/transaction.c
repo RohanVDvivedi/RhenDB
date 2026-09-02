@@ -24,15 +24,13 @@ transaction initialize_transaction(rhendb* rdb)
 	};
 
 	{
-		const void* transaction_id = NULL;
 		int abort_error_dummy = 0;
 		init_hash_table_tuple_definitions(&(tx.inserted_tuple_pointers.httd), &(rdb->volatile_rage_engine.pam_p->pas), &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_tuple_def), key_element_positions_for_hashset_for_tuple_pointers, sizeof(key_element_positions_for_hashset_for_tuple_pointers)/ sizeof(positional_accessor), FNV_64_TUPLE_HASHER);
-		tx.inserted_tuple_pointers.root_handle = get_new_hash_table(64, &(tx.inserted_tuple_pointers.httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		tx.inserted_tuple_pointers.root_handle = get_new_hash_table(64, &(tx.inserted_tuple_pointers.httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 		initialize_rwlock(&(tx.inserted_tuple_pointers.hash_table_lock), NULL);
 	}
 
 	{
-		const void* transaction_id = NULL;
 		int abort_error_dummy = 0;
 
 		tx.savepoint_logs.savepoint_name_dti = malloc(sizeof(data_type_info));
@@ -56,11 +54,11 @@ transaction initialize_transaction(rhendb* rdb)
 		initialize_tuple_def(tx.savepoint_logs.savepoint_log_def, tx.savepoint_logs.savepoint_log_dti);
 
 		init_linked_page_list_tuple_definitions(&(tx.savepoint_logs.savepoint_log_defs), &(rdb->volatile_rage_engine.pam_p->pas), tx.savepoint_logs.savepoint_log_def);
-		tx.savepoint_logs.savepoint_log_root = get_new_linked_page_list(&(tx.savepoint_logs.savepoint_log_defs), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		tx.savepoint_logs.savepoint_log_root = get_new_linked_page_list(&(tx.savepoint_logs.savepoint_log_defs), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 		tx.savepoint_logs.savepoint_logs_count = 0;
 
 		init_hash_table_tuple_definitions(&(tx.savepoint_logs.savepoint_names_set_tuple_defs), &(rdb->volatile_rage_engine.pam_p->pas), tx.savepoint_logs.savepoint_name_def, key_element_positions_for_hashset_for_savepoint_names, 1, FNV_64_TUPLE_HASHER);
-		tx.savepoint_logs.savepoint_names_set_handle = get_new_hash_table(64, &(tx.savepoint_logs.savepoint_names_set_tuple_defs), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		tx.savepoint_logs.savepoint_names_set_handle = get_new_hash_table(64, &(tx.savepoint_logs.savepoint_names_set_tuple_defs), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 		tx.savepoint_logs.savepoint_names_count = 0;
 		
 		pthread_mutex_init(&(tx.savepoint_logs.savepoint_lock), NULL);
@@ -68,9 +66,8 @@ transaction initialize_transaction(rhendb* rdb)
 
 	for(uint32_t i = 0; i < TEMPORARY_EXTENSION_STORE_COUNT; i++)
 	{
-		const void* transaction_id = NULL;
 		int abort_error_dummy = 0;
-		tx.temp_ext_stores[i].blob_store_root_page_id = get_new_blob_store(&(rdb->volatile_rage_engine.bstd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		tx.temp_ext_stores[i].blob_store_root_page_id = get_new_blob_store(&(rdb->volatile_rage_engine.bstd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 		initialize_heap_table_accumulative_notifier(&(tx.temp_ext_stores[i].htan), MAX_ENTRIES_IN_VOL_BLOBS_HTAN);
 		initialize_rwlock(&(tx.temp_ext_stores[i].blob_store_lock), NULL);
 	}
@@ -83,27 +80,26 @@ void register_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr)
 	char tptr_tpl[20];
 	set_tuple_pointer(tptr_tpl, tptr, &(tx->rdb->persistent_acid_rage_engine.pam_p->pas)); // tuple_pointer belongs to the persistent_acid_rage_engine so this is the way to serialize it
 
-	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
 	write_lock(&(tx->inserted_tuple_pointers.hash_table_lock), BLOCKING);
 
 	// perform the insert and increment entry_count
 	{
-		hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->inserted_tuple_pointers.root_handle), (bucket_range){0,0}, tptr_tpl, &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->inserted_tuple_pointers.root_handle), (bucket_range){0,0}, tptr_tpl, &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
-		insert_in_hash_table_iterator(hti_p, tptr_tpl, transaction_id, &abort_error_dummy);
+		insert_in_hash_table_iterator(hti_p, tptr_tpl, NULL, &abort_error_dummy);
 		tx->inserted_tuple_pointers.entries_count++;
 
 		hash_table_vaccum_params htvp;
-		delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
+		delete_hash_table_iterator(hti_p, &htvp, NULL, &abort_error_dummy);
 	}
 
 	// expand if required, we do not want to lookup more than a single page, 70% page fill works better for speed and efficient memory utilization, hence the 0.7
 	if( ((double)(tx->inserted_tuple_pointers.entries_count) * 12.0)
 		/ ((double)(tx->inserted_tuple_pointers.root_handle.bucket_count))
 		/ ((double)(tx->rdb->volatile_rage_engine.pam_p->pas.page_size))     > 0.7)
-		expand_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		expand_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
 	write_unlock(&(tx->inserted_tuple_pointers.hash_table_lock));
 }
@@ -113,14 +109,13 @@ int was_registered_as_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr
 	char tptr_tpl[20];
 	set_tuple_pointer(tptr_tpl, tptr, &(tx->rdb->persistent_acid_rage_engine.pam_p->pas)); // tuple_pointer belongs to the persistent_acid_rage_engine so this is the way to serialize it
 
-	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
 	int was_registered = 0;
 
 	read_lock(&(tx->inserted_tuple_pointers.hash_table_lock), READ_PREFERRING, BLOCKING);
 
-	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->inserted_tuple_pointers.root_handle), (bucket_range){0,0}, tptr_tpl, &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, NULL, transaction_id, &abort_error_dummy);
+	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->inserted_tuple_pointers.root_handle), (bucket_range){0,0}, tptr_tpl, &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, NULL, NULL, &abort_error_dummy);
 
 	if(!is_curr_bucket_empty_for_hash_table_iterator(hti_p))
 	{
@@ -132,13 +127,13 @@ int was_registered_as_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr
 				break;
 			}
 
-			if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, transaction_id, &abort_error_dummy)) // if we can not go to the next one in the same bucket, we are done searching
+			if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, NULL, &abort_error_dummy)) // if we can not go to the next one in the same bucket, we are done searching
 				break;
 		}
 	}
 
 	hash_table_vaccum_params htvp;
-	delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
+	delete_hash_table_iterator(hti_p, &htvp, NULL, &abort_error_dummy);
 
 	read_unlock(&(tx->inserted_tuple_pointers.hash_table_lock));
 
@@ -147,12 +142,11 @@ int was_registered_as_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr
 
 void reset_inserted_tuple_pointers(transaction* tx)
 {
-	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
-	destroy_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
+	destroy_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 
-	tx->inserted_tuple_pointers.root_handle = get_new_hash_table(64, &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+	tx->inserted_tuple_pointers.root_handle = get_new_hash_table(64, &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 	tx->inserted_tuple_pointers.entries_count = 0;
 }
 
@@ -162,16 +156,15 @@ void log_to_savepoint_log(transaction* tx, savepoint_log_type type, uint64_t tab
 	if(type != INSERTION_SAVEPOINT_LOG && type != DELETION_SAVEPOINT_LOG)
 		return;
 
-	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
 	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
 
 	// open iterator to savepoint_log_root
-	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
 	// unconditionally go to tail, by going previous
-	prev_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+	prev_linked_page_list_iterator(lpli_p, NULL, &abort_error_dummy);
 
 	// create savepoint log tuple
 	char log_tuple[8 + 4 + 8 + 8 + 8 + sizeof(tuple_pointer)];
@@ -184,13 +177,13 @@ void log_to_savepoint_log(transaction* tx, savepoint_log_type type, uint64_t tab
 	set_element_in_tuple(tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(4), log_tuple, &((datum){.tuple_value = tptr_tpl}), 0);
 
 	// insert after the tail
-	insert_at_linked_page_list_iterator(lpli_p, log_tuple, INSERT_AFTER_LINKED_PAGE_LIST_ITERATOR, transaction_id, &abort_error_dummy);
+	insert_at_linked_page_list_iterator(lpli_p, log_tuple, INSERT_AFTER_LINKED_PAGE_LIST_ITERATOR, NULL, &abort_error_dummy);
 
 	// increment savepoint_logs_count
 	tx->savepoint_logs.savepoint_logs_count++;
 
 	// delete the iterator
-	delete_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+	delete_linked_page_list_iterator(lpli_p, NULL, &abort_error_dummy);
 
 	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
 }
@@ -200,7 +193,6 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
 	if(get_char_count_dstring(savepoint_name) > 64)
 		return 0;
 
-	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
 	int inserted = 0;
@@ -216,7 +208,7 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
 		// iterate over the hash set and
 		// if savepoint_name exists exit the loop and fail
 
-		hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_key_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_key_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
 		if(!is_curr_bucket_empty_for_hash_table_iterator(hti_p))
 		{
@@ -226,12 +218,12 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
 				{
 					inserted = 0;
 					hash_table_vaccum_params htvp;
-					delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
+					delete_hash_table_iterator(hti_p, &htvp, NULL, &abort_error_dummy);
 					pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
 					return 0;
 				}
 
-				if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, transaction_id, &abort_error_dummy)) // if we can not go to the next one in the same bucket, we are done searching
+				if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, NULL, &abort_error_dummy)) // if we can not go to the next one in the same bucket, we are done searching
 					break;
 			}
 		}
@@ -240,12 +232,12 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
 		init_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.lpltd.record_def, savepoint_name_tuple);
 		set_element_in_tuple(tx->savepoint_logs.savepoint_names_set_tuple_defs.lpltd.record_def, SELF, savepoint_name_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
 
-		insert_in_hash_table_iterator(hti_p, savepoint_name_tuple, transaction_id, &abort_error_dummy);
+		insert_in_hash_table_iterator(hti_p, savepoint_name_tuple, NULL, &abort_error_dummy);
 		tx->savepoint_logs.savepoint_names_count++;
 		inserted = 1;
 
 		hash_table_vaccum_params htvp;
-		delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
+		delete_hash_table_iterator(hti_p, &htvp, NULL, &abort_error_dummy);
 	}
 
 	{
@@ -253,16 +245,16 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
 		if( ((double)(tx->savepoint_logs.savepoint_names_count) * 64.0)
 			/ ((double)(tx->savepoint_logs.savepoint_names_set_handle.bucket_count))
 			/ ((double)(tx->rdb->volatile_rage_engine.pam_p->pas.page_size))     > 0.7)
-			expand_hash_table(&(tx->savepoint_logs.savepoint_names_set_handle), &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+			expand_hash_table(&(tx->savepoint_logs.savepoint_names_set_handle), &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
 	}
 
 	{
 		// open iterator to savepoint_log_root
-		linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
 		// unconditionally go to tail, by going previous
-		prev_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+		prev_linked_page_list_iterator(lpli_p, NULL, &abort_error_dummy);
 
 		// create savepoint log tuple
 		char log_tuple[8 + 4 + 80 + 8 + 8 + 8 + sizeof(tuple_pointer)];
@@ -271,13 +263,13 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
 		set_element_in_tuple(tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(1), log_tuple, &((datum){.string_value = get_byte_array_dstring(savepoint_name), .string_size = get_char_count_dstring(savepoint_name)}), 80);
 
 		// insert after the tail
-		insert_at_linked_page_list_iterator(lpli_p, log_tuple, INSERT_AFTER_LINKED_PAGE_LIST_ITERATOR, transaction_id, &abort_error_dummy);
+		insert_at_linked_page_list_iterator(lpli_p, log_tuple, INSERT_AFTER_LINKED_PAGE_LIST_ITERATOR, NULL, &abort_error_dummy);
 
 		// increment savepoint_logs_count
 		tx->savepoint_logs.savepoint_logs_count++;
 
 		// delete the iterator
-		delete_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+		delete_linked_page_list_iterator(lpli_p, NULL, &abort_error_dummy);
 	}
 
 	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
@@ -287,7 +279,6 @@ int insert_new_savepoint(transaction* tx, const dstring* savepoint_name)
 
 static void delete_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_name)
 {
-	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
 	char savepoint_name_key_tuple[80];
@@ -297,7 +288,7 @@ static void delete_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_na
 	// iterate over the hash set and
 	// if savepoint_name exists remove it and break out of the loop
 
-	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_key_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_key_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
 	if(!is_curr_bucket_empty_for_hash_table_iterator(hti_p))
 	{
@@ -305,18 +296,18 @@ static void delete_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_na
 		{
 			if(get_tuple_hash_table_iterator(hti_p) != NULL) // we found this exact savepoint_name
 			{
-				remove_from_hash_table_iterator(hti_p, transaction_id, &abort_error_dummy);
+				remove_from_hash_table_iterator(hti_p, NULL, &abort_error_dummy);
 				tx->savepoint_logs.savepoint_names_count--;
 				break;
 			}
 
-			if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, transaction_id, &abort_error_dummy)) // if we can not go to the next one in the same bucket, we are done searching
+			if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, NULL, &abort_error_dummy)) // if we can not go to the next one in the same bucket, we are done searching
 				break;
 		}
 	}
 
 	hash_table_vaccum_params htvp;
-	delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
+	delete_hash_table_iterator(hti_p, &htvp, NULL, &abort_error_dummy);
 }
 
 void delete_savepoint(transaction* tx, const dstring* savepoint_name)
@@ -333,7 +324,6 @@ void delete_savepoint(transaction* tx, const dstring* savepoint_name)
 
 static int exists_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_name)
 {
-	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
 	int exists = 0;
@@ -345,7 +335,7 @@ static int exists_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_nam
 	// iterate over the hash set and
 	// check if savepoint_name exists
 
-	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_key_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, NULL, transaction_id, &abort_error_dummy);
+	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->savepoint_logs.savepoint_names_set_handle), (bucket_range){0,0}, savepoint_name_key_tuple, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, NULL, NULL, &abort_error_dummy);
 
 	if(!is_curr_bucket_empty_for_hash_table_iterator(hti_p))
 	{
@@ -357,13 +347,13 @@ static int exists_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_nam
 				break;
 			}
 
-			if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, transaction_id, &abort_error_dummy)) // if we can not go to the next one in the same bucket, we are done searching
+			if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, NULL, &abort_error_dummy)) // if we can not go to the next one in the same bucket, we are done searching
 				break;
 		}
 	}
 
 	hash_table_vaccum_params htvp;
-	delete_hash_table_iterator(hti_p, &htvp, transaction_id, &abort_error_dummy);
+	delete_hash_table_iterator(hti_p, &htvp, NULL, &abort_error_dummy);
 
 	return exists;
 }
@@ -384,7 +374,6 @@ int exists_savepoint(transaction* tx, const dstring* savepoint_name)
 
 int peek_top_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring* savepoint_name, uint64_t* table_id, uint64_t* partition_id, tuple_pointer* tptr)
 {
-	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
 	int peeked = 0;
@@ -392,12 +381,12 @@ int peek_top_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring
 	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
 
 	// open iterator to savepoint_log_root
-	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, NULL, transaction_id, &abort_error_dummy);
+	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, NULL, NULL, &abort_error_dummy);
 
 	if(!is_empty_linked_page_list(lpli_p))
 	{
 		// unconditionally go to tail, by going previous
-		prev_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+		prev_linked_page_list_iterator(lpli_p, NULL, &abort_error_dummy);
 
 		// get top log tuple from the stack
 		const void* log_tuple = get_tuple_linked_page_list_iterator(lpli_p);
@@ -423,7 +412,7 @@ int peek_top_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring
 	}
 
 	// delete the iterator
-	delete_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+	delete_linked_page_list_iterator(lpli_p, NULL, &abort_error_dummy);
 
 	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
 
@@ -432,7 +421,6 @@ int peek_top_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring
 
 int pop_top_of_savepoint_log(transaction* tx)
 {
-	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
 	int popped = 0;
@@ -440,15 +428,15 @@ int pop_top_of_savepoint_log(transaction* tx)
 	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
 
 	// open iterator to savepoint_log_root
-	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
 	if(!is_empty_linked_page_list(lpli_p))
 	{
 		// unconditionally go to tail, by going previous
-		prev_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+		prev_linked_page_list_iterator(lpli_p, NULL, &abort_error_dummy);
 
 		// remove the tail
-		remove_from_linked_page_list_iterator(lpli_p, GO_PREV_AFTER_LINKED_PAGE_ITERATOR_OPERATION, transaction_id, &abort_error_dummy);
+		remove_from_linked_page_list_iterator(lpli_p, GO_PREV_AFTER_LINKED_PAGE_ITERATOR_OPERATION, NULL, &abort_error_dummy);
 
 		// decrement savepoint_logs_count
 		tx->savepoint_logs.savepoint_logs_count--;
@@ -456,7 +444,7 @@ int pop_top_of_savepoint_log(transaction* tx)
 	}
 
 	// delete the iterator
-	delete_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+	delete_linked_page_list_iterator(lpli_p, NULL, &abort_error_dummy);
 
 	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
 
@@ -465,7 +453,6 @@ int pop_top_of_savepoint_log(transaction* tx)
 
 int peek_bottom_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring* savepoint_name, uint64_t* table_id, uint64_t* partition_id, tuple_pointer* tptr)
 {
-	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
 	int peeked = 0;
@@ -473,7 +460,7 @@ int peek_bottom_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstr
 	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
 
 	// open iterator to savepoint_log_root
-	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, NULL, transaction_id, &abort_error_dummy);
+	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, NULL, NULL, &abort_error_dummy);
 
 	if(!is_empty_linked_page_list(lpli_p))
 	{
@@ -501,7 +488,7 @@ int peek_bottom_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstr
 	}
 
 	// delete the iterator
-	delete_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+	delete_linked_page_list_iterator(lpli_p, NULL, &abort_error_dummy);
 
 	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
 
@@ -510,7 +497,6 @@ int peek_bottom_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstr
 
 int pop_bottom_of_savepoint_log(transaction* tx)
 {
-	const void* transaction_id = NULL;
 	int abort_error_dummy = 0;
 
 	int popped = 0;
@@ -518,12 +504,12 @@ int pop_bottom_of_savepoint_log(transaction* tx)
 	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
 
 	// open iterator to savepoint_log_root
-	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 
 	if(!is_empty_linked_page_list(lpli_p))
 	{
 		// remove the tail
-		remove_from_linked_page_list_iterator(lpli_p, GO_PREV_AFTER_LINKED_PAGE_ITERATOR_OPERATION, transaction_id, &abort_error_dummy);
+		remove_from_linked_page_list_iterator(lpli_p, GO_PREV_AFTER_LINKED_PAGE_ITERATOR_OPERATION, NULL, &abort_error_dummy);
 
 		// decrement savepoint_logs_count
 		tx->savepoint_logs.savepoint_logs_count--;
@@ -531,7 +517,7 @@ int pop_bottom_of_savepoint_log(transaction* tx)
 	}
 
 	// delete the iterator
-	delete_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+	delete_linked_page_list_iterator(lpli_p, NULL, &abort_error_dummy);
 
 	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
 
@@ -542,12 +528,11 @@ void reset_temp_ext_stores_in_transaction(transaction* tx)
 {
 	for(uint32_t i = 0; i < TEMPORARY_EXTENSION_STORE_COUNT; i++)
 	{
-		const void* transaction_id = NULL;
 		int abort_error_dummy = 0;
-		destroy_blob_store(tx->temp_ext_stores[i].blob_store_root_page_id, &(tx->rdb->volatile_rage_engine.bstd), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
+		destroy_blob_store(tx->temp_ext_stores[i].blob_store_root_page_id, &(tx->rdb->volatile_rage_engine.bstd), tx->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 		deinitialize_heap_table_accumulative_notifier(&(tx->temp_ext_stores[i].htan));
 
-		tx->temp_ext_stores[i].blob_store_root_page_id = get_new_blob_store(&(tx->rdb->volatile_rage_engine.bstd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+		tx->temp_ext_stores[i].blob_store_root_page_id = get_new_blob_store(&(tx->rdb->volatile_rage_engine.bstd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
 		initialize_heap_table_accumulative_notifier(&(tx->temp_ext_stores[i].htan), MAX_ENTRIES_IN_VOL_BLOBS_HTAN);
 	}
 }
@@ -645,21 +630,19 @@ void deinitialize_transaction(transaction* tx)
 {
 	for(uint32_t i = 0; i < TEMPORARY_EXTENSION_STORE_COUNT; i++)
 	{
-		const void* transaction_id = NULL;
 		int abort_error_dummy = 0;
-		destroy_blob_store(tx->temp_ext_stores[i].blob_store_root_page_id, &(tx->rdb->volatile_rage_engine.bstd), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
+		destroy_blob_store(tx->temp_ext_stores[i].blob_store_root_page_id, &(tx->rdb->volatile_rage_engine.bstd), tx->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 		deinitialize_heap_table_accumulative_notifier(&(tx->temp_ext_stores[i].htan));
 		deinitialize_rwlock(&(tx->temp_ext_stores[i].blob_store_lock));
 	}
 
 	{
-		const void* transaction_id = NULL;
 		int abort_error_dummy = 0;
 
-		destroy_hash_table(&(tx->savepoint_logs.savepoint_names_set_handle), &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
+		destroy_hash_table(&(tx->savepoint_logs.savepoint_names_set_handle), &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 		deinit_hash_table_tuple_definitions(&(tx->savepoint_logs.savepoint_names_set_tuple_defs));
 
-		destroy_linked_page_list(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
+		destroy_linked_page_list(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 		deinit_linked_page_list_tuple_definitions(&(tx->savepoint_logs.savepoint_log_defs));
 
 		free(tx->savepoint_logs.savepoint_log_dti);
@@ -670,9 +653,8 @@ void deinitialize_transaction(transaction* tx)
 	}
 
 	{
-		const void* transaction_id = NULL;
 		int abort_error_dummy = 0;
-		destroy_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
+		destroy_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
 		deinit_hash_table_tuple_definitions(&(tx->inserted_tuple_pointers.httd));
 		deinitialize_rwlock(&(tx->inserted_tuple_pointers.hash_table_lock));
 	}
