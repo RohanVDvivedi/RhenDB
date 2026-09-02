@@ -273,6 +273,23 @@ void deinitialize_transaction(transaction* tx)
 	{
 		const void* transaction_id = NULL;
 		int abort_error_dummy = 0;
+
+		destroy_hash_table(&(tx->savepoint_logs.savepoint_names_set_handle), &(tx->savepoint_logs.savepoint_names_set_tuple_defs), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
+		deinit_hash_table_tuple_definitions(&(tx->savepoint_logs.savepoint_names_set_tuple_defs));
+
+		destroy_linked_page_list(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
+		deinit_linked_page_list_tuple_definitions(&(tx->savepoint_logs.savepoint_log_defs));
+
+		free(tx->savepoint_logs.savepoint_log_dti);
+		free(tx->savepoint_logs.savepoint_log_def);
+		free(tx->savepoint_logs.savepoint_name_dti);
+		free(tx->savepoint_logs.savepoint_name_def);
+		pthread_mutex_destroy(&(tx->savepoint_logs.savepoint_lock));
+	}
+
+	{
+		const void* transaction_id = NULL;
+		int abort_error_dummy = 0;
 		destroy_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, transaction_id, &abort_error_dummy);
 		deinit_hash_table_tuple_definitions(&(tx->inserted_tuple_pointers.httd));
 		deinitialize_rwlock(&(tx->inserted_tuple_pointers.hash_table_lock));
