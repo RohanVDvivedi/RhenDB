@@ -53,6 +53,34 @@ struct hashset_for_tuple_pointers
 // this is the number of temporary extension stores that any 1 particular transaction will maintain
 #define TEMPORARY_EXTENSION_STORE_COUNT 64
 
+// savepoint log is the place where we store table_id, partition_id and tuple_pointer for the insert and deleted so that rollback to savepoint can undo it
+
+typedef enum savepoint_log_type savepoint_log_type;
+enum savepoint_log_type
+{
+	INSERTION_SAVEPOINT_LOG,
+	DELETION_SAVEPOINT_LOG,
+	NEW_SAVEPOINT_NAME_LOG,
+};
+
+typedef struct savepoint_log savepoint_log;
+struct savepoint_log
+{
+	pthread_mutex_t savepoint_lock;
+
+	uint64_t savepoint_log_root;
+
+	linked_page_list_tuple_defs savepoint_log_defs;
+
+	uint64_t savepoint_logs_count;
+
+	hash_table_handle savepoint_names_set_handle;
+
+	hash_table_tuple_defs savepoint_names_set_tuple_defs;
+
+	uint64_t savepoint_names_count;
+};
+
 typedef struct query_plan query_plan;
 
 typedef struct transaction transaction;
@@ -72,6 +100,9 @@ struct transaction
 
 	// every inserted tuple pointer must be registered here, so the source operator scans can skip it
 	hashset_for_tuple_pointers inserted_tuple_pointers;
+
+	// every insert/delete is inserted here to allow undoing upon rollback to savepoint
+	savepoint_log savepoint_logs;
 
 	// the array that holds these temporary extension blobs, access them by the hash of the prefix
 	temporary_extension_store temp_ext_stores[TEMPORARY_EXTENSION_STORE_COUNT];
@@ -101,6 +132,19 @@ int was_registered_as_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr
 // deletes the old inserted_tuple_pointers and creates new hash_table for it
 // this needs to be called after the current query is completed, so that this very same inserted tuple pointer are visible to the next query in the same transaction
 void reset_inserted_tuple_pointers(transaction* tx);
+
+// this function allows only type = INSERTION_SAVEPOINT_LOG or DELETION_SAVEPOINT_LOG
+void log_to_savepoint_log(transaction* tx, savepoint_log_type type, uint64_t table_id, uint64_t partition_id, tuple_pointer tptr);
+
+// the below 4 savepoint functions although guarded by savepoint_lock, must be called only while no query plan is active on the transaction
+
+// this function inserts NEW_SAVEPOINT_NAME_LOG, and a savepoint name entry in savepoint_names_set
+void insert_new_savepoint(transaction* tx, char* savepoint_name);
+void delete_savepoint(transaction* tx, char* savepoint_name); // and this one only deleted from savepoint_names_set
+int exists_savepoint(transaction* tx, char* savepoint_name);
+
+// rollback to previous point in time, fails only if the savepoint does not exists
+int rollback_to_savepoint(transaction* tx, char* savepoint_name);
 
 // deletes the old temp_ext_stores and creates new blobs for them
 // this needs to be done after completion of the current query, after which the temporary memory for the extended objects produced for this query is no longer needed
