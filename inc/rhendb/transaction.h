@@ -9,6 +9,7 @@
 #include<tuplestore/data_type_info.h>
 
 #include<tupleindexer/hash_table/hash_table.h>
+#include<tupleindexer/linked_page_list/linked_page_list.h>
 
 #include<tupleindexer/utils/heap_table_accumulative_notifier.h>
 
@@ -79,6 +80,14 @@ struct savepoint_log
 	hash_table_tuple_defs savepoint_names_set_tuple_defs;
 
 	uint64_t savepoint_names_count;
+
+	// below are the two tuple definitions that support the above 2 structures
+
+	tuple_def* savepoint_log_def;
+	data_type_info* savepoint_log_dti;
+
+	tuple_def* savepoint_name_def;
+	data_type_info* savepoint_name_dti;
 };
 
 typedef struct query_plan query_plan;
@@ -139,12 +148,12 @@ void log_to_savepoint_log(transaction* tx, savepoint_log_type type, uint64_t tab
 // the below 4 savepoint functions although guarded by savepoint_lock, must be called only while no query plan is active on the transaction
 
 // this function inserts NEW_SAVEPOINT_NAME_LOG, and a savepoint name entry in savepoint_names_set
-void insert_new_savepoint(transaction* tx, char* savepoint_name);
-void delete_savepoint(transaction* tx, char* savepoint_name); // and this one only deleted from savepoint_names_set
-int exists_savepoint(transaction* tx, char* savepoint_name);
+void insert_new_savepoint(transaction* tx, const dstring* savepoint_name);
+void delete_savepoint(transaction* tx, const dstring* savepoint_name); // and this one only deleted from savepoint_names_set
+int exists_savepoint(transaction* tx, const dstring* savepoint_name);
 
 // rollback to previous point in time, fails only if the savepoint does not exists
-int rollback_to_savepoint(transaction* tx, char* savepoint_name);
+int rollback_to_savepoint(transaction* tx, const dstring* savepoint_name);
 
 // deletes the old temp_ext_stores and creates new blobs for them
 // this needs to be done after completion of the current query, after which the temporary memory for the extended objects produced for this query is no longer needed
