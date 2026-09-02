@@ -44,7 +44,6 @@ char* materialize_tb(datum uval, const data_type_info* dti, transaction* tx, uin
 	}
 
 	{
-		const void* transaction_id = NULL;
 		int abort_error = 0;
 
 		extension_reader_iterator_callback temp;
@@ -92,7 +91,7 @@ char* materialize_tb(datum uval, const data_type_info* dti, transaction* tx, uin
 				if((*capacity) == UINT32_MAX)
 				{
 					uint32_t has_more_bytes = 0;
-					peek_in_binary_read_iterator(bri, &has_more_bytes, transaction_id, &abort_error);
+					peek_in_binary_read_iterator(bri, &has_more_bytes, NULL, &abort_error);
 					if(abort_error)
 					{
 						printf("experienced abort_error while materializing text/blob type\n");
@@ -100,7 +99,7 @@ char* materialize_tb(datum uval, const data_type_info* dti, transaction* tx, uin
 					}
 					if(has_more_bytes)
 					{
-						delete_binary_read_iterator(bri, transaction_id, &abort_error);
+						delete_binary_read_iterator(bri, NULL, &abort_error);
 						(*error_code) = MATERIALIZED_RESULT_TOO_BIG;
 						free(buffer);
 						return NULL;
@@ -112,7 +111,7 @@ char* materialize_tb(datum uval, const data_type_info* dti, transaction* tx, uin
 					(*capacity) = 2 * (*capacity);
 				buffer = realloc(buffer, (*capacity));
 			}
-			uint32_t bytes_read = read_from_binary_read_iterator(bri, buffer + (*length), (*capacity) - (*length), transaction_id, &abort_error);
+			uint32_t bytes_read = read_from_binary_read_iterator(bri, buffer + (*length), (*capacity) - (*length), NULL, &abort_error);
 			if(abort_error)
 			{
 				printf("experienced abort_error while materializing text/blob type\n");
@@ -123,7 +122,7 @@ char* materialize_tb(datum uval, const data_type_info* dti, transaction* tx, uin
 			(*length) += bytes_read;
 		}
 
-		delete_binary_read_iterator(bri, transaction_id, &abort_error);
+		delete_binary_read_iterator(bri, NULL, &abort_error);
 		if(abort_error)
 		{
 			printf("experienced abort_error while materializing text/blob type\n");
@@ -170,14 +169,13 @@ materialized_numeric materialize_numeric1(datum uval, const data_type_info* dti,
 		exit(-1);
 
 	{
-		const void* transaction_id = NULL;
 		int abort_error = 0;
 
 		extension_reader_iterator_callback temp;
 		rage_engine* ex_engine;
 		extension_reader_iterator_callback* callbacks = get_callback_and_engine_for_extended_type(tx, dti, &ex_engine, &temp);
 
-		numeric_reader_interface nri = init_intuple_numeric_reader_interface(uval, dti, ex_engine ? &(ex_engine->bstd) : NULL, ex_engine ? ex_engine->pam_p : NULL, callbacks, transaction_id, &abort_error);
+		numeric_reader_interface nri = init_intuple_numeric_reader_interface(uval, dti, ex_engine ? &(ex_engine->bstd) : NULL, ex_engine ? ex_engine->pam_p : NULL, callbacks, NULL, &abort_error);
 		if(abort_error)
 		{
 			printf("experienced abort_error while materializing numeric type\n");
