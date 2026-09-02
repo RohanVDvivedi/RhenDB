@@ -155,6 +155,9 @@ int exists_savepoint(transaction* tx, const dstring* savepoint_name);
 // if the return value is 1 and returned type is NEW_SAVEPOINT_NAME_LOG, then deinit_dstring must be called on the savepoint_name
 int peek_top_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring* savepoint_name, uint64_t* table_id, uint64_t* partition_id, tuple_pointer* tptr);
 int pop_top_of_savepoint_log(transaction* tx);
+// same functions as above but work with the bottom
+int peek_bottom_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring* savepoint_name, uint64_t* table_id, uint64_t* partition_id, tuple_pointer* tptr);
+int pop_bottom_of_savepoint_log(transaction* tx);
 
 // deletes the old temp_ext_stores and creates new blobs for them
 // this needs to be done after completion of the current query, after which the temporary memory for the extended objects produced for this query is no longer needed

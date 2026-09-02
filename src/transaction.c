@@ -463,6 +463,81 @@ int pop_top_of_savepoint_log(transaction* tx)
 	return popped;
 }
 
+int peek_bottom_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring* savepoint_name, uint64_t* table_id, uint64_t* partition_id, tuple_pointer* tptr)
+{
+	const void* transaction_id = NULL;
+	int abort_error_dummy = 0;
+
+	int peeked = 0;
+
+	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
+
+	// open iterator to savepoint_log_root
+	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+
+	if(!is_empty_linked_page_list(lpli_p))
+	{
+		// get top log tuple from the stack
+		const void* log_tuple = get_tuple_linked_page_list_iterator(lpli_p);
+
+		datum uval;
+
+		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(0), log_tuple))
+			(*type) = uval.uint_value;
+
+		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(1), log_tuple) && !is_datum_NULL(&uval))
+			init_dstring(savepoint_name, uval.string_value, uval.string_size);
+
+		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(2), log_tuple))
+			(*table_id) = uval.uint_value;
+
+		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(3), log_tuple))
+			(*partition_id) = uval.uint_value;
+
+		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(4), log_tuple))
+			(*tptr) = get_tuple_pointer(uval.tuple_value, &(tx->rdb->persistent_acid_rage_engine.pam_p->pas));
+
+		peeked = 1;
+	}
+
+	// delete the iterator
+	delete_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+
+	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
+
+	return peeked;
+}
+
+int pop_bottom_of_savepoint_log(transaction* tx)
+{
+	const void* transaction_id = NULL;
+	int abort_error_dummy = 0;
+
+	int popped = 0;
+
+	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
+
+	// open iterator to savepoint_log_root
+	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+
+	if(!is_empty_linked_page_list(lpli_p))
+	{
+		// remove the tail
+		remove_from_linked_page_list_iterator(lpli_p, GO_PREV_AFTER_LINKED_PAGE_ITERATOR_OPERATION, transaction_id, &abort_error_dummy);
+
+		// decrement savepoint_logs_count
+		tx->savepoint_logs.savepoint_logs_count--;
+		popped = 1;
+	}
+
+	// delete the iterator
+	delete_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+
+	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
+
+	return popped;
+}
+
 void reset_temp_ext_stores_in_transaction(transaction* tx)
 {
 	for(uint32_t i = 0; i < TEMPORARY_EXTENSION_STORE_COUNT; i++)
