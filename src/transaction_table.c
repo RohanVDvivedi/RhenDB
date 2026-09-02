@@ -218,7 +218,7 @@ static int set_transaction_status_in_table(transaction_table* ttbl, uint256 tran
 		// we are fine with waiting for atmost a second, and we hold no latches
 		void* min_tx_id = ttbl->ttbl_engine->allot_new_sub_transaction_id(ttbl->ttbl_engine->context, page_latches_to_be_borrowed);
 
-		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = bucket_id, .last_bucket_id = bucket_id}, &(ttbl->ttbl_engine->pttd), ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, sub_transaction_id, &abort_error);
+		ptrl_p = get_new_page_table_range_locker(ttbl->transaction_table_root_page_id, (bucket_range){.first_bucket_id = bucket_id, .last_bucket_id = bucket_id}, &(ttbl->ttbl_engine->pttd), ttbl->ttbl_engine->pam_p, ttbl->ttbl_engine->pmm_p, min_tx_id, &abort_error);
 		if(abort_error)
 			goto ABORT_ERROR;
 
