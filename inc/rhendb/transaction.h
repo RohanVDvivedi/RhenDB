@@ -59,9 +59,9 @@ struct hashset_for_tuple_pointers
 typedef enum savepoint_log_type savepoint_log_type;
 enum savepoint_log_type
 {
-	INSERTION_SAVEPOINT_LOG,
-	DELETION_SAVEPOINT_LOG,
-	NEW_SAVEPOINT_NAME_LOG,
+	INSERTION_SAVEPOINT_LOG = 1,
+	DELETION_SAVEPOINT_LOG = 2,
+	NEW_SAVEPOINT_NAME_LOG = 3,
 };
 
 typedef struct savepoint_log savepoint_log;
@@ -153,6 +153,7 @@ void delete_savepoint(transaction* tx, const dstring* savepoint_name); // and th
 int exists_savepoint(transaction* tx, const dstring* savepoint_name);
 
 // rollback to previous point in time, fails only if the savepoint does not exists
+// it will need 1 buffer
 int rollback_to_savepoint(transaction* tx, const dstring* savepoint_name);
 
 // deletes the old temp_ext_stores and creates new blobs for them

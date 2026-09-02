@@ -156,11 +156,46 @@ void reset_inserted_tuple_pointers(transaction* tx)
 	tx->inserted_tuple_pointers.entries_count = 0;
 }
 
-void log_to_savepoint_log(transaction* tx, savepoint_log_type type, uint64_t table_id, uint64_t partition_id, tuple_pointer tptr);
+void log_to_savepoint_log(transaction* tx, savepoint_log_type type, uint64_t table_id, uint64_t partition_id, tuple_pointer tptr)
+{
+	// only these two can be logged using this function
+	if(type != INSERTION_SAVEPOINT_LOG && type != DELETION_SAVEPOINT_LOG)
+		return;
 
-static int exists_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_name);
+	const void* transaction_id = NULL;
+	int abort_error_dummy = 0;
 
-void insert_new_savepoint(transaction* tx, const dstring* savepoint_name);
+	pthread_mutex_lock(&(tx->savepoint_logs.savepoint_lock));
+
+	// open iterator to savepoint_log_root
+	linked_page_list_iterator* lpli_p = get_new_linked_page_list_iterator(tx->savepoint_logs.savepoint_log_root, &(tx->savepoint_logs.savepoint_log_defs), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, transaction_id, &abort_error_dummy);
+
+	// unconditionally go to tail, by going previous
+	prev_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+
+	// create savepoint log tuple
+	char log_tuple[8 + 4 + 8 + 8 + 8 + sizeof(tuple_pointer)];
+	char tptr_tpl[20];
+	set_tuple_pointer(tptr_tpl, tptr, &(tx->rdb->persistent_acid_rage_engine.pam_p->pas));
+	init_tuple(tx->savepoint_logs.savepoint_log_def, log_tuple);
+	set_element_in_tuple(tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(0), log_tuple, &((datum){.uint_value = type}), 0);
+	set_element_in_tuple(tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(2), log_tuple, &((datum){.uint_value = table_id}), 0);
+	set_element_in_tuple(tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(3), log_tuple, &((datum){.uint_value = partition_id}), 0);
+	set_element_in_tuple(tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(4), log_tuple, &((datum){.tuple_value = tptr_tpl}), 0);
+
+	// insert after the tail
+	insert_at_linked_page_list_iterator(lpli_p, log_tuple, INSERT_AFTER_LINKED_PAGE_LIST_ITERATOR, transaction_id, &abort_error_dummy);
+
+	// increment savepoint_logs_count
+	tx->savepoint_logs.savepoint_logs_count++;
+
+	// delete the iterator
+	delete_linked_page_list_iterator(lpli_p, transaction_id, &abort_error_dummy);
+
+	pthread_mutex_unlock(&(tx->savepoint_logs.savepoint_lock));
+}
+
+int insert_new_savepoint(transaction* tx, const dstring* savepoint_name);
 
 void delete_savepoint(transaction* tx, const dstring* savepoint_name);
 
