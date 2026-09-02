@@ -156,6 +156,18 @@ void reset_inserted_tuple_pointers(transaction* tx)
 	tx->inserted_tuple_pointers.entries_count = 0;
 }
 
+void log_to_savepoint_log(transaction* tx, savepoint_log_type type, uint64_t table_id, uint64_t partition_id, tuple_pointer tptr);
+
+static int exists_savepoint_UNSAFE(transaction* tx, const dstring* savepoint_name);
+
+void insert_new_savepoint(transaction* tx, const dstring* savepoint_name);
+
+void delete_savepoint(transaction* tx, const dstring* savepoint_name);
+
+int exists_savepoint(transaction* tx, const dstring* savepoint_name);
+
+int rollback_to_savepoint(transaction* tx, const dstring* savepoint_name);
+
 void reset_temp_ext_stores_in_transaction(transaction* tx)
 {
 	for(uint32_t i = 0; i < TEMPORARY_EXTENSION_STORE_COUNT; i++)

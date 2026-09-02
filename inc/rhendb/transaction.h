@@ -148,7 +148,7 @@ void log_to_savepoint_log(transaction* tx, savepoint_log_type type, uint64_t tab
 // the below 4 savepoint functions although guarded by savepoint_lock, must be called only while no query plan is active on the transaction
 
 // this function inserts NEW_SAVEPOINT_NAME_LOG, and a savepoint name entry in savepoint_names_set
-void insert_new_savepoint(transaction* tx, const dstring* savepoint_name);
+int insert_new_savepoint(transaction* tx, const dstring* savepoint_name); // fails if the savepoint name is more than 64 bytes long
 void delete_savepoint(transaction* tx, const dstring* savepoint_name); // and this one only deleted from savepoint_names_set
 int exists_savepoint(transaction* tx, const dstring* savepoint_name);
 
