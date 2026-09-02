@@ -127,7 +127,10 @@ int main()
 			setup_constant_dataset_operator(input_operator, its_p, &record_def);
 
 			operator* insertion_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_insertion_operator(insertion_operator, input_operator, input_positions, ftbl, 0, NULL, 0);
+			setup_insertion_operator(insertion_operator, input_operator, input_positions, ftbl, TABLE_ID_IN_OUTPUT | PARTITION_ID_IN_OUTPUT | TUPLE_POINTER_IN_OUTPUT | HEAP_TUPLE_IN_OUTPUT, NULL, 0);
+
+			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
+			setup_consumer_operator(print_operator, insertion_operator, print_consumer, NULL);
 		}
 
 		start_all_operators_for_query_plan(qp);
