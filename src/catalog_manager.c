@@ -2408,11 +2408,36 @@ static void write_xmax_at(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, 
 	return;
 }
 
+static int do_attributes_have_unique_names(const rhendb_attribute* attrs, uint32_t attrs_count)
+{
+	for(uint32_t i = 0; i < attrs_count; i++)
+	{
+		for(uint32_t j = 0; j < i; j++)
+		{
+			if(strncmp(attrs[i].attribute_name, attrs[j].attribute_name, sizeof(attrs[j].attribute_name)) == 0)
+				return 0;
+		}
+	}
+	return 1;
+}
+
 uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count)
 {
-	if(attrs_count == 0)
+	if(attrs_count <= 1)
 	{
-		printf("ISSUE in (catalog_manager) :: create_table needs a non-zero attrs_count\n");
+		printf("ISSUE in (catalog_manager) :: create_table needs more than one attrs_count\n");
+		return 0; // logical failure, not a fatal bug
+	}
+
+	if(attrs[0].base_type != RHENDB_MVCC_HEADER)
+	{
+		printf("ISSUE in (catalog_manager) :: create_table needs first attribute as a mvcc-header\n");
+		return 0; // logical failure, not a fatal bug
+	}
+
+	if(!do_attributes_have_unique_names(attrs, attrs_count))
+	{
+		printf("ISSUE in (catalog_manager) :: create_table needs unique attribute names\n");
 		return 0; // logical failure, not a fatal bug
 	}
 
