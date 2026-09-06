@@ -2433,7 +2433,7 @@ static int do_attributes_have_unique_names(const rhendb_attribute* attrs, uint32
 
 	// compare all 2 adjacent ones, if found same, return 0
 	for(uint32_t i = 1; i < attrs_count; i++)
-		if(0 == compare_attribute_names(&(attrs[i-1].attribute_name), &(attrs[i].attribute_name)))
+		if(0 == compare_attribute_names(get_from_front_of_arraylist(&attr_names, i-1), get_from_front_of_arraylist(&attr_names, i)))
 			return 0;
 
 	// destroy the temporary list
