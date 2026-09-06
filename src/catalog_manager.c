@@ -2408,16 +2408,38 @@ static void write_xmax_at(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, 
 	return;
 }
 
+static int compare_attribute_names(const void* attr_name1, const void* attr_name2)
+{
+	return strncmp(attr_name1, attr_name2, 64);
+}
+
 static int do_attributes_have_unique_names(const rhendb_attribute* attrs, uint32_t attrs_count)
 {
+	// attrs_count being 0 or 1 always has unique names
+	if(attrs_count <= 1)
+		return 1;
+
+	// create an arraylist for all the attribute_name-s
+	arraylist attr_names;
+	if(!initialize_arraylist(&attr_names, attrs_count))
+		exit(-1);
 	for(uint32_t i = 0; i < attrs_count; i++)
-	{
-		for(uint32_t j = 0; j < i; j++)
-		{
-			if(strncmp(attrs[i].attribute_name, attrs[j].attribute_name, sizeof(attrs[j].attribute_name)) == 0)
-				return 0;
-		}
-	}
+		push_back_to_arraylist(&attr_names, &(attrs[i].attribute_name));
+
+	// sort them
+	index_accessed_interface iai = get_index_accessed_interface_for_front_of_arraylist(&attr_names);
+	if(!quick_sort_iai(&iai, 0, get_element_count_arraylist(&attr_names) - 1, &simple_comparator(compare_attribute_names)))
+		exit(-1);
+
+	// compare all 2 adjacent ones, if found same, return 0
+	for(uint32_t i = 1; i < attrs_count; i++)
+		if(0 == compare_attribute_names(&(attrs[i-1].attribute_name), &(attrs[i].attribute_name)))
+			return 0;
+
+	// destroy the temporary list
+	deinitialize_arraylist(&attr_names);
+
+	// else return 1 as all nmaes are unique
 	return 1;
 }
 
