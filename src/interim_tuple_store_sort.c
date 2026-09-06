@@ -87,7 +87,8 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, tuples_down
 		sc.key_dtis[j] = get_type_info_for_element_from_tuple_def(tpl_d, element_ids[j]);
 
 	// sort its_p using sc and iai
-	merge_sort_sortable_tuple_references(&list_of_sortable_tuple_references, 0, get_element_count_sortable_tuple_references(&list_of_sortable_tuple_references)-1, &contexted_comparator(&sc, compare_tuples_for_interim_tuple_store_sort), STD_C_mem_allocator);
+	if(!merge_sort_sortable_tuple_references(&list_of_sortable_tuple_references, 0, get_element_count_sortable_tuple_references(&list_of_sortable_tuple_references)-1, &contexted_comparator(&sc, compare_tuples_for_interim_tuple_store_sort), STD_C_mem_allocator))
+		exit(-1);
 
 	// create output interim_tuple_store
 	interim_tuple_store* ots_p = get_new_interim_tuple_store(get_total_bytes_in_interim_tuple_store(its_p));
