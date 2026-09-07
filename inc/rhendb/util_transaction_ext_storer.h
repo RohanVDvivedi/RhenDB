@@ -30,6 +30,8 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 // ext_type_info is always expected to be volatile_rage_engine->jsonb_extended_type_info
 // json must not be NULL, and is left owned by the caller
 // returned pointer if not NULL must be freed, after setting it into the tuple
+// the parameter json_root must have succeeded the call to finalize_jsonb, after you completed making jsonb and before you make this call
+// this function returns NULL, if the json_root serializes to more number of bytes than what fits UINT32_MAX, this is the limitation because it still should be possible to hold it in a uint32_t capacity-ed buffer
 void* tx_temp_store_jsonb(jsonb_node* json_root, const data_type_info* ext_type_info, transaction* tx);
 
 #endif

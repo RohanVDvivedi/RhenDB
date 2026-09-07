@@ -144,3 +144,50 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 
 	return output_buffer;
 }
+
+#include<cutlery/stream_for_dstring.h>
+
+void* tx_temp_store_jsonb(jsonb_node* json_root, const data_type_info* ext_type_info, transaction* tx)
+{
+	// dstring to hold jsonb as bytes
+	dstring jsonb_as_bytes;
+	init_empty_dstring(&jsonb_as_bytes, 0);
+
+	// convert jsonb into bytes
+	{
+		stream ws;
+		initialize_dstring_stream(&ws, &jsonb_as_bytes);
+		if(!serialize_jsonb(&ws, json_root))
+		{
+			printf("failed serializing jsonb\n");
+			exit(-1);
+		}
+		int error = 0;
+		flush_all_from_stream(&ws, &error);
+		if(error)
+		{
+			printf("failed flushing jsonb bytes -> error = %d\n", error);
+			exit(-1);
+		}
+		close_stream(&ws, &error);
+		if(error)
+		{
+			printf("failed closing after flushing jsonb bytes -> error = %d\n", error);
+			exit(-1);
+		}
+		deinitialize_stream(&ws);
+	}
+
+	if(get_char_count_dstring(&jsonb_as_bytes) > UINT32_MAX)
+	{
+		deinit_dstring(&jsonb_as_bytes);
+		return NULL;
+	}
+
+	void* output_buffer = tx_temp_store_tbj(get_byte_array_dstring(&jsonb_as_bytes), get_char_count_dstring(&jsonb_as_bytes), ext_type_info, tx);
+
+	// deinit the jsonb in bytes
+	deinit_dstring(&jsonb_as_bytes);
+
+	return output_buffer;
+}
