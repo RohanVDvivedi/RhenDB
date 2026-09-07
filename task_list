@@ -3,8 +3,8 @@ PICKED TASKS
 * refactor and make readable the expression evaluator
 
 aggregate_functions
- * works only on bIT_FIELD, UINT, INT, LARGE_UINT, LARGE_INT
-  * gcd -> outputs same type
+ * works only on BIT_FIELD, UINT, INT, LARGE_UINT, LARGE_INT
+  * gcd -> outputs same type in byte and bit width, convert numbers to unsigned numbers before working with them
   * bitwise_and/or/xor -> outputs same type
   * logical_and/or/xor -> outputs bit field of size 1 bit, only supports true or false
 
