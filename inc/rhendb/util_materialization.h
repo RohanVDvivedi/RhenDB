@@ -38,4 +38,9 @@ char* materialize_tbj(datum uval, const data_type_info* dti, transaction* tx, ui
 materialized_numeric materialize_numeric1(datum uval, const data_type_info* dti, transaction* tx, int* error_code);
 mpd_t materialize_numeric(datum uval, const data_type_info* dti, transaction* tx, int* error_code);
 
+// dti must be a jsonb type, extended
+// directly returns NULL, if the dti is not a jsonb type
+// uval input parameter for this function must be not a NULL_DATUM
+jsonb_node* materialize_jsonb(datum uval, const data_type_info* dti, transaction* tx, int* error_code);
+
 #endif

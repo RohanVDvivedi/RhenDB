@@ -6,6 +6,7 @@
 #include<tuplelargetypes/text_extended.h>
 #include<tuplelargetypes/blob_extended.h>
 #include<tuplelargetypes/numeric_extended.h>
+#include<tuplelargetypes/jsonb_extended.h>
 
 #include<mpdecimal.h>
 
@@ -25,5 +26,10 @@ void* tx_temp_store_tbj(const char* data, uint32_t data_size, const data_type_in
 // number must not be NULL, and is left owned by the caller
 // returned pointer if not NULL must be freed, after setting it into the tuple
 void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, transaction* tx);
+
+// ext_type_info is always expected to be volatile_rage_engine->jsonb_extended_type_info
+// json must not be NULL, and is left owned by the caller
+// returned pointer if not NULL must be freed, after setting it into the tuple
+void* tx_temp_store_jsonb(jsonb_node* json_root, const data_type_info* ext_type_info, transaction* tx);
 
 #endif
