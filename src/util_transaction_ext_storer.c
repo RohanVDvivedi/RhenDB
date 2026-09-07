@@ -2,7 +2,7 @@
 
 #include<stdlib.h>
 
-void* tx_temp_store_tb(const char* data, uint32_t data_size, const data_type_info* ext_type_info, transaction* tx)
+void* tx_temp_store_tbj(const char* data, uint32_t data_size, const data_type_info* ext_type_info, transaction* tx)
 {
 	tuple_def output_tuple_def;
 	initialize_tuple_def(&output_tuple_def, (data_type_info*)ext_type_info);

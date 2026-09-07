@@ -2699,7 +2699,7 @@ projected_type_info infer_projected_type_sql_expr_for_rhendb(sql_expression* exp
 static int project_write_sb_to_volatile(transaction* tx, data_type_info* proj, const char* data, uint32_t data_size,
 	datum* out_datum, void** out_buf, int* error_code)
 {
-	void* buf = tx_temp_store_tb(data, data_size, proj, tx);
+	void* buf = tx_temp_store_tbj(data, data_size, proj, tx);
 	if(buf == NULL) { *error_code = RHENDB_EE_MATERIALIZE_FAILED; return 0; }
 	*out_buf = buf;
 	*out_datum = (datum){ .is_NULL = 0, .tuple_value = buf };
