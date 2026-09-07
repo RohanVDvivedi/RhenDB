@@ -6,6 +6,7 @@
 #include<tuplelargetypes/text_extended.h>
 #include<tuplelargetypes/blob_extended.h>
 #include<tuplelargetypes/numeric_extended.h>
+#include<tuplelargetypes/jsonb_extended.h>
 
 #include<mpdecimal.h>
 
@@ -21,11 +22,12 @@
 
 /* if error_code is returned nothing needs to be freed/released all resources acquired in the functions are already taken cared of */
 
-// dti must be a text/blob type, inline or extended
-// directly returns NULL, if the dti is not a text or blob type, if dti is NULL, we expect uval to be a native tuple store string datum
+// dti must be a text/blob/jsonb type, inline or extended
+// directly returns NULL, if the dti is not a text or blob or jsonb type, if dti is NULL, we expect uval to be a native tuple store string datum
 // uval input parameter for this function must be not a NULL_DATUM
 // if capacity is returned to be 0, nothing needs to be freed, and the returned pointer is owned by the datum or the tuple passed
-char* materialize_tb(datum uval, const data_type_info* dti, transaction* tx, uint32_t* length, uint32_t* capacity, int* error_code);
+// returns pointers for bytes for the corresponding type
+char* materialize_tbj(datum uval, const data_type_info* dti, transaction* tx, uint32_t* length, uint32_t* capacity, int* error_code);
 
 #define materialize_text materialize_tb
 #define materialize_blob materialize_tb

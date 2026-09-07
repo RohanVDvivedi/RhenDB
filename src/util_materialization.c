@@ -2,18 +2,18 @@
 
 #include<stdlib.h>
 
-char* materialize_tb(datum uval, const data_type_info* dti, transaction* tx, uint32_t* length, uint32_t* capacity, int* error_code)
+char* materialize_tbj(datum uval, const data_type_info* dti, transaction* tx, uint32_t* length, uint32_t* capacity, int* error_code)
 {
 	(*error_code) = MATERIALIZED_SUCCESSFULLY;
 
 	(*length) = 0;
 	(*capacity) = 0;
 
-	if((dti != NULL && !is_text_type_info(dti) && !is_blob_type_info(dti)) || is_datum_NULL(&uval))
+	if((dti != NULL && !is_text_type_info(dti) && !is_blob_type_info(dti) && !is_jsonb_type_info(dti)) || is_datum_NULL(&uval))
 	{
 		if(is_datum_NULL(&uval))
 			(*error_code) = MATERIALIZING_NULL_DATUM;
-		if(dti != NULL && !is_text_type_info(dti) && !is_blob_type_info(dti))
+		if(dti != NULL && !is_text_type_info(dti) && !is_blob_type_info(dti) && !is_jsonb_type_info(dti))
 			(*error_code) = MATERIALIZATION_TYPE_INVALID;
 
 		return NULL;
@@ -94,7 +94,7 @@ char* materialize_tb(datum uval, const data_type_info* dti, transaction* tx, uin
 					peek_in_binary_read_iterator(bri, &has_more_bytes, NULL, &abort_error);
 					if(abort_error)
 					{
-						printf("experienced abort_error while materializing text/blob type\n");
+						printf("experienced abort_error while materializing text/blob/jsonb type\n");
 						exit(-1);
 					}
 					if(has_more_bytes)
@@ -114,7 +114,7 @@ char* materialize_tb(datum uval, const data_type_info* dti, transaction* tx, uin
 			uint32_t bytes_read = read_from_binary_read_iterator(bri, buffer + (*length), (*capacity) - (*length), NULL, &abort_error);
 			if(abort_error)
 			{
-				printf("experienced abort_error while materializing text/blob type\n");
+				printf("experienced abort_error while materializing text/blob/jsonb type\n");
 				exit(-1);
 			}
 			if(bytes_read == 0)
@@ -125,7 +125,7 @@ char* materialize_tb(datum uval, const data_type_info* dti, transaction* tx, uin
 		delete_binary_read_iterator(bri, NULL, &abort_error);
 		if(abort_error)
 		{
-			printf("experienced abort_error while materializing text/blob type\n");
+			printf("experienced abort_error while materializing text/blob/jsonb type\n");
 			exit(-1);
 		}
 	}
