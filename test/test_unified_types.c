@@ -46,8 +46,8 @@ void insert_in_interim_tuple_store(interim_tuple_store* its_p, const char* key, 
 	char record[900];
 	init_tuple(&record_def, record);
 
-	void* k = tx_temp_store_tb(key, strlen(key), record_def.type_info->containees[0].al.type_info, txn);
-	void* vb = tx_temp_store_tb(value_blob, strlen(value_blob), record_def.type_info->containees[1].al.type_info, txn);
+	void* k = tx_temp_store_tbj(key, strlen(key), record_def.type_info->containees[0].al.type_info, txn);
+	void* vb = tx_temp_store_tbj(value_blob, strlen(value_blob), record_def.type_info->containees[1].al.type_info, txn);
 	mpd_context_t ctx;
     mpd_maxcontext(&ctx);
 	mpd_t* number = mpd_new(&ctx);
