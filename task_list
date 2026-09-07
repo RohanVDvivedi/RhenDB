@@ -1,5 +1,27 @@
 PICKED TASKS
 
+* refactor and make readable the expression evaluator
+
+aggregate_functions
+ * works only on bIT_FIELD, UINT, INT, LARGE_UINT, LARGE_INT
+  * gcd -> outputs same type
+  * bitwise_and/or/xor -> outputs same type
+  * logical_and/or/xor -> outputs bit field of size 1 bit, only supports true or false
+
+default functions in expression evaluation
+  * implement concat, length and substring -> works only on string and binary and jsonb array
+  * implement double/numeric funtions, sin, cos, tan, asin, acos, atan, log, pow, covert the type to double and return a double
+
+
+
+
+
+
+
+
+
+-----------------------------------------------------------------
+
 * also cache materialized values by chunk_pointer and by what rage_engine pointer they live in
  * resets everytime new input_tuples are set
 
@@ -47,9 +69,6 @@ PRIORITY HIGH LEVEL TASKS (not yet prioritized)
 
 * aggregate functions
  * aggregate_into_array -> put all composite types into a jsonb array
- * gcd -> same return type for the number (ponder over support for lcm)
- * bitwise_and/or/xor -> only integer types wiuth same number of bytes/bits in them
- * logical_and/or/xor -> single bit number, doen after type casting to bool
 
 * functions
 * need preloaded functions and mechanism to call them like length of string/array/blob/binary, trigonometery, max, min with variable lengths inputs
@@ -57,8 +76,6 @@ PRIORITY HIGH LEVEL TASKS (not yet prioritized)
  * implement a function to get i-th element from an array, tuple, string, blob, binary
  * implement a function to convert a byte to it's ascii value, can also allow type cast to do it
  * implement get date, time, with timezone, and time in string to unix epoch
- * implement concat and substring
- * implement double/numeric funtions, sin, cos, tan, asin, acos, atan, log, exp
 
 FUTURE TASKS
 
