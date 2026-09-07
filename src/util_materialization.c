@@ -251,3 +251,70 @@ mpd_t materialize_numeric(datum uval, const data_type_info* dti, transaction* tx
 
 	return number;
 }
+
+jsonb_node* materialize_jsonb(datum uval, const data_type_info* dti, transaction* tx, int* error_code)
+{
+	(*error_code) = MATERIALIZED_SUCCESSFULLY;
+
+	if(!is_jsonb_type_info(dti) || is_datum_NULL(&uval))
+	{
+		if(is_datum_NULL(&uval))
+			(*error_code) = MATERIALIZING_NULL_DATUM;
+		if(!is_jsonb_type_info(dti))
+			(*error_code) = MATERIALIZATION_TYPE_INVALID;
+
+		return NULL;
+	}
+
+	// if it is a union type info, make it point to the right extended type
+	if(is_unified_type_info(dti))
+	{
+		for(uint32_t i = 0; i < get_element_count_for_datum(&uval, dti); i++)
+		{
+			datum child_value;
+			const data_type_info* child_dti;
+			if(!get_containee_from_datum(&child_value, &child_dti, &uval, dti, i) || is_datum_NULL(&child_value))
+				continue;
+			uval = child_value;
+			dti = child_dti;
+			break;
+		}
+	}
+
+	int abort_error = 0;
+
+	extension_reader_iterator_callback temp;
+	rage_engine* ex_engine;
+	extension_reader_iterator_callback* callbacks = get_callback_and_engine_for_extended_type(tx, dti, &ex_engine, &temp);
+
+	// create iterator
+	binary_read_iterator* bri = get_new_binary_read_iterator(&uval, dti, ex_engine ? &(ex_engine->bstd) : NULL, ex_engine ? ex_engine->pam_p : NULL, callbacks);
+
+	// create stream on top of it
+	stream rs;
+	if(!initialize_stream_for_binary_read_iterator_static(&rs, bri, NULL, &abort_error))
+	{
+		printf("experienced failure to initialize stream over binary read iterator while materializing jsonb type\n");
+		exit(-1);
+	}
+
+	// parse
+	jsonb_node* json_root = parse_jsonb(&rs);
+	if(abort_error)
+	{
+		printf("experienced abort_error while materializing jsonb type\n");
+		exit(-1);
+	}
+
+	// destroy stream
+	{
+		int error = 0;
+		close_stream(&rs, &error);
+		deinitialize_stream(&rs);
+	}
+
+	// destroy read iterator
+	delete_binary_read_iterator(bri, NULL, &abort_error);
+
+	return json_root;
+}
