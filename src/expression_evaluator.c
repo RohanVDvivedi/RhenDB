@@ -592,10 +592,10 @@ static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, i
 		}
 	}
 
-	/* materialize_tb() runs the identical uint32-safe read loop and returns the bytes; map its codes back. */
+	/* materialize_tbj() runs the identical uint32-safe read loop and returns the bytes; map its codes back. */
 	uint32_t cap = 0, len = 0;
 	int mrc = MATERIALIZED_SUCCESSFULLY;
-	char* buf = materialize_tb(v->value, dti, tx_from_ctx(ec_p), &len, &cap, &mrc);
+	char* buf = materialize_tbj(v->value, dti, tx_from_ctx(ec_p), &len, &cap, &mrc);
 	if(mrc != MATERIALIZED_SUCCESSFULLY)
 	{
 		/* a value overflowing the uint32 size field -> STRING_TOO_LONG; a NULL datum / non-text-or-blob type

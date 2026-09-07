@@ -226,7 +226,7 @@ static int build_heap_record_without_extensions(input_values* inputs, const void
 				};
 
 				uint32_t len = 0, cap = 0; int mrc = 0;
-				char* bytes = materialize_tb(src, src_dti, tx, &len, &cap, &mrc);
+				char* bytes = materialize_tbj(src, src_dti, tx, &len, &cap, &mrc);
 				if(mrc)
 					return 0;
 				e.is_numeric = 0; e.total_size = len; e.value = bytes; e.must_free_value = (cap > 0);
