@@ -8,7 +8,7 @@
 
 #include<stdlib.h>
 
-static data_type_info* get_gcd_output_type_info(const data_type_info* input_type_info, transaction* tx)
+static data_type_info* get_gcd_output_type_info(const data_type_info* input_type_info)
 {
 	switch(input_type_info->type)
 	{
@@ -49,7 +49,7 @@ static void* create_gcd_state(const data_type_info* input_type_info, const datum
 		case INT :
 		{
 			uint64_t* gcd_state = malloc(sizeof(uint64_t));
-			(*gcd_state) = (input.int_value >= 0) ? input.int_value : (-input.int_value);
+			(*gcd_state) = (input.int_value >= 0) ? input.int_value : (((uint64_t)(-(input.int_value+1)))+1); // taking it's absolute value in uint64_t
 			return gcd_state;
 		}
 
@@ -129,7 +129,7 @@ static int UINT_update_gcd_state(void** state_p, const datum input, const aggreg
 static int INT_update_gcd_state(void** state_p, const datum input, const aggregate_function* af_p)
 {
 	uint64_t* gcd_val = *((uint64_t**)state_p);
-	(*gcd_val) = gcd_for_uint64_t((*gcd_val), ((input.int_value >= 0) ? input.int_value : (-input.int_value)));
+	(*gcd_val) = gcd_for_uint64_t((*gcd_val), ((input.int_value >= 0) ? input.int_value : (((uint64_t)(-(input.int_value+1)))+1))); // taking it's absolute value in uint64_t, then gcd
 	return 1;
 }
 
@@ -147,7 +147,7 @@ static int LARGE_INT_update_gcd_state(void** state_p, const datum input, const a
 	return 1;
 }
 
-update_gcd_state get_dedicated_update_gcd_state_function(const data_type_info* input_type_info)
+static update_gcd_state get_dedicated_update_gcd_state_function(const data_type_info* input_type_info)
 {
 	switch(input_type_info->type)
 	{
@@ -215,7 +215,7 @@ static void destroy_aggregate_function(aggregate_function* af_p)
 	free(af_p);
 }
 
-aggregate_function* get_gcd_aggregate_function(transaction* tx, const data_type_info* input_type_info)
+aggregate_function* get_gcd_aggregate_function(const data_type_info* input_type_info)
 {
 	aggregate_function* af_p = malloc(size_of_aggregate_function(1));
 
@@ -235,7 +235,7 @@ aggregate_function* get_gcd_aggregate_function(transaction* tx, const data_type_
 
 	af_p->destroy_aggregate_function = destroy_aggregate_function;
 
-	af_p->output_type_info = get_gcd_output_type_info(input_type_info, tx);
+	af_p->output_type_info = get_gcd_output_type_info(input_type_info);
 	if(af_p->output_type_info == NULL)
 	{
 		printf("incompatible input_type_info for gcd_aggregate_function\n");

@@ -265,7 +265,7 @@ static int NUMERIC_update_sum_state(void** state_p, const datum input, const agg
 	return 1;
 }
 
-update_sum_state get_dedicated_update_sum_state_function(const data_type_info* input_type_info)
+static update_sum_state get_dedicated_update_sum_state_function(const data_type_info* input_type_info)
 {
 	switch(input_type_info->type)
 	{
