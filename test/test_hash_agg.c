@@ -78,7 +78,7 @@ int main(int argc, char** argv)
 		get_gcd_aggregate_function(record_def.type_info->containees[0].al.type_info),
 
 		get_bitwise_aggregate_function(record_def.type_info->containees[0].al.type_info, 1, 0),
-		get_bitwise_aggregate_function(record_def.type_info->containees[0].al.type_info, 0, 0),
+		get_bitwise_aggregate_function(record_def.type_info->containees[0].al.type_info, 0, 1),
 		get_bitwise_aggregate_function(record_def.type_info->containees[0].al.type_info, 0, 0),
 	};
 
