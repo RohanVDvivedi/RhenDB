@@ -1,8 +1,5 @@
 PICKED TASKS
 
-aggregate_functions
- * works only on BIT_FIELD, UINT, INT, LARGE_UINT, LARGE_INT, ignore nulls as usual
-  * logical_and/or/xor -> outputs bit field of size 1 bit, only supports true or false, nulls discarded, value != 0, is true, and value == 0 is false
 
 * refactor and make readable the expression evaluator
 
