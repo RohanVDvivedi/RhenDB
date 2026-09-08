@@ -12,12 +12,14 @@
 #include<tuplelargetypes/text_extended.h>
 #include<tuplelargetypes/blob_extended.h>
 #include<tuplelargetypes/numeric_extended.h>
+#include<tuplelargetypes/jsonb_extended.h>
 #include<tuplelargetypes/materialized_numeric.h>
 
 #include<mpdecimal.h>
 
 #include<cutlery/hashmap.h>
 #include<cutlery/arraylist.h>
+#include<cutlery/dstring.h>
 
 #include<rhendb/transaction.h>
 
@@ -25,29 +27,37 @@ typedef enum expr_type expr_type;
 enum expr_type
 {
 	RHENDB_EXPR_BIT_FIELD  = 0,
-	RHENDB_EXPR_UINT	      = 1,
-	RHENDB_EXPR_INT 	      = 2,
 
-	// RHENDB_EXPR_FLOAT is the 4-byte IEEE type, RHENDB_EXPR_DOUBLE the 8-byte one. both keep their value in
-	// datum.double_value while being computed; the kind records the declared width, which decides how
-	// wide the value is finally stored.
-	RHENDB_EXPR_FLOAT      = 3,
-	RHENDB_EXPR_DOUBLE     = 4,
+	RHENDB_EXPR_UINT       = 1,
+	RHENDB_EXPR_INT        = 2,
 
-	RHENDB_EXPR_LARGE_UINT = 5,
-	RHENDB_EXPR_LARGE_INT  = 6,
+	RHENDB_EXPR_LARGE_UINT = 3,
+	RHENDB_EXPR_LARGE_INT  = 4,
 
-	RHENDB_EXPR_STRING     = 7,
-	RHENDB_EXPR_BINARY     = 8,
+	RHENDB_EXPR_FLOAT      = 5,
+	RHENDB_EXPR_DOUBLE     = 6,
 
-	// TUPLE and ARRAY REQUIRE dti_p. every native scalar above MAY also carry a dti_p, used purely to
-	// remember its declared width (bits for BIT_FIELD, bytes otherwise) so that results are not widened to
-	// the maximum. that dti_p is always static or owned by an input tuple, hence never freed.
-	RHENDB_EXPR_TUPLE      = 9,
-	RHENDB_EXPR_ARRAY      = 10,
+	RHENDB_EXPR_TUPLE      = 7,
+	RHENDB_EXPR_ARRAY      = 8,
 
-	// points a valid materialized numeric
+	// find all above types in expr_value.value
+	// they will have valid dti_p
+
+	RHENDB_EXPR_STRING     = 9,
+	RHENDB_EXPR_BINARY     = 10,
+	// find the above types in expr_value.string_value or expr_value.blob_value
+	// they may optionally have a dti_p
+	// if absent project them into volatile_rage_engine.text/blob_extended_type_info
+
 	RHENDB_EXPR_NUMERIC    = 11,
+	// find the above types in expr_value.numeric_value
+	// they will not have a dti_p
+	// project them into volatile_rage_engine.numeric_extended_type_info
+
+	RHENDB_EXPR_JSONB      = 12,
+	// find the above types in expr_value.jsonb_value
+	// they will not have a dti_p
+	// project them into volatile_rage_engine.jsonb_extended_type_info
 };
 
 typedef struct expr_type_info expr_type_info;
@@ -55,9 +65,8 @@ struct expr_type_info
 {
 	expr_type type;
 
-	// only used for TUPLE and ARRAY
-	data_type_info* dti_p;
-	int should_free_dti_p;
+	data_type_info* dti_p; // not valid for RHENDB_EXPR_STRING, RHENDB_EXPR_BINARY, RHENDB_EXPR_NUMERIC and RHENDB_EXPR_JSONB
+	// dti_p will always be a borrowed type, or a statically created and returned type and will not need freeing
 };
 
 typedef struct expr_value expr_value;
@@ -68,15 +77,14 @@ struct expr_value
 	union
 	{
 		datum value;
-		mpd_t numeric_value; // used only for RHENDB_EXPR_NUMERIC
+		dstring string_value;    // used only for RHENDB_EXPR_STRING
+		dstring blob_value;      // used only for RHENDB_EXPR_BINARY
+		mpd_t numeric_value;     // used only for RHENDB_EXPR_NUMERIC
+		jsonb_node* jsonb_value; // used only for RHENDB_EXPR_JSONB
 	};
-
-	// on destroy buffer must be destroyed, if not NULL
-	void* buffer;
-	uint64_t capacity;
 };
 
-// this is what sits in sql_expr_eval_context.context_p, for now this is unused
+// this is what sits in sql_expr_eval_context.context_p
 typedef struct rhendb_expr_eval_context rhendb_expr_eval_context;
 struct rhendb_expr_eval_context
 {
@@ -92,7 +100,7 @@ struct rhendb_expr_eval_context
 	// owned by the context; caches "a.b.c" -> (tuple index + positional accessor + type)
 	hashmap var_cache;
 
-	// for materializing the on-disk, and extended volatile store -> text, blob and numeric columns
+	// for materializing the on-disk, and extended volatile store -> text, blob, numeric and jsonb columns
 	// and to access the catalog_manager, for user defined types and functions
 	transaction* tx;
 
@@ -104,22 +112,8 @@ struct rhendb_expr_eval_context
 	// the expression does, and the expression is left exactly as it was found.
 	arraylist folded_expressions;
 
-	// FREE LIST OF RECYCLED expr_value-s, owned by this context.
-	//
-	// every AST node of an expression allocates one expr_value and frees it again, so evaluating a
-	// predicate over N rows means ~(nodes * N) malloc()/free() pairs -- and in a multi threaded query
-	// plan that means hammering malloc()'s arena lock. Instead of returning a dead expr_value to
-	// malloc(), rhendb_delete_data() pushes it here, and new_val() pops it back off.
-	//
-	// It is a plain LIFO stack (push-front / pop-front), which is all a free list ever needs:
-	//   free_list_for_expr_value  ->  expr_value -> expr_value -> ... -> NULL
-	// the "next" pointer is written into the first bytes of the DEAD block itself, so an expr_value
-	// costs no extra bytes to be on the list. A recycled block is memory_set() to 0 before it is handed
-	// back out, so it is byte-identical to what calloc() would have returned.
-	//
-	// It is UNCAPPED and NEVER SHRINKS -- it is only drained when the context itself is destroyed.
-	// There is NO LOCK on it, because a context is owned by exactly ONE thread
-	// (see the THREADING note above get_sql_expr_eval_context_for_rhendb()).
+	// FREE LIST OF RECYCLED expr_value-s, owned by this context
+	// every delete pushes to it, every allocate first tries to allocate from this list
 	void* free_list_for_expr_value;
 };
 
