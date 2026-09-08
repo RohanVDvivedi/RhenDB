@@ -170,7 +170,7 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 {
 	if(!is_datum_NULL(&(inputs[0])))
 	{
-		// always create an empty state if one does not exist yet
+		// initialize state from the first non-NULL input
 		if((*state_p) == NULL)
 		{
 			(*state_p) = create_gcd_state(af_p->input_type_infos[0], inputs[0]);
