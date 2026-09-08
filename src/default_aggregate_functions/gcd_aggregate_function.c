@@ -15,8 +15,8 @@ static data_type_info* get_gcd_output_type_info(const data_type_info* input_type
 		case BIT_FIELD :
 			return BIT_FIELD_NULLABLE[input_type_info->bit_field_size];
 
-		case INT :
 		case UINT :
+		case INT :
 			return UINT_NULLABLE[input_type_info->size];
 
 		case LARGE_UINT:
