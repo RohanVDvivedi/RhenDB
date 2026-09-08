@@ -80,6 +80,9 @@ aggregate_function* get_gcd_aggregate_function(const data_type_info* input_type_
 // it uses either is_and OR is_or and if both are unset it is XOR function
 aggregate_function* get_bitwise_aggregate_function(const data_type_info* input_type_info, int is_and, int is_or);
 
+// it uses either is_and OR is_or and if both are unset it is XOR function
+aggregate_function* get_logical_aggregate_function(const data_type_info* input_type_info, int is_and, int is_or);
+
 static inline uint64_t get_max_buffers_count_for_all_aggregate_functions(uint32_t rfs_count, aggregate_function const * const * rfs_p)
 {
 	uint64_t buffers_resource_count = 0;
