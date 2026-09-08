@@ -94,4 +94,4 @@ FUTURE TASKS
 
  5.*trash cleaner to heap tables, locks the right partition and permanently deletes the tuples and discards the index entries in the same mini transaction, always in the same order
 
- 6.*functions implemented but need high level functions to orchestrate the savepoint management
+ 6.*savepoint supporting functions have been implemented but need high level functions to orchestrate the savepoint management
