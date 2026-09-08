@@ -70,7 +70,11 @@ int main(int argc, char** argv)
 
 		get_sum_aggregate_function(&tx, record_def.type_info->containees[0].al.type_info),
 
-		get_gcd_aggregate_function(&tx, record_def.type_info->containees[0].al.type_info),
+		get_gcd_aggregate_function(record_def.type_info->containees[0].al.type_info),
+
+		get_bitwise_aggregate_function(record_def.type_info->containees[0].al.type_info, 1, 0),
+		get_bitwise_aggregate_function(record_def.type_info->containees[0].al.type_info, 0, 0),
+		get_bitwise_aggregate_function(record_def.type_info->containees[0].al.type_info, 0, 0),
 	};
 
 	const positional_accessor aggregate_input_positions_SELF[] = {SELF};
@@ -89,6 +93,10 @@ int main(int argc, char** argv)
 
 		aggregate_input_positions_0,
 
+		aggregate_input_positions_0,
+
+		aggregate_input_positions_0,
+		aggregate_input_positions_0,
 		aggregate_input_positions_0,
 	};
 
