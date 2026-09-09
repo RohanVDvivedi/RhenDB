@@ -595,7 +595,7 @@ static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, i
 	/* materialize_tbj() runs the identical uint32-safe read loop and returns the bytes; map its codes back. */
 	uint32_t cap = 0, len = 0;
 	int mrc = MATERIALIZED_SUCCESSFULLY;
-	char* buf = materialize_tbj(v->value, dti, tx_from_ctx(ec_p), &len, &cap, &mrc);
+	char* buf = materialize_tbj(v->value, dti, tx_from_ctx(ec_p), &len, &cap, 0, &mrc);
 	if(mrc != MATERIALIZED_SUCCESSFULLY)
 	{
 		/* a value overflowing the uint32 size field -> STRING_TOO_LONG; a NULL datum / non-text-or-blob type
@@ -648,7 +648,7 @@ static int ee_materialize_numeric(expr_value* v, const sql_expr_eval_context* ec
 	 * is heap-allocated (released via mpd_del). a NULL datum / non-numeric type cannot occur here (guarded
 	 * above); too many digits map to STRING_TOO_LONG, anything else to a read failure. */
 	int mrc = MATERIALIZED_SUCCESSFULLY;
-	mpd_t d = materialize_numeric(v->value, v->type_info.dti_p, tx_from_ctx(ec_p), &mrc);
+	mpd_t d = materialize_numeric(v->value, v->type_info.dti_p, tx_from_ctx(ec_p), 0, &mrc);
 	if(mrc != MATERIALIZED_SUCCESSFULLY)
 	{
 		*error_code = (mrc == MATERIALIZED_RESULT_TOO_BIG) ? RHENDB_EE_STRING_TOO_LONG : RHENDB_EE_MATERIALIZE_FAILED;

@@ -2,7 +2,7 @@
 
 #include<stdlib.h>
 
-char* materialize_tbj(datum uval, const data_type_info* dti, transaction* tx, uint32_t* length, uint32_t* capacity, int* error_code)
+char* materialize_tbj(datum uval, const data_type_info* dti, transaction* tx, uint32_t* length, uint32_t* capacity, uint32_t limit_bytes, int* error_code)
 {
 	(*error_code) = MATERIALIZED_SUCCESSFULLY;
 
@@ -38,7 +38,7 @@ char* materialize_tbj(datum uval, const data_type_info* dti, transaction* tx, ui
 
 	if(dti == NULL || !is_extended_type_info(dti))
 	{
-		(*length) = uval.string_or_binary_size;
+		(*length) = (limit_bytes == 0) ? uval.string_or_binary_size : (min(uval.string_or_binary_size, limit_bytes));
 		(*capacity) = 0;
 		return (char*)uval.string_or_binary_value;
 	}
@@ -70,7 +70,7 @@ char* materialize_tbj(datum uval, const data_type_info* dti, transaction* tx, ui
 						}
 						else
 						{
-							(*length) = prefix.string_or_binary_size;
+							(*length) = (limit_bytes == 0) ? prefix.string_or_binary_size : (min(prefix.string_or_binary_size, limit_bytes));
 							(*capacity) = 0;
 							return (char*)prefix.string_or_binary_value;
 						}
@@ -84,7 +84,7 @@ char* materialize_tbj(datum uval, const data_type_info* dti, transaction* tx, ui
 		(*capacity) = 64;
 		buffer = malloc((*capacity));
 
-		while(1)
+		while((limit_bytes == 0) || ((*length) < limit_bytes))
 		{
 			if((*length) == (*capacity))
 			{
@@ -101,6 +101,8 @@ char* materialize_tbj(datum uval, const data_type_info* dti, transaction* tx, ui
 					{
 						delete_binary_read_iterator(bri, NULL, &abort_error);
 						(*error_code) = MATERIALIZED_RESULT_TOO_BIG;
+						(*length) = 0;
+						(*capacity) = 0;
 						free(buffer);
 						return NULL;
 					}
@@ -111,7 +113,11 @@ char* materialize_tbj(datum uval, const data_type_info* dti, transaction* tx, ui
 					(*capacity) = 2 * (*capacity);
 				buffer = realloc(buffer, (*capacity));
 			}
-			uint32_t bytes_read = read_from_binary_read_iterator(bri, buffer + (*length), (*capacity) - (*length), NULL, &abort_error);
+			uint32_t bytes_read = 0;
+			if(limit_bytes == 0)
+				bytes_read = read_from_binary_read_iterator(bri, buffer + (*length), (*capacity) - (*length), NULL, &abort_error);
+			else
+				bytes_read = read_from_binary_read_iterator(bri, buffer + (*length), min(((*capacity) - (*length)), (limit_bytes - (*length))), NULL, &abort_error);
 			if(abort_error)
 			{
 				printf("experienced abort_error while materializing text/blob/jsonb type\n");
@@ -133,7 +139,7 @@ char* materialize_tbj(datum uval, const data_type_info* dti, transaction* tx, ui
 	return buffer;
 }
 
-materialized_numeric materialize_numeric1(datum uval, const data_type_info* dti, transaction* tx, int* error_code)
+materialized_numeric materialize_numeric1(datum uval, const data_type_info* dti, transaction* tx, uint32_t limit_digits, int* error_code)
 {
 	(*error_code) = MATERIALIZED_SUCCESSFULLY;
 
@@ -190,7 +196,7 @@ materialized_numeric materialize_numeric1(datum uval, const data_type_info* dti,
 		if(sb == POSITIVE_NUMERIC || sb == NEGATIVE_NUMERIC)   /* only finite non-zero values carry digits */
 		{
 			uint64_t valid_digits_count = 0;
-			while(1)
+			while((limit_digits == 0) || (valid_digits_count < limit_digits))
 			{
 				// first expand capacity, if it is full
 				if(valid_digits_count == get_capacity_digits_list(&(mn.digits)) && !expand_digits_list(&(mn.digits)))
@@ -214,7 +220,11 @@ materialized_numeric materialize_numeric1(datum uval, const data_type_info* dti,
 				const uint64_t* digit_slots = peek_all_contiguous_from_front_in_digits_list(&(mn.digits), valid_digits_count, &contiguous_digit_slots_count);
 
 				int err = 0;
-				uint32_t digits_read = nri.read_digits_as_stream(&nri, (uint64_t*)digit_slots, min(UINT32_MAX, contiguous_digit_slots_count), &err);
+				uint32_t digits_read = 0;
+				if(limit_digits == 0)
+					digits_read = nri.read_digits_as_stream(&nri, (uint64_t*)digit_slots, min(UINT32_MAX, contiguous_digit_slots_count), &err);
+				else
+					digits_read = nri.read_digits_as_stream(&nri, (uint64_t*)digit_slots, min((limit_digits - valid_digits_count), min(UINT32_MAX, contiguous_digit_slots_count)), &err);
 				if(err)
 				{
 					printf("experienced abort_error while materializing numeric type\n");
@@ -236,13 +246,13 @@ materialized_numeric materialize_numeric1(datum uval, const data_type_info* dti,
 	return mn;
 }
 
-mpd_t materialize_numeric(datum uval, const data_type_info* dti, transaction* tx, int* error_code)
+mpd_t materialize_numeric(datum uval, const data_type_info* dti, transaction* tx, uint32_t limit_digits, int* error_code)
 {
 	(*error_code) = MATERIALIZED_SUCCESSFULLY;
 
 	mpd_t number;
 
-	materialized_numeric mn = materialize_numeric1(uval, dti, tx, error_code);
+	materialized_numeric mn = materialize_numeric1(uval, dti, tx, limit_digits, error_code);
 	if(*error_code)
 		return number;
 
