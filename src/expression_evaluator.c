@@ -801,7 +801,7 @@ static void* rhendb_sub(void* d1, void* d2, const sql_expr_eval_context* ec_p, i
 static void* rhendb_mul(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_arith(d1, d2, OP_MUL, ec_p, e); }
 static void* rhendb_div(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_arith(d1, d2, OP_DIV, ec_p, e); }
 static void* rhendb_mod(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_arith(d1, d2, OP_MOD, ec_p, e); }
-
+// -------------------------------------------------- REFACTORING CHECKPOINT -----------------------------
 /* ------------------------------ truthiness ------------------------------ */
 
 static int tuple_tb_is_empty(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
