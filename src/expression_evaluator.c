@@ -31,8 +31,7 @@
 
 static const expr_type_info rhendb_bool_type = {
 	.type = RHENDB_EXPR_BIT_FIELD,
-	.dti_p = NULL,
-	.should_free_dti_p = 0,
+	.dti_p = BIT_FIELD_NULLABLE[1],
 };
 
 static const expr_value rhendb_true_bool = {
@@ -45,15 +44,15 @@ static const expr_value rhendb_false_bool = {
 	.value = (datum){.bit_field_value = 0},
 };
 
+// unknown is basically the NULL of the boolean world
 static const expr_value rhendb_unknown_bool = {
 	.type_info = rhendb_bool_type,
-	.value = (datum){.bit_field_value = 0},
+	.value = (*NULL_DATUM),
 };
 
 static const expr_type_info rhendb_int_type = {
 	.type = RHENDB_EXPR_INT,
-	.dti_p = NULL,
-	.should_free_dti_p = 0,
+	.dti_p = INT_NULLABLE[8],
 };
 
 static const expr_value rhendb_minus_one_number = {
@@ -85,7 +84,7 @@ static void* rhendb_mod(void* data1, void* data2, const sql_expr_eval_context* e
 
 // returns sign of data1 - data2
 // uses compare_datum_rhendb() when possible, for simplyfying this function
-// for numeric_value, convert them to materialized_numeric and then compare, this allows preserving RhenDB standard of NANs being equal and greater than even positive infinity
+// for numeric_value, convert them to materialized_numeric and then compare, this allows preserving RhenDB standard of NANs being equal and they greater than even positive infinity
 static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context* ec_p, int* error_code);
 
 static void* rhendb_left_shift(void* data, void* shift_amt, const sql_expr_eval_context* ec_p, int* error_code);
