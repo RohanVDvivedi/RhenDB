@@ -11,18 +11,10 @@
 
 #include<rhendb/function_compare.h>
 #include<rhendb/transaction.h>
+
 #include<rhendb/util_materialization.h>
 #include<rhendb/util_numeric_conversions.h>
-#include<tuplestore/data_type_info_defaults.h>
 #include<rhendb/util_transaction_ext_storer.h>
-
-#include<tuplelargetypes/common_extended.h>
-#include<tuplelargetypes/binary_read_iterator.h>
-#include<tuplelargetypes/binary_write_iterator.h>
-#include<tuplelargetypes/digit_write_iterator.h>
-
-#include<tupleindexer/blob_store/blob_store.h>
-#include<tupleindexer/utils/heap_table_accumulative_notifier.h>
 
 #include<lockking/rwlock.h>
 
