@@ -36,7 +36,7 @@ int print_consumer_custom(void* consumer_context, const void* tuple, const tuple
 	int error_code = 0;
 	uint32_t length = 0;
 	uint32_t capacity = 0;
-	char* group_concat_data = materialize_tbj(uval, qp->curr_tx->rdb->volatile_rage_engine.text_extended_type_info, qp->curr_tx, &length, &capacity, &error_code);
+	char* group_concat_data = materialize_tbj(uval, qp->curr_tx->rdb->volatile_rage_engine.text_extended_type_info, qp->curr_tx, &length, &capacity, 0, &error_code);
 
 	if(error_code)
 	{
