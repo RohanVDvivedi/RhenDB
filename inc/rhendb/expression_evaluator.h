@@ -105,15 +105,14 @@ struct rhendb_expr_eval_context
 	transaction* tx;
 
 	// CONSTANT FOLDING CACHE OWNERSHIP.
-	// the folded values themselves live on the AST, in sql_expression::user_meta_value, but the AST
-	// can not free them, it has no idea what an expr_value is. so every node we hang a cache on is
-	// recorded here, and delete_context_p_for_sql_expr_eval_context_for_rhendb() frees each value and
-	// clears the node again. that keeps the existing lifetime rule intact : the context dies before
-	// the expression does, and the expression is left exactly as it was found.
+	// the folded values themselves live on the AST, in sql_expression.user_meta_value, but the AST
+	// can not free them, it has no idea what an expr_value is.
+	// All constant expression nodes are registered here in this list, so their corresponding expr_value,
+	// is freed by traversing this list upon deleting the context.
 	arraylist folded_expressions;
 
 	// FREE LIST OF RECYCLED expr_value-s, owned by this context
-	// every delete pushes to it, every allocate first tries to allocate from this list
+	// every delete pushes to it, every allocate first tries to allocate by getting one from this list.
 	void* free_list_for_expr_value;
 };
 
@@ -183,12 +182,13 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 // returns true only if any of the var_cache points to an extended type
 int has_reference_to_persistent_extended_type_from_expression(const rhendb_expr_eval_context* context_p);
 
-// frees shallow copied input_tuple_defs and input_tuples, and the pointer itself
+// frees shallow copied input_tuple_defs and input_tuples, and the pointer itself, and everything else held by the context_p, including the expr_value-s in free list, and the folded_expressions[i]->user_meta_value
+// and the entries in var_cache
 void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_context* context_p);
 
 // set the input tuples used by the next evaluate/infer on this context.
-// copies min(input_tuples_count, context's input_tuples_count) pointers by SHALLOW reference --
-// the context does not take ownership of the tuples.
+// copies min(input_tuples_count, context's input_tuples_count) pointers into the input_tuples array
+// the context does not take ownership of the tuples, you manage their memory
 void set_input_tuples_in_context_for_rhendb(sql_expr_eval_context* ec_p, void** input_tuples, uint32_t input_tuples_count);
 
 // variadic form : pass the tuples directly, in index order.
@@ -201,8 +201,8 @@ void set_input_tuples_in_context_for_rhendb_v(sql_expr_eval_context* ec_p, uint3
 //   on an evaluation or bool-conversion error, *error_code is set non-zero and 0 is returned.
 int select_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
 
-// run infer_type_sql_expr() on `expr`; return 1 iff inference produced no error. the inferred type object
-// is deleted internally, so the caller must not free it.
+// run infer_type_sql_expr() on `expr`; return 1 if inference produced no error. the inferred type object
+// is deleted internally, so the caller may not need to free it.
 int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
 
 // ===================================================================================================
@@ -222,17 +222,6 @@ int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval
 // finishes; a projected_value is destroyed after each use of the expression (i.e. per row).
 // ===================================================================================================
 
-typedef struct projected_type_info projected_type_info;
-struct projected_type_info
-{
-	// the type to project into. NULL if inference failed.
-	data_type_info* projected_type_info;
-
-	// set only when this struct owns projected_type_info and must destroy it. borrowed types (static
-	// defaults, and container types owned by the expression's inputs) leave this at 0.
-	int should_free_projected_type_info;
-};
-
 typedef struct projected_value projected_value;
 struct projected_value
 {
@@ -244,23 +233,17 @@ struct projected_value
 	void* buffer_to_free;
 };
 
-// run infer_type_sql_expr() on `expr`; return 1 iff inference produced no error. the inferred type object
-// is deleted internally, so the caller must not free it.
+// run infer_type_sql_expr() on `expr`; return 1 if inference produced no error. the inferred type object
+// is deleted internally, so the caller may not need to free it.
 int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
 
 // infer the result kind of `expr` and describe how it would be PROJECTED:
-//   - native scalar (bit-field / uint / int / float / large uint / large int) -> the matching default
-//     type_info, BORROWED (is_static, never freed);
-//   - string / binary / arbitrary-precision numeric -> a freshly built, finalized volatile-store extended
-//     type (sub_type = VOLATILE_EXT_SUB_TYPE, ~90-byte inline prefix, 128-byte max_size), OWNED;
-//   - tuple / array -> the inferred container type itself, borrowed or taken over exactly as the inferred
-//     type held it (no clone).
+//   - native scalar (bit-field / uint / int / large uint / large int / float / double) -> the matching default type_info.
+//   - string / binary / arbitrary-precision numeric / jsonb -> a freshly built, finalized volatile-store extended
+//     type (sub_type = VOLATILE_EXT_SUB_TYPE, ~90-byte inline prefix, 128-byte max_size).
+//   - tuple / array -> the inferred container type itself, borrowed or taken over exactly as the inferred type held it.
 // on failure the returned struct has a NULL type and *error_code is set.
-// destroy the result with destroy_projected_type_info() -- a no-op when the type is borrowed.
-projected_type_info infer_projected_type_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
-
-// release a projected_type_info : destroys the type only if this struct owns it.
-void destroy_projected_type_info(projected_type_info pti);
+data_type_info* infer_projected_type_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
 
 // evaluate `expr` and PROJECT the result into `pti`, which must be what
 // infer_projected_type_sql_expr_for_rhendb() returned for this expression (so no cast is needed -- the kinds
@@ -270,11 +253,12 @@ void destroy_projected_type_info(projected_type_info pti);
 //     as an extended value (prefix written, hashed to pick one of the 64 temporary_extension_stores, then
 //     the remainder appended into that store under its WRITE lock);
 //   - a numeric result is stored as an extended numeric the same way;
+//   - a jsonb result is stored as an extended numeric the same way;
 //   - a native scalar is returned directly at full width (including 256-bit large uint/int).
 // a NULL (no-error) evaluation result yields a NULL datum. a PERSISTENT projection type, or a value/target
 // mismatch, sets *error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION.
 // destroy the result with destroy_projected_value() once the value has been consumed.
-projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, projected_type_info pti, int* error_code);
+projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, data_type_info* pti, int* error_code);
 
 // release a projected_value : frees the backing buffer if there is one.
 void destroy_projected_value(projected_value pv);
