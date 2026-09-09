@@ -433,7 +433,7 @@ static uint64_t to_u64(const expr_value* v)
 }
 static int64_t to_i64(const expr_value* v)
 {
-	if(et_is_float(v->type_info.type))
+	if(et_is_native_float(v->type_info.type))
 		return (int64_t)read_flt(v);
 	return (v->type_info.type == RHENDB_EXPR_INT) ? v->value.int_value : (int64_t)v->value.uint_value;
 }
