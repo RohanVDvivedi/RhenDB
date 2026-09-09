@@ -30,24 +30,43 @@ void intHandler(int dummy)
 int print_consumer_custom(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def)
 {
 	datum uval;
-	if(!get_value_from_element_from_tuple(&uval, input_tuple_def, STATIC_POSITION(21), tuple))
-		return 0;
-
-	int error_code = 0;
-	uint32_t length = 0;
-	uint32_t capacity = 0;
-	char* group_concat_data = materialize_tbj(uval, qp->curr_tx->rdb->volatile_rage_engine.text_extended_type_info, qp->curr_tx, &length, &capacity, &error_code);
-
-	if(error_code)
 	{
-		printf("group_concate materialization error %d\n", error_code);
-		return 0;
+		if(!get_value_from_element_from_tuple(&uval, input_tuple_def, STATIC_POSITION(21), tuple))
+			return 0;
+
+		int error_code = 0;
+		uint32_t length = 0;
+		uint32_t capacity = 0;
+		char* group_concat_data = materialize_tbj(uval, qp->curr_tx->rdb->volatile_rage_engine.text_extended_type_info, qp->curr_tx, &length, &capacity, 0, &error_code);
+
+		if(error_code)
+		{
+			printf("group_concate materialization error %d\n", error_code);
+			return 0;
+		}
+
+		printf("group concat = <%.*s>\n", length, group_concat_data);
+		if(capacity > 0)
+			free(group_concat_data);
 	}
+	{
+		if(!get_value_from_element_from_tuple(&uval, input_tuple_def, STATIC_POSITION(15), tuple))
+			return 0;
 
-	printf("group concat = <%.*s>\n", length, group_concat_data);
-	if(capacity > 0)
-		free(group_concat_data);
+		int error_code = 0;
+		mpd_t sum_all = materialize_numeric(uval, qp->curr_tx->rdb->volatile_rage_engine.numeric_extended_type_info, qp->curr_tx, 0, &error_code);
+		if(error_code)
+		{
+			printf("sum all numeric materialization error %d\n", error_code);
+			return 0;
+		}
 
+		char *s = mpd_to_sci(&sum_all, 1);
+		printf("%s\n", s);
+		mpd_free(s);
+
+		mpd_del(&sum_all);
+	}
 	return 1;
 }
 

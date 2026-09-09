@@ -525,7 +525,7 @@ static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, i
 
 	int mrc = MATERIALIZED_SUCCESSFULLY;
 	uint32_t cap = 0, len = 0;
-	char* buf = materialize_tbj(v->value, dti, tx_from_ctx(ec_p), &len, &cap, &mrc);
+	char* buf = materialize_tbj(v->value, dti, tx_from_ctx(ec_p), &len, &cap, 0, &mrc);
 	if(mrc != MATERIALIZED_SUCCESSFULLY)
 	{
 		*error_code = (mrc == MATERIALIZED_RESULT_TOO_BIG) ? RHENDB_EE_STRING_TOO_LONG : RHENDB_EE_MATERIALIZE_FAILED;
@@ -555,7 +555,7 @@ static int ee_materialize_numeric(expr_value* v, const sql_expr_eval_context* ec
 		return RHENDB_EE_OK;
 
 	int mrc = MATERIALIZED_SUCCESSFULLY;
-	mpd_t d = materialize_numeric(v->value, v->type_info.dti_p, tx_from_ctx(ec_p), &mrc);
+	mpd_t d = materialize_numeric(v->value, v->type_info.dti_p, tx_from_ctx(ec_p), 0, &mrc);
 	if(mrc != MATERIALIZED_SUCCESSFULLY)
 	{
 		*error_code = (mrc == MATERIALIZED_RESULT_TOO_BIG) ? RHENDB_EE_STRING_TOO_LONG : RHENDB_EE_MATERIALIZE_FAILED;

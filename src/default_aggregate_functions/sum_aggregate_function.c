@@ -250,7 +250,7 @@ static int NUMERIC_update_sum_state(void** state_p, const datum input, const agg
 
 	// convert innput to input_mpd_t, i.e. materialize it
 	int error_code = 0;
-	mpd_t input_mpd_t = materialize_numeric(input, af_p->input_type_infos[0], tx, &error_code);
+	mpd_t input_mpd_t = materialize_numeric(input, af_p->input_type_infos[0], tx, 0, &error_code);
 	if(error_code)
 		return 0;
 
