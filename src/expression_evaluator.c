@@ -29,52 +29,24 @@
 #define RHENDB_EE_DIV_PREC 100
 #endif
 
-static const expr_type_info rhendb_bool_type = {
-	.type = RHENDB_EXPR_BIT_FIELD,
-	.dti_p = BIT_FIELD_NULLABLE[1],
-};
+static expr_type_info rhendb_bool_type = {};
 
-static const expr_value rhendb_true_bool = {
-	.type_info = rhendb_bool_type,
-	.value = (datum){.bit_field_value = 1},
-	.buffer_to_free = NULL,
-};
+static expr_value rhendb_true_bool = {};
 
-static const expr_value rhendb_false_bool = {
-	.type_info = rhendb_bool_type,
-	.value = (datum){.bit_field_value = 0},
-	.buffer_to_free = NULL,
-};
+static expr_value rhendb_false_bool = {};
 
 // unknown is basically the NULL of the boolean world
-static const expr_value rhendb_unknown_bool = {
-	.type_info = rhendb_bool_type,
-	.value = (*NULL_DATUM),
-	.buffer_to_free = NULL,
-};
+static expr_value rhendb_unknown_bool = {};
 
-static const expr_type_info rhendb_int_type = {
-	.type = RHENDB_EXPR_INT,
-	.dti_p = INT_NULLABLE[8],
-};
+static expr_type_info rhendb_int_type = {};
 
-static const expr_value rhendb_minus_one_number = {
-	.type_info = rhendb_int_type,
-	.value = (datum){.int_value = -1},
-	.buffer_to_free = NULL,
-};
+static expr_value rhendb_minus_one_number = {};
 
-static const expr_value rhendb_zero_number = {
-	.type_info = rhendb_int_type,
-	.value = (datum){.int_value = 0},
-	.buffer_to_free = NULL,
-};
+static expr_value rhendb_zero_number = {};
 
-static const expr_value rhendb_one_number = {
-	.type_info = rhendb_int_type,
-	.value = (datum){.int_value = 1},
-	.buffer_to_free = NULL,
-};
+static expr_value rhendb_one_number = {};
+
+// the above static global, these values will be inited every time the context is inited
 
 static void* rhendb_get_bool(void* data, const sql_expr_eval_context* ec_p, int* error_code);
 
@@ -172,85 +144,184 @@ static void rhendb_delete_type(void* typ, const sql_expr_eval_context* ec_p)
 
 /* ------------------------------ helpers ------------------------------ */
 
-static int et_is_int(expr_type t)
+static uint32_t native_width(const expr_type_info* ti)
+{
+	if(ti->dti_p == NULL)
+		return 0;
+	switch(ti->dti_p->type)
+	{
+		case BIT_FIELD:
+			return ti->dti_p->bit_field_size;
+		case UINT:
+		case INT:
+		case LARGE_UINT:
+		case LARGE_INT:
+		case FLOAT:
+			return ti->dti_p->size;
+		default:
+			return 0;
+	}
+}
+
+/* bit-field bits -> whole bytes, so a bit-field can be width-compared against the integer types */
+static uint32_t bits_to_bytes(uint32_t bits){ return (bits + 7u) / 8u; }
+
+/* the static default data_type_info of a given native type and width. width 0 (unspecified) yields the
+ * widest form, matching the previous behaviour. always static, hence never freed. */
+static data_type_info* static_dti_for(expr_type t, uint32_t width)
+{
+	switch(t)
+	{
+		case RHENDB_EXPR_BIT_FIELD:
+			if(width == 0 || width > 64) width = 64;
+			return BIT_FIELD_NULLABLE[width];
+		case RHENDB_EXPR_UINT:
+			if(width == 0 || width > 8) width = 8;
+			return UINT_NULLABLE[width];
+		case RHENDB_EXPR_INT:
+			if(width == 0 || width > 8) width = 8;
+			return INT_NULLABLE[width];
+		case RHENDB_EXPR_LARGE_UINT:
+			if(width == 0 || width > 32) width = 32;
+			return LARGE_UINT_NULLABLE[width];
+		case RHENDB_EXPR_LARGE_INT:
+			if(width == 0 || width > 32) width = 32;
+			return LARGE_INT_NULLABLE[width];
+		case RHENDB_EXPR_FLOAT:
+			return FLOAT_float_NULLABLE;
+		case RHENDB_EXPR_DOUBLE:
+			return FLOAT_double_NULLABLE;
+		default:
+			return NULL;
+	}
+}
+
+static expr_type_info* new_type(expr_type t, data_type_info* dti_p)
+{
+	expr_type_info* ti = malloc(sizeof(expr_type_info));
+	ti->type = t;
+	ti->dti_p = dti_p;
+	return ti;
+}
+
+/* a new type object carrying a width (via a borrowed static dti) */
+static expr_type_info* new_type_sized(expr_type t, uint32_t width)
+{
+	return new_type(t, static_dti_for(t, width));
+}
+
+/* width of a native type expressed in BYTES (bit-fields rounded up), 0 when unspecified */
+static uint32_t native_width_bytes(const expr_type_info* ti)
+{
+	if(ti->dti_p == NULL)
+		return 0;
+	uint32_t width = native_width(ti);
+	if(ti->dti_p->type == BIT_FIELD)
+		return bits_to_bytes(width);
+	return width;
+}
+
+/* the resulting width for combining two native operands : the wider of the two, and unspecified as soon
+ * as either side is unspecified (an unspecified operand may be arbitrarily wide) */
+static uint32_t combined_width_bytes(const expr_type_info* a, const expr_type_info* b)
+{
+	uint32_t wa = native_width_bytes(a);
+	uint32_t wb = native_width_bytes(b);
+	if(wa == 0 || wb == 0)
+		return 0;
+	return max(wa, wb);
+}
+
+static int et_is_native_integer(expr_type t)
 {
 	return t == RHENDB_EXPR_BIT_FIELD || t == RHENDB_EXPR_UINT || t == RHENDB_EXPR_INT || t == RHENDB_EXPR_LARGE_UINT || t == RHENDB_EXPR_LARGE_INT;
 }
-static int et_is_float(expr_type t)
-{
-	return t == RHENDB_EXPR_FLOAT || t == RHENDB_EXPR_DOUBLE;
-}
-static int et_is_num(expr_type t)
-{
-	return et_is_int(t) || et_is_float(t);
-}
-static int et_is_large(expr_type t)
+static int et_is_native_large_integer(expr_type t)
 {
 	return t == RHENDB_EXPR_LARGE_UINT || t == RHENDB_EXPR_LARGE_INT;
 }
-static int et_is_signed(expr_type t)
+static int et_is_native_signed_integer(expr_type t)
 {
 	return t == RHENDB_EXPR_INT || t == RHENDB_EXPR_LARGE_INT;
 }
-static int et_is_num_or_numeric(expr_type t)
+static int et_is_native_float(expr_type t)
 {
-	return et_is_num(t) || t == RHENDB_EXPR_NUMERIC;
+	return t == RHENDB_EXPR_FLOAT || t == RHENDB_EXPR_DOUBLE;
+}
+static int et_is_native_number(expr_type t)
+{
+	return et_is_native_integer(t) || et_is_native_float(t);
+}
+static int et_is_numeric(expr_type t)
+{
+	return t == RHENDB_EXPR_NUMERIC;
+}
+static int et_is_native_number_or_numeric(expr_type t)
+{
+	return et_is_native_number(t) || t == RHENDB_EXPR_NUMERIC;
 }
 
-/* result type for arithmetic on two operands. NUMERIC is the most general (contagious). */
-/* forward declarations : the width helpers and effective_type() are defined further down */
-static expr_type_info* new_type_sized(expr_type t, uint32_t width);
-static uint32_t combined_width_bytes(const expr_type_info* a, const expr_type_info* b);
-static expr_type effective_type(const expr_type_info* ti);
-static data_type_info* static_dti_for(expr_type t, uint32_t width);
-
+// this function explains how type promotion works, for most operations
 static expr_type num_result(expr_type a, expr_type b)
 {
 	if(a == RHENDB_EXPR_NUMERIC || b == RHENDB_EXPR_NUMERIC)
 		return RHENDB_EXPR_NUMERIC;
 
-	/* float-ness wins. a 4-byte float result is only kept when BOTH sides are 4-byte floats; mixing a
-	 * float with an integer (of any width) yields a double, since a 4-byte float cannot represent the
-	 * wider integers exactly. */
-	if(et_is_float(a) || et_is_float(b))
+	if(et_is_native_float(a) || et_is_native_float(b))
 	{
-		if(a == RHENDB_EXPR_FLOAT && b == RHENDB_EXPR_FLOAT) return RHENDB_EXPR_FLOAT;
+		if(a == RHENDB_EXPR_FLOAT && b == RHENDB_EXPR_FLOAT)
+			return RHENDB_EXPR_FLOAT;
 		return RHENDB_EXPR_DOUBLE;
 	}
 
-	int signd = et_is_signed(a) || et_is_signed(b);
+	int signd = et_is_native_signed_integer(a) || et_is_native_signed_integer(b);
 
-	if(et_is_large(a) || et_is_large(b))
+	if(et_is_native_large_integer(a) || et_is_native_large_integer(b))
 		return signd ? RHENDB_EXPR_LARGE_INT : RHENDB_EXPR_LARGE_UINT;
 
 	return signd ? RHENDB_EXPR_INT : RHENDB_EXPR_UINT;
+}
+
+/* utility for when the type is RHENDB_EXPR_TUPLE, it may either be any og the extended tuple types */
+static expr_type effective_type(const expr_type_info* ti)
+{
+	if(ti->type == RHENDB_EXPR_TUPLE) // it's dti_p will never be NULL
+	{
+		if(is_text_type_info(ti->dti_p))    return RHENDB_EXPR_STRING;
+		if(is_blob_type_info(ti->dti_p))    return RHENDB_EXPR_BINARY;
+		if(is_numeric_type_info(ti->dti_p)) return RHENDB_EXPR_NUMERIC;
+		if(is_jsonb_type_info(ti->dti_p))   return RHENDB_EXPR_JSONB;
+	}
+	return ti->type;
 }
 
 /* the full width-preserving result of combining two operand TYPES. the result kind follows num_result();
  * the width is the wider of the two operands, expressed in the result kind's own unit. */
 static expr_type_info* num_result_sized(const expr_type_info* ta, const expr_type_info* tb)
 {
+	if(tb == NULL)
+		tb = ta;
+
 	expr_type a = effective_type(ta);
-	expr_type b = (tb != NULL) ? effective_type(tb) : a;
+	expr_type b = effective_type(tb);
 	expr_type res = num_result(a, b);
 
-	if(res == RHENDB_EXPR_NUMERIC || et_is_float(res))
-		return new_type_sized(res, 0);          /* numeric has no width; float width is implied by the kind */
-
-	uint32_t w = combined_width_bytes(ta, tb);  /* 0 -> a side was unspecified -> widest */
+	if(res == RHENDB_EXPR_NUMERIC || et_is_native_float(res))
+		return new_type_sized(res, 0); /* numeric has no width; float width is implied by the kind */
 
 	if(res == RHENDB_EXPR_BIT_FIELD)
 	{
 		/* stays a bit-field only when both operands are bit-fields : take the wider bit count */
-		uint32_t ba = (ta && ta->dti_p && ta->dti_p->type==BIT_FIELD) ? ta->dti_p->bit_field_size : 0;
-		uint32_t bb = (tb && tb->dti_p && tb->dti_p->type==BIT_FIELD) ? tb->dti_p->bit_field_size : 0;
-		uint32_t bits = (ba > bb) ? ba : bb;
-		if(ba == 0 || (tb != NULL && bb == 0)) bits = 0;
+		uint32_t ba = (ta->type == RHENDB_EXPR_BIT_FIELD) ? ta->dti_p->bit_field_size : 0;
+		uint32_t bb = (tb->type == RHENDB_EXPR_BIT_FIELD) ? tb->dti_p->bit_field_size : 0;
+		uint32_t bits = max(ba, bb);
+		if(ba == 0 || bb == 0)
+			bits = 0;
 		return new_type_sized(RHENDB_EXPR_BIT_FIELD, bits);
 	}
 
 	/* a small int combined with a large one keeps the LARGE kind, but only needs the wider byte count */
-	return new_type_sized(res, w);
+	return new_type_sized(res, combined_width_bytes(ta, tb));
 }
 
 /* pop a recycled expr_value off the context's free list, else calloc() a fresh one.
@@ -307,108 +378,9 @@ static void drain_free_list_for_expr_value(rhendb_expr_eval_context* ctx)
 		ctx->free_list_for_expr_value = nxt;
 	}
 }
-static expr_type_info* new_type(expr_type t)
-{
-	expr_type_info* ti = calloc(1, sizeof *ti);
-	ti->type = t;
-	return ti;
-}
 
-/* ===================================================================================================
- * WIDTH-PRESERVING NATIVE TYPES
- *
- * a native scalar type carries a dti_p that records its declared width, so that combining values does
- * not immediately widen everything to the maximum (8-byte int / 32-byte large / 64-bit bit-field).
- * uint(3 bytes) + uint(4 bytes) is a uint of 4 bytes, not of 8.
- *
- * every dti_p used here is either one of the static defaults or a type owned by an input tuple, so it is
- * never freed (should_free_dti_p stays 0) and can never leak.
- *
- * INVARIANT : every primitive numeral (BIT_FIELD / UINT / INT / LARGE_UINT / LARGE_INT / FLOAT / DOUBLE)
- * ALWAYS carries a non-NULL dti_p -- either the one borrowed from its input tuple, or, when it originates
- * in the evaluator (a literal or a computed result), the widest NULLABLE default for its kind (new_val()
- * installs that default; static_dti_for(t, 0) picks it). dti_p == NULL therefore means "not a primitive
- * numeral" : NUMERIC (its width is dynamic), STRING / BINARY, the containers, and the boolean singletons.
- * =================================================================================================== */
+/* =================================================================================================== */
 
-/* declared width of a native type, in BITS for a bit-field and in BYTES otherwise; 0 for a non-native
- * type_info (NUMERIC / STRING / BINARY / container) whose dti_p is NULL -- a primitive numeral always has one */
-static uint32_t native_width(const expr_type_info* ti)
-{
-	if(ti == NULL || ti->dti_p == NULL) return 0;
-	const data_type_info* d = ti->dti_p;
-	switch(d->type)
-	{
-		case BIT_FIELD:  return d->bit_field_size;
-		case UINT: case INT: case LARGE_UINT: case LARGE_INT: case FLOAT: return d->size;
-		default: return 0;
-	}
-}
-
-/* bit-field bits -> whole bytes, so a bit-field can be width-compared against the integer types */
-static uint32_t bits_to_bytes(uint32_t bits){ return (bits + 7u) / 8u; }
-
-/* the static default data_type_info of a given native type and width. width 0 (unspecified) yields the
- * widest form, matching the previous behaviour. always static, hence never freed. */
-static data_type_info* static_dti_for(expr_type t, uint32_t width)
-{
-	switch(t)
-	{
-		case RHENDB_EXPR_BIT_FIELD:
-			if(width == 0 || width > 64) width = 64;
-			return BIT_FIELD_NULLABLE[width];
-		case RHENDB_EXPR_UINT:
-			if(width == 0 || width > 8) width = 8;
-			return UINT_NULLABLE[width];
-		case RHENDB_EXPR_INT:
-			if(width == 0 || width > 8) width = 8;
-			return INT_NULLABLE[width];
-		case RHENDB_EXPR_LARGE_UINT:
-			if(width == 0 || width > 32) width = 32;
-			return LARGE_UINT_NULLABLE[width];
-		case RHENDB_EXPR_LARGE_INT:
-			if(width == 0 || width > 32) width = 32;
-			return LARGE_INT_NULLABLE[width];
-		case RHENDB_EXPR_FLOAT:  return FLOAT_float_NULLABLE;
-		case RHENDB_EXPR_DOUBLE: return FLOAT_double_NULLABLE;
-		default: return NULL;
-	}
-}
-
-/* a new type object carrying a width (via a borrowed static dti) */
-static expr_type_info* new_type_sized(expr_type t, uint32_t width)
-{
-	expr_type_info* ti = new_type(t);
-	ti->dti_p = static_dti_for(t, width);      /* static : never freed */
-	ti->should_free_dti_p = 0;
-	return ti;
-}
-
-/* a new type object that borrows an existing (static or tuple-owned) dti verbatim */
-static expr_type_info* new_type_borrowing(expr_type t, data_type_info* dti)
-{
-	expr_type_info* ti = new_type(t);
-	ti->dti_p = dti;
-	ti->should_free_dti_p = 0;
-	return ti;
-}
-
-/* width of a native type expressed in BYTES (bit-fields rounded up), 0 when unspecified */
-static uint32_t native_width_bytes(const expr_type_info* ti)
-{
-	if(ti == NULL || ti->dti_p == NULL) return 0;
-	if(ti->dti_p->type == BIT_FIELD) return bits_to_bytes(ti->dti_p->bit_field_size);
-	return native_width(ti);
-}
-
-/* the resulting width for combining two native operands : the wider of the two, and unspecified as soon
- * as either side is unspecified (an unspecified operand may be arbitrarily wide) */
-static uint32_t combined_width_bytes(const expr_type_info* a, const expr_type_info* b)
-{
-	uint32_t wa = native_width_bytes(a), wb = native_width_bytes(b);
-	if(wa == 0 || wb == 0) return 0;
-	return (wa > wb) ? wa : wb;
-}
 
 /* discriminators */
 static int is_materialized_numeric(const expr_value* v)
@@ -1764,18 +1736,6 @@ static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_e
 		default: *error_code = RHENDB_EE_UNSUPPORTED_TYPE; return NULL;
 	}
 }
-/* the scalar type an operator should see for a value/type : an unmaterialized extended numeric/
- * text/blob (RHENDB_EXPR_TUPLE + a prefixed dti) acts as its scalar kind; everything else is its own type. */
-static expr_type effective_type(const expr_type_info* ti)
-{
-	if(ti->type == RHENDB_EXPR_TUPLE && ti->dti_p != NULL)
-	{
-		if(is_numeric_type_info(ti->dti_p)) return RHENDB_EXPR_NUMERIC;
-		if(is_text_type_info(ti->dti_p))    return RHENDB_EXPR_STRING;
-		if(is_blob_type_info(ti->dti_p))    return RHENDB_EXPR_BINARY;
-	}
-	return ti->type;
-}
 
 /* an extended (blob-backed) text/blob/numeric type. these read through an engine; two of them are only
  * interchangeable-in-tuple-form when they are byte-for-byte the same type (same sub_type/name, same
@@ -2408,6 +2368,16 @@ static void* rhendb_post_eval(const sql_expr_eval_context* ec_p, const sql_expre
 
 sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, transaction* tx)
 {
+	rhendb_bool_type = (expr_type_info){.type = RHENDB_EXPR_BIT_FIELD, .dti_p = BIT_FIELD_NULLABLE[1]};
+	rhendb_true_bool = (expr_value){.type_info = rhendb_bool_type, .value = (datum){.bit_field_value = 1}, .buffer_to_free = NULL};
+	rhendb_false_bool = (expr_value){.type_info = rhendb_bool_type, .value = (datum){.bit_field_value = 0}, .buffer_to_free = NULL};
+	rhendb_unknown_bool = (expr_value){.type_info = rhendb_bool_type, .value = (*NULL_DATUM), .buffer_to_free = NULL};
+
+	rhendb_int_type = (expr_type_info){.type = RHENDB_EXPR_INT, .dti_p = INT_NULLABLE[4]};
+	rhendb_one_number = (expr_value){.type_info = rhendb_int_type, .value = (datum){.int_value = 1}, .buffer_to_free = NULL};
+	rhendb_zero_number = (expr_value){.type_info = rhendb_int_type, .value = (datum){.int_value = 0}, .buffer_to_free = NULL};
+	rhendb_minus_one_number = (expr_value){.type_info = rhendb_int_type, .value = (datum){.int_value = -1}, .buffer_to_free = NULL};
+
 	sql_expr_eval_context eval_context = (sql_expr_eval_context){
 		.context_p = malloc(sizeof(rhendb_expr_eval_context)),
 
