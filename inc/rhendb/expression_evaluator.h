@@ -132,7 +132,6 @@ enum rhendb_expr_eval_error
 	RHENDB_EE_UNSUPPORTED_CAST    = 6,  // cast() to an unsupported target type
 	RHENDB_EE_NON_STRING_OPERAND  = 7,  // concat()/like() on a non string/binary operand
 	RHENDB_EE_MATERIALIZE_FAILED  = 8,  // failed while reading/materializing an extended text/blob/numeric value
-	RHENDB_EE_MISSING_ENGINE      = 9,  // no rage_engine reachable to materialize an extended value
 	RHENDB_EE_OUT_OF_MEMORY       = 10, // allocation failure
 	RHENDB_EE_NULL_OPERAND        = 11, // a required operand pointer was NULL
 	RHENDB_EE_STRING_TOO_LONG     = 12, // a text/blob value's byte length would not fit in the uint32_t size field (concat result, or an extended value being materialized)

@@ -485,34 +485,13 @@ static transaction* tx_from_ctx(const sql_expr_eval_context* ec_p)
 {
 	return ((rhendb_expr_eval_context*)(ec_p->context_p))->tx;
 }
-
-/* the engine + lock callback used to read one extended text/blob/numeric COLUMN out of a tuple.
- * The correct engine (persistent vs volatile temporary store) and, for the volatile stores, the
- * begin/end lock callback are chosen from the transaction by the column's extension sub-type.
- * `dti` is the column's own data_type_info; `cb_storage` supplies backing storage for the callback.
- *   returns the engine (NULL if not extended / no tx / unknown sub-type); *callback_out is the
- *   pass-through callback (NULL for the persistent store and for inline types). */
 static rage_engine* engine_and_callback_from_ctx(const sql_expr_eval_context* ec_p, const data_type_info* dti,
 	extension_reader_iterator_callback* cb_storage, extension_reader_iterator_callback** callback_out)
 {
 	transaction* tx = tx_from_ctx(ec_p);
-	if(tx == NULL)
-	{
-		(*callback_out) = NULL;
-		return NULL;
-	}
 	rage_engine* eng = NULL;
 	(*callback_out) = get_callback_and_engine_for_extended_type(tx, dti, &eng, cb_storage);
 	return eng;
-}
-
-/* True only if `dti` is an EXTENDED (blob-backed) text/blob/numeric type, i.e. one that actually needs an
- * engine + (for volatile) a lock callback to be read. An INLINE text/blob/numeric column is read through
- * the same iterator APIs but with bstd = pam_p = callback = NULL, so a NULL engine is NOT an error for it.
- * Only an extended type with no resolvable engine (e.g. no transaction, or an unknown sub-type) is. */
-static int dti_needs_engine(const data_type_info* dti)
-{
-	return dti != NULL && is_extended_type_info(dti);
 }
 
 /* initialize a fresh, empty, usable mpd_t whose struct is static (kept inline in an expr_value)
@@ -533,27 +512,13 @@ static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, i
 {
 	const data_type_info* dti = v->type_info.dti_p;
 	if(dti == NULL)
-		return RHENDB_EE_OK;                    /* already native */
+		return RHENDB_EE_OK;
 	int is_txt = is_text_type_info(dti);
 	int is_bin = is_blob_type_info(dti);
 	if(!is_txt && !is_bin)
-		return RHENDB_EE_OK;             /* not text/blob */
+		return RHENDB_EE_OK;
 
 	expr_type target = is_txt ? RHENDB_EXPR_STRING : RHENDB_EXPR_BINARY;
-
-	/* only an EXTENDED text/blob needs an engine : guard early with a clear error if one is required but
-	 * absent (the shared utility would otherwise resolve a NULL engine and misread), then delegate the
-	 * actual read to it. */
-	{
-		extension_reader_iterator_callback cb_storage;
-		extension_reader_iterator_callback* callback = NULL;
-		rage_engine* eng = engine_and_callback_from_ctx(ec_p, dti, &cb_storage, &callback);
-		if(eng == NULL && dti_needs_engine(dti))
-		{
-			*error_code = RHENDB_EE_MISSING_ENGINE;
-			return *error_code;
-		}
-	}
 
 	/* materialize_tbj() runs the identical uint32-safe read loop and returns the bytes; map its codes back. */
 	uint32_t cap = 0, len = 0;
@@ -561,28 +526,20 @@ static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, i
 	char* buf = materialize_tbj(v->value, dti, tx_from_ctx(ec_p), &len, &cap, &mrc);
 	if(mrc != MATERIALIZED_SUCCESSFULLY)
 	{
-		/* a value overflowing the uint32 size field -> STRING_TOO_LONG; a NULL datum / non-text-or-blob type
-		 * cannot occur here (guarded above), so anything else is treated as a read failure. */
 		*error_code = (mrc == MATERIALIZED_RESULT_TOO_BIG) ? RHENDB_EE_STRING_TOO_LONG : RHENDB_EE_MATERIALIZE_FAILED;
 		return *error_code;
 	}
 
-	if(cap == 0 && v->buffer != NULL) // if cap == 0 (returned buffer is owned by v itself) and v->buffer != NULL (is present is suppossed to be freed)
-	{ // then make it owned
-		char* temp = malloc(len);
-		memory_move(temp, buf, len);
-		cap = len;
-		buf = temp;
-	}
+	if(v->buffer_to_free)
+		free(v->buffer_to_free);
 
-	if(v->type_info.should_free_dti_p && v->type_info.dti_p)
-		destroy_type_info_recursively(v->type_info.dti_p, NULL);
-	if(v->buffer)
-		free(v->buffer);
-	v->buffer = (cap > 0) ? buf : NULL;
-	v->capacity = cap;
-	v->value = (datum){.string_or_binary_value = buf, .string_or_binary_size = len};
-	v->type_info = (expr_type_info){.type = target, .dti_p = NULL, .should_free_dti_p = 0};
+	v->type_info = (expr_type_info){.type = target, .dti_p = NULL};
+	init_dstring(&(v->string_value), buf, len);
+	v->buffer_to_free = NULL;
+
+	if(cap > 0 && buf != NULL)
+		free(buf);
+
 	return RHENDB_EE_OK;
 }
 
