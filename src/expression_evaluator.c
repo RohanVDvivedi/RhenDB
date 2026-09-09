@@ -324,45 +324,26 @@ static expr_type_info* num_result_sized(const expr_type_info* ta, const expr_typ
 	return new_type_sized(res, combined_width_bytes(ta, tb));
 }
 
-/* pop a recycled expr_value off the context's free list, else calloc() a fresh one.
- * the free list is a plain LIFO stack whose "next" pointer lives in the first bytes of the DEAD block,
- * so being on the list costs an expr_value nothing. the block is zeroed before it is handed back, so it
- * is byte-identical to what calloc() would have returned.
- * NO LOCK : a context belongs to exactly one thread (see the header). */
+/* pop a recycled expr_value off the context's free list, else malloc() a fresh one. */
 static expr_value* new_val(expr_type t, const sql_expr_eval_context* ec_p)
 {
-	rhendb_expr_eval_context* ctx = (ec_p != NULL) ? ec_p->context_p : NULL;
+	rhendb_expr_eval_context* ctx = ec_p->context_p;
 	expr_value* v = NULL;
 
-	if(ctx != NULL && ctx->free_list_for_expr_value != NULL)
+	if(ctx->free_list_for_expr_value != NULL)
 	{
 		v = ctx->free_list_for_expr_value;
 		ctx->free_list_for_expr_value = *((void**)v);   /* pop : next ptr is stored inside the dead block */
 	}
 	else
-		v = malloc(sizeof *v);
+		v = malloc(sizeof(expr_value));
 
-	if(v == NULL)
-		return NULL;
-
-	// DO NOT zero the whole expr_value. it is 88 bytes (the mpd_t in the union makes it fat), and an
-	// int node only ever needs a couple of fields -- yet this runs once per AST node per row.
-	// only these five are ever READ before the caller writes them:
-	//   - type_info.type              : switched on everywhere, and by rhendb_delete_data()
-	//   - type_info.dti_p             : rhendb_delete_data() tests it
-	//   - type_info.should_free_dti_p : rhendb_delete_data() tests it
-	//   - buffer                      : rhendb_delete_data() frees it if non-NULL
-	//   - capacity                    : rhendb_concat() reads it alongside buffer
-	// the `value` / `numeric_value` union is ALWAYS written by the caller before it is read.
 	v->type_info.type = t;
-	/* every primitive numeral must carry a data_type_info : default to the widest NULLABLE form of the
-	 * kind. static_dti_for() returns NULL for non-numerals (NUMERIC / STRING / BINARY / containers), which
-	 * keep dti_p NULL. callers that know the real width -- a column read or a cast -- overwrite it right after. */
-	v->type_info.dti_p = static_dti_for(t, 0);
-	v->type_info.should_free_dti_p = 0;
-	v->buffer = NULL;
-	v->capacity = 0;
-	v->value.is_NULL = 0;      // datum carries a NULL flag -- garbage here makes values vanish
+	v->type_info.dti_p = static_dti_for(t, 0); // this must also be reinited by the user
+
+	// the caller must init the type specific value attributes
+
+	v->buffer_to_free = NULL;
 
 	return v;
 }
@@ -381,26 +362,20 @@ static void drain_free_list_for_expr_value(rhendb_expr_eval_context* ctx)
 
 /* =================================================================================================== */
 
-
-/* discriminators */
+/* discriminators for numeric*/
 static int is_materialized_numeric(const expr_value* v)
 {
 	return v->type_info.type == RHENDB_EXPR_NUMERIC;
 }
 static int is_tuple_numeric(const expr_value* v)
 {
-	return v->type_info.type == RHENDB_EXPR_TUPLE && v->type_info.dti_p != NULL && is_numeric_type_info(v->type_info.dti_p);
+	return v->type_info.type == RHENDB_EXPR_TUPLE && is_numeric_type_info(v->type_info.dti_p);
 }
 static int is_numeric_operand(const expr_value* v)
 {
 	return is_materialized_numeric(v) || is_tuple_numeric(v);
 }
 
-/* is this value still in its on-disk container form (an extended text/blob/numeric, or a tuple/array)?
- *
- * this used to be written as simply "dti_p != NULL". native scalars now carry a dti_p as well -- purely to
- * record their declared width -- so the discriminator has to be the expr_type. RHENDB_EXPR_TUPLE / RHENDB_EXPR_ARRAY
- * are the only kinds ever used for a value that is not already a plain in-memory scalar. */
 static int is_tuple_form(const expr_value* v)
 {
 	return v->type_info.type == RHENDB_EXPR_TUPLE || v->type_info.type == RHENDB_EXPR_ARRAY;
@@ -409,7 +384,7 @@ static int is_tuple_form(const expr_value* v)
 /* a string/binary operand: a native RHENDB_EXPR_STRING/BINARY, or a tuple-form text/blob column */
 static int is_sb_operand(const expr_value* v)
 {
-	if(is_tuple_form(v) && v->type_info.dti_p != NULL)
+	if(v->type_info.type == RHENDB_EXPR_TUPLE)
 		return is_text_type_info(v->type_info.dti_p) || is_blob_type_info(v->type_info.dti_p);
 	return v->type_info.type == RHENDB_EXPR_STRING || v->type_info.type == RHENDB_EXPR_BINARY;
 }
@@ -424,20 +399,24 @@ static double read_flt(const expr_value* v)
 }
 static void write_flt(expr_value* v, expr_type kind, double d)
 {
-	if(kind == RHENDB_EXPR_FLOAT) v->value.float_value = (float)d;
-	else                     v->value.double_value = d;
+	if(kind == RHENDB_EXPR_FLOAT)
+		v->value = (datum){.float_value = d};
+	else
+		v->value = (datum){.double_value = d};
 }
 
 static double to_dbl(const expr_value* v){
 	switch(v->type_info.type){
 		case RHENDB_EXPR_BIT_FIELD:
+			return (double)v->value.bit_field_value;
 		case RHENDB_EXPR_UINT:
 			return (double)v->value.uint_value;
 		case RHENDB_EXPR_INT:
 			return (double)v->value.int_value;
 		case RHENDB_EXPR_FLOAT:
+			return v->value.float_value;
 		case RHENDB_EXPR_DOUBLE:
-			return read_flt(v);
+			return v->value.double_value;
 		case RHENDB_EXPR_LARGE_UINT:
 			return convert_to_double_uint256(v->value.large_uint_value);
 		case RHENDB_EXPR_LARGE_INT:
@@ -448,18 +427,21 @@ static double to_dbl(const expr_value* v){
 }
 static uint64_t to_u64(const expr_value* v)
 {
-	if(et_is_float(v->type_info.type)) return (uint64_t)read_flt(v);   /* by value, never a bit reinterpret */
+	if(et_is_native_float(v->type_info.type))
+		return (uint64_t)read_flt(v);
 	return (v->type_info.type == RHENDB_EXPR_INT) ? (uint64_t)v->value.int_value : v->value.uint_value;
 }
 static int64_t to_i64(const expr_value* v)
 {
-	if(et_is_float(v->type_info.type)) return (int64_t)read_flt(v);    /* by value, never a bit reinterpret */
+	if(et_is_float(v->type_info.type))
+		return (int64_t)read_flt(v);
 	return (v->type_info.type == RHENDB_EXPR_INT) ? v->value.int_value : (int64_t)v->value.uint_value;
 }
-static uint256  to_u256(const expr_value* v)
+static uint256 to_u256(const expr_value* v)
 {
 	switch(v->type_info.type){
 		case RHENDB_EXPR_BIT_FIELD:
+			return get_uint256(v->value.bit_field_value);
 		case RHENDB_EXPR_UINT:
 			return get_uint256(v->value.uint_value);
 		case RHENDB_EXPR_INT:
@@ -468,8 +450,10 @@ static uint256  to_u256(const expr_value* v)
 			return v->value.large_uint_value;
 		case RHENDB_EXPR_LARGE_INT:
 			return v->value.large_int_value.raw_uint_value;
-		case RHENDB_EXPR_FLOAT: case RHENDB_EXPR_DOUBLE:
-			return get_uint256((uint64_t)read_flt(v));   /* by value, from the member the kind uses */
+		case RHENDB_EXPR_FLOAT:
+			return get_uint256(v->value.float_value);
+		case RHENDB_EXPR_DOUBLE:
+			return get_uint256(v->value.double_value);
 		default:
 			return get_uint256(0);
 	}
@@ -478,6 +462,7 @@ static int256 to_i256(const expr_value* v)
 {
 	switch(v->type_info.type){
 		case RHENDB_EXPR_BIT_FIELD:
+			return (int256){ get_uint256(v->value.bit_field_value) };
 		case RHENDB_EXPR_UINT:
 			return (int256){ get_uint256(v->value.uint_value) };
 		case RHENDB_EXPR_INT:
@@ -486,8 +471,10 @@ static int256 to_i256(const expr_value* v)
 			return (int256){ v->value.large_uint_value };
 		case RHENDB_EXPR_LARGE_INT:
 			return v->value.large_int_value;
-		case RHENDB_EXPR_FLOAT: case RHENDB_EXPR_DOUBLE:
-			return get_int256((int64_t)read_flt(v));     /* by value, from the member the kind uses */
+		case RHENDB_EXPR_FLOAT:
+			return get_int256(v->value.float_value);
+		case RHENDB_EXPR_DOUBLE:
+			return get_int256(v->value.double_value);
 		default:
 			return get_int256(0);
 	}
