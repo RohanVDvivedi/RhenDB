@@ -572,20 +572,15 @@ static int ee_materialize_numeric(expr_value* v, const sql_expr_eval_context* ec
 	return RHENDB_EE_OK;
 }
 
-/* build an mpd_t from a native number by delegating to the shared conversion util : integers (native and
- * 256-bit) are exact, floats go through their faithful decimal. caller releases the result with mpd_del(). */
+/* build an mpd_t from a native number */
 static int number_to_mpd(const expr_value* v, mpd_t* out)
 {
-	/* a primitive numeral normally carries its data_type_info (the WIDTH-PRESERVING NATIVE TYPES invariant
-	 * above), which names the exact declared width and which datum member holds the value. the three shared
-	 * compile-time constants (zero / one / minus-one, used by sqltoast for unary minus and increments) are
-	 * the one exception -- they are typed INT with no dti_p -- so fall back to the kind's widest default,
-	 * which represents their small integer value exactly. */
 	const data_type_info* dti = v->type_info.dti_p ? v->type_info.dti_p : static_dti_for(v->type_info.type, 0);
 	int ec = 0;
 	mpd_t r = numeric_from_primitive_numeral(dti, &(v->value), &ec);
-	if(ec) return 0; /* on error the util has already released any resource it acquired */
-	*out = r;
+	if(ec)
+		return 0; /* on error the util has already released any resource it acquired */
+	(*out) = r;
 	return 1;
 }
 
@@ -605,7 +600,7 @@ static mpd_t* operand_to_mpd(expr_value* v, mpd_t* scratch, int* owns, const sql
 			return NULL;
 		return &(v->numeric_value);
 	}
-	if(et_is_num(v->type_info.type) && !is_tuple_form(v))
+	if(et_is_native_number(v->type_info.type))
 	{
 		if(!number_to_mpd(v, scratch))
 		{
@@ -685,14 +680,14 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 
 	/* non-numeric operands must be plain in-memory numbers */
 	expr_type ta = a->type_info.type, tb = b->type_info.type;
-	if(is_tuple_form(a) || is_tuple_form(b) || !et_is_num(ta) || !et_is_num(tb))
+	if(!et_is_native_number(ta) || !et_is_native_number(tb))
 	{
 		*error_code = RHENDB_EE_NON_NUMERIC_OPERAND;
 		return NULL;
 	}
 	expr_type rt = num_result(ta, tb);
 
-	if(et_is_float(rt)){
+	if(et_is_native_float(rt)){
 		double x = to_dbl(a), y = to_dbl(b), r = 0;
 		switch(op){
 			case OP_ADD: r = x + y; break;
@@ -708,7 +703,6 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				break;
 		}
 		expr_value* v = new_val(rt, ec_p);
-		/* a FLOAT result is a genuine 4-byte float : rounding happens here, not only at storage time */
 		write_flt(v, rt, r);
 		return v;
 	}
@@ -728,7 +722,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				break;
 		}
 		expr_value* v = new_val(RHENDB_EXPR_LARGE_INT, ec_p);
-		v->value.large_int_value = r;
+		v->value = (datum){.large_int_value = r};
 		return v;
 	}
 	if(rt == RHENDB_EXPR_LARGE_UINT){
@@ -750,7 +744,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				break;
 		}
 		expr_value* v = new_val(RHENDB_EXPR_LARGE_UINT, ec_p);
-		v->value.large_uint_value = r;
+		v->value = (datum){.large_uint_value = r};
 		return v;
 	}
 	if(rt == RHENDB_EXPR_INT)
@@ -773,11 +767,11 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				break;
 		}
 		expr_value* v = new_val(RHENDB_EXPR_INT, ec_p);
-		v->value.int_value = r;
+		v->value = (datum){.int_value = r};
 		return v;
 	}
-	{ /* RHENDB_EXPR_UINT */
-		uint64_t x = to_u64(a), y = to_u64(b), r = 0;
+	{ /* RHENDB_EXPR_UINT or RHENDB_EXPR_BIT_FIELD */
+		uint64_t x = to_u64(a), y = to_u64(b), r = 0; // we can only add uint64_t but bit_field also has to be supported
 		switch(op){
 			case OP_ADD:
 				r = x + y; break;
@@ -794,8 +788,11 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				r = x % y;
 				break;
 		}
-		expr_value* v = new_val(RHENDB_EXPR_UINT, ec_p);
-		v->value.uint_value = r;
+		expr_value* v = new_val(rt, ec_p);
+		if(rt == RHENDB_EXPR_UINT)
+			v->value = (datum){.uint_value = r};
+		else
+			v->value = (datum){.bit_field_value = r};
 		return v;
 	}
 }
