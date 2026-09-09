@@ -510,6 +510,9 @@ static int ee_mpd_new(mpd_t* m)
 /* ---- text/blob materialization : ONLY used by concat and like ---- */
 static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
 {
+	if(v->type_info.type != RHENDB_EXPR_TUPLE)
+		return RHENDB_EE_OK;
+
 	const data_type_info* dti = v->type_info.dti_p;
 	if(dti == NULL)
 		return RHENDB_EE_OK;
@@ -520,9 +523,8 @@ static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, i
 
 	expr_type target = is_txt ? RHENDB_EXPR_STRING : RHENDB_EXPR_BINARY;
 
-	/* materialize_tbj() runs the identical uint32-safe read loop and returns the bytes; map its codes back. */
-	uint32_t cap = 0, len = 0;
 	int mrc = MATERIALIZED_SUCCESSFULLY;
+	uint32_t cap = 0, len = 0;
 	char* buf = materialize_tbj(v->value, dti, tx_from_ctx(ec_p), &len, &cap, &mrc);
 	if(mrc != MATERIALIZED_SUCCESSFULLY)
 	{
@@ -546,27 +548,12 @@ static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, i
 /* ---- numeric materialization : tuple numeric -> materialized_numeric -> mpd_t (RHENDB_EXPR_NUMERIC) ---- */
 static int ee_materialize_numeric(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	if(!is_tuple_form(v))
-		return RHENDB_EE_OK;                 /* already native */
+	if(v->type_info.type != RHENDB_EXPR_TUPLE)
+		return RHENDB_EE_OK;
+
 	if(!is_numeric_type_info(v->type_info.dti_p))
-		return RHENDB_EE_OK;                 /* not a numeric */
+		return RHENDB_EE_OK;
 
-	/* only an EXTENDED numeric needs an engine : guard early with a clear error if one is required but
-	 * absent, then delegate the read (materialized_numeric -> mpd_t) to the shared utility. */
-	{
-		extension_reader_iterator_callback cb_storage;
-		extension_reader_iterator_callback* callback = NULL;
-		rage_engine* eng = engine_and_callback_from_ctx(ec_p, v->type_info.dti_p, &cb_storage, &callback);
-		if(eng == NULL && dti_needs_engine(v->type_info.dti_p))
-		{
-			*error_code = RHENDB_EE_MISSING_ENGINE;
-			return *error_code;
-		}
-	}
-
-	/* materialize_numeric() runs the identical digit-stream read and returns an inline mpd_t whose coefficient
-	 * is heap-allocated (released via mpd_del). a NULL datum / non-numeric type cannot occur here (guarded
-	 * above); too many digits map to STRING_TOO_LONG, anything else to a read failure. */
 	int mrc = MATERIALIZED_SUCCESSFULLY;
 	mpd_t d = materialize_numeric(v->value, v->type_info.dti_p, tx_from_ctx(ec_p), &mrc);
 	if(mrc != MATERIALIZED_SUCCESSFULLY)
@@ -575,16 +562,13 @@ static int ee_materialize_numeric(expr_value* v, const sql_expr_eval_context* ec
 		return *error_code;
 	}
 
-	if(v->type_info.should_free_dti_p && v->type_info.dti_p)
-		destroy_type_info_recursively(v->type_info.dti_p, NULL);
-	if(v->buffer)
-	{
-		free(v->buffer);
-		v->buffer = NULL;
-		v->capacity = 0;
-	}
-	v->type_info = (expr_type_info){ .type = RHENDB_EXPR_NUMERIC, .dti_p = NULL, .should_free_dti_p = 0};
-	v->numeric_value = d;                                /* overwrites .value via the union */
+	if(v->buffer_to_free)
+		free(v->buffer_to_free);
+
+	v->type_info = (expr_type_info){ .type = RHENDB_EXPR_NUMERIC, .dti_p = NULL};
+	v->numeric_value = d;
+	v->buffer_to_free = NULL;
+
 	return RHENDB_EE_OK;
 }
 
