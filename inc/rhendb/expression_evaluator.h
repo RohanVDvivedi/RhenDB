@@ -78,10 +78,12 @@ struct expr_value
 	{
 		datum value;
 		dstring string_value;    // used only for RHENDB_EXPR_STRING
-		dstring blob_value;      // used only for RHENDB_EXPR_BINARY
+		dstring binary_value;    // used only for RHENDB_EXPR_BINARY
 		mpd_t numeric_value;     // used only for RHENDB_EXPR_NUMERIC
 		jsonb_node* jsonb_value; // used only for RHENDB_EXPR_JSONB
 	};
+
+	void* buffer_to_free; // temporary buffer always to be freed, on destroying the expr_value, may be used by user defined functions returning a complex RHENDB_EXPR_TUPLE or RHENDB_EXPR_ARRAY type
 };
 
 // this is what sits in sql_expr_eval_context.context_p

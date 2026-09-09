@@ -37,17 +37,20 @@ static const expr_type_info rhendb_bool_type = {
 static const expr_value rhendb_true_bool = {
 	.type_info = rhendb_bool_type,
 	.value = (datum){.bit_field_value = 1},
+	.buffer_to_free = NULL,
 };
 
 static const expr_value rhendb_false_bool = {
 	.type_info = rhendb_bool_type,
 	.value = (datum){.bit_field_value = 0},
+	.buffer_to_free = NULL,
 };
 
 // unknown is basically the NULL of the boolean world
 static const expr_value rhendb_unknown_bool = {
 	.type_info = rhendb_bool_type,
 	.value = (*NULL_DATUM),
+	.buffer_to_free = NULL,
 };
 
 static const expr_type_info rhendb_int_type = {
@@ -58,16 +61,19 @@ static const expr_type_info rhendb_int_type = {
 static const expr_value rhendb_minus_one_number = {
 	.type_info = rhendb_int_type,
 	.value = (datum){.int_value = -1},
+	.buffer_to_free = NULL,
 };
 
 static const expr_value rhendb_zero_number = {
 	.type_info = rhendb_int_type,
 	.value = (datum){.int_value = 0},
+	.buffer_to_free = NULL,
 };
 
 static const expr_value rhendb_one_number = {
 	.type_info = rhendb_int_type,
 	.value = (datum){.int_value = 1},
+	.buffer_to_free = NULL,
 };
 
 static void* rhendb_get_bool(void* data, const sql_expr_eval_context* ec_p, int* error_code);
@@ -113,26 +119,35 @@ static void rhendb_delete_data(void* data, const sql_expr_eval_context* ec_p)
 {
 	expr_value* val_p = data;
 
-	if(val_p->type_info.dti_p != NULL && val_p->type_info.should_free_dti_p)
-		destroy_type_info_recursively(val_p->type_info.dti_p, NULL);
+	// type_info is contained as composition holding none of any resources, so does not need freeing
 
-	if(val_p->type_info.type == RHENDB_EXPR_NUMERIC)
+	if(val_p->type_info.type == RHENDB_EXPR_STRING)
+		deinit_dstring(&(val_p->string_value));
+	else if(val_p->type_info.type == RHENDB_EXPR_BINARY)
+		deinit_dstring(&(val_p->binary_value));
+	else if(val_p->type_info.type == RHENDB_EXPR_NUMERIC)
 		mpd_del(&(val_p->numeric_value));
-	else
+	else if(val_p->type_info.type == RHENDB_EXPR_JSONB)
 	{
-		if(val_p->buffer)
-			free(val_p->buffer);
+		if(val_p->jsonb_value != NULL)
+		{
+			delete_jsonb_node(val_p->jsonb_value);
+			val_p->jsonb_value = NULL;
+		}
 	}
 
-	/* recycle onto the context's free list instead of returning it to malloc (no lock : single thread) */
-	rhendb_expr_eval_context* ctx = (ec_p != NULL) ? ec_p->context_p : NULL;
-	if(ctx != NULL)
+	if(val_p->buffer_to_free != NULL)
 	{
-		*((void**)val_p) = ctx->free_list_for_expr_value;   /* push : next ptr goes inside the dead block */
+		free(val_p->buffer_to_free);
+		val_p->buffer_to_free = NULL;
+	}
+
+	// put it in free list
+	{
+		rhendb_expr_eval_context* ctx = ec_p->context_p;
+		*((void**)val_p) = ctx->free_list_for_expr_value; // expecting val_p to be pointer aligned, and atleast pointer bytes size
 		ctx->free_list_for_expr_value = val_p;
 	}
-	else
-		free(val_p);
 }
 
 static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code);
@@ -151,8 +166,6 @@ static void rhendb_delete_type(void* typ, const sql_expr_eval_context* ec_p)
 {
 	expr_type_info* e_type_p = typ;
 
-	if(e_type_p->dti_p != NULL && e_type_p->should_free_dti_p)
-		destroy_type_info_recursively(e_type_p->dti_p, NULL);
 	free(e_type_p);
 }
 
