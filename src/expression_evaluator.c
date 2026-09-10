@@ -1067,7 +1067,7 @@ static void* do_shift(void* data, void* shift_amt, int left, const sql_expr_eval
 	expr_value* a = data;
 	expr_value* s = shift_amt;
 	expr_type t = a->type_info.type;
-	if(is_tuple_form(a) || is_tuple_form(s) || !et_is_int(t) || !et_is_int(s->type_info.type))
+	if(!et_is_native_integer(t) || !et_is_native_integer(s->type_info.type))
 	{
 		*error_code = RHENDB_EE_NON_INTEGER_OPERAND;
 		return NULL;
@@ -1078,16 +1078,16 @@ static void* do_shift(void* data, void* shift_amt, int left, const sql_expr_eval
 	switch(t)
 	{
 		case RHENDB_EXPR_LARGE_UINT:
-			v->value.large_uint_value = left ? left_shift_uint256(a->value.large_uint_value, amt) : right_shift_uint256(a->value.large_uint_value, amt);
+			v->value = (datum){.large_uint_value = left ? left_shift_uint256(a->value.large_uint_value, amt) : right_shift_uint256(a->value.large_uint_value, amt)};
 			break;
 		case RHENDB_EXPR_LARGE_INT:
-			v->value.large_int_value = (int256){ left ? left_shift_uint256(a->value.large_int_value.raw_uint_value, amt) : right_shift_uint256(a->value.large_int_value.raw_uint_value, amt) };
+			v->value = (datum){.large_int_value = left ? left_shift_int256(a->value.large_int_value, amt) : right_shift_int256(a->value.large_int_value, amt)};
 			break;
 		case RHENDB_EXPR_INT:
-			v->value.int_value = left ? (int64_t)(((uint64_t)a->value.int_value) << (amt & 63)) : (a->value.int_value >> (amt & 63));
+			v->value = (datum){.int_value = left ? ((a->value.int_value) << (amt & 63)) : (a->value.int_value >> (amt & 63))};
 			break;
-		default:
-			v->value.uint_value = left ? (to_u64(a) << (amt & 63)) : (to_u64(a) >> (amt & 63));
+		default: // for RHENDB_EXPR_UINT and RHENDB_EXPR_BIT_FIELD
+			v->value = (datum){.uint_value = left ? (to_u64(a) << (amt & 63)) : (to_u64(a) >> (amt & 63))};
 			break;
 	}
 	return v;
