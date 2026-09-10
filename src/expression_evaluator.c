@@ -1264,8 +1264,6 @@ static void* rhendb_like(void* str_p, void* pattern_p, const sql_expr_eval_conte
 }
 
 /* ------------------------------ cast ------------------------------ */
-/* to_type is the implementer's own type object (an expr_type_info*), produced by get_type_for_sql_type */
-/* ---- helpers for the numeric/large/string cast paths ---- */
 
 /* mpd_t -> double, going through the shortest scientific string */
 static double mpd_to_double(const mpd_t* m)
@@ -1279,36 +1277,21 @@ static double mpd_to_double(const mpd_t* m)
 /* heap-allocated NUL-terminated copy of a materialized string/binary value's bytes */
 static char* sb_to_cstring(const expr_value* a)
 {
-	uint32_t n = a->value.string_or_binary_size;
-	char* s = malloc((size_t)n + 1);
+	uint32_t n = get_char_count_dstring(&(a->string_value));
+	char* s = malloc(n + 1);
 	if(s == NULL) return NULL;
-	if(n) memory_move(s, a->value.string_or_binary_value, n);
+	if(n) memory_move(s, get_byte_array_dstring(&(a->string_value)), n);
 	s[n] = 0;
 	return s;
 }
 
-/* trim ASCII whitespace and parse a decimal/scientific numeric string into an initialized mpd_t.
- * returns 1 on success (out set), 0 if the string is not a valid number (out untouched), -1 on OOM.
- * honours '.', 'e'/'E' and sign; "Infinity"/"NaN" parse to the mpd specials. an empty/whitespace-only
- * string, or any trailing/embedded garbage (mpd is whole-string strict), is rejected as not-a-number. */
+/* converts a decimal valid c string into an mpd_t */
 static int parse_numeric_string(const char* str, mpd_t* out)
 {
-	const char* p = str;
-	while(*p==' '||*p=='\t'||*p=='\n'||*p=='\r') p++;
-	size_t len = strlen(p);
-	while(len>0 && (p[len-1]==' '||p[len-1]=='\t'||p[len-1]=='\n'||p[len-1]=='\r')) len--;
-	if(len == 0) return 0;
-
-	char stackbuf[128];
-	char* tmp = (len + 1 <= sizeof(stackbuf)) ? stackbuf : malloc(len + 1);
-	if(tmp == NULL) return -1;
-	memory_move(tmp, p, len); tmp[len] = 0;
-
-	if(!ee_mpd_new(out)){ if(tmp != stackbuf) free(tmp); return -1; }
+	if(!ee_mpd_new(out)) return -1;
 	mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
-	mpd_qset_string(out, tmp, &ctx, &st);
-	if(tmp != stackbuf) free(tmp);
-	if(st & MPD_Conversion_syntax){ mpd_del(out); return 0; }   /* not a valid numeric literal */
+	mpd_qset_string(out, str, &ctx, &st);
+	if(st & MPD_Conversion_syntax){ mpd_del(out); return 0; }
 	return 1;
 }
 
@@ -1323,8 +1306,7 @@ static char* number_to_decimal_cstring(const expr_value* a)
 		case RHENDB_EXPR_BIT_FIELD:
 		case RHENDB_EXPR_UINT:
 		{
-			int n = snprintf(stack, sizeof(stack), "%llu", (unsigned long long)a->value.uint_value);
-			if(n < 0) return NULL;
+			int n = snprintf(stack, sizeof(stack), "%"PRIu64, a->value.uint_value);
 			char* s = malloc((size_t)n + 1);
 			if(s != NULL) memory_move(s, stack, (size_t)n + 1);
 			return s;
@@ -1332,7 +1314,6 @@ static char* number_to_decimal_cstring(const expr_value* a)
 		case RHENDB_EXPR_INT:
 		{
 			int n = snprintf(stack, sizeof(stack), "%lld", (long long)a->value.int_value);
-			if(n < 0) return NULL;
 			char* s = malloc((size_t)n + 1);
 			if(s != NULL) memory_move(s, stack, (size_t)n + 1);
 			return s;
@@ -1390,8 +1371,11 @@ static char* number_to_decimal_cstring(const expr_value* a)
 static int cast_operand_to_mpd(expr_value* a, mpd_t* scratch, const mpd_t** m, int* owns, int* error_code)
 {
 	*owns = 0;
-	if(a->type_info.type == RHENDB_EXPR_NUMERIC){ *m = &(a->numeric_value); return 1; }
-	if(!is_tuple_form(a) && et_is_num(a->type_info.type))
+	if(a->type_info.type == RHENDB_EXPR_NUMERIC)
+	{
+		*m = &(a->numeric_value); return 1;
+	}
+	if(et_is_native_number(a->type_info.type))
 	{
 		if(!number_to_mpd(a, scratch)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
 		*m = scratch; *owns = 1; return 1;
@@ -1400,29 +1384,13 @@ static int cast_operand_to_mpd(expr_value* a, mpd_t* scratch, const mpd_t** m, i
 	{
 		char* s = sb_to_cstring(a);
 		if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
-		int pr = parse_numeric_string(s, scratch);   /* "1.939e5" -> 193900 */
+		int pr = parse_numeric_string(s, scratch);
 		free(s);
 		if(pr < 0){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
 		if(pr == 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return -1; }
 		*m = scratch; *owns = 1; return 1;
 	}
 	*error_code = RHENDB_EE_UNSUPPORTED_CAST; return 0;
-}
-
-/* the data_type_info of a cast's integer target : the declared one, or the widest form of the kind when
- * the cast left the width unspecified. NULL when the target is not an integer kind. */
-static const data_type_info* integer_cast_target_dti(const expr_type_info* to)
-{
-	if(to->dti_p != NULL) return to->dti_p;
-	switch(to->type)
-	{
-		case RHENDB_EXPR_BIT_FIELD:  return BIT_FIELD_NON_NULLABLE[64];
-		case RHENDB_EXPR_UINT:       return UINT_NON_NULLABLE[8];
-		case RHENDB_EXPR_INT:        return INT_NON_NULLABLE[8];
-		case RHENDB_EXPR_LARGE_UINT: return LARGE_UINT_NON_NULLABLE[32];
-		case RHENDB_EXPR_LARGE_INT:  return LARGE_INT_NON_NULLABLE[32];
-		default:                     return NULL;
-	}
 }
 
 static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_context* ec_p, int* error_code)
@@ -1436,15 +1404,12 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 	else if(is_sb_operand(a)){ if(ee_materialize_tb(a, ec_p, error_code)) return NULL; }
 
 	int src_is_numeric = (a->type_info.type == RHENDB_EXPR_NUMERIC);
-	int src_is_number  = (!is_tuple_form(a) && et_is_num(a->type_info.type));   /* native bit/int/float */
+	int src_is_number  = (et_is_native_number(a->type_info.type));
 	int src_is_sb      = (a->type_info.type == RHENDB_EXPR_STRING || a->type_info.type == RHENDB_EXPR_BINARY);
 
-	/* ---- integer target : EXPLICIT casts are STRICT -- the shared util rejects a fractional value or one
-	 *      outside the target's declared range (no silent truncation or wrap) ---- */
-	if(et_is_int(target))
+	if(et_is_native_integer(target))
 	{
-		const data_type_info* tdti = integer_cast_target_dti(to);
-		if(tdti == NULL){ *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
+		const data_type_info* tdti = to->dti_p;
 
 		mpd_t scratch; const mpd_t* m; int owns;
 		if(cast_operand_to_mpd(a, &scratch, &m, &owns, error_code) <= 0) return NULL;
@@ -1454,18 +1419,13 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		if(owns) mpd_del(&scratch);
 		if(ec != 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL; }
 
-		/* the util already produced a value that fits the target width. carry the declared width when the
-		 * cast named one; otherwise new_val() installed the widest NULLABLE default for the kind. */
 		expr_value* v = new_val(target, ec_p);
+		v->type_info = *to;
 		v->value = result;
-		if(to->dti_p != NULL) v->type_info.dti_p = to->dti_p;
-		v->type_info.should_free_dti_p = 0;
 		return v;
 	}
 
-	/* ---- FLOAT / DOUBLE target : a native number converts to double directly (exact IEEE rounding); a
-	 *      numeric / string goes through an mpd_t ---- */
-	if(et_is_float(target))
+	if(et_is_native_float(target))
 	{
 		double d;
 		if(src_is_number)
@@ -1474,13 +1434,15 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		{
 			mpd_t scratch; const mpd_t* m; int owns;
 			if(cast_operand_to_mpd(a, &scratch, &m, &owns, error_code) <= 0) return NULL;
-			d = mpd_to_double(m);   /* inf/NaN are valid floating-point values */
+			d = mpd_to_double(m);
 			if(owns) mpd_del(&scratch);
 		}
-		expr_value* v = new_val(target, ec_p); write_flt(v, target, d); return v;
+		expr_value* v = new_val(target, ec_p);
+		v->type_info = *to;
+		write_flt(v, target, d);
+		return v;
 	}
 
-	/* NUMERIC target */
 	if(target == RHENDB_EXPR_NUMERIC)
 	{
 		mpd_t d;
@@ -1500,42 +1462,34 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 			int pr = parse_numeric_string(s, &d);
 			free(s);
 			if(pr < 0){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			if(pr == 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL; }   /* not a number */
+			if(pr == 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL; }
 		}
 		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
-		expr_value* v = new_val(RHENDB_EXPR_NUMERIC, ec_p); v->numeric_value = d; return v;
+		expr_value* v = new_val(RHENDB_EXPR_NUMERIC, ec_p);
+		v->type_info = *to;
+		v->numeric_value = d;
+		return v;
 	}
 
-	/* STRING / BINARY target */
 	if(target == RHENDB_EXPR_STRING || target == RHENDB_EXPR_BINARY)
 	{
-		const char* bytes;   /* the result bytes and their length, sourced below */
-		uint32_t n;
-		char* owned;         /* a buffer we allocated that the result value must take ownership of */
+		dstring result;
 
 		if(src_is_sb)
 		{
-			/* string/binary source (already materialized above) : reinterpret its bytes under the new label */
-			n = a->value.string_or_binary_size;
-			owned = malloc(n ? n : 1);
-			if(owned == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			if(n) memory_move(owned, a->value.string_or_binary_value, n);
-			bytes = owned;
+			if(!init_copy_dstring(&result, &(a->string_value))){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
 		}
 		else if(src_is_numeric || src_is_number)
 		{
-			/* number / numeric source : plain decimal text */
-			owned = number_to_decimal_cstring(a);
-			if(owned == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			n = (uint32_t)strlen(owned);
-			bytes = owned;
+			char* cstr = number_to_decimal_cstring(a);
+			if(!init_dstring(&result, cstr, strlen(cstr))){ free(cstr); *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+			free(cstr);
 		}
 		else { *error_code = RHENDB_EE_UNSUPPORTED_CAST; return NULL; }
 
 		expr_value* v = new_val(target, ec_p);
-		v->buffer = owned;               /* freed by rhendb_delete_data */
-		v->capacity = n;
-		v->value = (datum){ .string_or_binary_value = bytes, .string_or_binary_size = n };
+		v->type_info = *to;
+		v->string_value = result;
 		return v;
 	}
 
@@ -1543,7 +1497,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 }
 
 /* ------------------------------ type inference ------------------------------ */
-
+// ---------------------------- REFACTORING CHECKPOINT
 static void* rhendb_get_type_for_data(void* data, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* v = data;
