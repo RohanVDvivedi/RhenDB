@@ -801,60 +801,69 @@ static void* rhendb_sub(void* d1, void* d2, const sql_expr_eval_context* ec_p, i
 static void* rhendb_mul(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_arith(d1, d2, OP_MUL, ec_p, e); }
 static void* rhendb_div(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_arith(d1, d2, OP_DIV, ec_p, e); }
 static void* rhendb_mod(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_arith(d1, d2, OP_MOD, ec_p, e); }
-// -------------------------------------------------- REFACTORING CHECKPOINT -----------------------------
+
 /* ------------------------------ truthiness ------------------------------ */
 
+// performs partial materialization
 static int tuple_tb_is_empty(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	extension_reader_iterator_callback cb_storage;
-	extension_reader_iterator_callback* callback = NULL;
-	rage_engine* eng = engine_and_callback_from_ctx(ec_p, v->type_info.dti_p, &cb_storage, &callback);
-	/* inline text/blob is read with bstd = pam_p = callback = NULL; only an EXTENDED type needs an engine. */
-	if(eng == NULL && dti_needs_engine(v->type_info.dti_p))
+	// materialize just 1 byte prefix
+	int mrc = MATERIALIZED_SUCCESSFULLY;
+	uint32_t len = 0, cap = 0;
+	char* buf = materialize_tbj(v->value, v->type_info.dti_p, tx_from_ctx(ec_p), &len, &cap, 1, &mrc); // read atmost 1 byte
+	if(mrc != MATERIALIZED_SUCCESSFULLY)
 	{
-		*error_code = RHENDB_EE_MISSING_ENGINE;
+		*error_code = (mrc == MATERIALIZED_RESULT_TOO_BIG) ? RHENDB_EE_STRING_TOO_LONG : RHENDB_EE_MATERIALIZE_FAILED;
 		return 0;
 	}
-	const void* transaction_id = NULL; int abort_error = 0;
-	binary_read_iterator* bri = get_new_binary_read_iterator(&(v->value), v->type_info.dti_p, eng ? &(eng->bstd) : NULL, eng ? eng->pam_p : NULL, callback);
-	if(bri == NULL)
+
+	if(cap > 0)
+		free(buf);
+	return len == 0;
+}
+
+// performs partial materialization
+static int tuple_numeric_is_zero(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	// materialize just 1 digit prefix
+	int mrc = MATERIALIZED_SUCCESSFULLY;
+	mpd_t d = materialize_numeric(v->value, v->type_info.dti_p, tx_from_ctx(ec_p), 1, &mrc); // read atmost 1 digit
+	if(mrc != MATERIALIZED_SUCCESSFULLY)
 	{
-		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
+		*error_code = (mrc == MATERIALIZED_RESULT_TOO_BIG) ? RHENDB_EE_STRING_TOO_LONG : RHENDB_EE_MATERIALIZE_FAILED;
 		return 0;
 	}
-	char one; uint32_t got = read_from_binary_read_iterator(bri, &one, 1, transaction_id, &abort_error);
-	delete_binary_read_iterator(bri, transaction_id, &abort_error);
-	if(abort_error)
-	{
-		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
-		return 0;
-	}
-	return got == 0;
+
+	int is_zero = mpd_iszero(&d);
+	mpd_del(&d);
+	return is_zero;
 }
 
 static void* rhendb_get_bool(void* data, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* v = data;
 
-	if(is_numeric_operand(v))
+	if(v->type_info.type == RHENDB_EXPR_TUPLE && (is_numeric_type_info(v->type_info.dti_p)))
 	{
-		if(ee_materialize_numeric(v, ec_p, error_code))
-			return NULL;
-		return mpd_iszero(&(v->numeric_value)) ? ec_p->false_bool : ec_p->true_bool;   /* inf and nan are truthy */
-	}
-
-	/* tuple-form text/blob: emptiness without full materialization */
-	if(v->type_info.dti_p != NULL && (is_text_type_info(v->type_info.dti_p) || is_blob_type_info(v->type_info.dti_p)))
-	{
-		int empty = tuple_tb_is_empty(v, ec_p, error_code);
+		int is_zero = tuple_numeric_is_zero(v, ec_p, error_code);
 		if(*error_code)
 			return NULL;
-		return empty ? ec_p->false_bool : ec_p->true_bool;
+		return is_zero ? ec_p->false_bool : ec_p->true_bool;
 	}
 
-	int truthy;
+	if(v->type_info.type == RHENDB_EXPR_TUPLE && (is_text_type_info(v->type_info.dti_p) || is_blob_type_info(v->type_info.dti_p)))
+	{
+		int is_empty = tuple_tb_is_empty(v, ec_p, error_code);
+		if(*error_code)
+			return NULL;
+		return is_empty ? ec_p->false_bool : ec_p->true_bool;
+	}
+
+	int truthy = 0;
 	switch(v->type_info.type){
 		case RHENDB_EXPR_BIT_FIELD:
+			truthy = (v->value.bit_field_value != 0);
+			break;
 		case RHENDB_EXPR_UINT:
 			truthy = (v->value.uint_value != 0);
 			break;
@@ -876,6 +885,9 @@ static void* rhendb_get_bool(void* data, const sql_expr_eval_context* ec_p, int*
 			break;
 		case RHENDB_EXPR_BINARY:
 			truthy = (v->value.binary_size != 0);
+			break;
+		case RHENDB_EXPR_NUMERIC:
+			truthy = !mpd_iszero(&(v->numeric_value));
 			break;
 		default:
 			*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
