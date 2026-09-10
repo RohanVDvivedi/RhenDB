@@ -179,8 +179,14 @@ enum rhendb_expr_eval_error
 // intitialize this per instance for evaluation context of one stream of tuples of 1 type
 sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, transaction* tx);
 
+// run infer_type_sql_expr() on `expr`; return 1 if inference produced no error. the inferred type object
+// is deleted internally, so the caller may not need to free it.
+// --- must be called on every expression that any rhendb operator works with, before doing anything else ---
+int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
+
 // must be called, only after you infer the output_type of the corresponding expressions that you want to process with this context
 // returns true only if any of the var_cache points to an extended type
+// it is used to evaluate, how many buffers an rhendb_expr_eval_context will need to evaluate an expression, if this function returns 1, reserve 2 buffers (required 2 for comparison)
 int has_reference_to_persistent_extended_type_from_expression(const rhendb_expr_eval_context* context_p);
 
 // frees shallow copied input_tuple_defs and input_tuples, and the pointer itself, and everything else held by the context_p, including the expr_value-s in free list, and the folded_expressions[i]->user_meta_value
@@ -201,10 +207,6 @@ void set_input_tuples_in_context_for_rhendb_v(sql_expr_eval_context* ec_p, uint3
 //   returns 1 if the expression evaluates to TRUE, 0 otherwise (FALSE, or UNKNOWN/NULL).
 //   on an evaluation or bool-conversion error, *error_code is set non-zero and 0 is returned.
 int select_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
-
-// run infer_type_sql_expr() on `expr`; return 1 if inference produced no error. the inferred type object
-// is deleted internally, so the caller may not need to free it.
-int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
 
 // ===================================================================================================
 // PROJECTION
@@ -233,10 +235,6 @@ struct projected_value
 	// expr_value). NULL when the datum is self-contained (a native scalar) or borrowed from a live tuple.
 	void* buffer_to_free;
 };
-
-// run infer_type_sql_expr() on `expr`; return 1 if inference produced no error. the inferred type object
-// is deleted internally, so the caller may not need to free it.
-int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code);
 
 // infer the result kind of `expr` and describe how it would be PROJECTED:
 //   - native scalar (bit-field / uint / int / large uint / large int / float / double) -> the matching default type_info.
