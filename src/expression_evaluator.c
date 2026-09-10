@@ -1003,22 +1003,22 @@ static void* do_bitlogic(void* d1, void* d2, bit_op op, const sql_expr_eval_cont
 	expr_value* b = d2;
 	expr_type ta = a->type_info.type, tb = b->type_info.type;
 
-	if(is_tuple_form(a) || is_tuple_form(b) || !et_is_int(ta) || !et_is_int(tb))
+	if(!et_is_native_integer(ta) || !et_is_native_integer(tb))
 	{
 		*error_code = RHENDB_EE_NON_INTEGER_OPERAND;
 		return NULL;
 	}
 
 	expr_type rt = num_result(ta, tb);
-	if(et_is_large(rt))
+	if(et_is_native_large_integer(rt))
 	{
 		uint256 x = to_u256(a), y = to_u256(b), r;
 		r = (op == B_AND) ? bitwise_and_uint256(x, y) : ((op == B_OR) ? bitwise_or_uint256(x, y) : bitwise_xor_uint256(x, y));
 		expr_value* v = new_val(rt, ec_p);
 		if(rt == RHENDB_EXPR_LARGE_INT)
-			v->value.large_int_value = (int256){r};
+			v->value = (datum){.large_int_value = (int256){r}};
 		else
-			v->value.large_uint_value = r;
+			v->value = (datum){.large_uint_value = r};
 		return v;
 	}
 
@@ -1026,9 +1026,9 @@ static void* do_bitlogic(void* d1, void* d2, bit_op op, const sql_expr_eval_cont
 	r = (op == B_AND) ? (x & y) : ((op == B_OR) ? (x | y) : (x ^ y));
 	expr_value* v = new_val(rt, ec_p);
 	if(rt == RHENDB_EXPR_INT)
-		v->value.int_value = (int64_t)r;
+		v->value = (datum){.int_value = (int64_t)r};
 	else
-		v->value.uint_value = r;
+		v->value = (datum){.uint_value = r};
 	return v;
 }
 static void* rhendb_bit_and(void* d1, void* d2, const sql_expr_eval_context* ec_p, int* e){ return do_bitlogic(d1,d2,B_AND,ec_p,e); }
@@ -1038,7 +1038,7 @@ static void* rhendb_bit_not(void* data, const sql_expr_eval_context* ec_p, int* 
 {
 	expr_value* a = data;
 	expr_type t = a->type_info.type;
-	if(is_tuple_form(a) || !et_is_int(t))
+	if(!et_is_native_integer(t))
 	{
 		*error_code = RHENDB_EE_NON_INTEGER_OPERAND;
 		return NULL;
@@ -1048,16 +1048,16 @@ static void* rhendb_bit_not(void* data, const sql_expr_eval_context* ec_p, int* 
 	switch(t)
 	{
 		case RHENDB_EXPR_LARGE_UINT:
-			v->value.large_uint_value = bitwise_not_uint256(a->value.large_uint_value);
+			v->value = (datum){.large_uint_value = bitwise_not_uint256(a->value.large_uint_value)};
 			break;
 		case RHENDB_EXPR_LARGE_INT:
-			v->value.large_int_value = (int256){ bitwise_not_uint256(a->value.large_int_value.raw_uint_value) };
+			v->value = (datum){.large_int_value = (int256){ bitwise_not_uint256(a->value.large_int_value.raw_uint_value) }};
 			break;
 		case RHENDB_EXPR_INT:
-			v->value.int_value = ~a->value.int_value;
+			v->value = (datum){.int_value = ~a->value.int_value};
 			break;
 		default:
-			v->value.uint_value = ~to_u64(a);
+			v->value = (datum){.uint_value = ~to_u64(a)};
 			break;
 	}
 	return v;
