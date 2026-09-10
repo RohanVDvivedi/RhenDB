@@ -1099,90 +1099,94 @@ static void* rhendb_right_shift(void* d, void* s, const sql_expr_eval_context* e
 
 static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	(void)ec_p;
-
 	/* parse every byte of the literal (no truncation); a small stack buffer for the common case */
 	uint32_t n = get_char_count_dstring(data_bytes);
-	char stackbuf[64];
-	char* buf = (n + 1 <= sizeof(stackbuf)) ? stackbuf : malloc(n + 1);
+	char stackbuf[128];
+	char* buf = ((n + 1) <= sizeof(stackbuf)) ? stackbuf : malloc(n + 1);
 	if(buf == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
 	memory_move(buf, get_byte_array_dstring(data_bytes), n);
-	buf[n] = 0;
+	buf[n] = '\0';
 
 	expr_value* v = NULL;
 
-	if(strpbrk(buf, "eE"))   /* an exponent -> approximate FLOAT (SQL approximate-numeric literal) */
-	{
-		v = new_val(RHENDB_EXPR_DOUBLE, ec_p);
-		v->value.double_value = strtod(buf, NULL);
-	}
-	else if(strchr(buf, '.'))   /* a fraction, no exponent -> exact NUMERIC (SQL exact-numeric literal) */
-	{
-		mpd_t d;
-		if(!ee_mpd_new(&d)){ if(buf != stackbuf) free(buf); *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-		mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
-		mpd_qset_string(&d, buf, &ctx, &st);
-		v = new_val(RHENDB_EXPR_NUMERIC, ec_p); v->numeric_value = d;
-	}
-	else   /* an integer literal : pick the smallest type it fits into */
-	{
-		int negative = (buf[0] == '-');
-		char* end;
+	int negative = (buf[0] == '-');
+	char* end;
 
+	int done = 0;
+
+	if(!done && (strpbrk(buf, "eE") || strchr(buf, '.')))
+	{
+		done = 1;
+		v = new_val(RHENDB_EXPR_DOUBLE, ec_p);
+		v->type_info.dti_p = FLOAT_double_NULLABLE;
+		v->value = (datum){.double_value = strtod(buf, NULL)};
+	}
+
+	if(!done)
+	{
 		errno = 0;
 		long long sll = strtoll(buf, &end, 10);
-		if(errno == 0 && *end == 0)   /* fits a signed 64-bit int */
+		if(errno == 0 && *end == 0 && INT64_MIN <= sll && sll <= INT64_MAX)
 		{
+			done = 1;
 			v = new_val(RHENDB_EXPR_INT, ec_p);
-			v->value.int_value = (int64_t)sll;
+			v->type_info.dti_p = INT_NULLABLE[8];
+			v->value = (datum){.int_value = (int64_t)sll};
 		}
-		else
+	}
+
+	if(!done && !negative)
+	{
+		errno = 0;
+		unsigned long long ull = strtoull(buf, &end, 10);
+		if(errno == 0 && *end == 0 && ull <= UINT64_MAX)
 		{
-			int done = 0;
-			if(!negative)   /* non-negative : try an unsigned 64-bit int next */
+			done = 1;
+			v = new_val(RHENDB_EXPR_UINT, ec_p);
+			v->type_info.dti_p = UINT_NULLABLE[8];
+			v->value = (datum){.uint_value = (uint64_t)ull};
+		}
+	}
+
+	if(!done)
+	{
+		const char* p = buf + (negative ? 1 : 0);
+		uint32_t digits = 0;
+		while(p[digits] >= '0' && p[digits] <= '9') digits++;
+		if(digits >= 1 && digits <= 78 && p[digits] == '\0')   /* <= 78 digits should very likely fits 256 bits */
+		{
+			uint256 mag = get_uint256(0), ten = get_uint256(10);
+			for(uint32_t k = 0; k < digits; k++)
 			{
-				errno = 0;
-				unsigned long long ull = strtoull(buf, &end, 10);
-				if(errno == 0 && *end == 0)
-				{
-					v = new_val(RHENDB_EXPR_UINT, ec_p);
-					v->value.uint_value = (uint64_t)ull;
-					done = 1;
-				}
+				if(!is_zero_uint256(mul_uint256(&mag, mag, ten)))
+					goto EXIT_FROM_LARGE_INTEGERS;
+				if(add_uint256(&mag, mag, get_uint256((uint64_t)(p[k] - '0'))))
+					goto EXIT_FROM_LARGE_INTEGERS;
 			}
-			if(!done)   /* too big for 64 bits : accumulate the magnitude into a uint256 if it can fit */
+			if(negative && compare_uint256(mag, get_absolute_int256(get_min_int256())) <= 0) // mag has to be lesser than the absolute value of the most negative representable value
 			{
-				const char* p = buf + (negative ? 1 : 0);
-				uint32_t digits = 0;
-				while(p[digits] >= '0' && p[digits] <= '9') digits++;
-				if(digits >= 1 && digits <= 77 && p[digits] == 0)   /* <= 77 digits always fits 256 bits */
-				{
-					uint256 mag = get_uint256(0), ten = get_uint256(10);
-					for(uint32_t k = 0; k < digits; k++)
-					{
-						mul_uint256(&mag, mag, ten);
-						add_uint256(&mag, mag, get_uint256((uint64_t)(p[k] - '0')));
-					}
-					if(negative)
-					{
-						uint256 neg;
-						sub_uint256(&neg, get_uint256(0), mag);   /* two's complement : 0 - mag */
-						v = new_val(RHENDB_EXPR_LARGE_INT, ec_p);
-						v->value.large_int_value = (int256){ neg };
-					}
-					else
-					{
-						v = new_val(RHENDB_EXPR_LARGE_UINT, ec_p);
-						v->value.large_uint_value = mag;
-					}
-				}
-				else   /* more digits than a 256-bit integer can hold -> approximate double */
-				{
-					v = new_val(RHENDB_EXPR_DOUBLE, ec_p);
-					v->value.double_value = strtod(buf, NULL);
-				}
+				done = 1;
+				v = new_val(RHENDB_EXPR_LARGE_INT, ec_p);
+				v->type_info.dti_p = LARGE_INT_NULLABLE[32];
+				v->value = (datum){.large_int_value = get_2s_complement_int256((int256){mag})};
+			}
+			else
+			{
+				done = 1;
+				v = new_val(RHENDB_EXPR_LARGE_UINT, ec_p);
+				v->type_info.dti_p = LARGE_UINT_NULLABLE[32];
+				v->value = (datum){.large_uint_value = mag};
 			}
 		}
+		EXIT_FROM_LARGE_INTEGERS:;
+	}
+
+	if(!done)
+	{
+		done = 1;
+		v = new_val(RHENDB_EXPR_DOUBLE, ec_p);
+		v->type_info.dti_p = FLOAT_double_NULLABLE;
+		v->value = (datum){.double_value = strtod(buf, NULL)};
 	}
 
 	if(buf != stackbuf)
@@ -1193,9 +1197,7 @@ static void* rhendb_create_string(const dstring* data_bytes, const sql_expr_eval
 {
 	/* point straight at the bytes owned by the parse tree; no allocation, buffer stays NULL */
 	expr_value* v = new_val(RHENDB_EXPR_STRING, ec_p);
-	v->value.string_value = get_byte_array_dstring(data_bytes);
-	v->value.string_size = get_char_count_dstring(data_bytes);
-	v->buffer = NULL;
+	v->string_value = get_dstring_pointing_to_dstring(data_bytes);
 	return v;
 }
 
