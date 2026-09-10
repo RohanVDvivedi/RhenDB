@@ -1212,47 +1212,31 @@ static void rhendb_concat(void** data1_p, void* data2, const sql_expr_eval_conte
 	int b_ok = (b->type_info.type == RHENDB_EXPR_STRING || b->type_info.type == RHENDB_EXPR_BINARY);
 	if(!a_ok || !b_ok){ *error_code = RHENDB_EE_NON_STRING_OPERAND; return; }
 
-	/* concat modifies the first operand in place.  If a already owns a big enough buffer, b's bytes
-	 * are appended with no allocation; if a owns a too-small buffer it is grown (with 0.5x spare);
-	 * if a is only borrowing its bytes (buffer == NULL) a fresh buffer is allocated and a is cloned. */
-	uint32_t na = a->value.string_or_binary_size, nb = b->value.string_or_binary_size;
-	/* the result size is held in a uint32_t : refuse to build a string whose length would not fit */
-	if(will_unsigned_sum_overflow(uint32_t, na, nb)){ *error_code = RHENDB_EE_STRING_TOO_LONG; return; }
-	uint32_t need = na + nb;
-	const char* a_bytes = a->value.string_or_binary_value;
-	const char* b_bytes = b->value.string_or_binary_value;
 
-	if(a->buffer != NULL && a->capacity >= need)
+	if(get_dstring_type(&(a->string_value)) == POINT_DSTR)
 	{
-		/* a owns a large enough buffer : append b's bytes in place */
-		memory_move((char*)a->buffer + na, b_bytes, nb);
-	}
-	else if(a->buffer != NULL)
-	{
-		/* a owns a buffer but it is too small : grow it (keeping a's bytes) with 0.5x spare */
-		uint64_t cap = min((((uint64_t)need) + (need / 2)), UINT32_MAX);
-		char* nbuf = realloc(a->buffer, cap ? cap : 1);
-		if(nbuf == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return; }
-		memory_move(nbuf + na, b_bytes, nb);
-		a->buffer = nbuf;
-		a->capacity = cap;
-	}
-	else
-	{
-		/* a is borrowing its bytes (buffer == NULL) : allocate with 0.5x spare, clone a then append b */
-		uint64_t cap = min((((uint64_t)need) + (need / 2)), UINT32_MAX);
-		char* nbuf = malloc(cap ? cap : 1);
-		if(nbuf == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return; }
-		memory_move(nbuf, a_bytes, na);
-		memory_move(nbuf + na, b_bytes, nb);
-		a->buffer = nbuf;
-		a->capacity = cap;
+		dstring clone;
+		if(!init_copy_dstring(&clone, &(a->string_value)))
+		{
+			*error_code = RHENDB_EE_OUT_OF_MEMORY;
+			return;
+		}
+		a->string_value = clone;
 	}
 
-	a->value.string_or_binary_value = a->buffer;
-	a->value.string_or_binary_size = need;
-	a->type_info = (expr_type_info){ .type = RHENDB_EXPR_STRING, .dti_p = NULL, .should_free_dti_p = 0 };
-	/* *data1_p is unchanged: a is modified in place */
+	if(!concatenate_dstring(&(a->string_value), &(b->string_value)))
+	{
+		*error_code = RHENDB_EE_OUT_OF_MEMORY;
+		return;
+	}
+
+	if(get_char_count_dstring(&(a->string_value)) > UINT32_MAX)
+	{
+		*error_code = RHENDB_EE_STRING_TOO_LONG;
+		return;
+	}
+
+	return;
 }
 static int like_match(const char* s, uint32_t sl, const char* p, uint32_t pl)
 {
@@ -1276,7 +1260,7 @@ static void* rhendb_like(void* str_p, void* pattern_p, const sql_expr_eval_conte
 		*error_code = RHENDB_EE_NON_STRING_OPERAND;
 		return NULL;
 	}
-	return like_match(s->value.string_value, s->value.string_size, p->value.string_value, p->value.string_size) ? ec_p->true_bool : ec_p->false_bool;
+	return like_match(get_byte_array_dstring(&(s->string_value)), get_char_count_dstring(&(s->string_value)), get_byte_array_dstring(&(p->string_value)), get_char_count_dstring(&(p->string_value))) ? ec_p->true_bool : ec_p->false_bool;
 }
 
 /* ------------------------------ cast ------------------------------ */
