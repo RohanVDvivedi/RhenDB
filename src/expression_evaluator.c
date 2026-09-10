@@ -898,7 +898,7 @@ static void* rhendb_get_bool(void* data, const sql_expr_eval_context* ec_p, int*
 
 /* ------------------------------ compare ------------------------------ */
 
-static const data_type_info* resolve_dti(const expr_value* v)
+static const data_type_info* resolve_dti(const expr_value* v, data_type_info* scratch)
 {
 	/* a tuple-form value is compared through its own type. a native scalar always lives in memory at full
 	 * width (uint_value / double_value / ...) no matter how narrow its DECLARED width is, so it must be
@@ -909,50 +909,41 @@ static const data_type_info* resolve_dti(const expr_value* v)
 		case RHENDB_EXPR_BIT_FIELD: return BIT_FIELD_NULLABLE[64];
 		case RHENDB_EXPR_UINT: return UINT_NULLABLE[8];
 		case RHENDB_EXPR_INT: return INT_NULLABLE[8];
-		/* each float kind is compared through the layout it actually occupies */
 		case RHENDB_EXPR_FLOAT: return FLOAT_float_NULLABLE;
 		case RHENDB_EXPR_DOUBLE: return FLOAT_double_NULLABLE;
 		case RHENDB_EXPR_LARGE_UINT: return LARGE_UINT_NULLABLE[32];
 		case RHENDB_EXPR_LARGE_INT: return LARGE_INT_NULLABLE[32];
-		default: return NULL;   /* string/binary handled by a dedicated byte compare */
+		case RHENDB_EXPR_STRING:
+		{
+			(*scratch) = get_variable_length_string_type("s", get_char_count_dstring(&(v->string_value)) + 8); // max_size is not important here
+			finalize_type_info(scratch);
+			return scratch;
+		}
+		case RHENDB_EXPR_BINARY:
+		{
+			(*scratch) = get_variable_length_binary_type("b", get_char_count_dstring(&(v->binary_value)) + 8); // max_size is not important here
+			finalize_type_info(scratch);
+			return scratch;
+		}
+		default: return NULL; // jsonb can not be compared and numeric needs dedicated case handling
 	}
-}
-
-/* Wrap an in-memory string/binary operand in a plain variable-length dti so it can be fed to
- * compare_datum_rhendb (whose text/blob path reads every operand through a binary_read_iterator).
- * This lets us compare an on-disk extended text/blob against an in-memory one WITHOUT materializing
- * the extended side.  The scratch dti is caller-owned and lives only for the compare call. */
-static const data_type_info* plain_sb_dti(const expr_value* v, data_type_info* scratch)
-{
-	uint32_t n = v->value.string_or_binary_size;
-	if(v->type_info.type == RHENDB_EXPR_STRING)
-		*scratch = get_variable_length_string_type("s", n + 8);
-	else
-		*scratch = get_variable_length_binary_type("b", n + 8);
-	finalize_type_info(scratch);
-	return scratch;
 }
 
 static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* a = data1; expr_value* b = data2;
 
+	// scratch data_type_infos
+	data_type_info scratch1;
+	data_type_info scratch2;
+
 	/* NUMERIC comparison, on the mpd_t: NaN == NaN and NaN > everything; otherwise mpd_qcmp
 	 * (which already sorts -inf < finite < +inf). */
 	if(is_numeric_operand(a) || is_numeric_operand(b))
 	{
-		/* both operands are on-disk extended numerics: stream-compare through the tuplestore
-		 * (sign/exponent/inline first, overflow digits only if needed) with no mpd materialization.
-		 * We fall back to materializing both to mpd_t only when at least one side is already an
-		 * in-memory numeric/number. */
 		if(is_tuple_numeric(a) && is_tuple_numeric(b))
 		{
-			/* Both operands carry numeric type infos, and can_compare_datum_rhendb() returns 1 for ANY
-			 * pair of numerics -- its "both numeric" branch is unconditional. The guard is therefore dead
-			 * on this path, so we skip it and compare directly, saving the call (and its type-name prefix
-			 * checks) on every numeric-vs-numeric comparison. See can_compare_datum_rhendb() in
-			 * function_compare.c: is_numeric_type_info(a) && is_numeric_type_info(b) => 1. */
-			return compare_datum_rhendb(&a->value, a->type_info.dti_p, &b->value, b->type_info.dti_p, tx_from_ctx(ec_p));
+			return compare_datum_rhendb(&a->value, resolve_dti(a, &scratch1), &b->value, resolve_dti(b, &scratch2), tx_from_ctx(ec_p));
 		}
 
 		mpd_t sa, sb; int oa = 0, ob = 0;
@@ -967,7 +958,7 @@ static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context*
 		{
 			uint32_t st = 0;
 			int c = mpd_qcmp(pa, pb, &st);
-			r = (c > 0) ? 1 : (c < 0) ? -1 : 0;
+			r = (c > 0) ? 1 : ((c < 0) ? -1 : 0);
 		}
 		if(oa) mpd_del(&sa);
 		if(ob) mpd_del(&sb);
@@ -978,47 +969,23 @@ static int rhendb_compare(void* data1, void* data2, const sql_expr_eval_context*
 	int a_sb = is_sb_operand(a), b_sb = is_sb_operand(b);
 	if(a_sb && b_sb){
 		transaction* tx = tx_from_ctx(ec_p);
-		int a_ext = is_tuple_form(a), b_ext = is_tuple_form(b);
-		if(tx != NULL && (a_ext || b_ext))
-		{
-			/* at least one on-disk extended text/blob: stream-compare through read-iterators,
-			 * never materializing the extended side.  An in-memory operand is wrapped in a plain
-			 * variable-length dti; compare_datum_rhendb reads both via binary_read_iterators. */
-			data_type_info scratch;
-			const data_type_info* da = a_ext ? a->type_info.dti_p : plain_sb_dti(a, &scratch);
-			const data_type_info* db = b_ext ? b->type_info.dti_p : plain_sb_dti(b, &scratch);
-			/* da and db are STRING / BINARY / extended-text / extended-blob type infos, and
-			 * can_compare_datum_rhendb() returns 1 for ANY such pair -- its "both text or blob" branch is
-			 * unconditional (is_text_type_info(STRING) == is_blob_type_info(BINARY) == 1). The guard is
-			 * dead on this path, so we skip it and compare directly, saving the call on every text/blob
-			 * comparison that touches an extended operand. */
-			return compare_datum_rhendb(&a->value, da, &b->value, db, tx);
-		}
-		/* both already in memory (or no engine available): plain byte compare, no engine needed */
-		if(ee_materialize_tb(a, ec_p, error_code)) return 0;
-		if(ee_materialize_tb(b, ec_p, error_code)) return 0;
-		uint32_t na = a->value.string_or_binary_size, nb = b->value.string_or_binary_size;
-		uint32_t n = na < nb ? na : nb;
-		int c = n ? memcmp(a->value.string_or_binary_value, b->value.string_or_binary_value, n) : 0;
-		if(c)
-			return c > 0 ? 1 : -1;
-		return (na < nb) ? -1 : ((na > nb) ? 1 : 0);
-	}
-	if(a_sb || b_sb)
-	{
-		*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
-		return 0;
-	}   /* string vs number */
 
-	/* numbers (native or tuple-form primitive): compare_datum_rhendb needs no engine for primitives */
-	const data_type_info* d1 = resolve_dti(a);
-	const data_type_info* d2 = resolve_dti(b);
-	if(d1 == NULL || d2 == NULL || !can_compare_datum_rhendb(d1, d2))
-	{
-		*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
-		return 0;
+		const data_type_info* dti_a = resolve_dti(a, &scratch1);
+		const data_type_info* dti_b = resolve_dti(b, &scratch2);
+
+		datum d_a = ((a->type_info.type == RHENDB_EXPR_STRING) || (a->type_info.type == RHENDB_EXPR_BINARY)) ?
+					(datum){.string_or_binary_value = get_byte_array_dstring(&(a->string_value)), .string_or_binary_size = get_char_count_dstring(&(a->string_value))} :
+					a->value;
+		datum d_b = ((b->type_info.type == RHENDB_EXPR_STRING) || (b->type_info.type == RHENDB_EXPR_BINARY)) ?
+					(datum){.string_or_binary_value = get_byte_array_dstring(&(b->string_value)), .string_or_binary_size = get_char_count_dstring(&(b->string_value))} :
+					b->value;
+
+		return compare_datum_rhendb(&d_a, dti_a, &d_b, dti_b, tx);
 	}
-	return compare_datum_rhendb(&a->value, d1, &b->value, d2, tx_from_ctx(ec_p)); // NAN ordering on floats already handled here
+
+	const data_type_info* dti_a = resolve_dti(a, &scratch1);
+	const data_type_info* dti_b = resolve_dti(b, &scratch2);
+	return compare_datum_rhendb(&a->value, dti_a, &b->value, dti_b, tx_from_ctx(ec_p)); // NAN ordering on floats already handled here
 }
 
 /* ------------------------------ bitwise / shifts ------------------------------ */
