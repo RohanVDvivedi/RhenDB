@@ -881,10 +881,10 @@ static void* rhendb_get_bool(void* data, const sql_expr_eval_context* ec_p, int*
 			truthy = !is_zero_int256(v->value.large_int_value);
 			break;
 		case RHENDB_EXPR_STRING:
-			truthy = (v->value.string_size != 0);
+			truthy = (get_char_count_dstring(&(v->string_value)) != 0);
 			break;
 		case RHENDB_EXPR_BINARY:
-			truthy = (v->value.binary_size != 0);
+			truthy = (get_char_count_dstring(&(v->binary_value)) != 0);
 			break;
 		case RHENDB_EXPR_NUMERIC:
 			truthy = !mpd_iszero(&(v->numeric_value));
