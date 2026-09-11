@@ -1609,9 +1609,11 @@ static int same_array_containee(const data_type_info* d1, const data_type_info* 
 static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_type a = effective_type((expr_type_info*)typ1), b = effective_type((expr_type_info*)typ2);
-	if(et_is_num_or_numeric(a) && et_is_num_or_numeric(b)) return 1;   /* numerics compare with any number */
+	if(et_is_native_number_or_numeric(a) && et_is_native_number_or_numeric(b)) return 1;   /* numeric and number compare with any numeric and number */
 	if(a==RHENDB_EXPR_STRING && b==RHENDB_EXPR_STRING) return 1;
 	if(a==RHENDB_EXPR_BINARY && b==RHENDB_EXPR_BINARY) return 1;
+	if(a==RHENDB_EXPR_NUMERIC && b==RHENDB_EXPR_NUMERIC) return 1;
+	if(a==RHENDB_EXPR_JSONB || b==RHENDB_EXPR_JSONB) return 1;
 	return 0;
 }
 static int rhendb_can_cast_types(const void* typ_from, const void* typ_to, const sql_expr_eval_context* ec_p, int* error_code)
@@ -1620,8 +1622,8 @@ static int rhendb_can_cast_types(const void* typ_from, const void* typ_to, const
 	/* aligned with rhendb_cast : any scalar among {numbers, NUMERIC, STRING, BINARY} casts to any other.
 	 * numbers <-> numbers/NUMERIC, string/binary -> number (parsed), number/NUMERIC -> string (decimal text),
 	 * and string/binary -> string/binary (byte reinterpretation). */
-	int from_ok = et_is_num_or_numeric(from) || from == RHENDB_EXPR_STRING || from == RHENDB_EXPR_BINARY;
-	int to_ok   = et_is_num_or_numeric(to)   || to   == RHENDB_EXPR_STRING || to   == RHENDB_EXPR_BINARY;
+	int from_ok = et_is_native_number_or_numeric(from) || from == RHENDB_EXPR_STRING || from == RHENDB_EXPR_BINARY;
+	int to_ok   = et_is_native_number_or_numeric(to)   || to   == RHENDB_EXPR_STRING || to   == RHENDB_EXPR_BINARY;
 	return from_ok && to_ok;
 }
 static void* rhendb_get_return_type_for_op_exec_callback(void* op_exec_func, void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
@@ -1631,24 +1633,24 @@ static void* rhendb_get_return_type_for_op_exec_callback(void* op_exec_func, voi
 	const expr_type_info* ta = (const expr_type_info*)typ1;
 	const expr_type_info* tb = (const expr_type_info*)typ2;
 	if(op_exec_func==(void*)ec_p->add||op_exec_func==(void*)ec_p->sub||op_exec_func==(void*)ec_p->mul||op_exec_func==(void*)ec_p->div||op_exec_func==(void*)ec_p->mod){
-		if(!et_is_num_or_numeric(a) || !et_is_num_or_numeric(b)){ *error_code = RHENDB_EE_NON_NUMERIC_OPERAND; return NULL; }
+		if(!et_is_native_number_or_numeric(a) || !et_is_native_number_or_numeric(b)){ *error_code = RHENDB_EE_NON_NUMERIC_OPERAND; return NULL; }
 		return num_result_sized(ta, tb);
 	}
 	if(op_exec_func==(void*)ec_p->bit_and||op_exec_func==(void*)ec_p->bit_or||op_exec_func==(void*)ec_p->bit_xor){
-		if(!et_is_int(a) || !et_is_int(b)){ *error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL; }
+		if(!et_is_native_integer(a) || !et_is_native_integer(b)){ *error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL; }
 		return num_result_sized(ta, tb);
 	}
 	if(op_exec_func==(void*)ec_p->left_shift||op_exec_func==(void*)ec_p->right_shift){
 		/* a shift keeps the LEFT operand's kind and width : shifting by a wider count cannot widen it */
-		if(!et_is_int(a) || !et_is_int(b)){ *error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL; }
-		return new_type_borrowing(a, ta ? ta->dti_p : NULL);
+		if(!et_is_native_integer(a) || !et_is_native_integer(b)){ *error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL; }
+		return new_type(a, ta->dti_p);
 	}
 	if(op_exec_func==(void*)ec_p->bit_not){
-		if(!et_is_int(a)){ *error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL; }
-		return new_type_borrowing(a, ta ? ta->dti_p : NULL);
+		if(!et_is_native_integer(a)){ *error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL; }
+		return new_type(a, ta->dti_p);
 	}
-	if(op_exec_func==(void*)ec_p->concat) return new_type(RHENDB_EXPR_STRING);
-	if(op_exec_func==(void*)ec_p->like)   return new_type(RHENDB_EXPR_BIT_FIELD);
+	if(op_exec_func==(void*)ec_p->concat) return new_type(RHENDB_EXPR_STRING, NULL);
+	if(op_exec_func==(void*)ec_p->like)   return new_type_sized(RHENDB_EXPR_BIT_FIELD, 1);
 	*error_code = RHENDB_EE_UNSUPPORTED_TYPE; return NULL;
 }
 static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
@@ -1656,57 +1658,27 @@ static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_cont
 	(void)ec_p;
 	expr_type_info* t1 = typ1; expr_type_info* t2 = typ2;
 
-	/* two tuple-form types (plain tuples, or unmaterialized extended numeric/text/blob) unify only
-	 * if they are the same kind/structure -- not necessarily the same pointer -- and stay tuple form. */
-	if(t1->type == RHENDB_EXPR_TUPLE && t2->type == RHENDB_EXPR_TUPLE)
+	if((t1->type == RHENDB_EXPR_TUPLE || t1->type == RHENDB_EXPR_ARRAY) && (t2->type == RHENDB_EXPR_TUPLE || t2->type == RHENDB_EXPR_ARRAY))
 	{
-		/* identical extended types (or identical plain tuples) stay in tuple form -- the reader will
-		 * pull them straight from their engine without a full materialization. */
-		if(t1->dti_p == t2->dti_p || same_tuple_kind(t1->dti_p, t2->dti_p))
-		{
-			expr_type_info* r = new_type(RHENDB_EXPR_TUPLE);
-			r->dti_p = t1->dti_p;   /* borrowed */
-			return r;
-		}
-		/* two DIFFERENT extended text/blob/numeric types (different engine, sub_type, max_size, name):
-		 * fall through to reconcile their materialized scalar kinds below (RHENDB_EXPR_STRING/BINARY/NUMERIC),
-		 * so the expression result is a materialized value. only genuinely unrelated plain tuples error. */
-		if(!(is_extended_kind(t1->dti_p) || is_extended_kind(t2->dti_p)))
-		{
-			*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
-			return NULL;
-		}
-	}
-	if(t1->type == RHENDB_EXPR_ARRAY && t2->type == RHENDB_EXPR_ARRAY)
-	{
-		/* identical CONTAINEES, not identical arrays */
-		if(t1->dti_p == t2->dti_p || same_array_containee(t1->dti_p, t2->dti_p))
-		{
-			expr_type_info* r = new_type(RHENDB_EXPR_ARRAY);
-			r->dti_p = t1->dti_p;   /* borrowed */
-			return r;
-		}
-		*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
-		return NULL;
+		if(are_identical_type_info(t1->dti_p, t2->dti_p))
+			return new_type(t1->type, t1->dti_p);
 	}
 
 	/* otherwise reconcile the effective scalar types (an unmaterialized extended value acts as its scalar) */
 	expr_type a = effective_type(t1), b = effective_type(t2);
 	if(a == b)
 	{
-		/* same kind : keep the wider of the two declared widths rather than jumping to the maximum */
-		if(et_is_num(a) && !et_is_float(a))
+		if(et_is_native_integer(a))
 			return new_type_sized(a, combined_width_bytes(t1, t2));
-		if(et_is_float(a))
+		if(et_is_native_float(a))
 			return new_type_sized(a, 0);
-		return new_type(a);
 	}
-	if(et_is_num_or_numeric(a) && et_is_num_or_numeric(b))
+	if(et_is_native_number_or_numeric(a) && et_is_native_number_or_numeric(b))
 		return num_result_sized(t1, t2);
 	*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
 	return NULL;
 }
-
+// REFACTORING CHECKPOINT
 /* ------------------------------ variables (column references) ------------------------------ */
 
 /* "a.b.c" is resolved once against the schema and cached; the cache lives for the life of the
