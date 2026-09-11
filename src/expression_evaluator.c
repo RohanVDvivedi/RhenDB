@@ -1497,15 +1497,11 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 }
 
 /* ------------------------------ type inference ------------------------------ */
-// ---------------------------- REFACTORING CHECKPOINT
+
 static void* rhendb_get_type_for_data(void* data, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* v = data;
-	expr_type_info* ti = new_type(v->type_info.type);
-	/* forward the value's dti verbatim : containers need it, and native scalars carry their declared
-	 * width in it. it is always static or owned by an input tuple, so it is borrowed, never freed. */
-	ti->dti_p = v->type_info.dti_p;
-	ti->should_free_dti_p = 0;
+	expr_type_info* ti = new_type(v->type_info.type, v->type_info.dti_p);
 	return ti;
 }
 static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_eval_context* ec_p, int* error_code)
@@ -1514,25 +1510,18 @@ static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_e
 	{
 		case SQL_BOOL: return (void*)(&rhendb_bool_type);
 
-		/* the integer widths are part of the SQL type, and native types now carry their declared width,
-		 * so give each its own rather than collapsing all three onto a full-width RHENDB_EXPR_INT. a CAST to
-		 * SMALLINT then really does produce a 2-byte result, and a projection of it stores 2 bytes. */
 		case SQL_SMALLINT: return new_type_sized(RHENDB_EXPR_INT, 2);
 
-		/* INT(bytes [, unsigned]) : spec[0] is the number of bytes (a regular INT / UINT, so it must be
-		 * 1..8), and spec[1] == 1 makes it unsigned while 0 or absent keeps it signed. With no spec it is the
-		 * unchanged default -- a 4-byte signed INT. An out-of-range width or a signedness flag other than
-		 * 0/1 is rejected rather than silently clamped. */
 		case SQL_INT:
 		{
-			if(type->spec_size == 0)
+			if(type->spec_size == 0) // if no specs, return 4 byte signed integer
 				return new_type_sized(RHENDB_EXPR_INT, 4);
-			if(type->spec[0] < 1 || type->spec[0] > 8)
+			if(type->spec[0] < 1 || type->spec[0] > 8) // spec[0] is size in bytes
 			{
 				*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
 				return NULL;
 			}
-			if(type->spec_size >= 2 && type->spec[1] != 0 && type->spec[1] != 1)
+			if(type->spec_size >= 2 && type->spec[1] != 0 && type->spec[1] != 1) // spec[1] = whether is it unsigned or not, bydefault it is signed, i.e. default value is 0
 			{
 				*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
 				return NULL;
@@ -1541,15 +1530,11 @@ static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_e
 			return new_type_sized(is_unsigned ? RHENDB_EXPR_UINT : RHENDB_EXPR_INT, (uint32_t)type->spec[0]);
 		}
 
-		/* BIGINT : with no spec it is the unchanged default -- an 8-byte signed (regular) INT. With spec[0]
-		 * it becomes a LARGE_INT of spec[0] bytes, which must be 1..32; spec[1] == 1 makes it unsigned
-		 * (LARGE_UINT) while 0 or absent keeps it signed. An out-of-range width or a signedness flag other
-		 * than 0/1 is rejected rather than silently clamped. */
 		case SQL_BIGINT:
 		{
-			if(type->spec_size == 0)
+			if(type->spec_size == 0) // if no sepcs, return 8 byte signed integer
 				return new_type_sized(RHENDB_EXPR_INT, 8);
-			if(type->spec[0] < 1 || type->spec[0] > 32)
+			if(type->spec[0] < 1 || type->spec[0] > 32) // else return a large signed or unsigned integr like, we did for the cases above
 			{
 				*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
 				return NULL;
@@ -1566,17 +1551,21 @@ static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_e
 		/* BIT(n) : a collection of n bits. spec[0] carries n when the type was written with a length. */
 		case SQL_BIT:
 		{
-			uint32_t bits = 64;
-			if(type->spec_size > 0 && type->spec[0] > 0 && type->spec[0] <= 64)
-				bits = (uint32_t)(type->spec[0]);
-			return new_type_sized(RHENDB_EXPR_BIT_FIELD, bits);
+			if(type->spec_size == 0) // if no sepcs, return 1 bit data type
+				return new_type_sized(RHENDB_EXPR_BIT_FIELD, 1);
+			if(type->spec[0] < 1 || type->spec[0] > 64) // else spec[0] is tyhe number of bits it contains
+			{
+				*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
+				return NULL;
+			}
+			return new_type_sized(RHENDB_EXPR_BIT_FIELD, type->spec[0]);
 		}
 		/* REAL is the 4-byte approximate type; FLOAT and DOUBLE PRECISION are 8-byte, as in common SQL */
 		case SQL_REAL: return new_type_sized(RHENDB_EXPR_FLOAT, 0);
 		case SQL_FLOAT: case SQL_DOUBLE: return new_type_sized(RHENDB_EXPR_DOUBLE, 0);
-		case SQL_DECIMAL: case SQL_NUMERIC: return new_type(RHENDB_EXPR_NUMERIC);
-		case SQL_TEXT: case SQL_CHAR: case SQL_VARCHAR: case SQL_STRING: case SQL_CLOB: return new_type(RHENDB_EXPR_STRING);
-		case SQL_BINARY: case SQL_BLOB: return new_type(RHENDB_EXPR_BINARY);
+		case SQL_DECIMAL: case SQL_NUMERIC: return new_type(RHENDB_EXPR_NUMERIC, NULL);
+		case SQL_TEXT: case SQL_CHAR: case SQL_VARCHAR: case SQL_STRING: case SQL_CLOB: return new_type(RHENDB_EXPR_STRING, NULL);
+		case SQL_BINARY: case SQL_BLOB: return new_type(RHENDB_EXPR_BINARY, NULL);
 		default: *error_code = RHENDB_EE_UNSUPPORTED_TYPE; return NULL;
 	}
 }
