@@ -1650,7 +1650,7 @@ static void* rhendb_get_return_type_for_op_exec_callback(void* op_exec_func, voi
 		return new_type(a, ta->dti_p);
 	}
 	if(op_exec_func==(void*)ec_p->concat) return new_type(RHENDB_EXPR_STRING, NULL);
-	if(op_exec_func==(void*)ec_p->like)   return new_type_sized(RHENDB_EXPR_BIT_FIELD, 1);
+	if(op_exec_func==(void*)ec_p->like)   return &rhendb_bool_type;
 	*error_code = RHENDB_EE_UNSUPPORTED_TYPE; return NULL;
 }
 static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
