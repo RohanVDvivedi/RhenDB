@@ -252,10 +252,10 @@ static int et_is_native_number(expr_type t)
 {
 	return et_is_native_integer(t) || et_is_native_float(t);
 }
-static int et_is_numeric(expr_type t)
+/*static int et_is_numeric(expr_type t)
 {
 	return t == RHENDB_EXPR_NUMERIC;
-}
+}*/
 static int et_is_native_number_or_numeric(expr_type t)
 {
 	return et_is_native_number(t) || t == RHENDB_EXPR_NUMERIC;
@@ -484,14 +484,6 @@ static int256 to_i256(const expr_value* v)
 static transaction* tx_from_ctx(const sql_expr_eval_context* ec_p)
 {
 	return ((rhendb_expr_eval_context*)(ec_p->context_p))->tx;
-}
-static rage_engine* engine_and_callback_from_ctx(const sql_expr_eval_context* ec_p, const data_type_info* dti,
-	extension_reader_iterator_callback* cb_storage, extension_reader_iterator_callback** callback_out)
-{
-	transaction* tx = tx_from_ctx(ec_p);
-	rage_engine* eng = NULL;
-	(*callback_out) = get_callback_and_engine_for_extended_type(tx, dti, &eng, cb_storage);
-	return eng;
 }
 
 /* initialize a fresh, empty, usable mpd_t whose struct is static (kept inline in an expr_value)
@@ -1570,42 +1562,6 @@ static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_e
 	}
 }
 
-/* an extended (blob-backed) text/blob/numeric type. these read through an engine; two of them are only
- * interchangeable-in-tuple-form when they are byte-for-byte the same type (same sub_type/name, same
- * max_size, same inline prefix, same containees) -- i.e. are_identical_type_info. */
-static int is_extended_kind(const data_type_info* d)
-{
-	return d != NULL && is_extended_type_info(d);
-}
-
-/* two tuple-form types are compatible if they are the same extended kind, or (for plain tuples)
- * the same declared type_name and container type -- pointer equality is not required. */
-static int same_tuple_kind(const data_type_info* d1, const data_type_info* d2)
-{
-	if(d1 == NULL || d2 == NULL) return d1 == d2;
-	/* extended text/blob/numeric stay in (unmaterialized) tuple form through a binary op ONLY when the
-	 * two sides are the exact same extended type. two extended types of the same scalar family but with
-	 * a different sub_type, max_size, prefix or table-derived name are NOT interchangeable: the caller
-	 * (rhendb_unify_types) then promotes them to the materialized scalar (RHENDB_EXPR_STRING/BINARY/NUMERIC).
-	 * this keeps all differing extended text types -- and a plain RHENDB_EXPR_STRING -- behaving identically. */
-	if(is_extended_kind(d1) || is_extended_kind(d2))
-		return is_extended_kind(d1) && is_extended_kind(d2) && are_identical_type_info(d1, d2);
-	/* plain (inline-container) tuples: same declared structure */
-	return are_identical_type_info(d1, d2);
-}
-
-/* two ARRAY types unify if their CONTAINEE types are identical -- the arrays themselves need NOT be
- * identical: they may differ in element_count, in being fixed or variable element counted, in max_size
- * or in their declared type_name. it is the element type that has to line up. */
-static int same_array_containee(const data_type_info* d1, const data_type_info* d2)
-{
-	if(d1 == NULL || d2 == NULL) return d1 == d2;
-	if(d1 == d2) return 1;
-	if(d1->containee == NULL || d2->containee == NULL) return d1->containee == d2->containee;
-	if(d1->containee == d2->containee) return 1;
-	return are_identical_type_info(d1->containee, d2->containee);
-}
-
 static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_type a = effective_type((expr_type_info*)typ1), b = effective_type((expr_type_info*)typ2);
@@ -1990,7 +1946,7 @@ static void* rhendb_get_variable(const dstring* identifier_bytes, const sql_expr
 	else if(dti->type == STRING || dti->type == BINARY)
 	{
 		v->type_info.type = expr_type_for_column(dti);
-		v->type_info.dti_p = (data_type_info*)dti;
+		v->type_info.dti_p = NULL;
 		v->string_value = get_dstring_pointing_to(d.string_or_binary_value, d.string_or_binary_size);
 	}
 	else
@@ -2383,8 +2339,9 @@ data_type_info* infer_projected_type_sql_expr_for_rhendb(sql_expression* expr, s
 	// if the src has dti_p, return that
 	if(src->dti_p != NULL) // passes for et_is_native_number(scalar) || RHENDB_EXPR_TUPLE || RHENDB_EXPR_ARRAY
 	{
+		data_type_info* res = src->dti_p;
 		delete_type(src, ec_p);
-		return src->dti_p;
+		return res;
 	}
 
 	expr_type scalar = effective_type(src);    // an unmaterialized extended large-type acts as its scalar
@@ -2414,13 +2371,12 @@ data_type_info* infer_projected_type_sql_expr_for_rhendb(sql_expression* expr, s
 // are simply `data`/`data_size` -- no read iterator, no source lock held. the write itself (fill the inline
 // prefix, then hash the finished prefix to pick + lock the right extension store and stream the remainder) is
 // the shared transaction extension storer, so it lives in exactly one place now.
-static int project_write_sb_to_volatile(transaction* tx, data_type_info* proj, const char* data, uint32_t data_size,
-	datum* out_datum, void** out_buf, int* error_code)
+static int project_write_sb_to_volatile(transaction* tx, data_type_info* proj, const char* data, uint32_t data_size, datum* out_datum, void** out_buf, int* error_code)
 {
 	void* buf = tx_temp_store_tbj(data, data_size, proj, tx);
 	if(buf == NULL) { *error_code = RHENDB_EE_MATERIALIZE_FAILED; return 0; }
 	*out_buf = buf;
-	*out_datum = (datum){ .is_NULL = 0, .tuple_value = buf };
+	*out_datum = (datum){ .tuple_value = buf };
 	return 1;
 }
 
@@ -2443,11 +2399,12 @@ static int project_write_numeric_to_volatile(transaction* tx, data_type_info* pr
 	return 1;
 }
 
-projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, projected_type_info pti, int* error_code)
+projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, data_type_info* pti, int* error_code)
 {
-	*error_code = 0;
-	projected_value res = (projected_value){ .value = (datum){ .is_NULL = 1 }, .buffer_to_free = NULL };
-	data_type_info* projection_type_info = pti.projected_type_info;
+	(*error_code) = 0;
+	projected_value res = (projected_value){ .value = (*NULL_DATUM), .buffer_to_free = NULL };
+
+	data_type_info* projection_type_info = pti;
 
 	// projection only ever produces a VOLATILE extended type; a persistent target is rejected outright.
 	if(has_extended_type_info(projection_type_info, PERSISTENT_EXT_SUB_TYPE))
@@ -2456,45 +2413,56 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 		return res;
 	}
 
-	transaction* tx = tx_from_ctx(ec_p);
-
-	// the target is the type inference handed us, so its kind already matches the result.
-	int to_ext_num  = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_numeric_type_info(projection_type_info);
-	int to_ext_text = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_text_type_info(projection_type_info);
-	int to_ext_blob = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_blob_type_info(projection_type_info);
-
 	expr_value* v = evaluate_sql_expr(expr, ec_p, error_code);
 	if(*error_code)
 		return res;
-	if(v == NULL)             // a NULL result with no error : the projected value is SQL NULL
+	if(v == NULL) // a NULL is NULL_DATUM
+	{
+		res.value = (*NULL_DATUM);
+		return res;
+	}
+	if(v == ec_p->unknown_bool) // unknown is also projected into NULL
 	{
 		res.value = (*NULL_DATUM);
 		return res;
 	}
 
-	// SQL three-valued logic: a boolean expression may evaluate to UNKNOWN, which the standard treats as
-	// the null value (SQL:2003 -- a boolean site holding UNKNOWN is null). the evaluator returns the static
-	// unknown_bool singleton for it, whose datum carries bit_field_value 0 with is_NULL clear, so without
-	// this it would project as plain FALSE. TRUE/FALSE fall through to the normal bit-field path.
-	if((void*)v == ec_p->unknown_bool)
-	{
-		res.value = (*NULL_DATUM);
-		delete_data(v, ec_p);     // no-op for the static singletons
-		return res;
-	}
-
-	// ---- the value already HAS the projected type : hand its datum straight back, nothing to rewrite ----
-	// (an already-projected volatile extended value, or any tuple/array, whose type we borrowed verbatim)
+	// same type_info for the projections, must pass for cases of et_is_native_number() || RHENDB_EXPR_TUPLE || RHENDB_EXPR_ARRAY
 	if(v->type_info.dti_p != NULL && are_identical_type_info(v->type_info.dti_p, projection_type_info))
 	{
 		res.value = v->value;
-		if(v->buffer != NULL)          // the value owned these bytes : take that ownership over
-		{
-			res.buffer_to_free = v->buffer;
-			v->buffer = NULL;
-			v->capacity = 0;
-		}
+		res.buffer_to_free = v->buffer_to_free;
+		v->buffer_to_free = NULL;
 		delete_data(v, ec_p);
+		return res;
+	}
+
+	transaction* tx = tx_from_ctx(ec_p);
+
+	// the target is the type inference handed to us, so its kind already matches the result.
+	int to_ext_text = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_text_type_info(projection_type_info);
+	int to_ext_blob = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_blob_type_info(projection_type_info);
+	int to_ext_num  = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_numeric_type_info(projection_type_info);
+
+	// ---- extended volatile text / blob target ----
+	if(to_ext_text || to_ext_blob)
+	{
+		if(ee_materialize_tb(v, ec_p, error_code) != RHENDB_EE_OK)
+		{
+			delete_data(v, ec_p);
+			return res;
+		}
+		if(!is_sb_operand(v))
+		{
+			delete_data(v, ec_p);
+			*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
+			return res;
+		}
+		datum od; void* ob = NULL;
+		int ok = project_write_sb_to_volatile(tx, projection_type_info, v->value.string_or_binary_value, v->value.string_or_binary_size, &od, &ob, error_code);
+		delete_data(v, ec_p);
+		if(!ok) return res;
+		res.value = od; res.buffer_to_free = ob;
 		return res;
 	}
 
@@ -2513,66 +2481,7 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 		return res;
 	}
 
-	// ---- extended volatile text / blob target ----
-	// materialize first (a no-op for an already-native string/binary; for an extended value this reads it
-	// through its own callback + engine), then the bytes are simply the datum's -- write those out.
-	if(to_ext_text || to_ext_blob)
-	{
-		if(ee_materialize_tb(v, ec_p, error_code) != RHENDB_EE_OK)
-		{
-			delete_data(v, ec_p);
-			return res;
-		}
-		if(!is_sb_operand(v))
-		{
-			delete_data(v, ec_p);
-			*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
-			return res;
-		}
-		datum od; void* ob = NULL;
-		int ok = project_write_sb_to_volatile(tx, projection_type_info,
-			v->value.string_or_binary_value, v->value.string_or_binary_size, &od, &ob, error_code);
-		delete_data(v, ec_p);
-		if(!ok) return res;
-		res.value = od; res.buffer_to_free = ob;
-		return res;
-	}
-
-	// ---- tuple / array target : an identical type was already returned as-is above, so anything reaching
-	// here is a genuine mismatch ----
-	if(projection_type_info != NULL && is_container_type_info(projection_type_info) && !is_extended_type_info(projection_type_info))
-	{
-		delete_data(v, ec_p);
-		*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
-		return res;
-	}
-
-	// ---- native scalar target : hand back the value directly, preserving its full width ----
-	if(projection_type_info != NULL && !is_extended_type_info(projection_type_info))
-	{
-		datum out = (datum){ .is_NULL = 0 };
-		switch(projection_type_info->type)
-		{
-			case FLOAT:
-				/* a 4-byte FLOAT target stores into float_value, an 8-byte one into double_value */
-				if(projection_type_info->size == sizeof(float)) out.float_value = (float)to_dbl(v);
-				else                                            out.double_value = to_dbl(v);
-				break;
-			case BIT_FIELD:
-			case UINT:       out.uint_value       = to_u64(v);  break;
-			case INT:        out.int_value        = to_i64(v);  break;
-			// large uint/int are 256-bit (32 bytes) : never truncate through a 64-bit path
-			case LARGE_UINT: out.large_uint_value = to_u256(v); break;
-			case LARGE_INT:  out.large_int_value  = to_i256(v); break;
-			default:
-				delete_data(v, ec_p);
-				*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
-				return res;
-		}
-		delete_data(v, ec_p);
-		res.value = out;
-		return res;
-	}
+	// **** JSONB materialization and storing into temp_ext_store -> support not yet implemented ****
 
 	delete_data(v, ec_p);
 	*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
