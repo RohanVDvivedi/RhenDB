@@ -1,5 +1,7 @@
 PICKED TASKS
 
+* test selection and projection operator
+
 
 default functions in expression evaluation
   * implement concat, length and substring -> works only on string and binary and jsonb array
