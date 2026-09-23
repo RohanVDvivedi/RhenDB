@@ -2022,7 +2022,7 @@ static void notify_removal_for_cache_entry(void* resource_p, const void* data_p)
 	deinit_dstring(&e->identifier);
 	free(e);
 }
-// REFACTORING CHECKPOINT
+
 /* ------------------------------ context ------------------------------ */
 
 
@@ -2052,22 +2052,27 @@ static expr_value* clone_cached_expr_value(const expr_value* src, const sql_expr
 	expr_value* v = new_val(src->type_info.type, ec_p);
 	if(v == NULL){ (*error_code) = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
 
-	// a straight shallow copy : the copy points at exactly the same bytes as the cached value
 	v->type_info = src->type_info;
-	v->type_info.should_free_dti_p = 0;   // the dti belongs to the cached value, never to the copy
 
-	if(src->type_info.type == RHENDB_EXPR_NUMERIC)
+	if(src->type_info.type == RHENDB_EXPR_STRING || src->type_info.type == RHENDB_EXPR_STRING)
 	{
-		// the mpd_t is copied as is, digits and all, and then its data is marked STATIC so that
-		// mpd_del() on this copy leaves the cached value's digits untouched. no deep copy needed.
+		v->string_value = get_dstring_pointing_to_dstring(&(src->string_value));
+	}
+	else if(src->type_info.type == RHENDB_EXPR_NUMERIC)
+	{
 		v->numeric_value = src->numeric_value;
 		mpd_set_static_data(&(v->numeric_value));
 	}
+	else if(src->type_info.type == RHENDB_EXPR_JSONB)
+	{
+		v->jsonb_value = clone_jsonb(src->jsonb_value);
+	}
 	else
+	{
 		v->value = src->value;
+	}
 
-	v->buffer = NULL;     // owns no bytes, so rhendb_delete_data() frees nothing
-	v->capacity = 0;
+	v->buffer_to_free = NULL;
 	return v;
 }
 
@@ -2083,7 +2088,7 @@ static int is_rhendb_sentinel_value(const void* d)
 	    || d == (const void*)(&rhendb_minus_one_number);
 }
 
-// function calls and sub queries are not handled by the constant folder yet
+// function calls and sub queries are not handled by the constant fold-er yet
 static void reject_unfoldable_expression(const sql_expression* expr, const char* which)
 {
 	if(expr->type == SQL_FUNCTION_CALL || expr->type == SQL_SUB_QUERY || expr->type == SQL_EXISTS)
@@ -2134,8 +2139,7 @@ static void* rhendb_post_eval(const sql_expr_eval_context* ec_p, const sql_expre
 
 	// still constant, and there is a real value to keep : the RESULT ITSELF becomes the cache, so
 	// nothing is copied here, and what we hand back to the caller is the cheap shallow copy
-	if(((*((int*)interim_context)) & RHENDB_EXPR_IS_CONSTANT) && !is_rhendb_sentinel_value(result)
-		&& expr->user_meta_value == NULL)
+	if(((*((int*)interim_context)) & RHENDB_EXPR_IS_CONSTANT) && !is_rhendb_sentinel_value(result) && expr->user_meta_value == NULL)
 	{
 		rhendb_expr_eval_context* fctx = ec_p->context_p;
 
@@ -2157,6 +2161,7 @@ static void* rhendb_post_eval(const sql_expr_eval_context* ec_p, const sql_expre
 			pop_back_from_arraylist(&(fctx->folded_expressions));
 			if(shallow != NULL)
 				rhendb_delete_data(shallow, ec_p);
+			(*((int*)interim_context)) &= ~RHENDB_EXPR_IS_CONSTANT; // something here failed, so mark it not constant
 		}
 	}
 
@@ -2343,7 +2348,7 @@ int select_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eva
 
 	return (log_res == ec_p->true_bool) ? 1 : 0;
 }
-
+// REFACTORING CHECKPOINT
 // ===================================================================================================
 // projection
 // ===================================================================================================
