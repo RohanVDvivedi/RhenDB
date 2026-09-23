@@ -1,11 +1,10 @@
 PICKED TASKS
 
-* test selection and projection operator
-
-
 default functions in expression evaluation
   * implement concat, length and substring -> works only on string and binary and jsonb array
-  * implement double/numeric funtions, sin, cos, tan, asin, acos, atan, log, pow, covert the type to double and return a double
+  * implement double/numeric funtions, sin, cos, tan, asin, acos, atan, log, pow, floor and ceil covert the type to double and return a double
+  * implement numeric function, round(, precission - or +, 0 implies round to integer, 1 means towards positive infinity, -1 meqans towards negatuive infinity, 0 implies towards 0)
+  * implement integer functions, gcd
 
 
 
