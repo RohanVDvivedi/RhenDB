@@ -1678,7 +1678,7 @@ static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_cont
 	*error_code = RHENDB_EE_INCOMPARABLE_TYPES;
 	return NULL;
 }
-// REFACTORING CHECKPOINT
+
 /* ------------------------------ variables (column references) ------------------------------ */
 
 /* "a.b.c" is resolved once against the schema and cached; the cache lives for the life of the
@@ -1782,6 +1782,12 @@ static int walk_field_path(data_type_info* root, const char** cptr, const uint32
 	uint32_t depth = 0;
 	for(uint32_t c = start; c < ncomp; c++)
 	{
+		// these 4 although represented as a tuple, can not be decomposed by the '.' operator
+		if(is_text_type_info(cur)) return 0;
+		if(is_blob_type_info(cur)) return 0;
+		if(is_numeric_type_info(cur)) return 0;
+		if(is_jsonb_type_info(cur)) return 0;
+
 		if(!is_container_type_info(cur)) return 0;
 		uint32_t idx;
 		if(!component_as_index(cptr[c], clen[c], &idx))   /* a field name -> look it up */
@@ -1792,8 +1798,15 @@ static int walk_field_path(data_type_info* root, const char** cptr, const uint32
 			if(idx == UINT32_MAX) return 0;               /* no such field */
 		}
 		positions_out[depth++] = idx;
-		cur = get_data_type_info_for_containee_of_container_without_data(cur, idx);
-		if(cur == NULL) return 0;                         /* index out of bounds / not a container */
+		data_type_info* next = get_data_type_info_for_containee_of_container_without_data(cur, idx);
+		if(next == NULL)
+		{
+			if(cur->type == STRING || cur->type == BINARY || cur->type == ARRAY) // for contiguous containers, an out of bounds is made to imply a NULL value
+				next = cur->containee;
+			else // can not go to the child position
+				return 0;
+		}
+		cur = next;
 	}
 	if(depth == 0) return 0;
 	*depth_out = depth;
@@ -1805,7 +1818,6 @@ static int walk_field_path(data_type_info* root, const char** cptr, const uint32
 static int tuple_table_named(rhendb_expr_eval_context* ctx, uint32_t t, const char* tname)
 {
 	return ctx->input_tuple_defs[t] != NULL
-	    && ctx->input_tuple_defs[t]->type_info != NULL
 	    && strncmp(ctx->input_tuple_defs[t]->type_info->type_name, tname, 64) == 0;
 }
 
@@ -1855,7 +1867,7 @@ static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32
 	// the 0th component must not be an integral access
 	{uint32_t temp_idx; if(component_as_index(comp_ptr[0], comp_len[0], &temp_idx)){
 		free(comp_ptr); free(comp_len); free(scratch);
-		*error_code = RHENDB_EE_OUT_OF_MEMORY;
+		*error_code = RHENDB_EE_UNKNOWN_VARIABLE;
 		return 0;
 	}}
 
@@ -1945,9 +1957,7 @@ static const var_cache_entry* get_or_resolve_entry(rhendb_expr_eval_context* ctx
 	 * shortens every probe. expand by 1.3x once we average more than 4 entries per bucket.
 	 * expand_hashmap() failing is harmless -- the map simply stays as it is. */
 	{
-		cy_uint buckets = get_bucket_count_hashmap(&ctx->var_cache);
-		cy_uint elements = get_element_count_hashmap(&ctx->var_cache);
-		if(buckets > 0 && elements > (buckets * 4))
+		if(get_element_count_hashmap(&ctx->var_cache) > (get_bucket_count_hashmap(&ctx->var_cache) * 4))
 			expand_hashmap(&ctx->var_cache, 1.3f);   /* no-op on failure */
 	}
 
@@ -1970,33 +1980,24 @@ static void* rhendb_get_variable(const dstring* identifier_bytes, const sql_expr
 
 	const data_type_info* dti = e->column_dti;
 	expr_value* v = new_val(RHENDB_EXPR_INT, ec_p);
-	v->value = d;
-	v->buffer = NULL;
-	v->capacity = 0;
-	v->type_info.should_free_dti_p = 0;
 	if(dti->type == TUPLE || dti->type == ARRAY)
 	{
-		/* keep it in tuple form so it is materialized only when needed */
+		/* keep extended text, blob, numeric and jsonb in tuple form so it is materialized only when needed */
 		v->type_info.type = expr_type_for_column(dti);
-		v->type_info.dti_p = (data_type_info*)dti;   /* borrowed from the schema */
+		v->type_info.dti_p = (data_type_info*)dti;
+		v->value = d;
+	}
+	else if(dti->type == STRING || dti->type == BINARY)
+	{
+		v->type_info.type = expr_type_for_column(dti);
+		v->type_info.dti_p = (data_type_info*)dti;
+		v->string_value = get_dstring_pointing_to(d.string_or_binary_value, d.string_or_binary_size);
 	}
 	else
 	{
-		/* a primitive (or inline string/binary) : the datum already holds the value */
 		v->type_info.type = expr_type_for_column(dti);
-		/* native scalars now keep the column's own data_type_info, purely to remember their declared
-		 * width so results are not widened to the maximum. it is owned by the input tuple's schema, so
-		 * it is borrowed and never freed. inline string/binary keep dti_p NULL as before. */
-		if(et_is_num(v->type_info.type))
-		{
-			v->type_info.dti_p = (data_type_info*)dti;
-			v->type_info.should_free_dti_p = 0;
-		}
-		else
-			v->type_info.dti_p = NULL;
-		/* a 4-byte FLOAT column is read into float_value and STAYS there : RHENDB_EXPR_FLOAT means the value
-		 * genuinely lives in float_value. an 8-byte column is RHENDB_EXPR_DOUBLE in double_value. nothing is
-		 * promoted here -- read_flt()/write_flt() pick the right member everywhere else. */
+		v->type_info.dti_p = (data_type_info*)dti;
+		v->value = d;
 	}
 	return v;
 }
@@ -2010,15 +2011,7 @@ static void* rhendb_get_type_for_variable(const dstring* identifier_bytes, const
 		return NULL;
 
 	expr_type t = expr_type_for_column(e->column_dti);
-	expr_type_info* ti = new_type(t);
-	/* containers need their dti; native scalars carry it too, to remember the column's declared width so
-	 * that inference does not widen every result to the maximum. it belongs to the input tuple's schema,
-	 * so it is borrowed and never freed. */
-	if(t == RHENDB_EXPR_TUPLE || t == RHENDB_EXPR_ARRAY || et_is_num(t))
-	{
-		ti->dti_p = (data_type_info*)e->column_dti;   /* borrowed */
-		ti->should_free_dti_p = 0;
-	}
+	expr_type_info* ti = new_type(t, (data_type_info*)e->column_dti);
 	return ti;
 }
 
@@ -2029,7 +2022,7 @@ static void notify_removal_for_cache_entry(void* resource_p, const void* data_p)
 	deinit_dstring(&e->identifier);
 	free(e);
 }
-
+// REFACTORING CHECKPOINT
 /* ------------------------------ context ------------------------------ */
 
 
