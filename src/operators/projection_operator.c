@@ -26,7 +26,7 @@ struct input_values
 	projection_description* projection_descriptions;
 
 	// will have only as many entries as count(projection_descriptions[i].type == PROJECT_IDENTITY)
-	projected_type_info* projected_expression_type_infos;
+	data_type_info** projected_expression_type_infos;
 
 	const tuple_def* output_tuple_def;
 };
@@ -136,7 +136,10 @@ static void free_resources(operator* o)
 	for(uint32_t i = 0, e = 0; i < inputs->projection_descriptions_count; i++)
 	{
 		if(inputs->projection_descriptions[i].type == PROJECT_EXPRESSION)
-			destroy_projected_type_info(inputs->projected_expression_type_infos[e++]);
+		{
+			// data_type_info for this attribute is managed/returned by the expression_evaluator, and is static, you can still access it at inputs->projected_expression_type_infos[e]
+			e++;
+		}
 		else
 			free((data_type_info*)(inputs->output_tuple_def->type_info->containees[i].al.type_info));
 	}
@@ -186,7 +189,7 @@ operator_resource_counter setup_projection_operator(operator* o, operator* input
 
 	projection_description* projection_descriptions_cloned = malloc(sizeof(projection_description) * projection_descriptions_count);
 
-	projected_type_info* projected_expression_type_infos = malloc(sizeof(projected_type_info) * expression_projections_count);
+	data_type_info** projected_expression_type_infos = malloc(sizeof(data_type_info*) * expression_projections_count);
 
 	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(projection_descriptions_count));
 	uint64_t max_output_tuple_size = 8;
@@ -199,7 +202,7 @@ operator_resource_counter setup_projection_operator(operator* o, operator* input
 		{
 			int error_code = 0;
 			projected_expression_type_infos[e] = infer_projected_type_sql_expr_for_rhendb(projection_descriptions[i].expr, &ec, &error_code);
-			col_dti = projected_expression_type_infos[e++].projected_type_info;
+			col_dti = projected_expression_type_infos[e++];
 		}
 		else
 			col_dti = shallow_clone_into_nullable_type((data_type_info*) get_type_info_for_element_from_tuple_def(input_tuple_def, projection_descriptions[i].pa)); // some nested key could be out-of-bounds so making it into a nullable type info is required
