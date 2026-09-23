@@ -2348,7 +2348,7 @@ int select_using_evaluate_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eva
 
 	return (log_res == ec_p->true_bool) ? 1 : 0;
 }
-// REFACTORING CHECKPOINT
+
 // ===================================================================================================
 // projection
 // ===================================================================================================
@@ -2362,109 +2362,50 @@ int is_valid_using_infer_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval
 	return ((*error_code) == 0) ? 1 : 0;
 }
 
-// the inline prefix budget of a projected extended value, and the total inline max_size (leaving room after
-// the prefix for the blob pointer (page id up to 8+4 bytes), a 4-byte offset, the inline array size header
-// and a few spare bytes). for numeric the prefix holds floor(90 / BYTES_PER_NUMERIC_DIGIT) radix-10^12
-// digit slots.
-
-// build the data_type_info a scalar result of kind `scalar` is PROJECTED into, and report through
-// *should_free whether the caller owns it.
-//   native scalars -> the matching default type_info, BORROWED (*should_free = 0); they are is_static and
-//                     must never be destroyed anyway.
-//   string / binary / arbitrary-precision numeric -> a freshly built, FINALIZED volatile-store extended type
-//                     (*should_free = 1). finalizing matters: an unfinalized type differs from the same type
-//                     sitting in a tuple (is_finalized/size), which would defeat the "value already has the
-//                     projected type" fast path in project_using_evaluate.
-// returns NULL for tuple/array (the caller borrows the inferred type instead) or when there is no
-// transaction to supply the volatile page specs.
-static data_type_info* build_projection_type_for_scalar(expr_type scalar, const expr_type_info* src,
-	const sql_expr_eval_context* ec_p, int* should_free)
-{
-	*should_free = 0;
-	if(et_is_num(scalar))
-	{
-		/* store the result no wider than it was declared to be : a uint of 3 bytes projects into a 3-byte
-		 * uint, not an 8-byte one. an unspecified width falls back to the widest form. these are all
-		 * static defaults, so the projected type is borrowed and never freed.
-		 * NOTE: BIT_FIELD_NULLABLE is indexed by BIT width (0..64); the others are byte-indexed. */
-		uint32_t w = 0;
-		if(src != NULL && src->dti_p != NULL)
-			w = (scalar == RHENDB_EXPR_BIT_FIELD) ? src->dti_p->bit_field_size : native_width(src);
-		return static_dti_for(scalar, w);
-	}
-
-	transaction* tx = tx_from_ctx(ec_p);
-	if(tx == NULL)
-		return NULL;
-
-	if(scalar == RHENDB_EXPR_STRING)
-	{
-		*should_free = 0;
-		return tx->rdb->volatile_rage_engine.text_extended_type_info;
-	}
-	else if(scalar == RHENDB_EXPR_BINARY)
-	{
-		*should_free = 0;
-		return tx->rdb->volatile_rage_engine.blob_extended_type_info;
-	}
-	else if(scalar == RHENDB_EXPR_NUMERIC)
-	{
-		*should_free = 0;
-		return tx->rdb->volatile_rage_engine.numeric_extended_type_info;
-	}
-	else
-		return NULL;   // RHENDB_EXPR_TUPLE / RHENDB_EXPR_ARRAY
-}
-
-void destroy_projected_type_info(projected_type_info pti)
-{
-	if(pti.projected_type_info != NULL && pti.should_free_projected_type_info)
-		destroy_type_info_recursively(pti.projected_type_info, NULL);
-}
-
 void destroy_projected_value(projected_value pv)
 {
 	if(pv.buffer_to_free != NULL)
 		free(pv.buffer_to_free);
 }
 
-projected_type_info infer_projected_type_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code)
+data_type_info* infer_projected_type_sql_expr_for_rhendb(sql_expression* expr, sql_expr_eval_context* ec_p, int* error_code)
 {
-	*error_code = 0;
-	projected_type_info res = (projected_type_info){ .projected_type_info = NULL, .should_free_projected_type_info = 0 };
+	(*error_code) = 0;
 
-	expr_type_info* t = infer_type_sql_expr(expr, ec_p, error_code);
-	if((*error_code) || t == NULL)
+	expr_type_info* src = infer_type_sql_expr(expr, ec_p, error_code);
+	if((*error_code) || src == NULL)
 	{
-		if(t != NULL) delete_type(t, ec_p);
-		if((*error_code) == 0) *error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
-		return res;
+		if(src != NULL) delete_type(src, ec_p);
+		if((*error_code) == 0) (*error_code) = RHENDB_EE_INCOMPATIBLE_PROJECTION;
+		return NULL;
 	}
-	expr_type scalar = effective_type(t);    // an unmaterialized extended large-type acts as its scalar
 
-	// a genuine tuple / array result (not an extended text/blob/numeric large type) projects AS-IS: BORROW
-	// the inferred container type directly -- no clone. we take over the inferred type's own ownership bit,
-	// clearing it there so delete_type() does not free a type we now hold.
-	if((scalar == RHENDB_EXPR_TUPLE || scalar == RHENDB_EXPR_ARRAY) && t->dti_p != NULL)
+	// if the src has dti_p, return that
+	if(src->dti_p != NULL) // passes for et_is_native_number(scalar) || RHENDB_EXPR_TUPLE || RHENDB_EXPR_ARRAY
 	{
-		res.projected_type_info = t->dti_p;
-		res.should_free_projected_type_info = t->should_free_dti_p;
-		t->should_free_dti_p = 0;
-		delete_type(t, ec_p);
-		return res;
+		delete_type(src, ec_p);
+		return src->dti_p;
 	}
-	/* build the projected type BEFORE releasing the inferred one : the builder reads its declared width */
-	int should_free = 0;
-	data_type_info* proj = build_projection_type_for_scalar(scalar, t, ec_p, &should_free);
-	delete_type(t, ec_p);
-	if(proj == NULL)
-	{
-		*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
-		return res;
-	}
-	res.projected_type_info = proj;
-	res.should_free_projected_type_info = should_free;
-	return res;
+
+	expr_type scalar = effective_type(src);    // an unmaterialized extended large-type acts as its scalar
+	delete_type(src, ec_p);
+
+	transaction* tx = tx_from_ctx(ec_p);
+	if(tx == NULL)
+		return NULL;
+
+	// below 4 may not have a src->dti_p
+
+	if(scalar == RHENDB_EXPR_STRING)
+		return tx->rdb->volatile_rage_engine.text_extended_type_info;
+	else if(scalar == RHENDB_EXPR_BINARY)
+		return tx->rdb->volatile_rage_engine.blob_extended_type_info;
+	else if(scalar == RHENDB_EXPR_NUMERIC)
+		return tx->rdb->volatile_rage_engine.numeric_extended_type_info;
+	else if(scalar == RHENDB_EXPR_JSONB)
+		return tx->rdb->volatile_rage_engine.jsonb_extended_type_info;
+
+	return NULL;
 }
 
 // write already-materialized text/blob bytes into a volatile extended value.
