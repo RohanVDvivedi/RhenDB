@@ -31,8 +31,8 @@
 // returns pointers for bytes for the corresponding type
 char* materialize_tbj(datum uval, const data_type_info* dti, transaction* tx, uint32_t* length, uint32_t* capacity, uint32_t limit_bytes, int* error_code);
 
-#define materialize_text materialize_tb
-#define materialize_blob materialize_tb
+#define materialize_text materialize_tbj
+#define materialize_blob materialize_tbj
 
 // dti must be a numeric type, inline or extended
 // directly returns NAN, if the dti is not a numeric type
