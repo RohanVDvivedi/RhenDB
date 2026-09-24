@@ -2431,16 +2431,17 @@ static int do_attributes_have_unique_names(const rhendb_attribute* attrs, uint32
 	if(!quick_sort_iai(&iai, 0, get_element_count_arraylist(&attr_names) - 1, &simple_comparator(compare_attribute_names)))
 		exit(-1);
 
+	int are_names_unique = 1;
+
 	// compare all 2 adjacent ones, if found same, return 0
-	for(uint32_t i = 1; i < attrs_count; i++)
+	for(uint32_t i = 1; i < attrs_count && are_names_unique == 1; i++)
 		if(0 == compare_attribute_names(get_from_front_of_arraylist(&attr_names, i-1), get_from_front_of_arraylist(&attr_names, i)))
-			return 0;
+			are_names_unique = 0;
 
 	// destroy the temporary list
 	deinitialize_arraylist(&attr_names);
 
-	// else return 1 as all nmaes are unique
-	return 1;
+	return are_names_unique;
 }
 
 uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count)
