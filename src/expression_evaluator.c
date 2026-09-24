@@ -1569,7 +1569,7 @@ static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_
 	if(a==RHENDB_EXPR_STRING && b==RHENDB_EXPR_STRING) return 1;
 	if(a==RHENDB_EXPR_BINARY && b==RHENDB_EXPR_BINARY) return 1;
 	if(a==RHENDB_EXPR_NUMERIC && b==RHENDB_EXPR_NUMERIC) return 1;
-	if(a==RHENDB_EXPR_JSONB || b==RHENDB_EXPR_JSONB) return 1;
+	if(a==RHENDB_EXPR_JSONB || b==RHENDB_EXPR_JSONB) return 0; // being explicit
 	return 0;
 }
 static int rhendb_can_cast_types(const void* typ_from, const void* typ_to, const sql_expr_eval_context* ec_p, int* error_code)
@@ -2010,7 +2010,7 @@ static expr_value* clone_cached_expr_value(const expr_value* src, const sql_expr
 
 	v->type_info = src->type_info;
 
-	if(src->type_info.type == RHENDB_EXPR_STRING || src->type_info.type == RHENDB_EXPR_STRING)
+	if(src->type_info.type == RHENDB_EXPR_STRING || src->type_info.type == RHENDB_EXPR_BINARY)
 	{
 		v->string_value = get_dstring_pointing_to_dstring(&(src->string_value));
 	}
@@ -2459,7 +2459,7 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 			return res;
 		}
 		datum od; void* ob = NULL;
-		int ok = project_write_sb_to_volatile(tx, projection_type_info, v->value.string_or_binary_value, v->value.string_or_binary_size, &od, &ob, error_code);
+		int ok = project_write_sb_to_volatile(tx, projection_type_info, get_byte_array_dstring(&(v->string_value)), get_char_count_dstring(&(v->string_value)), &od, &ob, error_code);
 		delete_data(v, ec_p);
 		if(!ok) return res;
 		res.value = od; res.buffer_to_free = ob;
