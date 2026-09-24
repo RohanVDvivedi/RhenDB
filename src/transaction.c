@@ -49,7 +49,7 @@ transaction initialize_transaction(rhendb* rdb)
 		tx.savepoint_logs.savepoint_log_dti->containees[3].al.type_info = UINT_NON_NULLABLE[8];
 		strcpy(tx.savepoint_logs.savepoint_log_dti->containees[4].field_name, "tuple_pointer");
 		tx.savepoint_logs.savepoint_log_dti->containees[4].al.type_info = &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_type_info);
-		initialize_tuple_data_type_info(tx.savepoint_logs.savepoint_log_dti, "savepoint_log_def", 1, 8 + 4 + 8 + 80 + 8 + 8 + sizeof(tuple_pointer), 5)
+		initialize_tuple_data_type_info(tx.savepoint_logs.savepoint_log_dti, "savepoint_log_def", 1, 8 + 4 + 8 + 80 + 8 + 8 + sizeof(tuple_pointer), 5);
 		tx.savepoint_logs.savepoint_log_def = malloc(sizeof(tuple_def));
 		initialize_tuple_def(tx.savepoint_logs.savepoint_log_def, tx.savepoint_logs.savepoint_log_dti);
 
