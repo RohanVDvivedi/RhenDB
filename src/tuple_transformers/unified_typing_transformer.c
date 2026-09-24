@@ -28,7 +28,7 @@ static void* process(tuple_transformer* tt_p, void* tuple)
 		positional_accessor pos_i_0 = STATIC_POSITION(i, 0);
 		positional_accessor pos_i_1 = STATIC_POSITION(i, 1);
 
-		positional_accessor* output_pos;
+		positional_accessor* output_pos = NULL;
 		if(input_dti == output_dti) // fast path
 			output_pos = &pos_i;
 		else
