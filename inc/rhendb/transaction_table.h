@@ -75,7 +75,7 @@ struct transaction_table
 	uint32_t transaction_statuses_per_bitmap_page;
 
 	// below two attributes will be used to access the transaction_table on the disk
-	page_table_tuple_defs* pttd_p; // actual page_table definition
+	// page_table_tuple_defs* pttd_p; // actual page_table definition, we will use the pttd from the ttbl_engine
 	tuple_def* bitmap_page_tuple_def_p; // actual tuple def of the bitmap_page to access them bit_field at a time
 
 	// below is the persistent ACID rage_engine that powers the transaction_table
