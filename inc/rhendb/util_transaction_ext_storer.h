@@ -19,8 +19,8 @@
 // returned pointer if not NULL must be freed, after setting it into the tuple
 void* tx_temp_store_tbj(const char* data, uint32_t data_size, const data_type_info* ext_type_info, transaction* tx);
 
-#define tx_temp_store_text tx_temp_store_tb
-#define tx_temp_store_blob tx_temp_store_tb
+#define tx_temp_store_text tx_temp_store_tbj
+#define tx_temp_store_blob tx_temp_store_tbj
 
 // ext_type_info is always expected to be volatile_rage_engine->numeric_extended_type_info
 // number must not be NULL, and is left owned by the caller
