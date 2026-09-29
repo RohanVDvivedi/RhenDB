@@ -1,10 +1,32 @@
 PICKED TASKS
 
 default functions in expression evaluation
-  * implement concat, length and substring -> works only on string and binary and jsonb array
-  * implement double/numeric funtions, sin, cos, tan, asin, acos, atan, log, pow, floor and ceil covert the type to double and return a double
-  * implement numeric function, round(, precission - or +, 0 implies round to integer, 1 means towards positive infinity, -1 meqans towards negatuive infinity, 0 implies towards 0)
-  * implement integer functions, gcd
+
+// double/numeric -> double
+// sin, cos, tan, asin, acos, atan, log, pow, floor and ceil
+
+// double/numeric -> double/numeric
+// log, pow, floor, ceil, round
+
+// numeric -> numeric
+// exact_round(numeric, precission -ve (as many digits after decimal point) or +ve or 0 implies round to integer, direction : 1 means towards positive infinity or -1 means towards negative infinity or 0 implies towards 0)
+
+// string/binary -> string/binary
+// substring
+
+// string/binary/jsonb(array) -> uint64_t
+// length
+
+// integer -> integer
+// gcd
+
+
+
+
+
+
+
+
 
 
 
