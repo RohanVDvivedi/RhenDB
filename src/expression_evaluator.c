@@ -1586,19 +1586,27 @@ static int rhendb_can_cast_types(const void* typ_from, const void* typ_to, const
 }
 static void* rhendb_get_return_type_for_op_exec_callback(void* op_exec_func, void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	expr_type a = effective_type((expr_type_info*)typ1);
-	expr_type b = (typ2 != NULL) ? effective_type((expr_type_info*)typ2) : a;   /* typ2 is NULL for unary ops */
 	const expr_type_info* ta = (const expr_type_info*)typ1;
 	const expr_type_info* tb = (const expr_type_info*)typ2;
+	if(ta == NULL)
+		return NULL;
+	expr_type a = effective_type((expr_type_info*)ta);
+	expr_type b = (tb != NULL) ? effective_type((expr_type_info*)tb) : a;   /* typ2 is NULL for unary ops */
 	if(op_exec_func==(void*)ec_p->add||op_exec_func==(void*)ec_p->sub||op_exec_func==(void*)ec_p->mul||op_exec_func==(void*)ec_p->div||op_exec_func==(void*)ec_p->mod){
+		if(tb == NULL)
+			return NULL;
 		if(!et_is_native_number_or_numeric(a) || !et_is_native_number_or_numeric(b)){ *error_code = RHENDB_EE_NON_NUMERIC_OPERAND; return NULL; }
 		return num_result_sized(ta, tb);
 	}
 	if(op_exec_func==(void*)ec_p->bit_and||op_exec_func==(void*)ec_p->bit_or||op_exec_func==(void*)ec_p->bit_xor){
+		if(tb == NULL)
+			return NULL;
 		if(!et_is_native_integer(a) || !et_is_native_integer(b)){ *error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL; }
 		return num_result_sized(ta, tb);
 	}
 	if(op_exec_func==(void*)ec_p->left_shift||op_exec_func==(void*)ec_p->right_shift){
+		if(tb == NULL)
+			return NULL;
 		/* a shift keeps the LEFT operand's kind and width : shifting by a wider count cannot widen it */
 		if(!et_is_native_integer(a) || !et_is_native_integer(b)){ *error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL; }
 		return new_type(a, ta->dti_p);
@@ -1607,9 +1615,19 @@ static void* rhendb_get_return_type_for_op_exec_callback(void* op_exec_func, voi
 		if(!et_is_native_integer(a)){ *error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL; }
 		return new_type(a, ta->dti_p);
 	}
-	if(op_exec_func==(void*)ec_p->concat) return new_type(RHENDB_EXPR_STRING, NULL);
-	if(op_exec_func==(void*)ec_p->like)   return &rhendb_bool_type;
-	*error_code = RHENDB_EE_UNSUPPORTED_TYPE; return NULL;
+	if(op_exec_func==(void*)ec_p->concat) {
+		if(tb == NULL)
+			return NULL;
+		return new_type(a, NULL); // effective type of the first operand is carried forward
+	}
+	if(op_exec_func==(void*)ec_p->like) {
+		if(tb == NULL)
+			return NULL;
+		if(a == RHENDB_EXPR_STRING && b == RHENDB_EXPR_STRING) // like only works with strings
+			return &rhendb_bool_type;
+	}
+	*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
+	return NULL;
 }
 static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
 {
