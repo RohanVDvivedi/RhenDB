@@ -1564,6 +1564,7 @@ static void* rhendb_get_type_for_sql_type(const sql_type* type, const sql_expr_e
 
 static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
 {
+	if(typ1 == NULL || typ2 == NULL) return 1;
 	expr_type a = effective_type((expr_type_info*)typ1), b = effective_type((expr_type_info*)typ2);
 	if(et_is_native_number_or_numeric(a) && et_is_native_number_or_numeric(b)) return 1;   /* numeric and number compare with any numeric and number */
 	if(a==RHENDB_EXPR_STRING && b==RHENDB_EXPR_STRING) return 1;
@@ -1574,6 +1575,7 @@ static int rhendb_can_compare_types(void* typ1, void* typ2, const sql_expr_eval_
 }
 static int rhendb_can_cast_types(const void* typ_from, const void* typ_to, const sql_expr_eval_context* ec_p, int* error_code)
 {
+	if(typ_from == NULL) return 1;
 	expr_type from = effective_type((const expr_type_info*)typ_from), to = effective_type((const expr_type_info*)typ_to);
 	/* aligned with rhendb_cast : any scalar among {numbers, NUMERIC, STRING, BINARY} casts to any other.
 	 * numbers <-> numbers/NUMERIC, string/binary -> number (parsed), number/NUMERIC -> string (decimal text),
@@ -1611,8 +1613,14 @@ static void* rhendb_get_return_type_for_op_exec_callback(void* op_exec_func, voi
 }
 static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	(void)ec_p;
 	expr_type_info* t1 = typ1; expr_type_info* t2 = typ2;
+
+	if(t1 == NULL && t2 == NULL)
+		return NULL;
+	else if(t1 == NULL)
+		return new_type(t2->type, t2->dti_p);
+	else if(t2 == NULL)
+		return new_type(t1->type, t1->dti_p);
 
 	if((t1->type == RHENDB_EXPR_TUPLE || t1->type == RHENDB_EXPR_ARRAY) && (t2->type == RHENDB_EXPR_TUPLE || t2->type == RHENDB_EXPR_ARRAY))
 	{
