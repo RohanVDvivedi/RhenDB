@@ -2005,6 +2005,65 @@ static void notify_removal_for_cache_entry(void* resource_p, const void* data_p)
 	free(e);
 }
 
+/* ------------------------------ function calls support start ------------------------------ */
+
+// main struct that stores expressioned function that can show up in an expression
+// this is the struct that gets put into efunc_cache
+typedef struct expressed_function expressed_function;
+struct expressed_function
+{
+	void* function_context_handle;
+	void* (*call_function)(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code);
+	void* (*get_return_type_for_function)(void* function_context_handle, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code);
+	void (*destroy_expressed_function)(expressed_function* efunc);
+};
+
+// works for most of the cases
+static void simple_destroy_expressed_function(expressed_function* efunc)
+{
+	free(efunc);
+}
+
+// double/numeric -> double
+// function_context_handle = sin, cos, tan, asin, acos, atan, log, pow, floor and ceil
+
+// double/numeric -> double/numeric
+// abs, sign, sqrt, cbrt, log10, ln, pow, exp, floor, ceil, round
+
+// constants -> double
+// PI(), e()
+
+// constants -> numeric
+// PI_numeric(), e_numeric()
+
+// numeric -> numeric
+// exact_round(numeric, precission -ve (as many digits after decimal point) or +ve or 0 implies round to integer, direction : 1 means towards positive infinity or -1 means towards negative infinity or 0 implies towards 0)
+
+// string/binary -> string/binary
+// substring
+
+// string/binary/jsonb(array) -> uint64_t
+// length
+
+// string -> string
+// function_context_handle = lower, upper, ltrim, rtrim, trim
+
+// integer -> integer
+// gcd
+
+// constants -> integer
+// now() (resolved based on the timestamp of the current query)
+
+// jsonb, string/integer -> jsonb
+// access() -> jsonb
+
+// below function populate the efunc_cache on first access
+
+static void* rhendb_call_function(const dstring* identifier_bytes, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code);
+
+static void* rhendb_get_return_type_for_function(const dstring* identifier_bytes, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code);
+
+
 /* ------------------------------ context ------------------------------ */
 
 
@@ -2513,35 +2572,3 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 	*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
 	return res;
 }
-
-// -------------------------------------- function calls support start
-
-// main struct that stores any function that can show up in an expression
-// this is what gets cached upon the first encounter in the expression node itself
-typedef struct expressed_function expressed_function;
-struct expressed_function
-{
-	void* function_context_handle;
-	void* (*call_function)(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code);
-	void* (*get_return_type_for_function)(void* function_context_handle, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code);
-};
-
-// double/numeric -> double
-// sin, cos, tan, asin, acos, atan, log, pow, floor and ceil
-
-// double/numeric -> double/numeric
-// log, pow, floor, ceil, round
-
-// numeric -> numeric
-// exact_round(numeric, precission -ve (as many digits after decimal point) or +ve or 0 implies round to integer, direction : 1 means towards positive infinity or -1 means towards negative infinity or 0 implies towards 0)
-
-// string/binary -> string/binary
-// substring
-
-// string/binary/jsonb(array) -> uint64_t
-// length
-
-// integer -> integer
-// gcd
-
-// -------------------------------------- function calls support end
