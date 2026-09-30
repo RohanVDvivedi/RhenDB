@@ -2,12 +2,6 @@ PICKED TASKS
 
 default functions in expression evaluation
 
-// constants -> double
-// PI(), e(), inf(), nan()
-
-// constants -> numeric
-// PI_numeric(), e_numeric() inf_numeric(), nan_numeric()
-
 // integer list -> integer
 // take absolute and return smallest width large_uint possible
 // gcd
