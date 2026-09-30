@@ -2101,7 +2101,7 @@ static expressed_function* resolve_to_any_through_double_only_function(const dst
 }
 
 // any numberc -> double/numeric (returns numeric if input is numeric else returns double, and uses the double function unless it is numeric)
-// abs, sign, sqrt, cbrt, log2, log10, ln, pow, exp, floor, ceil, round
+// isinf, isnan, abs, sign, sqrt, cbrt, log10, ln, pow, exp, floor, ceil, round
 
 // any list of numbers -> type identified by the same logic as that of add/multiply i.e. type promotion
 // (function_context_handle holds the compare result required as intptr_t) min, max
