@@ -2260,6 +2260,71 @@ static expressed_function* resolve_to_numeric_or_double_function(const dstring* 
 
 // special checks for numeric and double only
 // isinf, isnan
+typedef int (*mpd_unary_check_fn_t) (const mpd_t*);
+static void* numeric_check_function_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expr_value* input = ((expr_value**)params)[0];
+	if(ee_materialize_numeric(input, ec_p, error_code))
+	{
+		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
+		return NULL;
+	}
+
+	return (((mpd_unary_check_fn_t)function_context_handle)(&(input->numeric_value))) ? ec_p->true_bool : ec_p->false_bool;
+}
+static int isnan_d(double d) {return isnan(d);}
+static int isinf_d(double d) {return isinf(d);}
+static void* double_check_function_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	double input = to_dbl(((expr_value**)params)[0]);
+
+	return (((int (*)(double))function_context_handle)(input)) ? ec_p->true_bool : ec_p->false_bool;
+}
+static void* double_or_numeric_check_function_get_return_type(void* function_context_handle, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	return ec_p->bool_type;
+}
+static expressed_function* resolve_to_numeric_or_double_check_functions(const dstring* identifier_bytes, expr_type_info** param_typs, uint32_t params_count)
+{
+	if(params_count != 1)
+		return NULL;
+	expr_type t = effective_type(param_typs[0]);
+	if(!et_is_native_float(t) && t != RHENDB_EXPR_NUMERIC)
+		return NULL;
+
+	int is_numeric_input = (t == RHENDB_EXPR_NUMERIC);
+
+	#define to_string_case_for(x) #x
+	#define case_for(name, mpd_fn, c_fn) \
+		if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring(to_string_case_for(name)))) \
+		{ \
+			expressed_function* efunc = malloc(sizeof(expressed_function)); \
+			if(is_numeric_input && mpd_fn != NULL) { \
+				*efunc = (expressed_function){ \
+					.function_context_handle      = mpd_fn, \
+					.call_function                = numeric_check_function_call_function, \
+					.get_return_type_for_function = double_or_numeric_check_function_get_return_type, \
+					.destroy_expressed_function   = simple_destroy_expressed_function, \
+				}; \
+			} else if(c_fn != NULL) { \
+				*efunc = (expressed_function){ \
+					.function_context_handle      = c_fn, \
+					.call_function                = double_check_function_call_function, \
+					.get_return_type_for_function = double_or_numeric_check_function_get_return_type, \
+					.destroy_expressed_function   = simple_destroy_expressed_function, \
+				}; \
+			} \
+			return efunc; \
+		}
+
+	case_for(isinf,    mpd_isfinite,   isinf_d)
+	case_for(isnan,    mpd_isnan,      isnan_d)
+
+	#undef case_for
+	#undef to_string_case_for
+
+	return NULL;
+}
 
 // constants -> double
 // PI(), e(), inf(), nan()
@@ -2355,6 +2420,8 @@ static expressed_function* resolve_and_populate_efunc_cache(const dstring* ident
 		efunc = resolve_to_any_through_double_only_function(identifier_bytes, param_typs, params_count);
 	if(efunc == NULL)
 		efunc = resolve_to_numeric_or_double_function(identifier_bytes, param_typs, params_count);
+	if(efunc == NULL)
+		efunc = resolve_to_numeric_or_double_check_functions(identifier_bytes, param_typs, params_count);
 
 	// lastly populate
 	if(efunc != NULL)
