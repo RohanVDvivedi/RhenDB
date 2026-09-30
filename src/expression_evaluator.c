@@ -2211,9 +2211,14 @@ static expressed_function* resolve_and_populate_efunc_cache(const dstring* ident
 			if(get_element_count_hashmap(&(((rhendb_expr_eval_context*)(ec_p->context_p))->efunc_cache)) > (get_bucket_count_hashmap(&(((rhendb_expr_eval_context*)(ec_p->context_p))->efunc_cache)) * 4))
 				expand_hashmap(&(((rhendb_expr_eval_context*)(ec_p->context_p))->efunc_cache), 1.3f);   /* no-op on failure */
 		}
-	}
 
-	return efunc;
+		return efunc;
+	}
+	else
+	{
+		(*error_code) = RHENDB_EE_UNKNOWN_FUNCTION_CALL;
+		return NULL;
+	}
 }
 
 static void* rhendb_call_function(const dstring* identifier_bytes, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
@@ -2227,6 +2232,13 @@ static void* rhendb_call_function(const dstring* identifier_bytes, void** params
 
 	if(efunc == NULL)
 		efunc = resolve_and_populate_efunc_cache(identifier_bytes, (expr_type_info**)params, params_count, ec_p, error_code); // this won't be an issue as the type_info is the first attribute in expr_value
+
+	// if remains unresolved return errro
+	if(efunc == NULL)
+	{
+		(*error_code) = RHENDB_EE_UNKNOWN_FUNCTION_CALL;
+		return NULL;
+	}
 
 	return efunc->call_function(efunc->function_context_handle, params, params_count, ec_p, error_code);
 }
@@ -2242,6 +2254,13 @@ static void* rhendb_get_return_type_for_function(const dstring* identifier_bytes
 
 	if(efunc == NULL)
 		efunc = resolve_and_populate_efunc_cache(identifier_bytes, (expr_type_info**)param_typs, params_count, ec_p, error_code);
+
+	// if remains unresolved return errro
+	if(efunc == NULL)
+	{
+		(*error_code) = RHENDB_EE_UNKNOWN_FUNCTION_CALL;
+		return NULL;
+	}
 
 	return efunc->get_return_type_for_function(efunc->function_context_handle, param_typs, params_count, ec_p, error_code);
 }

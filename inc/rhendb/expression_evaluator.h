@@ -142,6 +142,7 @@ enum rhendb_expr_eval_error
 	RHENDB_EE_INVALID_CAST_VALUE  = 14, // a string being cast to a number is not a valid numeric value
 	RHENDB_EE_UNKNOWN_VARIABLE    = 15, // a variable (column reference) does not resolve to any input column
 	RHENDB_EE_AMBIGUOUS_VARIABLE  = 16, // a variable resolves to more than one input column (collision)
+	RHENDB_EE_UNKNOWN_FUNCTION_CALL = 16, // a function call identifier could not be resolved
 };
 
 // ===================================================================================================
