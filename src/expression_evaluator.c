@@ -2170,24 +2170,24 @@ static void* double_or_numeric_only_function_get_return_type(void* function_cont
 	expr_type t = effective_type(((expr_type_info**)param_typs)[0]);
 	return et_is_native_number(t) ? new_type_sized(RHENDB_EXPR_DOUBLE, 0) : new_type(RHENDB_EXPR_NUMERIC, NULL);
 }
-static void mpd_sign(mpd_t* result, const mpd_t* num, const mpd_context_t* ctx, uint32_t* st)
+static void sign_mpd(mpd_t* result, const mpd_t* num, const mpd_context_t* ctx, uint32_t* st)
 {
 	if(mpd_isnan(num))
-		mpd_setspecial(&result, MPD_POS, MPD_NAN);
+		mpd_setspecial(result, MPD_POS, MPD_NAN);
 	else if(mpd_iszero(num))
-		mpd_set_string(&result, "0", &ctx);
+		mpd_set_string(result, "0", (mpd_context_t*)ctx);
 	else if(mpd_isnegative(num))
-		mpd_set_string(&result, "-1", &ctx);
+		mpd_set_string(result, "-1", (mpd_context_t*)ctx);
 	else
-		mpd_set_string(&result, "1", &ctx);
+		mpd_set_string(result, "1", (mpd_context_t*)ctx);
 }
 static double sign_d(double d)
 {
 	if(isnan(d))
 		return NAN;
-	else if(x == 0.0)
+	else if(d == 0.0)
 		return 0.0;
-	else if(x < 0.0)
+	else if(d < 0.0)
 		return -1;
 	else
 		return 1;
@@ -2237,7 +2237,7 @@ static expressed_function* resolve_to_numeric_or_double_function(const dstring* 
 			return efunc; \
 		}
 
-	case_for(sign,  1,    mpd_sign,          sign_d)
+	case_for(sign,  1,    sign_mpd,          sign_d)
 	case_for(abs,   1,    mpd_qabs,           fabs)
 	case_for(floor, 1,    mpd_qfloor,         floor)
 	case_for(ceil,  1,    mpd_qceil,          ceil)
