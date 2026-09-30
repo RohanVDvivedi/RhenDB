@@ -2194,7 +2194,7 @@ static expressed_function* resolve_to_numeric_or_double_function(const dstring* 
 
 	#define to_string_case_for(x) #x
 	#define case_for(name, expected_params_count, mpd_fn, c_fn) \
-		if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring(to_string_case_for(f))) && params_count == expected_params_count) \
+		if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring(to_string_case_for(name))) && params_count == expected_params_count) \
 		{ \
 			expressed_function* efunc = malloc(sizeof(expressed_function)); \
 			if(is_numeric_input) { \
