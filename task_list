@@ -6,16 +6,16 @@ default functions in expression evaluation
 
 // constants PI and e
 
-// numeric -> numeric
-// exact_round(numeric, precission -ve (as many digits after decimal point) or +ve or 0 implies round to integer, direction : 1 means towards positive infinity or -1 means towards negative infinity or 0 implies towards 0)
-
 // string/binary -> string/binary
 // substring
 
 // string/binary/jsonb(array) -> uint64_t
 // length
 
-// integer -> integer
+// string -> string
+// function_context_handle = lower, upper, ltrim, rtrim, trim
+
+// integer list -> integer
 // gcd
 
 

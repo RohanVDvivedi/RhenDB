@@ -2261,15 +2261,17 @@ static expressed_function* resolve_to_numeric_or_double_function(const dstring* 
 // special checks for numeric and double only
 // isinf, isnan
 
-// any list of numbers -> type identified by the same logic as that of add/multiply i.e. type promotion
-// (function_context_handle holds the compare result required as intptr_t) min, max
-
 // constants -> double
 // PI(), e(), inf(), nan()
 
 // constants -> numeric
-// PI_numeric(), e_numeric()
+// PI_numeric(), e_numeric() inf_numeric(), nan_numeric()
 
+// (*future)
+// any list of numbers -> type identified by the same logic as that of add/multiply i.e. type promotion
+// (function_context_handle holds the compare result required as intptr_t) min, max
+
+// (*future)
 // numeric -> numeric
 // exact_round(numeric, precission -ve (as many digits after decimal point) or +ve or 0 implies round to integer, direction : 1 means towards positive infinity or -1 means towards negative infinity or 0 implies towards 0)
 
@@ -2285,9 +2287,11 @@ static expressed_function* resolve_to_numeric_or_double_function(const dstring* 
 // integer list -> integer
 // gcd
 
+// (*future)
 // constants -> integer
 // now() (resolved based on the timestamp of the current query)
 
+// (*future)
 // jsonb, string/integer -> jsonb
 // access() -> jsonb
 
