@@ -2268,12 +2268,16 @@ static expressed_function* resolve_to_numeric_or_double_function(const dstring* 
 // PI_numeric(), e_numeric() inf_numeric(), nan_numeric()
 
 // (*future)
-// any list of numbers -> type identified by the same logic as that of add/multiply i.e. type promotion
-// (function_context_handle holds the compare result required as intptr_t) min, max
-
-// (*future)
 // numeric -> numeric
 // exact_round(numeric, precission -ve (as many digits after decimal point) or +ve or 0 implies round to integer, direction : 1 means towards positive infinity or -1 means towards negative infinity or 0 implies towards 0)
+
+// integer list -> integer
+// take absolute and return smallest width large_uint possible
+// gcd
+
+// (*future)
+// any list of numbers -> type identified by the same logic as that of add/multiply i.e. type promotion
+// (function_context_handle holds the compare result required as intptr_t) min, max
 
 // string/binary -> string/binary
 // substring
@@ -2283,9 +2287,6 @@ static expressed_function* resolve_to_numeric_or_double_function(const dstring* 
 
 // string -> string
 // function_context_handle = lower, upper, ltrim, rtrim, trim
-
-// integer list -> integer
-// gcd
 
 // (*future)
 // constants -> integer
