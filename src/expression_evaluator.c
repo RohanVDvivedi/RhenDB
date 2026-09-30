@@ -2039,7 +2039,10 @@ static void* through_double_only_function_call_function(void* function_context_h
 	else // this is numeric
 	{
 		if(ee_materialize_numeric(input, ec_p, error_code))
+		{
+			*error_code = RHENDB_EE_MATERIALIZE_FAILED;
 			return NULL;
+		}
 		input_double = mpd_to_double(&(input->numeric_value));
 	}
 
@@ -2100,8 +2103,140 @@ static expressed_function* resolve_to_any_through_double_only_function(const dst
 	return NULL;
 }
 
-// any numberc -> double/numeric (returns numeric if input is numeric else returns double, and uses the double function unless it is numeric)
-// isinf, isnan, abs, sign, sqrt, cbrt, log10, ln, pow, exp, floor, ceil, round
+
+// any number -> same type (numeric->numeric via mpd, float/double/integer->double)
+// 1-param: abs, floor, ceil, round, sqrt, cbrt, log10, ln, exp
+// 2-param: pow
+
+typedef void (*mpd_unary_fn_t) (mpd_t*, const mpd_t*, const mpd_context_t*, uint32_t*);
+typedef void (*mpd_binary_fn_t)(mpd_t*, const mpd_t*, const mpd_t*, const mpd_context_t*, uint32_t*);
+static void* numeric_only_function_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expr_value* input_0 = ((expr_value**)params)[0];
+	expr_value* input_1 = ((expr_value**)params)[1];
+
+	if(ee_materialize_numeric(input_0, ec_p, error_code))
+	{
+		*error_code = RHENDB_EE_MATERIALIZE_FAILED;
+		return NULL;
+	}
+	if(params_count > 1)
+	{
+		if(ee_materialize_numeric(input_1, ec_p, error_code))
+		{
+			*error_code = RHENDB_EE_MATERIALIZE_FAILED;
+			return NULL;
+		}
+	}
+
+	/* use bounded precision like division: input's own digits + guard digits.
+	 * mpd_qln / mpd_qexp / mpd_qsqrt at the full materialized-numeric precision (12M digits)
+	 * would hang for non-trivial inputs; this keeps transcendental functions fast. */
+	mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx);
+	ctx.prec = input_0->numeric_value.digits + RHENDB_EE_DIV_PREC;
+
+	uint32_t st = 0;
+	mpd_t result;
+	if(!ee_mpd_new(&result)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+
+	if(function_context_handle == mpd_qpow)
+		((mpd_binary_fn_t)function_context_handle)(&result, &(input_0->numeric_value), &(input_1->numeric_value), &ctx, &st);
+	else
+		((mpd_unary_fn_t)function_context_handle)(&result, &(input_0->numeric_value), &ctx, &st);
+
+	expr_value* output = new_val(RHENDB_EXPR_NUMERIC, ec_p);
+	output->numeric_value = result;
+	return output;
+}
+static void* double_only_function_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	double input_0 = to_dbl(((expr_value**)params)[0]);
+	double input_1 = 0;
+	if(params_count > 1)
+		input_1 = to_dbl(((expr_value**)params)[1]);
+
+	double result;
+	if(function_context_handle == pow)
+		result = ((double (*)(double, double))function_context_handle)(input_0, input_1);
+	else
+		result = ((double (*)(double))function_context_handle)(input_0);
+
+	expr_value* output = new_val(RHENDB_EXPR_DOUBLE, ec_p);
+	write_flt(output, RHENDB_EXPR_DOUBLE, result);
+	return output;
+}
+static void* double_or_numeric_only_function_get_return_type(void* function_context_handle, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expr_type t = effective_type(((expr_type_info**)param_typs)[0]);
+	return et_is_native_number(t) ? new_type_sized(RHENDB_EXPR_DOUBLE, 0) : new_type(RHENDB_EXPR_NUMERIC, NULL);
+}
+static expressed_function* resolve_to_numeric_or_double_function(const dstring* identifier_bytes, expr_type_info** param_typs, uint32_t params_count)
+{
+	if(params_count == 0 || params_count > 2)
+		return NULL;
+	expr_type t0 = effective_type(param_typs[0]);
+	int is_numeric_input = (t0 == RHENDB_EXPR_NUMERIC);
+	if(params_count == 1)
+	{
+		if(!et_is_native_number_or_numeric(t0))
+			return NULL;
+	}
+	if(params_count == 2)
+	{
+		expr_type t1 = effective_type(param_typs[1]);
+		if(!et_is_native_number_or_numeric(t0) || !et_is_native_number_or_numeric(t1))
+			return NULL;
+		if(et_is_native_number(t0) && t1 == RHENDB_EXPR_NUMERIC)
+			return NULL;
+		if(t0 == RHENDB_EXPR_NUMERIC && et_is_native_number(t1))
+			return NULL;
+	}
+
+	#define to_string_case_for(x) #x
+	#define case_for(name, expected_params_count, mpd_fn, c_fn) \
+		if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring(to_string_case_for(f))) && params_count == expected_params_count) \
+		{ \
+			expressed_function* efunc = malloc(sizeof(expressed_function)); \
+			if(is_numeric_input) { \
+				*efunc = (expressed_function){ \
+					.function_context_handle      = mpd_fn, \
+					.call_function                = numeric_only_function_call_function, \
+					.get_return_type_for_function = double_or_numeric_only_function_get_return_type, \
+					.destroy_expressed_function   = simple_destroy_expressed_function, \
+				}; \
+			} else { \
+				*efunc = (expressed_function){ \
+					.function_context_handle      = c_fn, \
+					.call_function                = double_only_function_call_function, \
+					.get_return_type_for_function = double_or_numeric_only_function_get_return_type, \
+					.destroy_expressed_function   = simple_destroy_expressed_function, \
+				}; \
+			} \
+			return efunc; \
+		}
+
+	case_for(abs,   1,    mpd_qabs,           fabs)
+	case_for(floor, 1,    mpd_qfloor,         floor)
+	case_for(ceil,  1,    mpd_qceil,          ceil)
+	case_for(round, 1,    mpd_qround_to_int,  round)
+
+	case_for(sqrt,  1,    mpd_qsqrt,          sqrt)
+	case_for(cbrt,  1,    /*mpd_qcbrt*/NULL,          cbrt)
+
+	case_for(log10, 1,    mpd_qlog10,         log10)
+	case_for(ln,    1,    mpd_qln,            log)
+	case_for(exp,   1,    mpd_qexp,           exp)
+
+	case_for(pow,   2,    mpd_qpow,           pow)
+
+	#undef case_for
+	#undef to_string_case_for
+
+	return NULL;
+}
+
+// special checks for numeric and double only
+// isinf, isnan
 
 // any list of numbers -> type identified by the same logic as that of add/multiply i.e. type promotion
 // (function_context_handle holds the compare result required as intptr_t) min, max
@@ -2190,6 +2325,8 @@ static expressed_function* resolve_and_populate_efunc_cache(const dstring* ident
 	// list cases one by one, handle each default function one type at a time
 	if(efunc == NULL)
 		efunc = resolve_to_any_through_double_only_function(identifier_bytes, param_typs, params_count);
+	if(efunc == NULL)
+		efunc = resolve_to_numeric_or_double_function(identifier_bytes, param_typs, params_count);
 
 	// lastly populate
 	if(efunc != NULL)
