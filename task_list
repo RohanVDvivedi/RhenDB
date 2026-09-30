@@ -2,9 +2,6 @@ PICKED TASKS
 
 default functions in expression evaluation
 
-// special checks for numeric and double only
-// isinf, isnan
-
 // constants -> double
 // PI(), e(), inf(), nan()
 
