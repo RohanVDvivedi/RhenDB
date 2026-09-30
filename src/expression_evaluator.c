@@ -2170,6 +2170,28 @@ static void* double_or_numeric_only_function_get_return_type(void* function_cont
 	expr_type t = effective_type(((expr_type_info**)param_typs)[0]);
 	return et_is_native_number(t) ? new_type_sized(RHENDB_EXPR_DOUBLE, 0) : new_type(RHENDB_EXPR_NUMERIC, NULL);
 }
+static void mpd_sign(mpd_t* result, const mpd_t* num, const mpd_context_t* ctx, uint32_t* st)
+{
+	if(mpd_isnan(num))
+		mpd_setspecial(&result, MPD_POS, MPD_NAN);
+	else if(mpd_iszero(num))
+		mpd_set_string(&result, "0", &ctx);
+	else if(mpd_isnegative(num))
+		mpd_set_string(&result, "-1", &ctx);
+	else
+		mpd_set_string(&result, "1", &ctx);
+}
+static double sign_d(double d)
+{
+	if(isnan(d))
+		return NAN;
+	else if(x == 0.0)
+		return 0.0;
+	else if(x < 0.0)
+		return -1;
+	else
+		return 1;
+}
 static expressed_function* resolve_to_numeric_or_double_function(const dstring* identifier_bytes, expr_type_info** param_typs, uint32_t params_count)
 {
 	if(params_count == 0 || params_count > 2)
@@ -2197,14 +2219,14 @@ static expressed_function* resolve_to_numeric_or_double_function(const dstring* 
 		if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring(to_string_case_for(name))) && params_count == expected_params_count) \
 		{ \
 			expressed_function* efunc = malloc(sizeof(expressed_function)); \
-			if(is_numeric_input) { \
+			if(is_numeric_input && mpd_fn != NULL) { \
 				*efunc = (expressed_function){ \
 					.function_context_handle      = mpd_fn, \
 					.call_function                = numeric_only_function_call_function, \
 					.get_return_type_for_function = double_or_numeric_only_function_get_return_type, \
 					.destroy_expressed_function   = simple_destroy_expressed_function, \
 				}; \
-			} else { \
+			} else if(c_fn != NULL) { \
 				*efunc = (expressed_function){ \
 					.function_context_handle      = c_fn, \
 					.call_function                = double_only_function_call_function, \
@@ -2215,13 +2237,14 @@ static expressed_function* resolve_to_numeric_or_double_function(const dstring* 
 			return efunc; \
 		}
 
+	case_for(sign,  1,    mpd_sign,          sign_d)
 	case_for(abs,   1,    mpd_qabs,           fabs)
 	case_for(floor, 1,    mpd_qfloor,         floor)
 	case_for(ceil,  1,    mpd_qceil,          ceil)
 	case_for(round, 1,    mpd_qround_to_int,  round)
 
 	case_for(sqrt,  1,    mpd_qsqrt,          sqrt)
-	case_for(cbrt,  1,    /*mpd_qcbrt*/NULL,          cbrt)
+	case_for(cbrt,  1,    NULL,               cbrt) // no support of cube-root on a numeric
 
 	case_for(log10, 1,    mpd_qlog10,         log10)
 	case_for(ln,    1,    mpd_qln,            log)
