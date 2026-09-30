@@ -98,9 +98,12 @@ struct rhendb_expr_eval_context
 
 	uint32_t input_tuples_count;
 
-	// variable/identifier cache that stores variable identifier to tuple_index and positional_accessor in it
+	// variable identifier cache that stores variable identifier to tuple_index and positional_accessor in it
 	// owned by the context; caches "a.b.c" -> (tuple index + positional accessor + type)
 	hashmap var_cache;
+
+	// expressed function identifier cache that stores function identifier to efunc struct pointer that has all information to execute and infer-type for the expressed function
+	hashmap efunc_cache;
 
 	// for materializing the on-disk, and extended volatile store -> text, blob, numeric and jsonb columns
 	// and to access the catalog_manager, for user defined types and functions

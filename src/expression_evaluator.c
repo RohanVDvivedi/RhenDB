@@ -1997,7 +1997,7 @@ static void* rhendb_get_type_for_variable(const dstring* identifier_bytes, const
 	return ti;
 }
 
-static void notify_removal_for_cache_entry(void* resource_p, const void* data_p)
+static void notify_removal_for_var_cache_entry(void* resource_p, const void* data_p)
 {
 	var_cache_entry* e = (var_cache_entry*)data_p;
 	free(e->pa.positions);
@@ -2009,10 +2009,11 @@ static void notify_removal_for_cache_entry(void* resource_p, const void* data_p)
 
 // main struct that stores expressioned function that can show up in an expression
 // this is the struct that gets put into efunc_cache
+// for a given instance of expressed_function and a fixed number of params, the returned types must depend only on the type of the operands and not on their value
 typedef struct expressed_function expressed_function;
 struct expressed_function
 {
-	void* function_context_handle;
+	void* function_context_handle; // must not be used to store any local state, this is not an aggregate function
 	void* (*call_function)(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code);
 	void* (*get_return_type_for_function)(void* function_context_handle, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code);
 	void (*destroy_expressed_function)(expressed_function* efunc);
@@ -2024,14 +2025,86 @@ static void simple_destroy_expressed_function(expressed_function* efunc)
 	free(efunc);
 }
 
-// double/numeric -> double
-// function_context_handle = sin, cos, tan, asin, acos, atan, log, pow, floor and ceil
+// any number (cast to double implicitly using to_dbl) -> double
+// function_context_handle = sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh
+static void* through_double_only_function_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expr_value* input = ((expr_value**)params)[0];
 
-// double/numeric -> double/numeric
-// abs, sign, sqrt, cbrt, log10, ln, pow, exp, floor, ceil, round
+	double input_double = 0;
+
+	expr_type t = effective_type(&(input->type_info));
+	if(et_is_native_number(t))
+		input_double = to_dbl(input);
+	else // this is numeric
+	{
+		if(ee_materialize_numeric(input, ec_p, error_code))
+			return NULL;
+		input_double = mpd_to_double(&(input->numeric_value));
+	}
+
+	double output_double = ((double (*)(double))function_context_handle)(input_double);
+
+	expr_value* output = new_val(RHENDB_EXPR_DOUBLE, ec_p);
+	write_flt(output, RHENDB_EXPR_DOUBLE, output_double);
+	return output;
+}
+static void* through_double_only_function_get_return_type_for_function(void* function_context_handle, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	return new_type_sized(RHENDB_EXPR_DOUBLE, 0);
+}
+static expressed_function* resolve_to_any_through_double_only_function(const dstring* identifier_bytes, expr_type_info** param_typs, uint32_t params_count)
+{
+	expressed_function efunc_template = {
+		.function_context_handle = NULL,
+		.call_function = through_double_only_function_call_function,
+		.get_return_type_for_function = through_double_only_function_get_return_type_for_function,
+		.destroy_expressed_function = simple_destroy_expressed_function,
+	};
+
+	if(params_count != 1)
+		return NULL;
+
+	expr_type t = effective_type(param_typs[0]);
+	if(!et_is_native_number_or_numeric(t))
+		return NULL;
+
+	#define case_for(f) if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring(#f)))\
+	{\
+		expressed_function* efunc = malloc(sizeof(expressed_function));\
+		(*efunc) = efunc_template;\
+		efunc->function_context_handle = (void*)f;\
+		return efunc;\
+	}
+
+	case_for(sin)
+	case_for(cos)
+	case_for(tan)
+
+	case_for(asin)
+	case_for(acos)
+	case_for(atan)
+
+	case_for(sinh)
+	case_for(cosh)
+	case_for(tanh)
+
+	case_for(asinh)
+	case_for(acosh)
+	case_for(atanh)
+
+
+	return NULL;
+}
+
+// any numberc -> double/numeric (returns numeric if input is numeric else returns double, and uses the double function unless it is numeric)
+// abs, sign, sqrt, cbrt, log2, log10, ln, pow, exp, floor, ceil, round
+
+// any list of numbers -> type identified by the same logic as that of add/multiply i.e. type promotion
+// (function_context_handle holds the compare result required as intptr_t) min, max
 
 // constants -> double
-// PI(), e()
+// PI(), e(), inf(), nan()
 
 // constants -> numeric
 // PI_numeric(), e_numeric()
@@ -2043,12 +2116,12 @@ static void simple_destroy_expressed_function(expressed_function* efunc)
 // substring
 
 // string/binary/jsonb(array) -> uint64_t
-// length
+// length (materialize and return size, skipping jsonb for now])
 
 // string -> string
 // function_context_handle = lower, upper, ltrim, rtrim, trim
 
-// integer -> integer
+// integer list -> integer
 // gcd
 
 // constants -> integer
@@ -2057,12 +2130,126 @@ static void simple_destroy_expressed_function(expressed_function* efunc)
 // jsonb, string/integer -> jsonb
 // access() -> jsonb
 
-// below function populate the efunc_cache on first access
+// on first access below function populates the efunc_cache on first access, pointed by byte_array and char_count of the identifier bytes
+// then calles the corresponding callback in the expressed_function* efunc
 
-static void* rhendb_call_function(const dstring* identifier_bytes, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code);
+typedef struct efunc_cache_entry efunc_cache_entry;
+struct efunc_cache_entry
+{
+	bstnode node;                      /* embedded cutlery hashmap node (red-black bst buckets) */
 
-static void* rhendb_get_return_type_for_function(const dstring* identifier_bytes, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code);
+	/* the cache KEY is the identifier's bytes in memory : (address, length).
+	 * the dstring handed to get_variable()/get_type_for_variable() points INTO the AST node, so these
+	 * bytes are stable for the life of the expression. hashing/comparing an address+length is O(1) and
+	 * costs no FNV pass and no memory_compare() over the identifier on every single evaluation.
+	 * two AST nodes naming the same column at different addresses simply get two entries -- accepted. */
+	const char* key_bytes;
+	cy_uint key_length;
 
+	dstring identifier;                /* owned clone of the variable name (diagnostics only) */
+	expressed_function* efunc;
+};
+
+/* hash the identifier's LOCATION (address + length), not its contents.
+ * key_bytes is only ever treated as an integer here -- it is NEVER dereferenced -- so it is safe even if
+ * the AST that owned those bytes has since been freed. this removes the FNV pass over the identifier
+ * string from every single variable reference of every single evaluation. */
+static cy_uint efunc_hash(const void* d)
+{
+	const efunc_cache_entry* e = d;
+	uintptr_t p = (uintptr_t)(e->key_bytes);
+	uintptr_t h = p ^ (p >> 17) ^ (((uintptr_t)(e->key_length)) << 7);
+	h *= (uintptr_t)1099511628211ULL;
+	return (cy_uint)(h ^ (h >> 29));
+}
+/* order by (address, length) first -- both cheap integers -- and only then verify the actual bytes.
+ * the verification is ESSENTIAL and must not be dropped : a context may outlive the expression it cached
+ * (the differential fuzzers do exactly this), the AST's identifier bytes are freed, and a later AST's
+ * identifier can land at the SAME address with the SAME length while naming a DIFFERENT column. keying on
+ * the address alone hands back that stale entry -- silently resolving the wrong column.
+ * the compare reads each side's OWNED clone, so no freed memory is ever dereferenced. */
+static int efunc_cmp(const void* d1, const void* d2)
+{
+	const efunc_cache_entry* a = d1;
+	const efunc_cache_entry* b = d2;
+	if(a->key_bytes != b->key_bytes)
+		return (a->key_bytes > b->key_bytes) ? 1 : -1;
+	if(a->key_length != b->key_length)
+		return (a->key_length > b->key_length) ? 1 : -1;
+	return 0;   /* identical bytes at an identical address -> the same identifier */
+}
+
+// compares identifier_bytes and params to populate the efunc cache with right efunc and returns that
+static expressed_function* resolve_and_populate_efunc_cache(const dstring* identifier_bytes, expr_type_info** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expressed_function* efunc = NULL;
+
+	// list cases one by one, handle each default function one type at a time
+	if(efunc == NULL)
+		efunc = resolve_to_any_through_double_only_function(identifier_bytes, param_typs, params_count);
+
+	// lastly populate
+	if(efunc != NULL)
+	{
+		efunc_cache_entry* ece = malloc(sizeof(efunc_cache_entry));
+
+		initialize_bstnode(&(ece->node));
+		ece->key_bytes = get_byte_array_dstring(identifier_bytes);
+		ece->key_length = get_char_count_dstring(identifier_bytes);
+		init_dstring(&(ece->identifier), ece->key_bytes, ece->key_length);
+		ece->efunc = efunc;
+
+		insert_in_hashmap(&(((rhendb_expr_eval_context*)(ec_p->context_p))->efunc_cache), ece);
+
+		/* buckets are red-black trees, so a long chain is not fatal, but keeping the load factor low still
+		 * shortens every probe. expand by 1.3x once we average more than 4 entries per bucket.
+		 * expand_hashmap() failing is harmless -- the map simply stays as it is. */
+		{
+			if(get_element_count_hashmap(&(((rhendb_expr_eval_context*)(ec_p->context_p))->efunc_cache)) > (get_bucket_count_hashmap(&(((rhendb_expr_eval_context*)(ec_p->context_p))->efunc_cache)) * 4))
+				expand_hashmap(&(((rhendb_expr_eval_context*)(ec_p->context_p))->efunc_cache), 1.3f);   /* no-op on failure */
+		}
+	}
+
+	return efunc;
+}
+
+static void* rhendb_call_function(const dstring* identifier_bytes, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expressed_function* efunc = NULL;
+	{
+		efunc_cache_entry* ece = (efunc_cache_entry*)find_equals_in_hashmap(&(((rhendb_expr_eval_context*)(ec_p->context_p))->efunc_cache), &(const efunc_cache_entry){.key_bytes =  get_byte_array_dstring(identifier_bytes), .key_length = get_char_count_dstring(identifier_bytes)});
+		if(ece != NULL)
+			efunc = ece->efunc;
+	}
+
+	if(efunc == NULL)
+		efunc = resolve_and_populate_efunc_cache(identifier_bytes, (expr_type_info**)params, params_count, ec_p, error_code); // this won't be an issue as the type_info is the first attribute in expr_value
+
+	return efunc->call_function(efunc->function_context_handle, params, params_count, ec_p, error_code);
+}
+
+static void* rhendb_get_return_type_for_function(const dstring* identifier_bytes, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expressed_function* efunc = NULL;
+	{
+		efunc_cache_entry* ece = (efunc_cache_entry*)find_equals_in_hashmap(&(((rhendb_expr_eval_context*)(ec_p->context_p))->efunc_cache), &(const efunc_cache_entry){.key_bytes =  get_byte_array_dstring(identifier_bytes), .key_length = get_char_count_dstring(identifier_bytes)});
+		if(ece != NULL)
+			efunc = ece->efunc;
+	}
+
+	if(efunc == NULL)
+		efunc = resolve_and_populate_efunc_cache(identifier_bytes, (expr_type_info**)param_typs, params_count, ec_p, error_code);
+
+	return efunc->get_return_type_for_function(efunc->function_context_handle, param_typs, params_count, ec_p, error_code);
+}
+
+static void notify_removal_for_efunc_cache_entry(void* resource_p, const void* data_p)
+{
+	efunc_cache_entry* ece = (efunc_cache_entry*)data_p;
+	ece->efunc->destroy_expressed_function(ece->efunc);
+	deinit_dstring(&(ece->identifier));
+	free(ece);
+}
 
 /* ------------------------------ context ------------------------------ */
 
@@ -2265,7 +2452,7 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 		.next_data_from_sub_query = NULL,
 		.delete_sub_query = NULL,
 
-		.call_function = NULL,
+		.call_function = rhendb_call_function,
 
 		.get_variable = rhendb_get_variable,
 
@@ -2289,7 +2476,7 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 
 		.get_type_for_sub_query = NULL,
 
-		.get_return_type_for_function = NULL,
+		.get_return_type_for_function = rhendb_get_return_type_for_function,
 
 		.get_type_for_variable = rhendb_get_type_for_variable,
 
@@ -2306,6 +2493,8 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 	context_p->input_tuples_count = input_tuples_count;
 
 	initialize_hashmap(&(context_p->var_cache), ELEMENTS_AS_RED_BLACK_BST, 64, &simple_hasher(var_hash), &simple_comparator(var_cmp), offsetof(var_cache_entry, node));
+
+	initialize_hashmap(&(context_p->efunc_cache), ELEMENTS_AS_RED_BLACK_BST, 64, &simple_hasher(efunc_hash), &simple_comparator(efunc_cmp), offsetof(efunc_cache_entry, node));
 
 	context_p->free_list_for_expr_value = NULL;
 
@@ -2343,7 +2532,8 @@ void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_cont
 	}
 	deinitialize_arraylist(&(context_p->folded_expressions));
 
-	remove_all_from_hashmap(&(context_p->var_cache), &((notifier_interface){NULL, notify_removal_for_cache_entry}));
+	remove_all_from_hashmap(&(context_p->var_cache), &((notifier_interface){NULL, notify_removal_for_var_cache_entry}));
+	remove_all_from_hashmap(&(context_p->efunc_cache), &((notifier_interface){NULL, notify_removal_for_efunc_cache_entry}));
 	drain_free_list_for_expr_value(context_p);          /* the ONLY place the free list is released */
 
 	deinitialize_hashmap(&(context_p->var_cache));
