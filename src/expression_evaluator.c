@@ -2317,7 +2317,7 @@ static expressed_function* resolve_to_numeric_or_double_check_functions(const ds
 			return efunc; \
 		}
 
-	case_for(isinf,    mpd_isfinite,   isinf_d)
+	case_for(isinf,    mpd_isinfinite, isinf_d)
 	case_for(isnan,    mpd_isnan,      isnan_d)
 
 	#undef case_for
