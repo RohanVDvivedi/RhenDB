@@ -2020,10 +2020,8 @@ struct expressed_function
 };
 
 // works for most of the cases
-static void simple_destroy_expressed_function(expressed_function* efunc)
-{
-	free(efunc);
-}
+static void simple_destroy_expressed_function(expressed_function* efunc) { free(efunc); }
+static void simple_destroy_expressed_function2(expressed_function* efunc) { free(efunc->function_context_handle); free(efunc); }
 
 // any number (cast to double implicitly using to_dbl) -> double
 // function_context_handle = sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh
@@ -2328,6 +2326,48 @@ static expressed_function* resolve_to_numeric_or_double_check_functions(const ds
 
 // constants -> double
 // PI(), e(), inf(), nan()
+static void* special_doubles_function_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expr_value* output = new_val(RHENDB_EXPR_DOUBLE, ec_p);
+	write_flt(output, RHENDB_EXPR_DOUBLE, (*((double*)function_context_handle)));
+	return output;
+}
+static void* special_doubles_function_get_return_type(void* function_context_handle, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	return new_type_sized(RHENDB_EXPR_DOUBLE, 0);
+}
+static expressed_function* resolve_specials_double_functions(const dstring* identifier_bytes, expr_type_info** param_typs, uint32_t params_count)
+{
+	if(params_count != 0)
+		return NULL;
+
+	#define to_string_case_for(x) #x
+	#define case_for(name, const_num) \
+		if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring(to_string_case_for(name)))) \
+		{ \
+			expressed_function* efunc = malloc(sizeof(expressed_function)); \
+			double* const_value = malloc(sizeof(double)); (*const_value) = const_num;\
+			{ \
+				*efunc = (expressed_function){ \
+					.function_context_handle      = const_value, \
+					.call_function                = special_doubles_function_call_function, \
+					.get_return_type_for_function = special_doubles_function_get_return_type, \
+					.destroy_expressed_function   = simple_destroy_expressed_function2, \
+				}; \
+			} \
+			return efunc; \
+		}
+
+	case_for(inf, INFINITY)
+	case_for(nan, NAN)
+	case_for(pi,  M_PI)
+	case_for(e,   M_E)
+
+	#undef case_for
+	#undef to_string_case_for
+
+	return NULL;
+}
 
 // (*future)
 // numeric -> numeric
@@ -2419,6 +2459,8 @@ static expressed_function* resolve_and_populate_efunc_cache(const dstring* ident
 		efunc = resolve_to_numeric_or_double_function(identifier_bytes, param_typs, params_count);
 	if(efunc == NULL)
 		efunc = resolve_to_numeric_or_double_check_functions(identifier_bytes, param_typs, params_count);
+	if(efunc == NULL)
+		efunc = resolve_specials_double_functions(identifier_bytes, param_typs, params_count);
 
 	// lastly populate
 	if(efunc != NULL)
