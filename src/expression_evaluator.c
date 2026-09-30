@@ -2069,7 +2069,8 @@ static expressed_function* resolve_to_any_through_double_only_function(const dst
 	if(!et_is_native_number_or_numeric(t))
 		return NULL;
 
-	#define case_for(f) if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring(#f)))\
+	#define to_string_case_for(x) #x
+	#define case_for(f) if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring(to_string_case_for(f))))\
 	{\
 		expressed_function* efunc = malloc(sizeof(expressed_function));\
 		(*efunc) = efunc_template;\
@@ -2093,6 +2094,8 @@ static expressed_function* resolve_to_any_through_double_only_function(const dst
 	case_for(acosh)
 	case_for(atanh)
 
+	#undef case_for
+	#undef to_string_case_for
 
 	return NULL;
 }
@@ -2319,9 +2322,9 @@ static int is_rhendb_sentinel_value(const void* d)
 // function calls and sub queries are not handled by the constant fold-er yet
 static void reject_unfoldable_expression(const sql_expression* expr, const char* which)
 {
-	if(expr->type == SQL_FUNCTION_CALL || expr->type == SQL_SUB_QUERY || expr->type == SQL_EXISTS)
+	if(expr->type == SQL_SUB_QUERY || expr->type == SQL_EXISTS)
 	{
-		printf("ISSUE in (expression_evaluator) :: constant unfolding is not implemented for function calls and sub queries, hit in %s\n", which);
+		printf("ISSUE in (expression_evaluator) :: constant unfolding is not implemented for sub queries, hit in %s\n", which);
 		exit(-1);
 	}
 }
