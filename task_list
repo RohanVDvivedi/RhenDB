@@ -9,9 +9,6 @@ default functions in expression evaluation
 // string/binary/jsonb(array) -> uint64_t
 // length (materialize and return size, skipping jsonb for now])
 
-// string -> string
-// function_context_handle = lower, upper, ltrim, rtrim, trim
-
 
 
 
