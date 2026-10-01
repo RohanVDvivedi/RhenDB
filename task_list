@@ -6,19 +6,6 @@ default functions in expression evaluation
 // take absolute and return smallest width large_uint possible
 // gcd
 
-// string/binary/jsonb(array) -> uint64_t
-// length (materialize and return size, skipping jsonb for now])
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -42,13 +29,6 @@ default functions in expression evaluation
   * index lookup functions that give out iterator on plausible results, may have false positives
     * btree_index_nested_loop_join_operator
     * hash_index_nested_loop_join_operator
-
-
-
-
-
-
-
 
 
 
@@ -98,6 +78,11 @@ FUTURE TASKS
    * if required store the buffers_allotted and thread_alloted in the query plan, and free the resources when not needed by some means later
    * finally before we do all this, make sure that the operator actually calculates the right number of resources for bufferpool and threadpool
 
- 5.*trash cleaner to heap tables, locks the right partition and permanently deletes the tuples and discards the index entries in the same mini transaction, always in the same order
+ 5.* trash cleaner to heap tables, locks the right partition and permanently deletes the tuples and discards the index entries in the same mini transaction, always in the same order
 
- 6.*savepoint supporting functions have been implemented but need high level functions to orchestrate the savepoint management
+ 6.* savepoint supporting functions have been implemented but need high level functions to orchestrate the savepoint management
+
+ 7.* JSONB support for expression evaluator
+   * access(integer for array, string for object), access_base() for leaf string or number
+   * length for jsonb array
+   * need materialize function and jsonb projection function
