@@ -2410,7 +2410,8 @@ static void* substring_call_function(void* function_context_handle, void** param
 	uint32_t start;
 	{
 		// start_v must be lesser than UINT32_MAX
-		if(compare_datum_rhendb(&(start_v->value), start_v->type_info.dti_p, &((const datum){.uint_value = UINT32_MAX}), UINT_NON_NULLABLE[4], tx_from_ctx(ec_p)) >= 0)
+		if(compare_datum_rhendb(&(start_v->value), start_v->type_info.dti_p, &((const datum){.uint_value = UINT32_MAX}), UINT_NON_NULLABLE[4], tx_from_ctx(ec_p)) >= 0
+		|| compare_datum_rhendb(&(start_v->value), start_v->type_info.dti_p, &((const datum){.uint_value = 0}), UINT_NON_NULLABLE[4], tx_from_ctx(ec_p)) < 0)
 		{
 			*error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL;
 		}
@@ -2451,7 +2452,8 @@ static void* substring_call_function(void* function_context_handle, void** param
 	{
 		expr_value* length_v = ((expr_value**)params)[2];
 		// length_v must be lesser than UINT32_MAX
-		if(compare_datum_rhendb(&(length_v->value), length_v->type_info.dti_p, &((const datum){.uint_value = UINT32_MAX}), UINT_NON_NULLABLE[4], tx_from_ctx(ec_p)) > 0)
+		if(compare_datum_rhendb(&(length_v->value), length_v->type_info.dti_p, &((const datum){.uint_value = UINT32_MAX}), UINT_NON_NULLABLE[4], tx_from_ctx(ec_p)) > 0
+		|| compare_datum_rhendb(&(length_v->value), length_v->type_info.dti_p, &((const datum){.uint_value = 0}), UINT_NON_NULLABLE[4], tx_from_ctx(ec_p)) < 0)
 		{
 			*error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL;
 		}
