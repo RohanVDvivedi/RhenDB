@@ -2606,7 +2606,7 @@ static expressed_function* resolve_from_string_to_string_functions(const dstring
 		return NULL;
 
 	expr_type t0 = effective_type(param_typs[0]);
-	if(t0 != RHENDB_EXPR_STRING && t0 != RHENDB_EXPR_BINARY)
+	if(t0 != RHENDB_EXPR_STRING)
 		return NULL;
 
 	#define to_string_case_for(x) #x
