@@ -6,9 +6,6 @@ default functions in expression evaluation
 // take absolute and return smallest width large_uint possible
 // gcd
 
-// string/binary -> string/binary
-// substring
-
 // string/binary/jsonb(array) -> uint64_t
 // length (materialize and return size, skipping jsonb for now])
 
