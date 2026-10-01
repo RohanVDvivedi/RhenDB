@@ -2101,11 +2101,9 @@ static expressed_function* resolve_to_any_through_double_only_function(const dst
 	return NULL;
 }
 
-
 // any number -> same type (numeric->numeric via mpd, float/double/integer->double)
 // 1-param: abs, floor, ceil, round, sqrt, cbrt, log10, ln, exp
 // 2-param: pow
-
 typedef void (*mpd_unary_fn_t) (mpd_t*, const mpd_t*, const mpd_context_t*, uint32_t*);
 typedef void (*mpd_binary_fn_t)(mpd_t*, const mpd_t*, const mpd_t*, const mpd_context_t*, uint32_t*);
 static void* numeric_only_function_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
@@ -2373,6 +2371,7 @@ static expressed_function* resolve_specials_double_functions(const dstring* iden
 // numeric -> numeric
 // exact_round(numeric, precission -ve (as many digits after decimal point) or +ve or 0 implies round to integer, direction : 1 means towards positive infinity or -1 means towards negative infinity or 0 implies towards 0)
 
+// (*future)
 // integer list -> integer
 // take absolute and return smallest width large_uint possible
 // gcd
@@ -2380,10 +2379,6 @@ static expressed_function* resolve_specials_double_functions(const dstring* iden
 // (*future)
 // any list of numbers -> type identified by the same logic as that of add/multiply i.e. type promotion
 // (function_context_handle holds the compare result required as intptr_t) min, max
-
-// string/binary -> string/binary
-// substring
-
 
 // string/binary -> string/binary
 // substring(str, start [, length])
@@ -2670,7 +2665,6 @@ static expressed_function* resolve_from_string_to_string_functions(const dstring
 
 	return NULL;
 }
-
 
 // (*future)
 // constants -> integer
