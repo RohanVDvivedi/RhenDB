@@ -3,8 +3,6 @@ PICKED TASKS
 
 
 
-
-
 -----------------------------------------------------------------
 
 * also cache materialized values by chunk_pointer and by what rage_engine pointer they live in
@@ -27,8 +25,6 @@ PICKED TASKS
 
 
 
-
-
 PRIORITY 1 SIMPLE OPERATORS SOURCE/SINK
 
 DB acess operators
@@ -44,9 +40,6 @@ DB acess operators
  * deletion may be allowed to wait or skip tuple it can not delete, decide on this policy and get back
 
 PRIORITY HIGH LEVEL TASKS (not yet prioritized)
-
-* aggregate functions
- * aggregate_into_array -> put all composite types into a jsonb array
 
 * functions
 * need preloaded functions and mechanism to call them like length of string/array/blob/binary, trigonometery, max, min with variable lengths inputs
@@ -76,7 +69,11 @@ FUTURE TASKS
 
  6.* savepoint supporting functions have been implemented but need high level functions to orchestrate the savepoint management
 
- 7.* JSONB support for expression evaluator
+ 7.* JSONB support for expression evaluator and aggregate functions
    * access(integer for array, string for object), access_base() for leaf string or number
    * length for jsonb array
    * need materialize function and jsonb projection function
+   * aggregate functions
+     * aggregate_into_array -> put all composite types into a jsonb array
+
+ 8.* more default functions (including replace for string and binary data and find in string for substring)
