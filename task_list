@@ -77,3 +77,5 @@ FUTURE TASKS
      * aggregate_into_array -> put all composite types into a jsonb array
 
  8.* more default functions (including replace for string and binary data and find in string for substring)
+
+ 9.* support for user-defined expressioned-functions and aggregate-functions
