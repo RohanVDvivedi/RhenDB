@@ -2384,6 +2384,195 @@ static expressed_function* resolve_specials_double_functions(const dstring* iden
 // string/binary -> string/binary
 // substring
 
+
+// string/binary -> string/binary
+// substring(str, start [, length])
+//
+// non-ANSI SQL semantics (0-based indexing unlike ANSI SQL):
+//   start   : mandatory, any integer type, 0-based.
+//   length  : optional, any integer type, must be >= 0.
+//
+// Partial materialisation: for TUPLE-form (extended) strings we pass
+//   limit_bytes = (uint32_t)(start_0based + byte_count_needed)
+// to materialize_tbj so we never read more of the stored value than necessary.
+//
+// Return type: RHENDB_EXPR_STRING if first param is STRING/TEXT,
+//              RHENDB_EXPR_BINARY if first param is BINARY/BLOB.
+// No function_context_handle needed.  Single call_function callback.
+// Single resolver: resolve_to_substring_function.
+
+static void* substring_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expr_value* str_v   = ((expr_value**)params)[0];
+	expr_value* start_v = ((expr_value**)params)[1];
+
+	/* ── decode start (0-based, non ANSI SQL) ── */
+	uint32_t start;
+	{
+		// start_v must be lesser than UINT32_MAX
+		if(compare_datum_rhendb(&(start_v->value), start_v->type_info.dti_p, &((const datum){.uint_value = UINT32_MAX}), UINT_NON_NULLABLE[4], tx_from_ctx(ec_p)) >= 0)
+		{
+			*error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL;
+		}
+		switch(start_v->type_info.type)
+		{
+			case RHENDB_EXPR_BIT_FIELD:
+			case RHENDB_EXPR_UINT :
+			{
+				start = start_v->value.uint_value;
+				break;
+			}
+			case RHENDB_EXPR_INT :
+			{
+				start = start_v->value.int_value;
+				break;
+			}
+			case RHENDB_EXPR_LARGE_UINT :
+			{
+				start = start_v->value.large_uint_value.limbs[0];
+				break;
+			}
+			case RHENDB_EXPR_LARGE_INT :
+			{
+				start = start_v->value.large_int_value.raw_uint_value.limbs[0];
+				break;
+			}
+			default :
+			{
+				*error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL;
+			}
+		}
+	}
+
+	/* ── decode length (optional, ANSI SQL) ── */
+	int has_length = (params_count == 3);
+	uint32_t length = UINT32_MAX;
+	if(has_length)
+	{
+		expr_value* length_v = ((expr_value**)params)[2];
+		// length_v must be lesser than UINT32_MAX
+		if(compare_datum_rhendb(&(length_v->value), length_v->type_info.dti_p, &((const datum){.uint_value = UINT32_MAX}), UINT_NON_NULLABLE[4], tx_from_ctx(ec_p)) > 0)
+		{
+			*error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL;
+		}
+		switch(length_v->type_info.type)
+		{
+			case RHENDB_EXPR_BIT_FIELD:
+			case RHENDB_EXPR_UINT :
+			{
+				length = length_v->value.uint_value;
+				break;
+			}
+			case RHENDB_EXPR_INT :
+			{
+				length = length_v->value.int_value;
+				break;
+			}
+			case RHENDB_EXPR_LARGE_UINT :
+			{
+				length = length_v->value.large_uint_value.limbs[0];
+				break;
+			}
+			case RHENDB_EXPR_LARGE_INT :
+			{
+				length = length_v->value.large_int_value.raw_uint_value.limbs[0];
+				break;
+			}
+			default :
+			{
+				*error_code = RHENDB_EE_NON_INTEGER_OPERAND; return NULL;
+			}
+		}
+	}
+
+	/* ── materialise only the bytes we need ──
+	 * limit_bytes = byte_offset + byte_count (0 means no limit). */
+
+	const char* src_ptr;    /* base of the materialised bytes                   */
+	uint32_t    src_len;    /* total length of what was materialised             */
+	char*       owned_buf = NULL;  /* non-NULL -> we must free this after use    */
+
+	expr_type out_type = effective_type(&str_v->type_info);
+
+	if(str_v->type_info.type == RHENDB_EXPR_TUPLE)
+	{
+		/* limit_bytes: only materialise as far as we need */
+		uint32_t limit = 0;   /* 0 = no limit (default: to-end case) */
+		if(has_length)
+		{
+			if(will_unsigned_sum_overflow(uint32_t, start, length))
+				limit = UINT32_MAX;
+			else
+				limit = start + length;
+		}
+
+		uint32_t mat_len = 0, mat_cap = 0;
+		int mrc = MATERIALIZED_SUCCESSFULLY;
+		char* buf = materialize_tbj(str_v->value, str_v->type_info.dti_p, tx_from_ctx(ec_p), &mat_len, &mat_cap, limit, &mrc);
+		if(mrc != MATERIALIZED_SUCCESSFULLY)
+		{
+			*error_code = (mrc == MATERIALIZED_RESULT_TOO_BIG) ? RHENDB_EE_STRING_TOO_LONG : RHENDB_EE_MATERIALIZE_FAILED;
+			return NULL;
+		}
+		src_ptr   = buf;
+		src_len   = mat_len;
+		if(mat_cap > 0)
+			owned_buf = buf;   /* we own the allocation; free after init_dstring */
+	}
+	else
+	{
+		/* native STRING or BINARY — bytes already live in string_value dstring */
+		src_ptr = get_byte_array_dstring(&str_v->string_value);
+		src_len = (uint32_t)get_char_count_dstring(&str_v->string_value);
+	}
+
+	/* ── build output: init_dstring on the moved pointer copies the slice ── */
+	expr_value* output = new_val(out_type, ec_p);
+	uint32_t substring_offset = ((start < src_len) ? start : src_len);
+	uint32_t substring_length = src_len - substring_offset;
+	if(has_length)
+		substring_length = min(substring_length, length);
+	if(!init_dstring(&output->string_value, src_ptr + substring_offset, substring_length))
+	{
+		if(owned_buf) free(owned_buf);
+		*error_code = RHENDB_EE_OUT_OF_MEMORY;
+		return NULL;
+	}
+	if(owned_buf) free(owned_buf);
+	return output;
+}
+static void* substring_get_return_type(void* function_context_handle, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expr_type t = effective_type((expr_type_info*)param_typs[0]);
+	return (t == RHENDB_EXPR_BINARY) ? new_type(RHENDB_EXPR_BINARY, NULL) : new_type(RHENDB_EXPR_STRING, NULL);
+}
+static expressed_function* resolve_to_substring_function(const dstring* identifier_bytes, expr_type_info** param_typs, uint32_t params_count)
+{
+	/* ANSI SQL: SUBSTRING(str, start) or SUBSTRING(str, start, length) */
+	if(params_count < 2 || params_count > 3)
+		return NULL;
+
+	if(0 != case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring("substring")))
+		return NULL;
+
+	expr_type t0 = effective_type(param_typs[0]);
+	if(t0 != RHENDB_EXPR_STRING && t0 != RHENDB_EXPR_BINARY)
+		return NULL;
+	if(!et_is_native_integer(effective_type(param_typs[1])))
+		return NULL;
+	if(params_count == 3 && !et_is_native_integer(effective_type(param_typs[2])))
+		return NULL;
+
+	expressed_function* efunc = malloc(sizeof(expressed_function));
+	*efunc = (expressed_function){
+		.function_context_handle      = NULL,
+		.call_function                = substring_call_function,
+		.get_return_type_for_function = substring_get_return_type,
+		.destroy_expressed_function   = simple_destroy_expressed_function,
+	};
+	return efunc;
+}
+
 // string/binary/jsonb(array) -> uint64_t
 // length (materialize and return size, skipping jsonb for now])
 
@@ -2399,7 +2588,7 @@ static expressed_function* resolve_specials_double_functions(const dstring* iden
 // access() -> jsonb
 
 // on first access below function populates the efunc_cache on first access, pointed by byte_array and char_count of the identifier bytes
-// then calles the corresponding callback in the expressed_function* efunc
+// then calls the corresponding callback in the expressed_function* efunc
 
 typedef struct efunc_cache_entry efunc_cache_entry;
 struct efunc_cache_entry
@@ -2461,6 +2650,8 @@ static expressed_function* resolve_and_populate_efunc_cache(const dstring* ident
 		efunc = resolve_to_numeric_or_double_check_functions(identifier_bytes, param_typs, params_count);
 	if(efunc == NULL)
 		efunc = resolve_specials_double_functions(identifier_bytes, param_typs, params_count);
+	if(efunc == NULL)
+		efunc = resolve_to_substring_function(identifier_bytes, param_typs, params_count);
 
 	// lastly populate
 	if(efunc != NULL)
