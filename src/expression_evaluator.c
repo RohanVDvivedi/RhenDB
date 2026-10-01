@@ -2577,8 +2577,64 @@ static expressed_function* resolve_to_substring_function(const dstring* identifi
 // string/binary/jsonb(array) -> uint64_t
 // length (materialize and return size, skipping jsonb for now])
 
+
 // string -> string
-// function_context_handle = lower, upper, ltrim, rtrim, trim
+// lower, upper, ltrim, rtrim, trim
+// Always accept STRING (or extended TEXT), always return RHENDB_EXPR_STRING.
+static void* string_to_string_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expr_value* str_v = ((expr_value**)params)[0];
+
+	if(ee_materialize_tb(str_v, ec_p, error_code))
+		return NULL;
+
+	expr_value* output = new_val(RHENDB_EXPR_STRING, ec_p);
+	output->string_value = str_v->string_value;
+	init_dstring(&(str_v->string_value), NULL, 0);
+
+	((void(*)(dstring*))function_context_handle)(&(output->string_value));
+
+	return output;
+}
+static void* string_to_string_get_return_type(void* function_context_handle, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	return new_type(RHENDB_EXPR_STRING, NULL);
+}
+static expressed_function* resolve_from_string_to_string_functions(const dstring* identifier_bytes, expr_type_info** param_typs, uint32_t params_count)
+{
+	if(params_count != 1)
+		return NULL;
+
+	expr_type t0 = effective_type(param_typs[0]);
+	if(t0 != RHENDB_EXPR_STRING && t0 != RHENDB_EXPR_BINARY)
+		return NULL;
+
+	#define to_string_case_for(x) #x
+	#define case_for(name, fn) \
+		if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring(to_string_case_for(name)))) \
+		{ \
+			expressed_function* efunc = malloc(sizeof(expressed_function)); \
+			*efunc = (expressed_function){ \
+				.function_context_handle      = fn, \
+				.call_function                = string_to_string_call_function, \
+				.get_return_type_for_function = string_to_string_get_return_type, \
+				.destroy_expressed_function   = simple_destroy_expressed_function, \
+			}; \
+			return efunc; \
+		}
+
+	case_for(lower, to_lowercase_dstring)
+	case_for(upper, to_uppercase_dstring)
+	case_for(ltrim, ltrim_dstring)
+	case_for(rtrim, rtrim_dstring)
+	case_for(trim,  trim_dstring)
+
+	#undef case_for
+	#undef to_string_case_for
+
+	return NULL;
+}
+
 
 // (*future)
 // constants -> integer
@@ -2653,6 +2709,8 @@ static expressed_function* resolve_and_populate_efunc_cache(const dstring* ident
 		efunc = resolve_specials_double_functions(identifier_bytes, param_typs, params_count);
 	if(efunc == NULL)
 		efunc = resolve_to_substring_function(identifier_bytes, param_typs, params_count);
+	if(efunc == NULL)
+		efunc = resolve_from_string_to_string_functions(identifier_bytes, param_typs, params_count);
 
 	// lastly populate
 	if(efunc != NULL)
