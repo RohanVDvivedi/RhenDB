@@ -2400,7 +2400,6 @@ static expressed_function* resolve_specials_double_functions(const dstring* iden
 //              RHENDB_EXPR_BINARY if first param is BINARY/BLOB.
 // No function_context_handle needed.  Single call_function callback.
 // Single resolver: resolve_to_substring_function.
-
 static void* substring_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expr_value* str_v   = ((expr_value**)params)[0];
