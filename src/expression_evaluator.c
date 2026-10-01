@@ -2574,9 +2574,45 @@ static expressed_function* resolve_to_substring_function(const dstring* identifi
 	return efunc;
 }
 
-// string/binary/jsonb(array) -> uint64_t
+// string/binary/[jsonb(array)(*future)] -> uint64_t
 // length (materialize and return size, skipping jsonb for now])
+static void* length_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expr_value* str_v   = ((expr_value**)params)[0];
 
+	if(ee_materialize_tb(str_v, ec_p, error_code))
+		return NULL;
+
+	expr_value* output = new_val(RHENDB_EXPR_UINT, ec_p);
+	output->type_info.dti_p = static_dti_for(RHENDB_EXPR_UINT, 4);
+	output->value = (datum){.uint_value = get_char_count_dstring(&(str_v->string_value))};
+	return output;
+}
+static void* length_get_return_type(void* function_context_handle, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	return new_type_sized(RHENDB_EXPR_UINT, 4);
+}
+static expressed_function* resolve_to_length_function(const dstring* identifier_bytes, expr_type_info** param_typs, uint32_t params_count)
+{
+	if(params_count != 1)
+		return NULL;
+
+	if(0 != case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring("length")))
+		return NULL;
+
+	expr_type t0 = effective_type(param_typs[0]);
+	if(t0 != RHENDB_EXPR_STRING && t0 != RHENDB_EXPR_BINARY && t0 != RHENDB_EXPR_JSONB)
+		return NULL;
+
+	expressed_function* efunc = malloc(sizeof(expressed_function));
+	*efunc = (expressed_function){
+		.function_context_handle      = NULL,
+		.call_function                = length_call_function,
+		.get_return_type_for_function = length_get_return_type,
+		.destroy_expressed_function   = simple_destroy_expressed_function,
+	};
+	return efunc;
+}
 
 // string -> string
 // lower, upper, ltrim, rtrim, trim
@@ -2711,6 +2747,8 @@ static expressed_function* resolve_and_populate_efunc_cache(const dstring* ident
 		efunc = resolve_to_substring_function(identifier_bytes, param_typs, params_count);
 	if(efunc == NULL)
 		efunc = resolve_from_string_to_string_functions(identifier_bytes, param_typs, params_count);
+	if(efunc == NULL)
+		efunc = resolve_to_length_function(identifier_bytes, param_typs, params_count);
 
 	// lastly populate
 	if(efunc != NULL)
