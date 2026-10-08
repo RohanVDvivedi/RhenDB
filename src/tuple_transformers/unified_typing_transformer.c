@@ -17,11 +17,11 @@ static void* process(tuple_transformer* tt_p, void* tuple)
 
 	for(uint32_t i = 0; i < tt_p->output_def->type_info->element_count; i++)
 	{
+		const data_type_info* input_dti;
 		datum input_uval;
-		if(!get_value_from_element_from_tuple(&input_uval, tt_p->input_def, STATIC_POSITION(i), tuple) || is_datum_NULL(&input_uval))
+		if(!get_value_from_element_from_tuple(&input_uval, &input_dti, tt_p->input_def, STATIC_POSITION(i), tuple) || is_datum_NULL(&input_uval))
 			continue;
 
-		const data_type_info* input_dti = get_type_info_for_element_from_tuple_def(tt_p->input_def, STATIC_POSITION(i));
 		const data_type_info* output_dti = get_type_info_for_element_from_tuple_def(tt_p->output_def, STATIC_POSITION(i));
 
 		positional_accessor pos_i = STATIC_POSITION(i);

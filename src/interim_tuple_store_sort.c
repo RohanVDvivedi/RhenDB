@@ -66,8 +66,11 @@ interim_tuple_store* sort_interim_tuples(interim_tuple_store* its_p, tuples_down
 	for(uint64_t i = 0; i < its_p->tuples_count; i++)
 	{
 		for(uint32_t j = 0; j < element_count; j++)
-			if(!get_value_from_element_from_tuple(&(keyss[i * element_count + j]), tpl_d, element_ids[j], tuple))
+		{
+			const data_type_info* dti_temp;
+			if(!get_value_from_element_from_tuple(&(keyss[i * element_count + j]), &dti_temp, tpl_d, element_ids[j], tuple))
 				keyss[i * element_count + j] = (*NULL_DATUM);
+		}
 		if(!push_back_to_sortable_tuple_references(&list_of_sortable_tuple_references, &(sortable_tuple_reference){tuple, &(keyss[i * element_count])}))
 			exit(-1);
 		tuple += get_tuple_size(tpl_d, tuple);

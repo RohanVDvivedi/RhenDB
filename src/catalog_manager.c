@@ -347,8 +347,9 @@ static char* catalog_read_extended_blob(catalog_manager* catmgr_p, const void* t
 	(*bytes_read) = 0;
 	rage_engine* engine = catmgr_p->catmgr_engine;
 
+	const data_type_info* dti_temp;
 	datum uval;
-	get_value_from_element_from_tuple(&uval, record_def, position, tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, position, tuple);
 
 	if(is_datum_NULL(&uval))
 		return NULL;
@@ -392,8 +393,9 @@ static char* catalog_read_extended_blob(catalog_manager* catmgr_p, const void* t
 
 static void catalog_read_mvcc_header(catalog_manager* catmgr_p, const void* tuple, const tuple_def* record_def, mvcc_header* mvcchdr_p)
 {
+	const data_type_info* dti_temp;
 	datum uval;
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(0), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(0), tuple);
 
 	read_mvcc_header(mvcchdr_p, uval.tuple_value, &(catmgr_p->mvcc_header_tuple_def));
 }
@@ -406,39 +408,40 @@ static rhendb_attribute deserialize_rhendb_attribute(catalog_manager* catmgr_p, 
 
 	rhendb_attribute attr = {};
 
+	const data_type_info* dti_temp;
 	datum uval;
 
 	if(mvcchdr_p != NULL)
 		catalog_read_mvcc_header(catmgr_p, tuple, record_def, mvcchdr_p);
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(1), tuple);
 	attr.owner_id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(2), tuple);
 	attr.rel_pos_in_owner = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(3), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(3), tuple);
 	attr.table_part_id_from = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(4), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(4), tuple);
 	attr.table_part_id_to = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(5), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(5), tuple);
 	memory_move(attr.attribute_name, uval.string_value, uval.string_size);
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(6), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(6), tuple);
 	attr.base_type = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(7), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(7), tuple);
 	attr.size = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(8), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(8), tuple);
 	attr.is_auto_increment = uval.bit_field_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(9), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(9), tuple);
 	attr.is_nullable = uval.bit_field_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(10), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(10), tuple);
 	attr.cmp_dir = uval.int_value;
 
 	if(should_blob)
@@ -462,21 +465,22 @@ static rhendb_index_fragment deserialize_rhendb_index_fragment(catalog_manager* 
 
 	rhendb_index_fragment ifrag = {};
 
+	const data_type_info* dti_temp;
 	datum uval;
 
 	if(mvcchdr_p != NULL)
 		catalog_read_mvcc_header(catmgr_p, tuple, record_def, mvcchdr_p);
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(1), tuple);
 	ifrag.table_id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(2), tuple);
 	ifrag.index_id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(3), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(3), tuple);
 	ifrag.partition_id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(4), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(4), tuple);
 	ifrag.root_page_id = uval.uint_value;
 
 	return ifrag;
@@ -488,21 +492,22 @@ static rhendb_index deserialize_rhendb_index(catalog_manager* catmgr_p, mvcc_hea
 
 	rhendb_index idx = {};
 
+	const data_type_info* dti_temp;
 	datum uval;
 
 	if(mvcchdr_p != NULL)
 		catalog_read_mvcc_header(catmgr_p, tuple, record_def, mvcchdr_p);
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(1), tuple);
 	idx.id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(2), tuple);
 	memory_move(idx.name, uval.string_value, uval.string_size);
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(3), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(3), tuple);
 	idx.table_id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(4), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(4), tuple);
 	idx.access_method = uval.uint_value;
 
 	if(should_blob)
@@ -526,21 +531,22 @@ static rhendb_table_partition deserialize_rhendb_table_partition(catalog_manager
 
 	rhendb_table_partition tpart = {};
 
+	const data_type_info* dti_temp;
 	datum uval;
 
 	if(mvcchdr_p != NULL)
 		catalog_read_mvcc_header(catmgr_p, tuple, record_def, mvcchdr_p);
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(1), tuple);
 	tpart.table_id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(2), tuple);
 	tpart.partition_id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(3), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(3), tuple);
 	tpart.heap_root_page_id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(4), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(4), tuple);
 	tpart.blobs_root_page_id = uval.uint_value;
 
 	return tpart;
@@ -552,15 +558,16 @@ static rhendb_table deserialize_rhendb_table(catalog_manager* catmgr_p, mvcc_hea
 
 	rhendb_table tbl = {};
 
+	const data_type_info* dti_temp;
 	datum uval;
 
 	if(mvcchdr_p != NULL)
 		catalog_read_mvcc_header(catmgr_p, tuple, record_def, mvcchdr_p);
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(1), tuple);
 	tbl.id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(2), tuple);
 	memory_move(tbl.name, uval.string_value, uval.string_size);
 
 	return tbl;
@@ -572,15 +579,16 @@ static rhendb_name_idx_entry deserialize_rhendb_name_idx_entry(catalog_manager* 
 
 	rhendb_name_idx_entry nidx = {};
 
+	const data_type_info* dti_temp;
 	datum uval;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(0), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(0), tuple);
 	nidx.object_type = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(1), tuple);
 	memory_move(nidx.name, uval.string_value, uval.string_size);
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(2), tuple);
 	nidx.object_tuple_pointer = get_tuple_pointer(uval.tuple_value, &(catmgr_p->catmgr_engine->pam_p->pas));
 
 	return nidx;
@@ -592,15 +600,16 @@ static rhendb_id_idx_entry deserialize_rhendb_id_idx_entry(catalog_manager* catm
 
 	rhendb_id_idx_entry ididx = {};
 
+	const data_type_info* dti_temp;
 	datum uval;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(0), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(0), tuple);
 	ididx.object_type = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(1), tuple);
 	ididx.id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(2), tuple);
 	ididx.object_tuple_pointer = get_tuple_pointer(uval.tuple_value, &(catmgr_p->catmgr_engine->pam_p->pas));
 
 	return ididx;
@@ -612,12 +621,13 @@ static rhendb_table_to_indices_entry deserialize_rhendb_table_to_indices_entry(c
 
 	rhendb_table_to_indices_entry t2iidx = {};
 
+	const data_type_info* dti_temp;
 	datum uval;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(0), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(0), tuple);
 	t2iidx.table_id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(1), tuple);
 	t2iidx.indices_tuple_pointer = get_tuple_pointer(uval.tuple_value, &(catmgr_p->catmgr_engine->pam_p->pas));
 
 	return t2iidx;
@@ -629,15 +639,16 @@ static rhendb_owner_to_attributes_idx_entry deserialize_rhendb_owner_to_attribut
 
 	rhendb_owner_to_attributes_idx_entry o2aidx = {};
 
+	const data_type_info* dti_temp;
 	datum uval;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(0), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(0), tuple);
 	o2aidx.owner_id = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(1), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(1), tuple);
 	o2aidx.rel_pos_in_owner = uval.uint_value;
 
-	get_value_from_element_from_tuple(&uval, record_def, STATIC_POSITION(2), tuple);
+	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(2), tuple);
 	o2aidx.attributes_tuple_pointer = get_tuple_pointer(uval.tuple_value, &(catmgr_p->catmgr_engine->pam_p->pas));
 
 	return o2aidx;

@@ -178,8 +178,9 @@ static int scan_partition(operator* o, uint64_t partition_index_in_info)
 
 			// every tuple must pass the mvcc visibility check, before it is even projected for the output
 			{
+				const data_type_info* dti_temp;
 				datum mvcc_hdr_datum;
-				get_value_from_element_from_tuple(&mvcc_hdr_datum, partition_tuple_def, STATIC_POSITION(0), heap_record);
+				get_value_from_element_from_tuple(&mvcc_hdr_datum, &dti_temp, partition_tuple_def, STATIC_POSITION(0), heap_record);
 
 				mvcc_header mvcchdr;
 				read_mvcc_header(&mvcchdr, mvcc_hdr_datum.tuple_value, &mvcc_def);

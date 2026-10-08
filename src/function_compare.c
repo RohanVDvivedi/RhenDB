@@ -360,14 +360,14 @@ int compare_tuples_rhendb(const void* tup1, const tuple_def* tpl_d1, const posit
 
 	for(uint32_t i = 0; ((i < element_count) && (compare == 0)); i++)
 	{
-		const data_type_info* dti1 = get_type_info_for_element_from_tuple_def(tpl_d1, (element_ids1 != NULL) ? element_ids1[i] : STATIC_POSITION(i));
+		const data_type_info* dti1;
 		datum uval1;
-		if(!get_value_from_element_from_tuple(&uval1, tpl_d1, (element_ids1 != NULL) ? element_ids1[i] : STATIC_POSITION(i), tup1))
+		if(!get_value_from_element_from_tuple(&uval1, &dti1, tpl_d1, (element_ids1 != NULL) ? element_ids1[i] : STATIC_POSITION(i), tup1))
 			uval1 = (*NULL_DATUM);
 
-		const data_type_info* dti2 = get_type_info_for_element_from_tuple_def(tpl_d2, (element_ids2 != NULL) ? element_ids2[i] : STATIC_POSITION(i));
+		const data_type_info* dti2;
 		datum uval2;
-		if(!get_value_from_element_from_tuple(&uval2, tpl_d2, (element_ids2 != NULL) ? element_ids2[i] : STATIC_POSITION(i), tup2))
+		if(!get_value_from_element_from_tuple(&uval2, &dti2, tpl_d2, (element_ids2 != NULL) ? element_ids2[i] : STATIC_POSITION(i), tup2))
 			uval2 = (*NULL_DATUM);
 
 		compare = compare_datum_rhendb(&uval1, dti1, &uval2, dti2, tx);
@@ -385,14 +385,14 @@ int compare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* 
 
 	for(uint32_t i = 0; ((i < element_count) && (compare == 0)); i++)
 	{
-		const data_type_info* dti = get_type_info_for_element_from_tuple_def(tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i));
+		const data_type_info* dti;
 
 		datum uval1;
-		if(!get_value_from_element_from_tuple(&uval1, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup1))
+		if(!get_value_from_element_from_tuple(&uval1, &dti, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup1))
 			uval1 = (*NULL_DATUM);
 
 		datum uval2;
-		if(!get_value_from_element_from_tuple(&uval2, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup2))
+		if(!get_value_from_element_from_tuple(&uval2, &dti, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup2))
 			uval2 = (*NULL_DATUM);
 
 		compare = compare_datum2_rhendb(&uval1, &uval2, dti, tx);

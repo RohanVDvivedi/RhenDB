@@ -200,8 +200,9 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 
 					for(uint32_t i = 0; i < inputs->key_element_count; i++)
 					{
+						const data_type_info* dti_temp;
 						datum key_val;
-						if(get_value_from_element_from_tuple(&key_val, &(inputs->partitions[partition_id]->rth.key_tuple_def), STATIC_POSITION(i), key_tuple))
+						if(get_value_from_element_from_tuple(&key_val, &dti_temp, &(inputs->partitions[partition_id]->rth.key_tuple_def), STATIC_POSITION(i), key_tuple))
 						{
 							// ensure there are enough bytes in the output_tuple, as we try to insert this datum
 							while(!set_element_in_tuple(inputs->output_tuple_def, STATIC_POSITION(i), output_tuple, &key_val, output_tuple_capacity - output_tuple_size))
@@ -239,7 +240,8 @@ static void probe_for_aggregation_phase_job(operator* o, void* param)
 										// generate input params to the i-th udaf
 										for(uint32_t j = 0; j < inputs->aggregate_functions[i]->input_type_infos_count; j++)
 										{
-											if(!get_value_from_element_from_tuple(&(input_datums[j]), inputs->input_tuple_def, inputs->aggregate_input_element_ids[i][j], tuple))
+											const data_type_info* dti_temp;
+											if(!get_value_from_element_from_tuple(&(input_datums[j]), &dti_temp, inputs->input_tuple_def, inputs->aggregate_input_element_ids[i][j], tuple))
 												input_datums[j] = (*NULL_DATUM);
 										}
 

@@ -33,9 +33,10 @@ data_type_info* get_mvcc_header_type_info(uint8_t transaction_id_width)
 
 void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_tup, const tuple_def* mvcchdr_def)
 {
+	const data_type_info* dti_temp;
 	datum uval;
 
-	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(2), mvcchdr_tup))
+	if(!get_value_from_element_from_tuple(&uval, &dti_temp, mvcchdr_def, STATIC_POSITION(2), mvcchdr_tup))
 		exit(-1);
 	if(is_datum_NULL(&uval))
 	{
@@ -46,16 +47,16 @@ void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_tup, const tup
 		mvcchdr_p->is_xmin_NULL = 0;
 		mvcchdr_p->xmin.transaction_id = uval.large_uint_value;
 
-		if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(0), mvcchdr_tup))
+		if(!get_value_from_element_from_tuple(&uval, &dti_temp, mvcchdr_def, STATIC_POSITION(0), mvcchdr_tup))
 			exit(-1);
 		mvcchdr_p->xmin.is_committed = uval.bit_field_value;
 
-		if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(1), mvcchdr_tup))
+		if(!get_value_from_element_from_tuple(&uval, &dti_temp, mvcchdr_def, STATIC_POSITION(1), mvcchdr_tup))
 			exit(-1);
 		mvcchdr_p->xmin.is_aborted = uval.bit_field_value;
 	}
 
-	if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(5), mvcchdr_tup))
+	if(!get_value_from_element_from_tuple(&uval, &dti_temp, mvcchdr_def, STATIC_POSITION(5), mvcchdr_tup))
 		exit(-1);
 	if(is_datum_NULL(&uval))
 	{
@@ -66,11 +67,11 @@ void read_mvcc_header(mvcc_header* mvcchdr_p, const void* mvcchdr_tup, const tup
 		mvcchdr_p->is_xmax_NULL = 0;
 		mvcchdr_p->xmax.transaction_id = uval.large_uint_value;
 
-		if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(3), mvcchdr_tup))
+		if(!get_value_from_element_from_tuple(&uval, &dti_temp, mvcchdr_def, STATIC_POSITION(3), mvcchdr_tup))
 			exit(-1);
 		mvcchdr_p->xmax.is_committed = uval.bit_field_value;
 
-		if(!get_value_from_element_from_tuple(&uval, mvcchdr_def, STATIC_POSITION(4), mvcchdr_tup))
+		if(!get_value_from_element_from_tuple(&uval, &dti_temp, mvcchdr_def, STATIC_POSITION(4), mvcchdr_tup))
 			exit(-1);
 		mvcchdr_p->xmax.is_aborted = uval.bit_field_value;
 	}

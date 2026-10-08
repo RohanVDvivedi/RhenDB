@@ -80,7 +80,8 @@ static void execute(operator* o)
 				}
 				else
 				{
-					if(!get_value_from_element_from_tuple(&output_uval, inputs->input_tuple_def, inputs->projection_descriptions[i].pa, tuple))
+					const data_type_info* dti_temp;
+					if(!get_value_from_element_from_tuple(&output_uval, &dti_temp, inputs->input_tuple_def, inputs->projection_descriptions[i].pa, tuple))
 						output_uval = (*NULL_DATUM);
 				}
 

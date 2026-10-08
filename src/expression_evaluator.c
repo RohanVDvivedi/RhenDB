@@ -1954,8 +1954,9 @@ static void* rhendb_get_variable(const dstring* identifier_bytes, const sql_expr
 	if(e == NULL)
 		return NULL;
 
+	const data_type_info* dti_temp;
 	datum d;
-	if(!get_value_from_element_from_tuple(&d, ctx->input_tuple_defs[e->tuple_index], e->pa, ctx->input_tuples[e->tuple_index]))
+	if(!get_value_from_element_from_tuple(&d, &dti_temp, ctx->input_tuple_defs[e->tuple_index], e->pa, ctx->input_tuples[e->tuple_index]))
 		return NULL;                       /* could not read : treat as SQL NULL */
 	if(is_datum_NULL(&d))
 		return NULL;             /* NULL column -> NULL pointer */

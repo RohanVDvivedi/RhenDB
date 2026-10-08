@@ -58,30 +58,21 @@ static void serialize_lock_entry_record(void* to, const lock_entry* from, const 
 
 static void deserialize_lock_entry_record(const void* from, lock_entry* to, const lock_manager* lckmgr_p)
 {
-	{
-		datum uval;
-		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(0), from);
-		to->transaction = (void*)((uintptr_t)uval.uint_value);
-	}
+	const data_type_info* dti_temp;
+	datum uval;
 
-	{
-		datum uval;
-		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(1), from);
-		to->resource_type = uval.uint_value;
-	}
+	get_value_from_element_from_tuple(&uval, &dti_temp, lckmgr_p->lock_record_def, STATIC_POSITION(0), from);
+	to->transaction = (void*)((uintptr_t)uval.uint_value);
 
-	{
-		datum uval;
-		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(2), from);
-		to->resource_id_size = uval.binary_size;
-		memory_move(to->resource_id, uval.binary_value, to->resource_id_size);
-	}
+	get_value_from_element_from_tuple(&uval, &dti_temp, lckmgr_p->lock_record_def, STATIC_POSITION(1), from);
+	to->resource_type = uval.uint_value;
 
-	{
-		datum uval;
-		get_value_from_element_from_tuple(&uval, lckmgr_p->lock_record_def, STATIC_POSITION(3), from);
-		to->lock_mode = uval.uint_value;
-	}
+	get_value_from_element_from_tuple(&uval, &dti_temp, lckmgr_p->lock_record_def, STATIC_POSITION(2), from);
+	to->resource_id_size = uval.binary_size;
+	memory_move(to->resource_id, uval.binary_value, to->resource_id_size);
+
+	get_value_from_element_from_tuple(&uval, &dti_temp, lckmgr_p->lock_record_def, STATIC_POSITION(3), from);
+	to->lock_mode = uval.uint_value;
 }
 
 static positional_accessor tx_locks_keys[] = {STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2)};
@@ -128,36 +119,24 @@ static void serialize_wait_entry_record(void* to, const wait_entry* from, const 
 
 static void deserialize_wait_entry_record(const void* from, wait_entry* to, const lock_manager* lckmgr_p)
 {
-	{
-		datum uval;
-		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(0), from);
-		to->waiting_transaction = (void*)((uintptr_t)uval.uint_value);
-	}
+	const data_type_info* dti_temp;
+	datum uval;
 
-	{
-		datum uval;
-		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(1), from);
-		to->waiting_task = (void*)((uintptr_t)uval.uint_value);
-	}
+	get_value_from_element_from_tuple(&uval, &dti_temp, lckmgr_p->wait_record_def, STATIC_POSITION(0), from);
+	to->waiting_transaction = (void*)((uintptr_t)uval.uint_value);
 
-	{
-		datum uval;
-		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(2), from);
-		to->transaction = (void*)((uintptr_t)uval.uint_value);
-	}
+	get_value_from_element_from_tuple(&uval, &dti_temp, lckmgr_p->wait_record_def, STATIC_POSITION(1), from);
+	to->waiting_task = (void*)((uintptr_t)uval.uint_value);
 
-	{
-		datum uval;
-		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(3), from);
-		to->resource_type = uval.uint_value;
-	}
+	get_value_from_element_from_tuple(&uval, &dti_temp, lckmgr_p->wait_record_def, STATIC_POSITION(2), from);
+	to->transaction = (void*)((uintptr_t)uval.uint_value);
 
-	{
-		datum uval;
-		get_value_from_element_from_tuple(&uval, lckmgr_p->wait_record_def, STATIC_POSITION(4), from);
-		to->resource_id_size = uval.binary_size;
-		memory_move(to->resource_id, uval.binary_value, to->resource_id_size);
-	}
+	get_value_from_element_from_tuple(&uval, &dti_temp, lckmgr_p->wait_record_def, STATIC_POSITION(3), from);
+	to->resource_type = uval.uint_value;
+
+	get_value_from_element_from_tuple(&uval, &dti_temp, lckmgr_p->wait_record_def, STATIC_POSITION(4), from);
+	to->resource_id_size = uval.binary_size;
+	memory_move(to->resource_id, uval.binary_value, to->resource_id_size);
 }
 
 static positional_accessor waits_for_keys[] = {STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(3), STATIC_POSITION(4)};

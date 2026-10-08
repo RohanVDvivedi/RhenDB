@@ -28,8 +28,9 @@ static void* process(tuple_transformer* tt_p, void* tuple)
 
 	const void* mvcchdr_tup = NULL;
 	{
+		const data_type_info* dti_temp;
 		datum uval;
-		if(!get_value_from_element_from_tuple(&uval, tt_p->input_def, MVCC_HEADER_POSITION, tuple) || is_datum_NULL(&uval))
+		if(!get_value_from_element_from_tuple(&uval, &dti_temp, tt_p->input_def, MVCC_HEADER_POSITION, tuple) || is_datum_NULL(&uval))
 			return NULL;
 		mvcchdr_tup = uval.tuple_value;
 	}

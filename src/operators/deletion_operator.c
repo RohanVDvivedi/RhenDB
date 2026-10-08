@@ -226,8 +226,9 @@ static int mark_buffered_tuples_deleted(operator* o, const char** kill_reason)
 				}
 
 				// write a non NULL xmax (our transaction) on the mvcc_header of this tuple, in place, marking it deleted
+				const data_type_info* dti_temp;
 				datum mvcc_hdr_datum;
-				get_value_from_element_from_tuple(&mvcc_hdr_datum, partition_tuple_def, STATIC_POSITION(0), record);
+				get_value_from_element_from_tuple(&mvcc_hdr_datum, &dti_temp, partition_tuple_def, STATIC_POSITION(0), record);
 
 				mvcc_header hdr;
 				read_mvcc_header(&hdr, mvcc_hdr_datum.tuple_value, &mvcc_def);
@@ -336,15 +337,17 @@ static void execute(operator* o)
 		// fetch the partition_id and the tuple_pointer of the tuple that is to be deleted
 		pending_deletion pd;
 		{
+			const data_type_info* dti_temp;
+
 			datum partition_id_datum;
-			if(!get_value_from_element_from_tuple(&partition_id_datum, inputs->input_tuple_def, (*(inputs->partition_id_from_source_positional_accessor)), tuple))
+			if(!get_value_from_element_from_tuple(&partition_id_datum, &dti_temp, inputs->input_tuple_def, (*(inputs->partition_id_from_source_positional_accessor)), tuple))
 			{
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("deletion_failed_NULL_partition_id"));
 				return ;
 			}
 
 			datum tuple_pointer_datum;
-			if(!get_value_from_element_from_tuple(&tuple_pointer_datum, inputs->input_tuple_def, (*(inputs->tuple_pointer_from_source_positional_accessor)), tuple))
+			if(!get_value_from_element_from_tuple(&tuple_pointer_datum, &dti_temp, inputs->input_tuple_def, (*(inputs->tuple_pointer_from_source_positional_accessor)), tuple))
 			{
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("deletion_failed_NULL_tuple_pointer"));
 				return ;

@@ -99,7 +99,8 @@ static void execute(operator* o)
 				// generate input params to the i-th udaf
 				for(uint32_t j = 0; j < inputs->aggregate_functions[i]->input_type_infos_count; j++)
 				{
-					if(!get_value_from_element_from_tuple(&(inputs->input_datums[j]), inputs->input_tuple_def, inputs->aggregate_input_element_ids[i][j], tuple))
+					const data_type_info* dti_temp;
+					if(!get_value_from_element_from_tuple(&(inputs->input_datums[j]), &dti_temp, inputs->input_tuple_def, inputs->aggregate_input_element_ids[i][j], tuple))
 						inputs->input_datums[j] = (*NULL_DATUM);
 				}
 

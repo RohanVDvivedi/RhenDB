@@ -238,8 +238,9 @@ static int lookup_buffered_tuples(operator* o, const char** kill_reason)
 				// every tuple must pass the mvcc visibility check, before it is even projected for the
 				// output, an invisible tuple is simply not produced
 				{
+					const data_type_info* dti_temp;
 					datum mvcc_hdr_datum;
-					get_value_from_element_from_tuple(&mvcc_hdr_datum, partition_tuple_def, STATIC_POSITION(0), record);
+					get_value_from_element_from_tuple(&mvcc_hdr_datum, &dti_temp, partition_tuple_def, STATIC_POSITION(0), record);
 
 					mvcc_header mvcchdr;
 					read_mvcc_header(&mvcchdr, mvcc_hdr_datum.tuple_value, &mvcc_def);
@@ -313,15 +314,17 @@ static void execute(operator* o)
 		// fetch the partition_id and the tuple_pointer of the tuple that is to be looked up
 		pending_lookup pl;
 		{
+			const data_type_info* dti_temp;
+
 			datum partition_id_datum;
-			if(!get_value_from_element_from_tuple(&partition_id_datum, inputs->input_tuple_def, (*(inputs->partition_id_from_source_positional_accessor)), tuple))
+			if(!get_value_from_element_from_tuple(&partition_id_datum, &dti_temp, inputs->input_tuple_def, (*(inputs->partition_id_from_source_positional_accessor)), tuple))
 			{
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("pointer_lookup_failed_NULL_partition_id"));
 				return ;
 			}
 
 			datum tuple_pointer_datum;
-			if(!get_value_from_element_from_tuple(&tuple_pointer_datum, inputs->input_tuple_def, (*(inputs->tuple_pointer_from_source_positional_accessor)), tuple))
+			if(!get_value_from_element_from_tuple(&tuple_pointer_datum, &dti_temp, inputs->input_tuple_def, (*(inputs->tuple_pointer_from_source_positional_accessor)), tuple))
 			{
 				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("pointer_lookup_failed_NULL_tuple_pointer"));
 				return ;

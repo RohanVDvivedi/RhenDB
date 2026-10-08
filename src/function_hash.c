@@ -94,9 +94,9 @@ uint64_t hash_tuple_rhendb(const void* tup, const tuple_def* tpl_d, const positi
 {
 	for(uint32_t i = 0; i < element_count; i++)
 	{
-		const data_type_info* dti = get_type_info_for_element_from_tuple_def(tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i));
+		const data_type_info* dti;
 		datum uval;
-		if(!get_value_from_element_from_tuple(&uval, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup))
+		if(!get_value_from_element_from_tuple(&uval, &dti, tpl_d, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i), tup))
 			uval = (*NULL_DATUM);
 
 		hash_datum_rhendb(&uval, dti, th, tx);

@@ -164,12 +164,10 @@ static int build_heap_record_without_extensions(input_values* inputs, const void
 
 	for(uint32_t i = 1; i < partition_tuple_def->type_info->element_count; i++)
 	{
+		const data_type_info* src_dti;
 		datum src;
-		if(!get_value_from_element_from_tuple(&src, inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1], input_tuple) || is_datum_NULL(&src))
+		if(!get_value_from_element_from_tuple(&src, &src_dti, inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1], input_tuple) || is_datum_NULL(&src))
 			continue; // leave the column NULL
-
-		// const data_type_info* col_dti = partition_tuple_def->type_info->containees[i].al.type_info;
-		const data_type_info* src_dti = get_type_info_for_element_from_tuple_def(inputs->input_tuple_def, inputs->insertion_from_source_positional_accessors[i-1]);
 
 		switch(inputs->column_kinds[i])
 		{

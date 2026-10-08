@@ -23,8 +23,9 @@ static void* process(tuple_transformer* tt_p, void* tuple)
 
 	for(uint32_t i = 0; i < element_count; i++)
 	{
+		const data_type_info* dti_temp;
 		datum output_uval;
-		if(get_value_from_element_from_tuple(&output_uval, tt_p->input_def, *(projections[i]), tuple))
+		if(get_value_from_element_from_tuple(&output_uval, &dti_temp, tt_p->input_def, *(projections[i]), tuple))
 		{
 			while(!set_element_in_tuple(tt_p->output_def, STATIC_POSITION(i), output_tuple, &output_uval, output_tuple_capacity - output_tuple_size))
 			{

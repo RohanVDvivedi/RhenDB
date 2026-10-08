@@ -150,8 +150,11 @@ static void revise_materialized_keys_in_interim_tuple_store(operator* o, interim
 	input_values* inputs = o->inputs;
 
 	for(uint32_t j = 0; j < inputs->key_element_count; j++)
-		if(!get_value_from_element_from_tuple(&(((datum*)(its_p->embed_ptrs[0]))[j]), inputs->record_def, inputs->key_element_ids[j], its_p->embed_regions[0].tuple))
+	{
+		const data_type_info* dti_temp;
+		if(!get_value_from_element_from_tuple(&(((datum*)(its_p->embed_ptrs[0]))[j]), &dti_temp, inputs->record_def, inputs->key_element_ids[j], its_p->embed_regions[0].tuple))
 			((datum*)(its_p->embed_ptrs[0]))[j] = (*NULL_DATUM);
+	}
 }
 
 // comparator to compare materialized tuples at its_p->embed_ptrs[0]

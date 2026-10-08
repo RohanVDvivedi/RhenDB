@@ -140,12 +140,13 @@ static void initialize_system_root_tables(rhendb* rdb, uint64_t max_concurrent_u
 			const void* curr_tuple = get_tuple_bplus_tree_iterator(bpi_p);
 			print_tuple(curr_tuple, &(system_roots_record_def));
 
+			const data_type_info* dti_temp;
 			datum system_table_name = {};
 			uint64_t system_root_page_id = 0;
 			{
-				get_value_from_element_from_tuple(&system_table_name, &(system_roots_record_def), STATIC_POSITION(0), curr_tuple);
+				get_value_from_element_from_tuple(&system_table_name, &dti_temp, &(system_roots_record_def), STATIC_POSITION(0), curr_tuple);
 				datum uval;
-				get_value_from_element_from_tuple(&uval, &(system_roots_record_def), STATIC_POSITION(1), curr_tuple);
+				get_value_from_element_from_tuple(&uval, &dti_temp, &(system_roots_record_def), STATIC_POSITION(1), curr_tuple);
 				system_root_page_id = uval.uint_value;
 			}
 

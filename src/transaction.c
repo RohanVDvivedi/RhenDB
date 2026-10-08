@@ -391,21 +391,22 @@ int peek_top_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstring
 		// get top log tuple from the stack
 		const void* log_tuple = get_tuple_linked_page_list_iterator(lpli_p);
 
+		const data_type_info* dti_temp;
 		datum uval;
 
-		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(0), log_tuple))
+		if(get_value_from_element_from_tuple(&uval, &dti_temp, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(0), log_tuple))
 			(*type) = uval.uint_value;
 
-		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(1), log_tuple) && !is_datum_NULL(&uval))
+		if(get_value_from_element_from_tuple(&uval, &dti_temp, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(1), log_tuple) && !is_datum_NULL(&uval))
 			init_dstring(savepoint_name, uval.string_value, uval.string_size);
 
-		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(2), log_tuple))
+		if(get_value_from_element_from_tuple(&uval, &dti_temp, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(2), log_tuple))
 			(*table_id) = uval.uint_value;
 
-		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(3), log_tuple))
+		if(get_value_from_element_from_tuple(&uval, &dti_temp, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(3), log_tuple))
 			(*partition_id) = uval.uint_value;
 
-		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(4), log_tuple))
+		if(get_value_from_element_from_tuple(&uval, &dti_temp, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(4), log_tuple))
 			(*tptr) = get_tuple_pointer(uval.tuple_value, &(tx->rdb->persistent_acid_rage_engine.pam_p->pas));
 
 		peeked = 1;
@@ -467,21 +468,22 @@ int peek_bottom_of_savepoint_log(transaction* tx, savepoint_log_type* type, dstr
 		// get top log tuple from the stack
 		const void* log_tuple = get_tuple_linked_page_list_iterator(lpli_p);
 
+		const data_type_info* dti_temp;
 		datum uval;
 
-		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(0), log_tuple))
+		if(get_value_from_element_from_tuple(&uval, &dti_temp, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(0), log_tuple))
 			(*type) = uval.uint_value;
 
-		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(1), log_tuple) && !is_datum_NULL(&uval))
+		if(get_value_from_element_from_tuple(&uval, &dti_temp, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(1), log_tuple) && !is_datum_NULL(&uval))
 			init_dstring(savepoint_name, uval.string_value, uval.string_size);
 
-		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(2), log_tuple))
+		if(get_value_from_element_from_tuple(&uval, &dti_temp, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(2), log_tuple))
 			(*table_id) = uval.uint_value;
 
-		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(3), log_tuple))
+		if(get_value_from_element_from_tuple(&uval, &dti_temp, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(3), log_tuple))
 			(*partition_id) = uval.uint_value;
 
-		if(get_value_from_element_from_tuple(&uval, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(4), log_tuple))
+		if(get_value_from_element_from_tuple(&uval, &dti_temp, tx->savepoint_logs.savepoint_log_def, STATIC_POSITION(4), log_tuple))
 			(*tptr) = get_tuple_pointer(uval.tuple_value, &(tx->rdb->persistent_acid_rage_engine.pam_p->pas));
 
 		peeked = 1;
