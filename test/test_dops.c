@@ -66,8 +66,9 @@ struct between_context
 static void* process_between(tuple_transformer* tt_p, void* tuple)
 {
 	between_context* bc = tt_p->context;
+	const data_type_info* dti_temp;
 	datum num;
-	get_value_from_element_from_tuple(&num, &record_def, STATIC_POSITION(0), tuple);
+	get_value_from_element_from_tuple(&num, &dti_temp, &record_def, STATIC_POSITION(0), tuple);
 	if(bc->min_value <= num.uint_value && num.uint_value <= bc->max_value)
 		return tuple;
 	else

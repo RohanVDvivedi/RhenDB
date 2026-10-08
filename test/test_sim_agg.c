@@ -29,9 +29,10 @@ void intHandler(int dummy)
 
 int print_consumer_custom(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def)
 {
+	const data_type_info* dti_temp;
 	datum uval;
 	{
-		if(!get_value_from_element_from_tuple(&uval, input_tuple_def, STATIC_POSITION(21), tuple))
+		if(!get_value_from_element_from_tuple(&uval, &dti_temp, input_tuple_def, STATIC_POSITION(21), tuple))
 			return 0;
 
 		int error_code = 0;
@@ -50,7 +51,7 @@ int print_consumer_custom(void* consumer_context, const void* tuple, const tuple
 			free(group_concat_data);
 	}
 	{
-		if(!get_value_from_element_from_tuple(&uval, input_tuple_def, STATIC_POSITION(15), tuple))
+		if(!get_value_from_element_from_tuple(&uval, &dti_temp, input_tuple_def, STATIC_POSITION(15), tuple))
 			return 0;
 
 		int error_code = 0;
