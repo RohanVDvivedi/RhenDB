@@ -5,6 +5,7 @@
 #include<rhendb/aggregate_functions.h>
 
 #include<stdlib.h>
+#include<string.h>
 
 typedef struct input_values input_values;
 struct input_values
@@ -217,9 +218,9 @@ operator_resource_counter setup_simple_aggregation_operator(operator* o, operato
 		.output_tuple_def = output_tuple_def,
 	};
 
-	memory_move(inputs->aggregate_functions, aggregate_functions, sizeof(aggregate_function*) * aggregate_functions_count);
+	memmove(inputs->aggregate_functions, aggregate_functions, sizeof(aggregate_function*) * aggregate_functions_count);
 
-	memory_move(inputs->aggregate_input_element_ids, aggregate_input_element_ids, sizeof(positional_accessor*) * aggregate_functions_count);
+	memmove(inputs->aggregate_input_element_ids, aggregate_input_element_ids, sizeof(positional_accessor*) * aggregate_functions_count);
 
 	return result;
 }

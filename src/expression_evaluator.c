@@ -20,6 +20,8 @@
 
 #include<cutlery/cutlery_math.h>
 
+#include<string.h>
+
 /* Working precision (in significant decimal digits) used to round a NUMERIC division whose exact
  * quotient does not terminate (e.g. 1/3).  Add/sub/mul are always exact and use unbounded precision;
  * only non-terminating division needs a bound.  Kept generous (exceeds decimal128/decimal256 and the
@@ -1096,7 +1098,7 @@ static void* rhendb_create_number(const dstring* data_bytes, const sql_expr_eval
 	char stackbuf[128];
 	char* buf = ((n + 1) <= sizeof(stackbuf)) ? stackbuf : malloc(n + 1);
 	if(buf == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-	memory_move(buf, get_byte_array_dstring(data_bytes), n);
+	memmove(buf, get_byte_array_dstring(data_bytes), n);
 	buf[n] = '\0';
 
 	expr_value* v = NULL;
@@ -1272,7 +1274,7 @@ static char* sb_to_cstring(const expr_value* a)
 	uint32_t n = get_char_count_dstring(&(a->string_value));
 	char* s = malloc(n + 1);
 	if(s == NULL) return NULL;
-	if(n) memory_move(s, get_byte_array_dstring(&(a->string_value)), n);
+	if(n) memmove(s, get_byte_array_dstring(&(a->string_value)), n);
 	s[n] = 0;
 	return s;
 }
@@ -1300,14 +1302,14 @@ static char* number_to_decimal_cstring(const expr_value* a)
 		{
 			int n = snprintf(stack, sizeof(stack), "%"PRIu64, a->value.uint_value);
 			char* s = malloc((size_t)n + 1);
-			if(s != NULL) memory_move(s, stack, (size_t)n + 1);
+			if(s != NULL) memmove(s, stack, (size_t)n + 1);
 			return s;
 		}
 		case RHENDB_EXPR_INT:
 		{
 			int n = snprintf(stack, sizeof(stack), "%lld", (long long)a->value.int_value);
 			char* s = malloc((size_t)n + 1);
-			if(s != NULL) memory_move(s, stack, (size_t)n + 1);
+			if(s != NULL) memmove(s, stack, (size_t)n + 1);
 			return s;
 		}
 		case RHENDB_EXPR_LARGE_UINT:
@@ -1315,7 +1317,7 @@ static char* number_to_decimal_cstring(const expr_value* a)
 			uint32_t n = serialize_to_decimal_uint256(stack, a->value.large_uint_value);
 			stack[n] = 0;
 			char* s = malloc((size_t)n + 1);
-			if(s != NULL) memory_move(s, stack, (size_t)n + 1);
+			if(s != NULL) memmove(s, stack, (size_t)n + 1);
 			return s;
 		}
 		case RHENDB_EXPR_LARGE_INT:
@@ -1323,7 +1325,7 @@ static char* number_to_decimal_cstring(const expr_value* a)
 			uint32_t n = serialize_to_decimal_int256(stack, a->value.large_int_value);
 			stack[n] = 0;
 			char* s = malloc((size_t)n + 1);
-			if(s != NULL) memory_move(s, stack, (size_t)n + 1);
+			if(s != NULL) memmove(s, stack, (size_t)n + 1);
 			return s;
 		}
 		case RHENDB_EXPR_NUMERIC:
@@ -1347,7 +1349,7 @@ static char* number_to_decimal_cstring(const expr_value* a)
 			// normalize to a free()-able buffer : mpd_qformat allocates with mpd_free, unlike the paths above.
 			size_t len = strlen(mpd_str);
 			char* s = malloc(len + 1);
-			if(s != NULL) memory_move(s, mpd_str, len + 1);
+			if(s != NULL) memmove(s, mpd_str, len + 1);
 			mpd_free(mpd_str);
 			return s;
 		}
@@ -1677,7 +1679,7 @@ struct var_cache_entry
 	/* the cache KEY is the identifier's bytes in memory : (address, length).
 	 * the dstring handed to get_variable()/get_type_for_variable() points INTO the AST node, so these
 	 * bytes are stable for the life of the expression. hashing/comparing an address+length is O(1) and
-	 * costs no FNV pass and no memory_compare() over the identifier on every single evaluation.
+	 * costs no FNV pass and no memcmp() over the identifier on every single evaluation.
 	 * two AST nodes naming the same column at different addresses simply get two entries -- accepted. */
 	const char* key_bytes;
 	cy_uint key_length;
@@ -1775,7 +1777,7 @@ static int walk_field_path(data_type_info* root, const char** cptr, const uint32
 		if(!component_as_index(cptr[c], clen[c], &idx))   /* a field name -> look it up */
 		{
 			uint32_t l = clen[c]; if(l > 64) return 0;
-			memory_move(name, cptr[c], l); name[l] = 0;
+			memmove(name, cptr[c], l); name[l] = 0;
 			idx = find_containee_using_field_name_in_tuple_type_info(cur, name);
 			if(idx == UINT32_MAX) return 0;               /* no such field */
 		}
@@ -1864,7 +1866,7 @@ static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32
 			else {                                                                                          \
 				win_pos = malloc(sizeof(uint32_t) * (_d ? _d : 1));                                         \
 				if(win_pos == NULL) { oom = 1; }                                                            \
-				else { memory_move(win_pos, scratch, sizeof(uint32_t) * _d); win_ti = (TI); win_depth = _d; win_dti = _dd; found = 1; } \
+				else { memmove(win_pos, scratch, sizeof(uint32_t) * _d); win_ti = (TI); win_depth = _d; win_dti = _dd; found = 1; } \
 			}                                                                                               \
 		}                                                                                                   \
 	} while(0)
@@ -1872,7 +1874,7 @@ static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32
 	/* table-qualified reading : first component names a table; try it against every tuple carrying that name */
 	if(ncomp >= 2 && comp_len[0] <= 64)
 	{
-		char tname[65]; memory_move(tname, comp_ptr[0], comp_len[0]); tname[comp_len[0]] = 0;
+		char tname[65]; memmove(tname, comp_ptr[0], comp_len[0]); tname[comp_len[0]] = 0;
 		for(uint32_t t = 0; t < ctx->input_tuples_count && !ambiguous && !oom; t++)
 			if(tuple_table_named(ctx, t, tname))
 				TRY_CANDIDATE(t, 1);
@@ -2686,7 +2688,7 @@ struct efunc_cache_entry
 	/* the cache KEY is the identifier's bytes in memory : (address, length).
 	 * the dstring handed to get_variable()/get_type_for_variable() points INTO the AST node, so these
 	 * bytes are stable for the life of the expression. hashing/comparing an address+length is O(1) and
-	 * costs no FNV pass and no memory_compare() over the identifier on every single evaluation.
+	 * costs no FNV pass and no memcmp() over the identifier on every single evaluation.
 	 * two AST nodes naming the same column at different addresses simply get two entries -- accepted. */
 	const char* key_bytes;
 	cy_uint key_length;
@@ -3057,7 +3059,7 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 	rhendb_expr_eval_context* context_p = eval_context.context_p;
 
 	context_p->input_tuple_defs = malloc(sizeof(tuple_def*) * input_tuples_count);
-	memory_move(context_p->input_tuple_defs, input_tuple_defs, sizeof(tuple_def*) * input_tuples_count);
+	memmove(context_p->input_tuple_defs, input_tuple_defs, sizeof(tuple_def*) * input_tuples_count);
 
 	context_p->input_tuples = calloc(sizeof(void*), input_tuples_count);
 

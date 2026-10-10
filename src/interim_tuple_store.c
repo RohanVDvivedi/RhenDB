@@ -8,6 +8,7 @@
 #include<sys/mman.h>
 
 #include<stdlib.h>
+#include<string.h>
 
 #include<fcntl.h>
 #include<unistd.h>
@@ -148,7 +149,7 @@ static uint32_t read_tuple_prefix_from_file(void* context_p, void* data, uint32_
 	{
 		if(contains_for_interim_tuple_region(temp->helper_itr_p, temp->offset, temp->offset + data_size))
 		{
-			memory_move(data, temp->helper_itr_p->region_memory + (temp->offset - temp->helper_itr_p->region_offset), data_size);
+			memmove(data, temp->helper_itr_p->region_memory + (temp->offset - temp->helper_itr_p->region_offset), data_size);
 			return data_size;
 		}
 	}
@@ -358,7 +359,7 @@ uint64_t append_tuple_to_interim_tuple_store2(interim_tuple_store* its_p, interi
 	mmap_for_writing_tuple(its_p, itr_p, tpl_sz_d, tuple_size, min_bytes_to_mmap);
 
 	// copy the tuple into the region
-	memory_move(itr_p->tuple, tupl, tuple_size);
+	memmove(itr_p->tuple, tupl, tuple_size);
 
 	// finalize the tuple appended
 	finalize_written_tuple(its_p, itr_p);

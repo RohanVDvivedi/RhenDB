@@ -23,6 +23,7 @@
 #include<rhendb/util_materialization.h>
 
 #include<stdlib.h>
+#include<string.h>
 
 /*
 	heap table insertion operator
@@ -158,7 +159,7 @@ static int build_heap_record_without_extensions(input_values* inputs, const void
 
 	inputs->ext_col_data_size = 0;
 
-	memory_move(inputs->heap_record_without_extensions, inputs->inited_heap_record, inputs->inited_heap_record_size);
+	memmove(inputs->heap_record_without_extensions, inputs->inited_heap_record, inputs->inited_heap_record_size);
 
 	transaction* tx = inputs->tx;
 
@@ -247,7 +248,7 @@ static void build_heap_record_with_prefix_bytes(input_values* inputs, void* min_
 
 	const rhendb_table_partition* insertion_table_partition = &(inputs->ftabl->table_partitions_info[inputs->ftabl->partitions_count-1]);
 
-	memory_move(inputs->heap_record_with_extensions, inputs->heap_record_without_extensions, get_tuple_size(partition_tuple_def, inputs->heap_record_without_extensions));
+	memmove(inputs->heap_record_with_extensions, inputs->heap_record_without_extensions, get_tuple_size(partition_tuple_def, inputs->heap_record_without_extensions));
 
 	for(uint32_t k = 0; k < inputs->ext_col_data_size; k++)
 	{

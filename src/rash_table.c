@@ -5,6 +5,8 @@
 
 #include<rhendb/nullable_type_info_maker.h>
 
+#include<string.h>
+
 static const positional_accessor hash_position = STATIC_POSITION(0);
 static const positional_accessor key_position = STATIC_POSITION(1);
 static const positional_accessor value_position = STATIC_POSITION(2);
@@ -484,7 +486,7 @@ binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_
 		uint32_t record_tuple_size = get_tuple_size(rti_p->rth_p->rdb->rash_httd.lpltd.record_def, record_tuple);
 
 		void* record_tuple_copy = malloc(RASH_RECORD_MAX_SIZE);
-		memory_move(record_tuple_copy, record_tuple, record_tuple_size);
+		memmove(record_tuple_copy, record_tuple, record_tuple_size);
 
 		tuple_pointer tail_of_value;
 		{

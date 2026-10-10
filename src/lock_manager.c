@@ -6,6 +6,7 @@
 #include<tupleindexer/interface/page_access_methods.h>
 
 #include<stdlib.h>
+#include<string.h>
 
 char const * const lock_result_strings[] = {
 	[LOCK_ACQUIRED] = "LOCK_ACQUIRED",
@@ -69,7 +70,7 @@ static void deserialize_lock_entry_record(const void* from, lock_entry* to, cons
 
 	get_value_from_element_from_tuple(&uval, &dti_temp, lckmgr_p->lock_record_def, STATIC_POSITION(2), from);
 	to->resource_id_size = uval.binary_size;
-	memory_move(to->resource_id, uval.binary_value, to->resource_id_size);
+	memmove(to->resource_id, uval.binary_value, to->resource_id_size);
 
 	get_value_from_element_from_tuple(&uval, &dti_temp, lckmgr_p->lock_record_def, STATIC_POSITION(3), from);
 	to->lock_mode = uval.uint_value;
@@ -136,7 +137,7 @@ static void deserialize_wait_entry_record(const void* from, wait_entry* to, cons
 
 	get_value_from_element_from_tuple(&uval, &dti_temp, lckmgr_p->wait_record_def, STATIC_POSITION(4), from);
 	to->resource_id_size = uval.binary_size;
-	memory_move(to->resource_id, uval.binary_value, to->resource_id_size);
+	memmove(to->resource_id, uval.binary_value, to->resource_id_size);
 }
 
 static positional_accessor waits_for_keys[] = {STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(3), STATIC_POSITION(4)};
@@ -298,7 +299,7 @@ static void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager
 		char wait_entry_tuple[MAX_SERIALIZED_WAIT_ENTRY_SIZE];
 		{
 			wait_entry we = {.resource_type = resource_type, .resource_id_size = resource_id_size};
-			memory_move(we.resource_id, resource_id, resource_id_size);
+			memmove(we.resource_id, resource_id, resource_id_size);
 			serialize_wait_entry_record(wait_entry_tuple, &we, lckmgr_p);
 		}
 
@@ -317,7 +318,7 @@ static void notify_all_wait_entries_for_resource_of_being_unblocked(lock_manager
 		deserialize_wait_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &we, lckmgr_p);
 
 		// if it is not the right tuple, we break out
-		if(we.resource_type != resource_type || we.resource_id_size != resource_id_size || memory_compare(we.resource_id, resource_id, resource_id_size))
+		if(we.resource_type != resource_type || we.resource_id_size != resource_id_size || 0 != memcmp(we.resource_id, resource_id, resource_id_size))
 			break;
 
 		// wake up that transaction's task
@@ -343,7 +344,7 @@ static uint32_t find_lock_entry(lock_manager* lckmgr_p, void* transaction, uint3
 		char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 		{
 			lock_entry le = {.transaction = transaction, .resource_type = resource_type, .resource_id_size = resource_id_size};
-			memory_move(le.resource_id, resource_id, resource_id_size);
+			memmove(le.resource_id, resource_id, resource_id_size);
 			serialize_lock_entry_record(lock_entry_tuple, &le, lckmgr_p);
 		}
 
@@ -362,7 +363,7 @@ static uint32_t find_lock_entry(lock_manager* lckmgr_p, void* transaction, uint3
 		deserialize_lock_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &le, lckmgr_p);
 
 		// if it is the right tuple, extract the lock_mode
-		if(le.transaction == transaction && le.resource_type == resource_type && le.resource_id_size == resource_id_size && 0 == memory_compare(le.resource_id, resource_id, resource_id_size))
+		if(le.transaction == transaction && le.resource_type == resource_type && le.resource_id_size == resource_id_size && 0 == memcmp(le.resource_id, resource_id, resource_id_size))
 			lock_mode = le.lock_mode;
 	}
 
@@ -409,7 +410,7 @@ static int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_
 	char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 	{
 		lock_entry le = {.transaction = transaction, .resource_type = resource_type, .resource_id_size = resource_id_size, .lock_mode = new_lock_mode};
-		memory_move(le.resource_id, resource_id, resource_id_size);
+		memmove(le.resource_id, resource_id, resource_id_size);
 		serialize_lock_entry_record(lock_entry_tuple, &le, lckmgr_p);
 	}
 
@@ -429,7 +430,7 @@ static int insert_or_update_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_
 static int remove_lock_entry_and_wake_up_waiters(lock_manager* lckmgr_p, void* transaction, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size)
 {
 	lock_entry le = {.transaction = transaction, .resource_type = resource_type, .resource_id_size = resource_id_size};
-	memory_move(le.resource_id, resource_id, resource_id_size);
+	memmove(le.resource_id, resource_id, resource_id_size);
 	char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 
 	serialize_lock_entry_record(lock_entry_tuple, &le, lckmgr_p);
@@ -523,7 +524,7 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, void* transaction, void*
 		char lock_entry_tuple[MAX_SERIALIZED_LOCK_ENTRY_SIZE];
 		{
 			lock_entry le = {.resource_type = resource_type, .resource_id_size = resource_id_size};
-			memory_move(le.resource_id, resource_id, resource_id_size);
+			memmove(le.resource_id, resource_id, resource_id_size);
 			serialize_lock_entry_record(lock_entry_tuple, &le, lckmgr_p);
 		}
 
@@ -542,7 +543,7 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, void* transaction, void*
 		deserialize_lock_entry_record(get_tuple_bplus_tree_iterator(bpi_p), &le, lckmgr_p);
 
 		// if it is not the right tuple, we break out
-		if(le.resource_type != resource_type || le.resource_id_size != resource_id_size || memory_compare(le.resource_id, resource_id, resource_id_size))
+		if(le.resource_type != resource_type || le.resource_id_size != resource_id_size || 0 != memcmp(le.resource_id, resource_id, resource_id_size))
 			break;
 
 		// skip entries for the transaction that wants this lock
@@ -569,7 +570,7 @@ static int check_lock_conflicts(lock_manager* lckmgr_p, void* transaction, void*
 		// insert wait entry for this lock conflict
 		{
 			wait_entry to_ins = {.waiting_transaction = transaction, .waiting_task = task, .transaction = le.transaction, .resource_type = resource_type, .resource_id_size = resource_id_size};
-			memory_move(to_ins.resource_id, resource_id, resource_id_size);
+			memmove(to_ins.resource_id, resource_id, resource_id_size);
 			insert_wait_entry(lckmgr_p, &to_ins);
 		}
 

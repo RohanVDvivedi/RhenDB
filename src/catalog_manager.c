@@ -7,6 +7,8 @@
 #include<tuplelargetypes/binary_write_iterator.h>
 #include<tuplelargetypes/binary_read_iterator.h>
 
+#include<string.h>
+
 // NOTE:: static functions i.e. internal functions will not even touch catlog_manager_lock
 
 // index utility struct
@@ -427,7 +429,7 @@ static rhendb_attribute deserialize_rhendb_attribute(catalog_manager* catmgr_p, 
 	attr.table_part_id_to = uval.uint_value;
 
 	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(5), tuple);
-	memory_move(attr.attribute_name, uval.string_value, uval.string_size);
+	memmove(attr.attribute_name, uval.string_value, uval.string_size);
 
 	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(6), tuple);
 	attr.base_type = uval.uint_value;
@@ -502,7 +504,7 @@ static rhendb_index deserialize_rhendb_index(catalog_manager* catmgr_p, mvcc_hea
 	idx.id = uval.uint_value;
 
 	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(2), tuple);
-	memory_move(idx.name, uval.string_value, uval.string_size);
+	memmove(idx.name, uval.string_value, uval.string_size);
 
 	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(3), tuple);
 	idx.table_id = uval.uint_value;
@@ -568,7 +570,7 @@ static rhendb_table deserialize_rhendb_table(catalog_manager* catmgr_p, mvcc_hea
 	tbl.id = uval.uint_value;
 
 	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(2), tuple);
-	memory_move(tbl.name, uval.string_value, uval.string_size);
+	memmove(tbl.name, uval.string_value, uval.string_size);
 
 	return tbl;
 }
@@ -586,7 +588,7 @@ static rhendb_name_idx_entry deserialize_rhendb_name_idx_entry(catalog_manager* 
 	nidx.object_type = uval.uint_value;
 
 	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(1), tuple);
-	memory_move(nidx.name, uval.string_value, uval.string_size);
+	memmove(nidx.name, uval.string_value, uval.string_size);
 
 	get_value_from_element_from_tuple(&uval, &dti_temp, record_def, STATIC_POSITION(2), tuple);
 	nidx.object_tuple_pointer = get_tuple_pointer(uval.tuple_value, &(catmgr_p->catmgr_engine->pam_p->pas));

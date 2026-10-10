@@ -14,6 +14,7 @@
 #include<rhendb/nullable_type_info_maker.h>
 
 #include<stdlib.h>
+#include<string.h>
 
 #define INIT_BUCKET_COUNT 64
 #define MAX_LOAD_FACTOR 1.3
@@ -658,9 +659,9 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 		.pending_build_buffer = NULL,
 	};
 
-	memory_move(inputs->aggregate_functions, aggregate_functions, sizeof(aggregate_function*) * aggregate_functions_count);
+	memmove(inputs->aggregate_functions, aggregate_functions, sizeof(aggregate_function*) * aggregate_functions_count);
 
-	memory_move(inputs->aggregate_input_element_ids, aggregate_input_element_ids, sizeof(positional_accessor*) * aggregate_functions_count);
+	memmove(inputs->aggregate_input_element_ids, aggregate_input_element_ids, sizeof(positional_accessor*) * aggregate_functions_count);
 
 	for(uint32_t i = 0; i < partitions_count; i++)
 	{

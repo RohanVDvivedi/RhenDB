@@ -8,6 +8,7 @@
 #include<tuplestore/tuple.h>
 
 #include<stdlib.h>
+#include<string.h>
 
 typedef struct min_max_state min_max_state;
 struct min_max_state
@@ -50,7 +51,7 @@ static void replace_min_max_state(min_max_state* ms, const datum* val, const dat
 				ms->memory = realloc(ms->memory, val->string_or_binary_size);
 			}
 
-			memory_move(ms->memory, val->string_or_binary_value, val->string_or_binary_size);
+			memmove(ms->memory, val->string_or_binary_value, val->string_or_binary_size);
 
 			ms->min_max_value = (datum){.string_or_binary_value = ms->memory, .string_or_binary_size = val->string_or_binary_size};
 			break;
@@ -65,7 +66,7 @@ static void replace_min_max_state(min_max_state* ms, const datum* val, const dat
 				ms->memory = realloc(ms->memory, array_memory_size);
 			}
 
-			memory_move(ms->memory, val->array_value, array_memory_size);
+			memmove(ms->memory, val->array_value, array_memory_size);
 
 			ms->min_max_value = (datum){.array_value = ms->memory};
 			break;
@@ -80,7 +81,7 @@ static void replace_min_max_state(min_max_state* ms, const datum* val, const dat
 				ms->memory = realloc(ms->memory, tuple_size);
 			}
 
-			memory_move(ms->memory, val->tuple_value, tuple_size);
+			memmove(ms->memory, val->tuple_value, tuple_size);
 
 			ms->min_max_value = (datum){.tuple_value = ms->memory};
 			break;
@@ -195,7 +196,7 @@ aggregate_function* get_min_max_aggregate_function(transaction* tx, const data_t
 
 		// make shallow copy, mark it nullable, and finalize this type
 		data_type_info* output_type_info = malloc(bytes_to_shallow_copy);
-		memory_move(output_type_info, input_type_info, bytes_to_shallow_copy);
+		memmove(output_type_info, input_type_info, bytes_to_shallow_copy);
 		output_type_info->is_nullable = 1;
 		finalize_type_info(output_type_info);
 
