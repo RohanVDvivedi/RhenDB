@@ -207,13 +207,20 @@ const tuple_def* get_tuple_def_for_tuples_to_be_consumed_from(operator* o);
 
 typedef struct transaction transaction;
 
+typedef struct rhendb_expr_eval_context rhendb_expr_eval_context;
+
 typedef struct query_plan query_plan;
 struct query_plan
 {
 	// the transaction that this query belongs to
 	transaction* curr_tx;
 
+	// expression evaluator context for this query to access parent operator variables
+	// this will be set and must be static throughoput the life of the query_plan
+	rhendb_expr_eval_context* parent_tuple_evaluator;
+
 	// operators like scans, writers, and also the joins, sorts and groupbys
+	// anything that implements the operator interface
 	arraylist operators;
 
 	// this is the value that needs to be checked to see if the query resulted into an error
