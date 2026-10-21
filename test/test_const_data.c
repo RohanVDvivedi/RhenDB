@@ -114,13 +114,21 @@ int main(int argc, char** argv)
 
 	wait_for_shutdown_of_query_plan(qp);
 
-	dstring kill_reasons = new_dstring("", 0);
-	destroy_query_plan(qp, &kill_reasons);
+	if(qp->query_errored)
+	{
+		dstring kill_reasons = new_dstring("", 0);
+		destroy_query_plan(qp, &kill_reasons);
 
-	printf("\n\nKILL REASONS : \n");
-	printf_dstring(&kill_reasons);
-	deinit_dstring(&kill_reasons);
-	printf("\n\nKILL REASONS END\n\n");
+		printf("\n\nKILL REASONS : \n");
+		printf_dstring(&kill_reasons);
+		deinit_dstring(&kill_reasons);
+		printf("\n\nKILL REASONS END\n\n");
+	}
+	else
+	{
+		printf("QUERY SUCCESSFULL\n");
+		destroy_query_plan(qp, NULL);
+	}
 
 	if(filter_expr_sql != NULL)
 		delete_sql(filter_expr_sql);
