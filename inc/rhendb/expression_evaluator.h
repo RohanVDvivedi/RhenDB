@@ -109,6 +109,11 @@ struct rhendb_expr_eval_context
 	// and to access the catalog_manager, for user defined types and functions
 	transaction* tx;
 
+	// this is the context for evaluating the variables if optionally it is not present in the current input_tuples
+	// allows using tuples and intermediate tuples as variables from parent query
+	// this must be same as query_plan->parent_expr_eval_context, but not necessarily be tx->curr_query->parent_expr_eval_context
+	rhendb_expr_eval_context* parent_context;
+
 	// CONSTANT FOLDING CACHE OWNERSHIP.
 	// the folded values themselves live on the AST, in sql_expression.user_meta_value, but the AST
 	// can not free them, it has no idea what an expr_value is.
@@ -181,7 +186,8 @@ enum rhendb_expr_eval_error
 // ===================================================================================================
 
 // intitialize this per instance for evaluation context of one stream of tuples of 1 type
-sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, transaction* tx);
+// tx is the current transaction and qp is the current query (not necessarily tx->curr_query)
+sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, transaction* tx, query_plan* qp);
 
 // run infer_type_sql_expr() on `expr`; return 1 if inference produced no error. the inferred type object
 // is deleted internally, so the caller may not need to free it.

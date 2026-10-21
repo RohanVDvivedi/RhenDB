@@ -157,7 +157,7 @@ operator_resource_counter setup_projection_operator(operator* o, operator* input
 {
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
-	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, input_operator->self_query_plan->curr_tx);
+	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, input_operator->self_query_plan->curr_tx, input_operator->self_query_plan);
 
 	uint32_t expression_projections_count = 0;
 	for(uint32_t i = 0; i < projection_descriptions_count; i++)

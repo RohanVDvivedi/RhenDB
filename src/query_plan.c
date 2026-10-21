@@ -719,6 +719,9 @@ query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count)
 		exit(-1);
 
 	qp->curr_tx = curr_tx;
+
+	qp->parent_expr_eval_context = NULL;
+
 	if(!initialize_arraylist(&(qp->operators), operators_count))
 		exit(-1);
 

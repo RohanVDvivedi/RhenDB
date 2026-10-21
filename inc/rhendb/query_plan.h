@@ -216,8 +216,9 @@ struct query_plan
 	transaction* curr_tx;
 
 	// expression evaluator context for this query to access parent operator variables
-	// this will be set and must be static throughoput the life of the query_plan
-	rhendb_expr_eval_context* parent_tuple_evaluator;
+	// this should be set after the get_new_query_plan() to optionally access parent operator tuples as variables
+	// and must be static throughoput the life of the query_plan
+	rhendb_expr_eval_context* parent_expr_eval_context;
 
 	// operators like scans, writers, and also the joins, sorts and groupbys
 	// anything that implements the operator interface

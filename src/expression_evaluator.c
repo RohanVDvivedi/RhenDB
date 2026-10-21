@@ -2970,7 +2970,7 @@ static void* rhendb_post_eval(const sql_expr_eval_context* ec_p, const sql_expre
 	return result;
 }
 
-sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, transaction* tx)
+sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, transaction* tx, query_plan* qp)
 {
 	rhendb_bool_type = (expr_type_info){.type = RHENDB_EXPR_BIT_FIELD, .dti_p = BIT_FIELD_NULLABLE[1]};
 	rhendb_true_bool = (expr_value){.type_info = rhendb_bool_type, .value = (datum){.bit_field_value = 1}, .buffer_to_free = NULL};
@@ -3074,6 +3074,8 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 	initialize_arraylist(&(context_p->folded_expressions), 16);
 
 	context_p->tx = tx;
+
+	context_p->parent_context = qp->parent_expr_eval_context;
 
 	return eval_context;
 }
