@@ -1830,7 +1830,7 @@ static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32
 		ncomp++;
 		if(i < klen && key[i] == '.') i++;
 	}
-	if(ncomp == 0 || ncomp > EE_MAX_PATH){ *error_code = RHENDB_EE_UNSUPPORTED_TYPE; return 0; }
+	if(ncomp == 0 || ncomp > EE_MAX_PATH){ *error_code = RHENDB_EE_UNRESOLVABLE_VARIABLE; return 0; }
 
 	const char** comp_ptr = malloc(sizeof(char*) * ncomp);
 	uint32_t*    comp_len = malloc(sizeof(uint32_t) * ncomp);
@@ -1851,7 +1851,7 @@ static int resolve_into(rhendb_expr_eval_context* ctx, const dstring* id, uint32
 	// the 0th component must not be an integral access
 	{uint32_t temp_idx; if(component_as_index(comp_ptr[0], comp_len[0], &temp_idx)){
 		free(comp_ptr); free(comp_len); free(scratch);
-		*error_code = RHENDB_EE_UNKNOWN_VARIABLE;
+		*error_code = RHENDB_EE_UNRESOLVABLE_VARIABLE;
 		return 0;
 	}}
 
@@ -1954,7 +1954,11 @@ static void* rhendb_get_variable(const dstring* identifier_bytes, const sql_expr
 
 	const var_cache_entry* e = get_or_resolve_entry(ctx, identifier_bytes, error_code);
 	if(e == NULL)
+	{
+		if((*error_code) == RHENDB_EE_UNKNOWN_VARIABLE && ctx->parent_context != NULL)
+			return rhendb_get_variable(identifier_bytes, ctx->parent_context, error_code);
 		return NULL;
+	}
 
 	const data_type_info* dti_temp;
 	datum d;
@@ -1993,7 +1997,11 @@ static void* rhendb_get_type_for_variable(const dstring* identifier_bytes, const
 
 	const var_cache_entry* e = get_or_resolve_entry(ctx, identifier_bytes, error_code);
 	if(e == NULL)
+	{
+		if((*error_code) == RHENDB_EE_UNKNOWN_VARIABLE && ctx->parent_context != NULL)
+			return rhendb_get_type_for_variable(identifier_bytes, ctx->parent_context, error_code);
 		return NULL;
+	}
 
 	expr_type t = expr_type_for_column(e->column_dti);
 	expr_type_info* ti = new_type(t, (data_type_info*)e->column_dti);

@@ -112,7 +112,7 @@ struct rhendb_expr_eval_context
 	// this is the context for evaluating the variables if optionally it is not present in the current input_tuples
 	// allows using tuples and intermediate tuples as variables from parent query
 	// this must be same as query_plan->parent_expr_eval_context, but not necessarily be tx->curr_query->parent_expr_eval_context
-	rhendb_expr_eval_context* parent_context;
+	const sql_expr_eval_context* parent_context;
 
 	// CONSTANT FOLDING CACHE OWNERSHIP.
 	// the folded values themselves live on the AST, in sql_expression.user_meta_value, but the AST
@@ -146,8 +146,9 @@ enum rhendb_expr_eval_error
 	RHENDB_EE_INCOMPATIBLE_PROJECTION = 13, // evaluated value cannot be projected into the requested type
 	RHENDB_EE_INVALID_CAST_VALUE  = 14, // a string being cast to a number is not a valid numeric value
 	RHENDB_EE_UNKNOWN_VARIABLE    = 15, // a variable (column reference) does not resolve to any input column
-	RHENDB_EE_AMBIGUOUS_VARIABLE  = 16, // a variable resolves to more than one input column (collision)
-	RHENDB_EE_UNKNOWN_FUNCTION_CALL = 17, // a function call identifier could not be resolved
+	RHENDB_EE_UNRESOLVABLE_VARIABLE = 16, // variable is not resolvable by this implementation yet
+	RHENDB_EE_AMBIGUOUS_VARIABLE  = 17, // a variable resolves to more than one input column (collision)
+	RHENDB_EE_UNKNOWN_FUNCTION_CALL = 18, // a function call identifier could not be resolved
 };
 
 // ===================================================================================================

@@ -207,7 +207,7 @@ const tuple_def* get_tuple_def_for_tuples_to_be_consumed_from(operator* o);
 
 typedef struct transaction transaction;
 
-typedef struct rhendb_expr_eval_context rhendb_expr_eval_context;
+#include<sqltoast/sql_expression_eval.h>
 
 typedef struct query_plan query_plan;
 struct query_plan
@@ -216,9 +216,9 @@ struct query_plan
 	transaction* curr_tx;
 
 	// expression evaluator context for this query to access parent operator variables
-	// this should be set after the get_new_query_plan() to optionally access parent operator tuples as variables
+	// this should be set after the get_new_query_plan() by the parent query operator in the expression to optionally access parent operator tuples as variables
 	// and must be static throughoput the life of the query_plan
-	rhendb_expr_eval_context* parent_expr_eval_context;
+	const sql_expr_eval_context* parent_expr_eval_context;
 
 	// operators like scans, writers, and also the joins, sorts and groupbys
 	// anything that implements the operator interface
