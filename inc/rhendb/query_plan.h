@@ -226,6 +226,19 @@ void shutdown_query_plan(query_plan* qp, dstring kill_reasons);
 
 void wait_for_shutdown_of_query_plan(query_plan* qp);
 
+/*
+** If you ever want to destroy a query plan (fully made or a partial one) before starting it
+** the procedure remains the same
+** just call the follonw functions in this order
+**
+** shutdown_query_plan()
+** start_all_operators_for_query_plan()
+** wait_for_shutdown_of_query_plan()
+** destroy_query_plan()
+**
+** this will make a clean destroy and destroy everything
+*/
+
 // must be called only after the query_plan is shutdown
 void destroy_query_plan(query_plan* qp, dstring* kill_reasons);
 
