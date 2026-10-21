@@ -1,6 +1,24 @@
 PICKED TASKS
 
 
+ * sub_query support
+   * expression evaluators have pointers to other expression evaluators for sub query resolution
+   * get variable calls may even go to parent expression evaluator context
+   * mechanism to have more than 1 curr_query with a linked list of current queries and a integer to store their count
+   * mechanism to wait on the results of the sub query
+   * interface to make a query plan from sql query and then the sub_query interface pushes it into the curr_queries
+
+-----------------------------------------------------------------
+
+ * jsonb support
+   * materialization
+   * serialization for projection
+   * expressioned_function jsonb_get with integer (arrays) and string (objects), of the wrong type returns NULL, get of NULL is always a NULL
+   * jsonb_exists, to check if a integer or string is present in array or object
+   * length function to return length of jsonb
+   * cast function for casting string to jsonb, and jsonb into numeric or bool
+   * get_bool to return false on NULL or actual false or 0, else return true
+   * jsonb_aggregation function to take al jsonb nodes and put then in an array or extract key and put in a jsonb object
 
 
 -----------------------------------------------------------------
@@ -9,6 +27,8 @@ PICKED TASKS
  * resets everytime new input_tuples are set
 
 -----------------------------------------------------------------
+
+* index creation and usage operators
 
   * btree_index_insertion_operator
   * hash_index_insertion_operator
@@ -22,12 +42,9 @@ PICKED TASKS
     * btree_index_nested_loop_join_operator
     * hash_index_nested_loop_join_operator
 
+-----------------------------------------------------------------
 
-
-
-PRIORITY 1 SIMPLE OPERATORS SOURCE/SINK
-
-DB acess operators
+*locking mechanisms
 
  * schema_lock (shared exclusive) for table/index -> "schema":name:id
  * tuple_locks (shared exclusive) -> lock "tuple":table_id:partition_id:tuple_pointer -> on update or delete, lock the older version, newer version is not even visible
@@ -39,14 +56,7 @@ DB acess operators
  * hook to lock the older version in shared or exclusive mode upon scan
  * deletion may be allowed to wait or skip tuple it can not delete, decide on this policy and get back
 
-PRIORITY HIGH LEVEL TASKS (not yet prioritized)
-
-* functions
-* need preloaded functions and mechanism to call them like length of string/array/blob/binary, trigonometery, max, min with variable lengths inputs
- * implement function NOW(), to get current epoch
- * implement a function to get i-th element from an array, tuple, string, blob, binary
- * implement a function to convert a byte to it's ascii value, can also allow type cast to do it
- * implement get date, time, with timezone, and time in string to unix epoch
+-----------------------------------------------------------------
 
 FUTURE TASKS
 
@@ -69,13 +79,10 @@ FUTURE TASKS
 
  6.* savepoint supporting functions have been implemented but need high level functions to orchestrate the savepoint management
 
- 7.* JSONB support for expression evaluator and aggregate functions
-   * access(integer for array, string for object), access_base() for leaf string or number
-   * length for jsonb array
-   * need materialize function and jsonb projection function
-   * aggregate functions
-     * aggregate_into_array -> put all composite types into a jsonb array
+ 7.* more default functions (including replace for string and binary data and find in string for substring)
+  * implement function NOW(), to get current epoch
+  * implement a function to get i-th element from an array, tuple, string, blob, binary
+  * implement a function to convert a byte to it's ascii value, can also allow type cast to do it
+  * implement get date, time, with timezone, and time in string to unix epoch
 
- 8.* more default functions (including replace for string and binary data and find in string for substring)
-
- 9.* support for user-defined expressioned-functions and aggregate-functions
+ 8.* support for user-defined expressioned-functions and aggregate-functions
