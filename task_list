@@ -2,11 +2,9 @@ PICKED TASKS
 
 
  * sub_query support
-   * expression evaluators have pointers to expression evaluator contexts of the parent, for sub query's parent query variable resolution
    * mechanism to wait on the results of the sub query, or it's completion, if query_errored return failure to the expression_evaluator's executor
      * we might need to add to the thread_counter of selection and projection operator, if it has a sub_query and we plan to wait on it
      * set dstring sub_query_kill_reasons for the selection or projection operators to use
-   * if it is tuple result with a single result return that scalar instead
    * mechanism to make a query plan from sql query pointer
 
 -----------------------------------------------------------------
@@ -16,10 +14,14 @@ PICKED TASKS
    * serialization for projection
    * expressioned_function jsonb_get with integer (arrays) and string (objects), of the wrong type returns NULL, get of NULL is always a NULL
    * jsonb_exists, to check if a integer or string is present in array or object
-   * length function to return length of jsonb
-   * cast function for casting string to jsonb, and jsonb into numeric or bool
+   * length function to return length of jsonb object or array
+
+-----------------------------------------------------------------
+
+ * jsonb support
+   * cast function for casting, json string to jsonb, and jsonb into numeric or bool
    * get_bool to return false on NULL or actual false or 0, else return true
-   * jsonb_aggregation function to take al jsonb nodes and put then in an array or extract key and put in a jsonb object
+   * jsonb_aggregation function to take all jsonb nodes and put then in an array or extract key and put in a jsonb object
 
 
 -----------------------------------------------------------------
