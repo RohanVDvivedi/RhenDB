@@ -722,6 +722,9 @@ query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count)
 	if(!initialize_arraylist(&(qp->operators), operators_count))
 		exit(-1);
 
+	// query initially never gets this flag set, it is set when an unknown operator reason is encountered
+	qp->query_errored = 0;
+
 	return qp;
 }
 
