@@ -20,7 +20,6 @@ transaction initialize_transaction(rhendb* rdb)
 	transaction tx = {
 		.rdb = rdb,
 		.snapshot = NULL,
-		.transaction_id = NULL,
 	};
 
 	{
@@ -663,5 +662,4 @@ void deinitialize_transaction(transaction* tx)
 
 	tx->rdb = NULL;
 	tx->snapshot = NULL;
-	tx->transaction_id = NULL;
 }

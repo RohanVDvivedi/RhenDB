@@ -101,9 +101,6 @@ struct transaction
 	// mvcc snapshot, for isolation level
 	mvcc_snapshot* snapshot;
 
-	// transaction_id points to the transaction_id in the snapshot for this transaction
-	uint256* transaction_id;
-
 	// curr_query is the parent most query being run, hels up kill the whole query when needed
 	query_plan* curr_query;
 
