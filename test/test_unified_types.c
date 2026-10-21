@@ -86,7 +86,6 @@ int main()
 	txn = &tx;
 	// make it have a writer snapshot capable of writing
 	tx.snapshot = get_new_transaction_id(&(rdb.tx_table), NULL);
-	tx.transaction_id = &(tx.snapshot->self_transaction_id);
 
 	// create a table
 	uint64_t table_id = create_table(&(rdb.cat_mgr), tx.snapshot, "my_table", (const rhendb_attribute[4]){
