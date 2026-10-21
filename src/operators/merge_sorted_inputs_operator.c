@@ -147,7 +147,7 @@ static void execute(operator* o)
 	}
 
 	// if there is nothing ready (there already is nothing in waiting also), we are done, we quit with success
-	kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+	kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 	return ;
 }
 

@@ -19,7 +19,7 @@ static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
+	dstring kill_reason = OPERATOR_SUCCESS_REASON;
 
 	FOR_EACH_TUPLE_IN_INTERIM_TUPLE_STORE(curr_tuple, tuple_index, tuple_offset, (&(inputs->record_def->size_def)), (inputs->constant_dataset_p), (1024 * 1024), {
 		int produced = produce_tuple_from_operator(o, curr_tuple);

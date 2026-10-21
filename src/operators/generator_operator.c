@@ -20,7 +20,7 @@ static void execute(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	dstring kill_reason = get_dstring_pointing_to_literal_cstring("completed_and_killed");
+	dstring kill_reason = OPERATOR_SUCCESS_REASON;
 
 	while(1)
 	{

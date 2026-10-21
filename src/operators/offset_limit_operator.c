@@ -26,7 +26,7 @@ static void execute(operator* o)
 		const void* tuple = consume_for_consumption_iterator(inputs->input_iterator, &no_more_data);
 		if(no_more_data)
 		{
-			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 			return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))
@@ -60,7 +60,7 @@ static void execute(operator* o)
 				// after every produce if this counter reached 0, then kill your self
 				if(is_zero_tuples_down_counter(&(inputs->limit_counter)))
 				{
-					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+					kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 					return ;
 				}
 			}

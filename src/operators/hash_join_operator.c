@@ -611,7 +611,7 @@ static void execute(operator* o)
 		{
 			if(!DOES_IT_PRESERVE_RIGHT(inputs->ptype))
 			{
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+				kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 				return;
 			}
 			inputs->phase = 3;
@@ -631,7 +631,7 @@ static void execute(operator* o)
 
 		if(inputs->phase == 4)
 		{
-			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 			return;
 		}
 	}

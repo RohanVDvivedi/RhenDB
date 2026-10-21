@@ -199,7 +199,7 @@ static void execute(operator* o)
 		{
 			produce_batched_left_block_loop_over_all_right(o);
 
-			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 			return ;
 		}
 		if(can_not_proceed_for_execution_operator(o))

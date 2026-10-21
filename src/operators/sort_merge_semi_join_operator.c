@@ -90,7 +90,7 @@ static void execute(operator* o)
 		// as we are only producing left side tuples, we need left tuples to continue operating
 		if(inputs->left_input_iterator == NULL)
 		{
-			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 			return ;
 		}
 
@@ -99,7 +99,7 @@ static void execute(operator* o)
 		// this means if we are not meant to produce any unmatched tuples then quit
 		if(inputs->right_input_iterator == NULL && (!(DOES_PRODUCE_UN_MATCHED_LEFT_TUPLES(inputs->stype))))
 		{
-			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 			return ;
 		}
 

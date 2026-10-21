@@ -15,6 +15,8 @@
 
 typedef struct query_plan query_plan;
 
+#define OPERATOR_SUCCESS_REASON get_dstring_pointing_to_literal_cstring("completed_and_killed")
+
 typedef enum operator_state operator_state;
 enum operator_state
 {
@@ -213,6 +215,10 @@ struct query_plan
 
 	// operators like scans, writers, and also the joins, sorts and groupbys
 	arraylist operators;
+
+	// this is the value that needs to be checked to see if the query resulted into an error
+	// do this only after the query stops producing the results
+	int query_errored;
 };
 
 query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count);
@@ -224,6 +230,7 @@ void start_all_operators_for_query_plan(query_plan* qp);
 // may be called as many times as you desire, from the inside of the operators or from outside
 void shutdown_query_plan(query_plan* qp, dstring kill_reasons);
 
+// right after this call succeeds, you may check the query_errored
 void wait_for_shutdown_of_query_plan(query_plan* qp);
 
 /*
@@ -240,6 +247,7 @@ void wait_for_shutdown_of_query_plan(query_plan* qp);
 */
 
 // must be called only after the query_plan is shutdown
+// kill_reasons is an optional parameter, it can be NULL if the results are not expected to be received
 void destroy_query_plan(query_plan* qp, dstring* kill_reasons);
 
 /*

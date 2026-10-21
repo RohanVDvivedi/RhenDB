@@ -429,7 +429,7 @@ static void execute(operator* o)
 
 		if(inputs->phase == 2)
 		{
-			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+			kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 			return;
 		}
 	}

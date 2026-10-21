@@ -358,7 +358,7 @@ static void merge_into_produce_job(operator* o, void* param)
 	if(produce_failed)
 		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
 	else
-		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+		kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 
 	// this would always be the final job, so no need to request for any more jobs
 }
@@ -416,7 +416,7 @@ static void produce_job(operator* o, void* param)
 	pthread_mutex_unlock(&(inputs->runs_lock));
 
 	if(!produce_failed)
-		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("completed_and_killed"));
+		kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 	else
 		kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
 

@@ -61,7 +61,7 @@ static void execute(operator* o)
 		if(inputs->no_more_data[0] == 1)
 		{
 			printf("matched %"PRIu64" tuples\n", inputs->tuple_processed);
-			kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("resuts_match_successfully"));
+			kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 			return ;
 		}
 
