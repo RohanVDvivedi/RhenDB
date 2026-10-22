@@ -2844,6 +2844,8 @@ struct expression_sub_query
 	sync_pipe* sub_query_output_pipe;
 
 	tuple_def* sub_query_output_def;
+
+	void* curr_sub_query_tuple;
 };
 
 void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
@@ -2851,14 +2853,43 @@ void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p
 	return NULL;
 }
 
+// declaration for the helper to get the tuple from sub query
+void* get_tuple_from_subquery_pipe(sync_pipe* spipe, const tuple_def* tpl_d);
+
 void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, const sql_expr_eval_context* ec_p, int* error_code)
 {
+	expression_sub_query* esq = sub_query;
+
+	if(esq->curr_sub_query_tuple != NULL)
+	{
+		free(esq->curr_sub_query_tuple);
+		esq->curr_sub_query_tuple = NULL
+	}
+
+	void* sub_query_tuple = get_tuple_from_subquery_pipe(esq->sub_query_output_pipe, esq->sub_query_output_def);
+	if(sub_query_tuple == NULL)
+	{
+		wait_for_shutdown_of_query_plan(esq->sub_query_plan);
+		if(esq->sub_query_plan->query_errored)
+			(*error_code) = RHENDB_EE_FAILED_SUB_QUERY;
+		return NULL;
+	}
+
+	// convert sub_query_tuple into a expr_value and return it
+	// expr_value could possibly just be pointing to the sub_query_tuple
+
 	return NULL;
 }
 
 void rhendb_delete_sub_query(void* sub_query, const sql_expr_eval_context* ec_p)
 {
 	expression_sub_query* esq = sub_query;
+
+	if(esq->curr_sub_query_tuple != NULL)
+	{
+		free(esq->curr_sub_query_tuple);
+		esq->curr_sub_query_tuple = NULL
+	}
 
 	close_sync_pipe(esq->sub_query_output_pipe);
 
