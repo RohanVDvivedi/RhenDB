@@ -147,7 +147,7 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 
 #include<cutlery/stream_for_dstring.h>
 
-void* tx_temp_store_jsonb(jsonb_node* json_root, const data_type_info* ext_type_info, transaction* tx)
+void* tx_temp_store_jsonb(const jsonb_node* json_root, const data_type_info* ext_type_info, transaction* tx)
 {
 	// dstring to hold jsonb as bytes
 	dstring jsonb_as_bytes;

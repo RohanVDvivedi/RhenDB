@@ -3423,12 +3423,11 @@ static int project_write_sb_to_volatile(transaction* tx, data_type_info* proj, c
 	void* buf = tx_temp_store_tbj(data, data_size, proj, tx);
 	if(buf == NULL) { *error_code = RHENDB_EE_MATERIALIZE_FAILED; return 0; }
 	*out_buf = buf;
-	*out_datum = (datum){ .tuple_value = buf };
+	*out_datum = (datum){.tuple_value = buf};
 	return 1;
 }
 
-static int project_write_numeric_to_volatile(transaction* tx, data_type_info* proj, const mpd_t* d,
-	datum* out_datum, void** out_buf, int* error_code)
+static int project_write_numeric_to_volatile(transaction* tx, data_type_info* proj, const mpd_t* d, datum* out_datum, void** out_buf, int* error_code)
 {
 	// guard the one case the shared storer does not surface : an exponent too large for the numeric type.
 	// this is a cheap conversion (no digit copy, no write) whose result is discarded; the storer redoes the
@@ -3442,7 +3441,16 @@ static int project_write_numeric_to_volatile(transaction* tx, data_type_info* pr
 	void* buf = tx_temp_store_numeric((mpd_t*)d, proj, tx);
 	if(buf == NULL) { *error_code = RHENDB_EE_MATERIALIZE_FAILED; return 0; }
 	*out_buf = buf;
-	*out_datum = (datum){ .is_NULL = 0, .tuple_value = buf };
+	*out_datum = (datum){.tuple_value = buf};
+	return 1;
+}
+
+static int project_write_jsonb_to_volatile(transaction* tx, data_type_info* proj, const jsonb_node* j, datum* out_datum, void** out_buf, int* error_code)
+{
+	void* buf = tx_temp_store_jsonb(j, proj, tx);
+	if(buf == NULL) { *error_code = RHENDB_EE_MATERIALIZE_FAILED; return 0; }
+	*out_buf = buf;
+	*out_datum = (datum){.tuple_value = buf};
 	return 1;
 }
 
@@ -3489,7 +3497,8 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 	// the target is the type inference handed to us, so its kind already matches the result.
 	int to_ext_text = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_text_type_info(projection_type_info);
 	int to_ext_blob = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_blob_type_info(projection_type_info);
-	int to_ext_num  = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_numeric_type_info(projection_type_info);
+	int to_ext_num = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_numeric_type_info(projection_type_info);
+	int to_ext_jsonb = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_jsonb_type_info(projection_type_info);
 
 	// ---- extended volatile text / blob target ----
 	if(to_ext_text || to_ext_blob)
@@ -3522,6 +3531,28 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 		datum od; void* ob = NULL;
 		int ok = project_write_numeric_to_volatile(tx, projection_type_info, dp, &od, &ob, error_code);
 		if(owns) mpd_del(&scratch);
+		delete_data(v, ec_p);
+		if(!ok) return res;
+		res.value = od; res.buffer_to_free = ob;
+		return res;
+	}
+
+	// ---- extended volatile jsonb target ----
+	if(to_ext_jsonb)
+	{
+		if(ee_materialize_jsonb(v, ec_p, error_code) != RHENDB_EE_OK)
+		{
+			delete_data(v, ec_p);
+			return res;
+		}
+		if(v->type_info.type != RHENDB_EXPR_JSONB)
+		{
+			delete_data(v, ec_p);
+			*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
+			return res;
+		}
+		datum od; void* ob = NULL;
+		int ok = project_write_jsonb_to_volatile(tx, projection_type_info, v->jsonb_value, &od, &ob, error_code);
 		delete_data(v, ec_p);
 		if(!ok) return res;
 		res.value = od; res.buffer_to_free = ob;
