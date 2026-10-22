@@ -1,9 +1,7 @@
 PICKED TASKS
 
 
- * sub_query support
-  * set dstring sub_query_kill_reasons for the selection or projection operators to use
-  * mechanism to make a query plan from sql query pointer
+ * test sub_query support with sample sub_query
 
 -----------------------------------------------------------------
 

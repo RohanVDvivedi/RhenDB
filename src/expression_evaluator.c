@@ -2848,9 +2848,60 @@ struct expression_sub_query
 	void* curr_sub_query_tuple;
 };
 
+// ============================================================================
+// SUB-QUERY SUPPORT
+
+#define SUB_QUERY_OUTPUT_PIPE_CAPACITY 1024
+
+query_plan* build_query_plan_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, sync_pipe* out_pipe, tuple_def** out_def, int* error_code);
+tuple_def* infer_output_def_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code);
+
 void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	return NULL;
+	rhendb_expr_eval_context* ctx = ec_p->context_p;
+
+	// a fresh sync_pipe, created and owned by us, that the sub-query plan writes its output rows into
+	sync_pipe* out_pipe = new_sync_pipe(SUB_QUERY_OUTPUT_PIPE_CAPACITY);
+	if(out_pipe == NULL)
+	{
+		(*error_code) = RHENDB_EE_OUT_OF_MEMORY;
+		return NULL;
+	}
+
+	// build the runnable plan around our pipe; it also hands back the output row's type
+	tuple_def* output_def = NULL;
+	query_plan* qp = build_query_plan_for_sub_query(dql, ec_p, out_pipe, &output_def, error_code);
+	if(qp == NULL)
+	{
+		delete_sync_pipe(out_pipe);
+		return NULL;
+	}
+
+	// start the pipeline so it begins producing tuples into out_pipe, concurrently with our reads
+	start_all_operators_for_query_plan(qp);
+
+	expression_sub_query* esq = malloc(sizeof(expression_sub_query));
+	if(esq == NULL)
+	{
+		(*error_code) = RHENDB_EE_OUT_OF_MEMORY;
+
+		// shutdown the query plan
+		shutdown_query_plan(qp, OPERATOR_SUCCESS_REASON);
+		wait_for_shutdown_of_query_plan(qp);
+		destroy_query_plan(qp, NULL);
+
+		// close and delete the sync pipe
+		close_sync_pipe(out_pipe);
+		delete_sync_pipe(out_pipe);
+		return NULL;
+	}
+
+	esq->sub_query_plan = qp;
+	esq->sub_query_plan->parent_expr_eval_context = ctx; // set the parent_expr_eval_context to the current expression context that created it
+	esq->sub_query_output_pipe = out_pipe;
+	esq->sub_query_output_def = output_def;
+	esq->curr_sub_query_tuple = NULL;
+	return esq;
 }
 
 // declaration for the helper to get the tuple from sub query
@@ -2869,16 +2920,46 @@ void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, cons
 	void* sub_query_tuple = get_tuple_from_subquery_pipe(esq->sub_query_output_pipe, esq->sub_query_output_def);
 	if(sub_query_tuple == NULL)
 	{
+		// the pipe closed with no (more) rows : the sub-query finished -- reap it and report its outcome
 		wait_for_shutdown_of_query_plan(esq->sub_query_plan);
 		if(esq->sub_query_plan->query_errored)
 			(*error_code) = RHENDB_EE_FAILED_SUB_QUERY;
+		(*end_of_results) = 1;
 		return NULL;
 	}
 
-	// convert sub_query_tuple into a expr_value and return it, like we do with variable resolution
-	// expr_value could possibly just be pointing to the sub_query_tuple
+	// own the row for as long as the returned expr_value is alive (freed on the next call, or on delete)
+	esq->curr_sub_query_tuple = sub_query_tuple;
+	(*end_of_results) = 0;
 
-	return NULL;
+	const data_type_info* dti = NULL;
+	datum d;
+	if(!get_value_from_element_from_tuple(&d, &dti, esq->sub_query_output_def, SELF, esq->curr_sub_query_tuple))
+		return NULL;
+	if(is_datum_NULL(&d))
+		return NULL;
+
+	expr_value* v = new_val(RHENDB_EXPR_INT, ec_p);
+	if(dti->type == TUPLE || dti->type == ARRAY)
+	{
+		/* keep extended text, blob, numeric and jsonb in tuple form so it is materialized only when needed */
+		v->type_info.type = expr_type_for_column(dti);
+		v->type_info.dti_p = (data_type_info*)dti;
+		v->value = d;
+	}
+	else if(dti->type == STRING || dti->type == BINARY)
+	{
+		v->type_info.type = expr_type_for_column(dti);
+		v->type_info.dti_p = NULL;
+		v->string_value = get_dstring_pointing_to(d.string_or_binary_value, d.string_or_binary_size);
+	}
+	else
+	{
+		v->type_info.type = expr_type_for_column(dti);
+		v->type_info.dti_p = (data_type_info*)dti;
+		v->value = d;
+	}
+	return v;
 }
 
 void rhendb_delete_sub_query(void* sub_query, const sql_expr_eval_context* ec_p)
@@ -2904,7 +2985,12 @@ void rhendb_delete_sub_query(void* sub_query, const sql_expr_eval_context* ec_p)
 
 void* rhendb_get_type_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	return NULL;
+	// inference pass : just the output row's type -- no plan built, nothing executed.
+	tuple_def* output_def = infer_output_def_for_sub_query(dql, ec_p, error_code);
+	if(output_def == NULL)
+		return NULL;                       // *error_code set by the inferer
+
+	return new_type(expr_type_for_column(output_def->type_info), output_def->type_info);
 }
 
 /* ------------------------------ context ------------------------------ */
