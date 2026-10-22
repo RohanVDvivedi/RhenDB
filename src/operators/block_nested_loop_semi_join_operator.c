@@ -286,7 +286,9 @@ operator_resource_counter setup_block_nested_loop_semi_join_operator(operator* o
 	}
 	int has_reference_to_extended_type = has_reference_to_persistent_extended_type_from_expression(ec.context_p); // must be called only after validation/inference of type of the expr
 
-	operator_resource_counter result = {.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
+	operator_resource_counter result = has_sub_query_in_sql_exp(join_expr)
+		? (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .thread_counter = 1}
+		: (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
 	if(o == NULL)
 	{
 		delete_context_p_for_sql_expr_eval_context_for_rhendb(ec.context_p);

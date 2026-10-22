@@ -159,6 +159,8 @@ operator_resource_counter setup_projection_operator(operator* o, operator* input
 
 	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, input_operator->self_query_plan->curr_tx, input_operator->self_query_plan);
 
+	int has_sub_query = 0;
+
 	uint32_t expression_projections_count = 0;
 	for(uint32_t i = 0; i < projection_descriptions_count; i++)
 	{
@@ -172,11 +174,15 @@ operator_resource_counter setup_projection_operator(operator* o, operator* input
 				printf("type validation errored for projection_operator : %d @ index : %u\n", error_code, i);
 				exit(-1);
 			}
+
+			has_sub_query = has_sub_query || has_sub_query_in_sql_exp(projection_descriptions[i].expr);
 		}
 	}
 	int has_reference_to_extended_type = has_reference_to_persistent_extended_type_from_expression(ec.context_p); // must be called only after validation/inference of type of the expr
 
-	operator_resource_counter result = {.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
+	operator_resource_counter result = has_sub_query
+		? (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .thread_counter = 1}
+		: (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
 	if(o == NULL)
 	{
 		delete_context_p_for_sql_expr_eval_context_for_rhendb(ec.context_p);
