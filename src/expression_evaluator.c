@@ -2882,8 +2882,9 @@ struct expression_sub_query
 
 #define SUB_QUERY_OUTPUT_PIPE_CAPACITY 1024
 
-query_plan* build_query_plan_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, sync_pipe* out_pipe, tuple_def** out_def, int* error_code);
-tuple_def* infer_output_def_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code);
+query_plan* build_query_plan_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, sync_pipe* out_pipe, tuple_def** out_def, int* error_code){return NULL;}
+
+tuple_def* infer_output_def_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code){return NULL;}
 
 void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
 {
