@@ -2863,7 +2863,7 @@ void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, cons
 	if(esq->curr_sub_query_tuple != NULL)
 	{
 		free(esq->curr_sub_query_tuple);
-		esq->curr_sub_query_tuple = NULL
+		esq->curr_sub_query_tuple = NULL;
 	}
 
 	void* sub_query_tuple = get_tuple_from_subquery_pipe(esq->sub_query_output_pipe, esq->sub_query_output_def);
@@ -2888,7 +2888,7 @@ void rhendb_delete_sub_query(void* sub_query, const sql_expr_eval_context* ec_p)
 	if(esq->curr_sub_query_tuple != NULL)
 	{
 		free(esq->curr_sub_query_tuple);
-		esq->curr_sub_query_tuple = NULL
+		esq->curr_sub_query_tuple = NULL;
 	}
 
 	close_sync_pipe(esq->sub_query_output_pipe);
