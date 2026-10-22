@@ -7,7 +7,6 @@ PICKED TASKS
 
 * jsonb support
   * materialization
-  * parent_jsonb_value -> attribute that needs to be freed, if it exists
   * serialization for projection
 
  * jsonb support
