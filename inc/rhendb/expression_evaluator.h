@@ -149,6 +149,7 @@ enum rhendb_expr_eval_error
 	RHENDB_EE_UNRESOLVABLE_VARIABLE = 16, // variable is not resolvable by this implementation yet
 	RHENDB_EE_AMBIGUOUS_VARIABLE  = 17, // a variable resolves to more than one input column (collision)
 	RHENDB_EE_UNKNOWN_FUNCTION_CALL = 18, // a function call identifier could not be resolved
+	RHENDB_EE_FAILED_SUB_QUERY    = 19, // implies the subquery failed with a reason
 };
 
 // ===================================================================================================
