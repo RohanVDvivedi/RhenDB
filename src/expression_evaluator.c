@@ -2832,6 +2832,27 @@ static void notify_removal_for_efunc_cache_entry(void* resource_p, const void* d
 	free(ece);
 }
 
+// sub-query support start
+
+void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	return NULL;
+}
+
+void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	return NULL;
+}
+
+void rhendb_delete_sub_query(void* sub_query, const sql_expr_eval_context* ec_p)
+{
+}
+
+void* rhendb_get_type_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	return NULL;
+}
+
 /* ------------------------------ context ------------------------------ */
 
 
@@ -3029,9 +3050,9 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 
 		.delete_data = rhendb_delete_data,
 
-		.get_sub_query = NULL,
-		.next_data_from_sub_query = NULL,
-		.delete_sub_query = NULL,
+		.get_sub_query = rhendb_get_sub_query,
+		.next_data_from_sub_query = rhendb_next_data_from_sub_query,
+		.delete_sub_query = rhendb_delete_sub_query,
 
 		.call_function = rhendb_call_function,
 
@@ -3055,7 +3076,7 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 
 		.unify_types = rhendb_unify_types,
 
-		.get_type_for_sub_query = NULL,
+		.get_type_for_sub_query = rhendb_get_type_for_sub_query,
 
 		.get_return_type_for_function = rhendb_get_return_type_for_function,
 
