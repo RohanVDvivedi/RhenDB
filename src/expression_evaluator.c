@@ -2834,6 +2834,18 @@ static void notify_removal_for_efunc_cache_entry(void* resource_p, const void* d
 
 // sub-query support start
 
+#include<boompar/sync_pipe.h>
+
+typedef struct expression_sub_query expression_sub_query;
+struct expression_sub_query
+{
+	query_plan* sub_query_plan;
+
+	sync_pipe* sub_query_output_pipe;
+
+	tuple_def* sub_query_output_def;
+};
+
 void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	return NULL;
@@ -2846,6 +2858,17 @@ void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, cons
 
 void rhendb_delete_sub_query(void* sub_query, const sql_expr_eval_context* ec_p)
 {
+	expression_sub_query* esq = sub_query;
+
+	close_sync_pipe(esq->sub_query_output_pipe);
+
+	shutdown_query_plan(esq->sub_query_plan, OPERATOR_SUCCESS_REASON);
+	wait_for_shutdown_of_query_plan(esq->sub_query_plan);
+	destroy_query_plan(esq->sub_query_plan, NULL);
+
+	delete_sync_pipe(esq->sub_query_output_pipe);
+
+	free(esq);
 }
 
 void* rhendb_get_type_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
