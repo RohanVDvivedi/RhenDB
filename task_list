@@ -5,21 +5,20 @@ PICKED TASKS
 
 -----------------------------------------------------------------
 
+* jsonb support
+  * materialization
+  * parent_jsonb_value -> attribute that needs to be freed, if it exists
+  * serialization for projection
+
  * jsonb support
-   * materialization
-   * serialization for projection
-   * expressioned_function jsonb_get with integer (arrays) and string (objects), of the wrong type returns NULL, get of NULL is always a NULL
-   * jsonb_exists, to check if a integer or string is present in array or object
+   * jsonb_get, access array/object by integer/string null if wrong for any of the 4
+   * jsonb_exists, to check if a integer or string is present in array or object, false if wrong type for any of the 4
+   * jsonb_array, jsonb_object, takes input parameters and converts into a jsonb array or object
    * length function to return length of jsonb object or array
-   * jsonb_array_maker, takes in many strings and numbers and jsonb nodes and makes array out of it
-   * jsonb_object_maker, takes in string, jsonb/string/number/true/bool/null to make object out of it
-
------------------------------------------------------------------
+   * cast jsonb nodes to bare materialized string or numericupon a cast
 
  * jsonb support
-   * cast function for casting, json string to jsonb, and jsonb into numeric or bool
-   * get_bool to return false on NULL or actual false or 0, else return true
-   * jsonb_aggregation function to take all jsonb nodes and put then in an array or extract key and put in a jsonb object
+  * jsonb_aggregation function to take all jsonb nodes and put then in an array or extract key and put in a jsonb object
 
 
 -----------------------------------------------------------------
