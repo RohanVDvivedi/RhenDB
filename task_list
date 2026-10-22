@@ -5,9 +5,6 @@ PICKED TASKS
 
 -----------------------------------------------------------------
 
-* jsonb support
-  * serialization for projection
-
  * jsonb support
    * jsonb_get, access array/object by integer/string null if wrong for any of the 4
    * jsonb_exists, to check if a integer or string is present in array or object, false if wrong type for any of the 4
