@@ -2875,7 +2875,7 @@ void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, cons
 		return NULL;
 	}
 
-	// convert sub_query_tuple into a expr_value and return it
+	// convert sub_query_tuple into a expr_value and return it, like we do with variable resolution
 	// expr_value could possibly just be pointing to the sub_query_tuple
 
 	return NULL;
