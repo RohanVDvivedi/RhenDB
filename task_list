@@ -6,7 +6,6 @@ PICKED TASKS
 -----------------------------------------------------------------
 
 * jsonb support
-  * materialization
   * serialization for projection
 
  * jsonb support
