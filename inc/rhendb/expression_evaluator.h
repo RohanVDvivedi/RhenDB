@@ -80,7 +80,13 @@ struct expr_value
 		dstring string_value;    // used only for RHENDB_EXPR_STRING
 		dstring binary_value;    // used only for RHENDB_EXPR_BINARY
 		mpd_t numeric_value;     // used only for RHENDB_EXPR_NUMERIC
-		jsonb_node* jsonb_value; // used only for RHENDB_EXPR_JSONB
+		struct
+		{
+			jsonb_node* parent_jsonb_value; // used only for RHENDB_EXPR_JSONB
+			jsonb_node* jsonb_value; // used only for RHENDB_EXPR_JSONB
+			// when you want to release memory, free only the parent_jsonb_value, if it is already NULL, then we are working with borrowed value
+			// work only on the jsonb_value, it is what is being pointed at inside the parent_jsonb_value
+		};
 	};
 
 	void* buffer_to_free; // temporary buffer always to be freed, on destroying the expr_value, may be used by user defined functions returning a complex RHENDB_EXPR_TUPLE or RHENDB_EXPR_ARRAY type

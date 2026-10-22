@@ -103,9 +103,10 @@ static void rhendb_delete_data(void* data, const sql_expr_eval_context* ec_p)
 		mpd_del(&(val_p->numeric_value));
 	else if(val_p->type_info.type == RHENDB_EXPR_JSONB)
 	{
-		if(val_p->jsonb_value != NULL)
+		if(val_p->parent_jsonb_value != NULL)
 		{
-			delete_jsonb_node(val_p->jsonb_value);
+			delete_jsonb_node(val_p->parent_jsonb_value);
+			val_p->parent_jsonb_value = NULL;
 			val_p->jsonb_value = NULL;
 		}
 	}
@@ -3035,7 +3036,8 @@ static expr_value* clone_cached_expr_value(const expr_value* src, const sql_expr
 	}
 	else if(src->type_info.type == RHENDB_EXPR_JSONB)
 	{
-		v->jsonb_value = clone_jsonb(src->jsonb_value);
+		v->parent_jsonb_value = NULL;
+		v->jsonb_value = src->jsonb_value;
 	}
 	else
 	{
