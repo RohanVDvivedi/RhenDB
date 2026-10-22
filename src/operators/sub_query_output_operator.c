@@ -38,16 +38,17 @@ static void execute(operator* o)
 
 		if(tuple != NULL)
 		{
-			cy_uint bytes_to_write = get_tuple_size(inputs->input_tuple_def, tuple);
-			while(bytes_to_write > 0)
+			cy_uint tuple_size = get_tuple_size(inputs->input_tuple_def, tuple);
+			cy_uint bytes_written = 0;
+			while(bytes_written < tuple_size)
 			{
-				cy_uint bytes_written = write_to_sync_pipe(inputs->out_pipe, tuple + bytes_to_write, bytes_to_write);
-				if(bytes_written == 0)
+				cy_uint bytes_written_this_iteration = write_to_sync_pipe(inputs->out_pipe, tuple + bytes_written, tuple_size - bytes_written);
+				if(bytes_written_this_iteration == 0)
 				{
 					kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 					return ;
 				}
-				bytes_to_write -= bytes_written;
+				bytes_written += bytes_written_this_iteration;
 			}
 		}
 		else
@@ -121,12 +122,14 @@ static uint32_t read_tuple_prefix_from_sync_pipe(void* context_p, void* data, ui
 		bytes_read += bytes_read_this_iteration;
 	}
 
-	if(cntxt->bytes_capacity - cntxt->bytes_read < bytes_read)
+	if((cntxt->bytes_capacity - cntxt->bytes_read) < bytes_read)
 	{
 		cntxt->buffer = realloc(cntxt->buffer, cntxt->bytes_read + bytes_read);
 		cntxt->bytes_capacity = cntxt->bytes_read + bytes_read;
-		memmove(cntxt->buffer + cntxt->bytes_read, data, bytes_read);
 	}
+
+	memmove(cntxt->buffer + cntxt->bytes_read, data, bytes_read);
+	cntxt->bytes_read += bytes_read;
 
 	return bytes_read;
 }
@@ -148,6 +151,7 @@ void* get_tuple_from_subquery_pipe(sync_pipe* spipe, const tuple_def* tpl_d)
 	}
 
 	cntxt.buffer = realloc(cntxt.buffer, tuple_size);
+	cntxt.bytes_capacity = tuple_size;
 	while(cntxt.bytes_read < tuple_size)
 	{
 		cy_uint bytes_read_this_iteration = read_from_sync_pipe(spipe, cntxt.buffer + cntxt.bytes_read, tuple_size - cntxt.bytes_read);
