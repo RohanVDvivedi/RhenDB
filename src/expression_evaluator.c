@@ -567,6 +567,34 @@ static int ee_materialize_numeric(expr_value* v, const sql_expr_eval_context* ec
 	return RHENDB_EE_OK;
 }
 
+/* ---- jsonb materialization : tuple jsonb -> jsonb_value ---- */
+static int ee_materialize_jsonb(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	if(v->type_info.type != RHENDB_EXPR_TUPLE)
+		return RHENDB_EE_OK;
+
+	if(!is_jsonb_type_info(v->type_info.dti_p))
+		return RHENDB_EE_OK;
+
+	int mrc = MATERIALIZED_SUCCESSFULLY;
+	jsonb_node* j = materialize_jsonb(v->value, v->type_info.dti_p, tx_from_ctx(ec_p), &mrc);
+	if(mrc != MATERIALIZED_SUCCESSFULLY)
+	{
+		*error_code = (mrc == MATERIALIZED_RESULT_TOO_BIG) ? RHENDB_EE_STRING_TOO_LONG : RHENDB_EE_MATERIALIZE_FAILED;
+		return *error_code;
+	}
+
+	if(v->buffer_to_free)
+		free(v->buffer_to_free);
+
+	v->type_info = (expr_type_info){.type = RHENDB_EXPR_JSONB, .dti_p = NULL};
+	v->parent_jsonb_value = j;
+	v->jsonb_value = j;
+	v->buffer_to_free = NULL;
+
+	return RHENDB_EE_OK;
+}
+
 /* build an mpd_t from a native number */
 static int number_to_mpd(const expr_value* v, mpd_t* out)
 {
@@ -2859,8 +2887,6 @@ tuple_def* infer_output_def_for_sub_query(const sql_dql* dql, const sql_expr_eva
 
 void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	rhendb_expr_eval_context* ctx = ec_p->context_p;
-
 	// a fresh sync_pipe, created and owned by us, that the sub-query plan writes its output rows into
 	sync_pipe* out_pipe = new_sync_pipe(SUB_QUERY_OUTPUT_PIPE_CAPACITY);
 	if(out_pipe == NULL)
@@ -2898,7 +2924,7 @@ void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p
 	}
 
 	esq->sub_query_plan = qp;
-	esq->sub_query_plan->parent_expr_eval_context = ctx; // set the parent_expr_eval_context to the current expression context that created it
+	esq->sub_query_plan->parent_expr_eval_context = ec_p; // set the parent_expr_eval_context to the current expression context that created it
 	esq->sub_query_output_pipe = out_pipe;
 	esq->sub_query_output_def = output_def;
 	esq->curr_sub_query_tuple = NULL;
