@@ -131,7 +131,7 @@ static uint32_t read_tuple_prefix_from_sync_pipe(void* context_p, void* data, ui
 	return bytes_read;
 }
 
-void* get_tuple_from_subquery_pipe(sync_pipe* spipe, tuple_def* tpl_d)
+void* get_tuple_from_subquery_pipe(sync_pipe* spipe, const tuple_def* tpl_d)
 {
 	subquery_pipe_size_reader_context cntxt = {
 		.buffer = NULL,

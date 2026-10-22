@@ -83,7 +83,7 @@ operator_resource_counter setup_projection_operator(operator* o, operator* input
 #include<boompar/sync_pipe.h>
 
 operator_resource_counter setup_subquery_output_operator(operator* o, operator* input_operator, sync_pipe* out_pipe);
-void* get_tuple_from_subquery_pipe(sync_pipe* spipe, tuple_def* tpl_d); // a return NULL implies query completed
+void* get_tuple_from_subquery_pipe(sync_pipe* spipe, const tuple_def* tpl_d); // a return NULL implies query completed
 
 #include<rhendb/table_operator_output_type.h>
 #include<rhendb/fetched_table.h>

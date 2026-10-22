@@ -229,6 +229,10 @@ int main()
 
 	// make operators
 
+	// testing for a sub query consumer
+	const tuple_def* spipe_def = NULL;
+	sync_pipe* spipe = new_sync_pipe(10);
+
 	printf("Building pipeline :\n");
 	{
 		operator* o = get_new_registered_operator_for_query_plan(qp);
@@ -283,6 +287,13 @@ int main()
 		setup_identity_operator(i2, input);
 		append_tuple_transformer(&(i2->output_tuple_transformers), get_new_row_identifier_prepender_transformer(get_tuple_def_for_tuples_to_be_consumed_from(i2), 777));
 		printf("i2 operator %p\n", i2);
+
+		operator* sq = i2;
+		spipe_def = get_tuple_def_for_tuples_to_be_consumed_from(sq);
+		operator* mq = get_new_registered_operator_for_query_plan(qp);
+		setup_subquery_output_operator(mq, sq, spipe);
+		printf("mq operator %p\n", mq);
+
 		o = get_new_registered_operator_for_query_plan(qp);
 		setup_consumer_operator(o, i2, print_consumer, NULL);
 		printf("sink operator %p\n", o);
@@ -292,6 +303,18 @@ int main()
 	// make operators completed
 
 	start_all_operators_for_query_plan(qp);
+
+	while(1)
+	{
+		void* spipe_tuple = get_tuple_from_subquery_pipe(spipe, spipe_def);
+		if(spipe_tuple == NULL)
+			break;
+		printf("printing from parent query : ");
+		print_tuple(spipe_tuple, spipe_def);
+		printf("\n");
+		free(spipe_tuple);
+	}
+	delete_sync_pipe(spipe);
 
 	wait_for_shutdown_of_query_plan(qp);
 
