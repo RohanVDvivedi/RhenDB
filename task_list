@@ -9,6 +9,7 @@ PICKED TASKS
    * jsonb_get, access array/object by integer/string null if wrong for any of the 4
    * jsonb_exists, to check if a integer or string is present in array or object, false if wrong type for any of the 4
    * jsonb_array, jsonb_object, takes input parameters and converts into a jsonb array or object
+   * jsonb_concat, concatenates jsonb arrays or objects into 1 jsonb array, earlier string keys dominate
    * length function to return length of jsonb object or array
    * cast jsonb nodes to bare materialized string or numericupon a cast
 
