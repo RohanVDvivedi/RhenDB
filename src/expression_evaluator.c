@@ -2879,8 +2879,6 @@ struct expression_sub_query
 	sync_pipe* sub_query_output_pipe;
 
 	tuple_def* sub_query_output_def;
-
-	void* curr_sub_query_tuple;
 };
 
 // ============================================================================
@@ -2934,7 +2932,6 @@ void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p
 	esq->sub_query_plan->parent_expr_eval_context = ec_p; // set the parent_expr_eval_context to the current expression context that created it
 	esq->sub_query_output_pipe = out_pipe;
 	esq->sub_query_output_def = output_def;
-	esq->curr_sub_query_tuple = NULL;
 	return esq;
 }
 
@@ -2944,12 +2941,6 @@ void* get_tuple_from_subquery_pipe(sync_pipe* spipe, const tuple_def* tpl_d);
 void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expression_sub_query* esq = sub_query;
-
-	if(esq->curr_sub_query_tuple != NULL)
-	{
-		free(esq->curr_sub_query_tuple);
-		esq->curr_sub_query_tuple = NULL;
-	}
 
 	void* sub_query_tuple = get_tuple_from_subquery_pipe(esq->sub_query_output_pipe, esq->sub_query_output_def);
 	if(sub_query_tuple == NULL)
@@ -2962,13 +2953,11 @@ void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, cons
 		return NULL;
 	}
 
-	// own the row for as long as the returned expr_value is alive (freed on the next call, or on delete)
-	esq->curr_sub_query_tuple = sub_query_tuple;
 	(*end_of_results) = 0;
 
 	const data_type_info* dti = NULL;
 	datum d;
-	if(!get_value_from_element_from_tuple(&d, &dti, esq->sub_query_output_def, SELF, esq->curr_sub_query_tuple))
+	if(!get_value_from_element_from_tuple(&d, &dti, esq->sub_query_output_def, SELF, sub_query_tuple))
 		return NULL;
 	if(is_datum_NULL(&d))
 		return NULL;
@@ -2980,18 +2969,21 @@ void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, cons
 		v->type_info.type = expr_type_for_column(dti);
 		v->type_info.dti_p = (data_type_info*)dti;
 		v->value = d;
+		v->buffer_to_free = sub_query_tuple; // we are borrowing value
 	}
 	else if(dti->type == STRING || dti->type == BINARY)
 	{
 		v->type_info.type = expr_type_for_column(dti);
 		v->type_info.dti_p = NULL;
 		v->string_value = get_dstring_pointing_to(d.string_or_binary_value, d.string_or_binary_size);
+		v->buffer_to_free = sub_query_tuple; // we are borrowing value
 	}
 	else
 	{
 		v->type_info.type = expr_type_for_column(dti);
 		v->type_info.dti_p = (data_type_info*)dti;
 		v->value = d;
+		free(sub_query_tuple);
 	}
 	return v;
 }
