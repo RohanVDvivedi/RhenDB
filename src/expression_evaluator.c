@@ -2759,7 +2759,6 @@ static expressed_function* resolve_from_string_to_string_functions(const dstring
 // constants -> integer
 // now() (resolved based on the timestamp of the current query)
 
-// (*future)
 // jsonb, string/integer -> jsonb/exists
 // jsonb_get/jsonb_exists() -> jsonb/bool
 static jsonb_node* jsonb_object_get(jsonb_node* root, const dstring* key)
@@ -2916,6 +2915,200 @@ static expressed_function* resolve_to_jsonb_read_functions(const dstring* identi
 	return NULL;
 }
 
+// jsonb constructors
+// jsonb_leaf/jsonb_array/jsonb_object -> jsonb
+static jsonb_node* make_jsonb_leaf_node(expr_value* v, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	if(v == NULL || v == (expr_value*)ec_p->unknown_bool)
+		return &jsonb_null;
+	if(v == (expr_value*)ec_p->true_bool)
+		return &jsonb_true;
+	if(v == (expr_value*)ec_p->false_bool)
+		return &jsonb_false;
+
+	expr_type et = effective_type(&(v->type_info));
+
+	// already jsonb : steal when it owns itself, else clone
+	if(et == RHENDB_EXPR_JSONB)
+	{
+		if(v->parent_jsonb_value == v->jsonb_value)   // owns itself as root -> take it directly
+		{
+			jsonb_node* n = v->jsonb_value;
+			v->parent_jsonb_value = NULL;             // moved : the caller's delete_data(v) must free nothing
+			return n;
+		}
+		return clone_jsonb(v->jsonb_value);           // part of some other tree (or borrowed) -> clone
+	}
+
+	// a string -> a jsonb string leaf (the node clones the bytes for itself)
+	if(et == RHENDB_EXPR_STRING)
+	{
+		if(ee_materialize_tb(v, ec_p, error_code))
+			return NULL;
+		jsonb_node* n = new_jsonb_string_node(&(v->string_value));
+		if(n == NULL)
+			*error_code = RHENDB_EE_OUT_OF_MEMORY;
+		return n;
+	}
+
+	// a number of any native/large/float/double/bit-field kind, or a numeric -> a jsonb numeric leaf
+	if(et == RHENDB_EXPR_NUMERIC || et_is_native_number(et))
+	{
+		mpd_t scratch; int owns = 0;
+		mpd_t* m = operand_to_mpd(v, &scratch, &owns, ec_p, error_code, RHENDB_EE_UNSUPPORTED_TYPE);
+		if(m == NULL)
+			return NULL;
+
+		int exp_too_big = 0;
+		materialized_numeric mn = decimal_to_materialized_numeric(m, &exp_too_big);
+		if(owns)
+			mpd_del(&scratch);
+		if(exp_too_big)
+		{
+			deinitialize_materialized_numeric(&mn);
+			*error_code = RHENDB_EE_STRING_TOO_LONG;
+			return NULL;
+		}
+
+		jsonb_node* n = new_jsonb_numeric_node2(mn);   // consumes mn on success
+		if(n == NULL)
+		{
+			deinitialize_materialized_numeric(&mn);
+			*error_code = RHENDB_EE_OUT_OF_MEMORY;
+			return NULL;
+		}
+		return n;
+	}
+
+	// binary, array and genuine tuple values are not leaf-convertible
+	*error_code = RHENDB_EE_UNSUPPORTED_TYPE;
+	return NULL;
+}
+// wraps a freshly-built jsonb node into a self-owning RHENDB_EXPR_JSONB expr_value (parent == value)
+static expr_value* wrap_owned_jsonb_node(jsonb_node* n, const sql_expr_eval_context* ec_p)
+{
+	expr_value* out = new_val(RHENDB_EXPR_JSONB, ec_p);
+	out->type_info.dti_p = NULL;
+	out->parent_jsonb_value = n;
+	out->jsonb_value = n;
+	out->buffer_to_free = NULL;
+	return out;
+}
+// jsonb_leaf(x) : one value -> one jsonb leaf. a SQL NULL input stays a SQL NULL output, as is.
+static void* jsonb_leaf_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	if(((expr_value**)params)[0] == NULL)   // NULL in -> NULL out
+		return NULL;
+
+	jsonb_node* n = make_jsonb_leaf_node(((expr_value**)params)[0], ec_p, error_code);
+	if(*error_code)
+		return NULL;
+	return wrap_owned_jsonb_node(n, ec_p);
+}
+// jsonb_array(e0, e1, ...) : each argument is leaf-ified (or kept, if already jsonb) and appended in order
+static void* jsonb_array_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	jsonb_node* arr = new_jsonb_array_node(params_count);
+	if(arr == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+
+	for(uint32_t i = 0; i < params_count; i++)
+	{
+		jsonb_node* n = make_jsonb_leaf_node(((expr_value**)params)[i], ec_p, error_code);
+		if(*error_code){ delete_jsonb_node(arr); return NULL; }
+
+		if(!push_in_jsonb_array_node(arr, n))
+		{
+			delete_jsonb_node(n);
+			delete_jsonb_node(arr);
+			*error_code = RHENDB_EE_OUT_OF_MEMORY;
+			return NULL;
+		}
+	}
+
+	return wrap_owned_jsonb_node(arr, ec_p);
+}
+// jsonb_object(k0, v0, k1, v1, ...) : even arg count, even indices are raw string keys, odd are leaf-ified values
+static void* jsonb_object_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	jsonb_node* obj = new_jsonb_object_node();
+	if(obj == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
+
+	for(uint32_t i = 0; (i + 1) < params_count; i += 2)
+	{
+		expr_value* key_v = ((expr_value**)params)[i];
+
+		// the key must be a present, raw string
+		if(key_v == NULL){ delete_jsonb_node(obj); *error_code = RHENDB_EE_NULL_OPERAND; return NULL; }
+		if(ee_materialize_tb(key_v, ec_p, error_code)){ delete_jsonb_node(obj); return NULL; }
+		if(effective_type(&(key_v->type_info)) != RHENDB_EXPR_STRING){ delete_jsonb_node(obj); *error_code = RHENDB_EE_UNSUPPORTED_TYPE; return NULL; }
+
+		jsonb_node* vn = make_jsonb_leaf_node(((expr_value**)params)[i + 1], ec_p, error_code);
+		if(*error_code){ delete_jsonb_node(obj); return NULL; }
+
+		if(!put_in_jsonb_object_node(obj, &(key_v->string_value), vn))   // key is cloned internally, vn inserted as is
+		{
+			delete_jsonb_node(vn);
+			delete_jsonb_node(obj);
+			*error_code = RHENDB_EE_OUT_OF_MEMORY;
+			return NULL;
+		}
+	}
+
+	return wrap_owned_jsonb_node(obj, ec_p);
+}
+static void* jsonb_construct_get_return_type(void* function_context_handle, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	return new_type(RHENDB_EXPR_JSONB, NULL);   // all three always produce a jsonb value
+}
+static int is_jsonb_leaf_compatible_type(const expr_type_info* ti)
+{
+	expr_type e = effective_type((expr_type_info*)ti);
+	return e != RHENDB_EXPR_BINARY && e != RHENDB_EXPR_ARRAY && e != RHENDB_EXPR_TUPLE;
+}
+static expressed_function* resolve_to_jsonb_construct_functions(const dstring* identifier_bytes, expr_type_info** param_typs, uint32_t params_count)
+{
+	void* (*cf)(void*, void**, uint32_t, const sql_expr_eval_context*, int*) = NULL;
+
+	if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring("jsonb_leaf")))
+	{
+		if(params_count != 1)
+			return NULL;
+		if(!is_jsonb_leaf_compatible_type(param_typs[0]))
+			return NULL;
+		cf = jsonb_leaf_call_function;
+	}
+	else if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring("jsonb_array")))
+	{
+		for(uint32_t i = 0; i < params_count; i++)
+			if(!is_jsonb_leaf_compatible_type(param_typs[i]))
+				return NULL;
+		cf = jsonb_array_call_function;
+	}
+	else if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring("jsonb_object")))
+	{
+		if((params_count % 2) != 0)
+			return NULL;
+		for(uint32_t i = 0; i < params_count; i += 2)
+			if(effective_type(param_typs[i]) != RHENDB_EXPR_STRING)   // keys are raw strings
+				return NULL;
+		for(uint32_t i = 1; i < params_count; i += 2)
+			if(!is_jsonb_leaf_compatible_type(param_typs[i]))          // values are leaf-callable
+				return NULL;
+		cf = jsonb_object_call_function;
+	}
+	else
+		return NULL;
+
+	expressed_function* efunc = malloc(sizeof(expressed_function));
+	*efunc = (expressed_function){
+		.function_context_handle      = NULL,
+		.call_function                = cf,
+		.get_return_type_for_function = jsonb_construct_get_return_type,
+		.destroy_expressed_function   = simple_destroy_expressed_function,
+	};
+	return efunc;
+}
+
 // on first access below function populates the efunc_cache on first access, pointed by byte_array and char_count of the identifier bytes
 // then calls the corresponding callback in the expressed_function* efunc
 
@@ -2987,6 +3180,8 @@ static expressed_function* resolve_and_populate_efunc_cache(const dstring* ident
 		efunc = resolve_to_length_function(identifier_bytes, param_typs, params_count);
 	if(efunc == NULL)
 		efunc = resolve_to_jsonb_read_functions(identifier_bytes, param_typs, params_count);
+	if(efunc == NULL)
+		efunc = resolve_to_jsonb_construct_functions(identifier_bytes, param_typs, params_count);
 
 	// lastly populate
 	if(efunc != NULL)
