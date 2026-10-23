@@ -1248,6 +1248,9 @@ static void rhendb_concat(void** data1_p, void* data2, const sql_expr_eval_conte
 			return;
 		}
 		a->string_value = clone;
+		if(a->buffer_to_free != NULL)
+			free(a->buffer_to_free);
+		a->buffer_to_free = NULL;
 	}
 
 	if(!concatenate_dstring(&(a->string_value), &(b->string_value)))
