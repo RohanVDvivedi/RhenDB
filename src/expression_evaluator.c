@@ -527,15 +527,18 @@ static int ee_materialize_tb(expr_value* v, const sql_expr_eval_context* ec_p, i
 		return *error_code;
 	}
 
-	if(v->buffer_to_free)
-		free(v->buffer_to_free);
-
 	v->type_info = (expr_type_info){.type = target, .dti_p = NULL};
-	init_dstring(&(v->string_value), buf, len);
-	v->buffer_to_free = NULL;
 
-	if(cap > 0 && buf != NULL)
+	if(cap == 0) // if there was no allocation reuse the buffer_to_free, i.e make a pointing to dstring
+		v->string_value = get_dstring_pointing_to(buf, len);
+	else
+	{
+		init_dstring(&(v->string_value), buf, len);
 		free(buf);
+		if(v->buffer_to_free)
+			free(v->buffer_to_free);
+		v->buffer_to_free = NULL;
+	}
 
 	return RHENDB_EE_OK;
 }
@@ -3082,7 +3085,10 @@ static int is_rhendb_sentinel_value(const void* d)
 static void* rhendb_pre_eval(const sql_expr_eval_context* ec_p, const sql_expression* expr, void** result)
 {
 	if(expr->type == SQL_SUB_QUERY || expr->type == SQL_EXISTS) // sub queries are never constant, they may access intermediate parent query tuples as variables
-		return NULL;
+	{
+		((sql_expression*)expr)->user_meta_flags &= ~RHENDB_EXPR_IS_CONSTANT;
+		return &(((sql_expression*)expr)->user_meta_flags);
+	}
 
 	// already proven constant : answer straight from the cache, and skip the whole subtree
 	if((expr->user_meta_flags & RHENDB_EXPR_IS_CONSTANT) && expr->user_meta_value != NULL)
