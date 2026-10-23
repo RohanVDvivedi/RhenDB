@@ -2992,12 +2992,6 @@ void rhendb_delete_sub_query(void* sub_query, const sql_expr_eval_context* ec_p)
 {
 	expression_sub_query* esq = sub_query;
 
-	if(esq->curr_sub_query_tuple != NULL)
-	{
-		free(esq->curr_sub_query_tuple);
-		esq->curr_sub_query_tuple = NULL;
-	}
-
 	close_sync_pipe(esq->sub_query_output_pipe);
 
 	shutdown_query_plan(esq->sub_query_plan, OPERATOR_SUCCESS_REASON);
