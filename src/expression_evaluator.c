@@ -1438,6 +1438,59 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 	const expr_type_info* to = to_type;
 	expr_type target = to->type;
 
+	/* a jsonb leaf casts to the native form implied by the leaf's OWN type :
+	 *   JSONB_TRUE / JSONB_FALSE -> the native boolean singletons (ec_p->true_bool / false_bool)
+	 *   JSONB_STRING             -> a native string, then on to the requested target
+	 *   JSONB_NUMERIC            -> a native numeric via its materialized_numeric, then on to the target number type
+	 * a JSON null becomes SQL NULL; arrays / objects are not leaf-castable to a scalar. */
+	if(effective_type(&(a->type_info)) == RHENDB_EXPR_JSONB)
+	{
+		if(ee_materialize_jsonb(a, ec_p, error_code))
+			return NULL;
+
+		jsonb_node* leaf = a->jsonb_value;
+		jsonb_type jt = (leaf == NULL) ? JSONB_NULL : leaf->type;
+
+		if(jt == JSONB_NULL)
+			return NULL;                                   /* SQL NULL as is */
+
+		if(jt == JSONB_TRUE || jt == JSONB_FALSE)
+		{
+			expr_value* b = (expr_value*)((jt == JSONB_TRUE) ? ec_p->true_bool : ec_p->false_bool);
+			if(target == RHENDB_EXPR_BIT_FIELD)            /* the native boolean target */
+				return b;
+			return rhendb_cast(b, to_type, ec_p, error_code); /* a shared singleton -> nothing to free */
+		}
+
+		if(jt == JSONB_STRING)
+		{
+			/* the leaf's bytes live inside `a` (freed by the caller only AFTER this cast returns) and the
+			 * inner cast copies/parses them before `s` is discarded, so a pointing dstring is enough -- no
+			 * deep copy, and nothing to free (buffer_to_free stays NULL ; POINT_DSTR deinit is a no-op). */
+			expr_value* s = new_val(RHENDB_EXPR_STRING, ec_p);
+			s->type_info = (expr_type_info){.type = RHENDB_EXPR_STRING, .dti_p = NULL};
+			s->string_value = get_dstring_pointing_to_dstring(&(leaf->jsonb_string));
+			s->buffer_to_free = NULL;
+			expr_value* res = rhendb_cast(s, to_type, ec_p, error_code);
+			rhendb_delete_data(s, ec_p);
+			return res;
+		}
+
+		if(jt == JSONB_NUMERIC)
+		{
+			expr_value* n = new_val(RHENDB_EXPR_NUMERIC, ec_p);
+			n->type_info = (expr_type_info){.type = RHENDB_EXPR_NUMERIC, .dti_p = NULL};
+			n->numeric_value = decimal_from_materialized_numeric(&(leaf->jsonb_numeric));
+			n->buffer_to_free = NULL;
+			expr_value* res = rhendb_cast(n, to_type, ec_p, error_code);
+			rhendb_delete_data(n, ec_p);
+			return res;
+		}
+
+		*error_code = RHENDB_EE_UNSUPPORTED_CAST;           /* JSONB_ARRAY / JSONB_OBJECT */
+		return NULL;
+	}
+
 	/* bring an extended (tuple-form) source down to its scalar representation first */
 	if(is_numeric_operand(a)){ if(ee_materialize_numeric(a, ec_p, error_code)) return NULL; }
 	else if(is_sb_operand(a)){ if(ee_materialize_tb(a, ec_p, error_code)) return NULL; }
@@ -1627,7 +1680,7 @@ static int rhendb_can_cast_types(const void* typ_from, const void* typ_to, const
 	/* aligned with rhendb_cast : any scalar among {numbers, NUMERIC, STRING, BINARY} casts to any other.
 	 * numbers <-> numbers/NUMERIC, string/binary -> number (parsed), number/NUMERIC -> string (decimal text),
 	 * and string/binary -> string/binary (byte reinterpretation). */
-	int from_ok = et_is_native_number_or_numeric(from) || from == RHENDB_EXPR_STRING || from == RHENDB_EXPR_BINARY;
+	int from_ok = et_is_native_number_or_numeric(from) || from == RHENDB_EXPR_STRING || from == RHENDB_EXPR_BINARY || from == RHENDB_EXPR_JSONB;
 	int to_ok   = et_is_native_number_or_numeric(to)   || to   == RHENDB_EXPR_STRING || to   == RHENDB_EXPR_BINARY;
 	return from_ok && to_ok;
 }
