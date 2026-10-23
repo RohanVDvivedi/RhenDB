@@ -1985,7 +1985,10 @@ static void* rhendb_get_variable(const dstring* identifier_bytes, const sql_expr
 	if(e == NULL)
 	{
 		if((*error_code) == RHENDB_EE_UNKNOWN_VARIABLE && ctx->parent_context != NULL)
+		{
+			(*error_code) = 0;
 			return rhendb_get_variable(identifier_bytes, ctx->parent_context, error_code);
+		}
 		return NULL;
 	}
 
@@ -2028,7 +2031,10 @@ static void* rhendb_get_type_for_variable(const dstring* identifier_bytes, const
 	if(e == NULL)
 	{
 		if((*error_code) == RHENDB_EE_UNKNOWN_VARIABLE && ctx->parent_context != NULL)
+		{
+			(*error_code) = 0;
 			return rhendb_get_type_for_variable(identifier_bytes, ctx->parent_context, error_code);
+		}
 		return NULL;
 	}
 
