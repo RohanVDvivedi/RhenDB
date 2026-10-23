@@ -1,9 +1,6 @@
 PICKED TASKS
 
  * jsonb support
-   * cast jsonb nodes to bare materialized string or numeric upon a cast
-
- * jsonb support
   * jsonb_aggregation function to take all jsonb nodes and put then in an array or extract key and put in a jsonb object
 
 -----------------------------------------------------------------
