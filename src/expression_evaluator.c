@@ -1691,6 +1691,8 @@ static void* rhendb_unify_types(void* typ1, void* typ2, const sql_expr_eval_cont
 			return new_type_sized(a, combined_width_bytes(t1, t2));
 		if(et_is_native_float(a))
 			return new_type_sized(a, 0);
+		if(a == RHENDB_EXPR_STRING || a == RHENDB_EXPR_BINARY || a == RHENDB_EXPR_JSONB)
+			return new_type(a, NULL);
 	}
 	if(et_is_native_number_or_numeric(a) && et_is_native_number_or_numeric(b))
 		return num_result_sized(t1, t2);
@@ -2625,6 +2627,9 @@ static expressed_function* resolve_to_substring_function(const dstring* identifi
 // length (materialize and return size, skipping jsonb for now])
 static void* length_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
 {
+	if(((expr_value**)params)[0] == NULL) // length(NULL) -> NULL
+		return NULL;
+
 	expr_type t0 = effective_type(&(((expr_value*)params[0])->type_info));
 
 	if(t0 == RHENDB_EXPR_STRING || t0 == RHENDB_EXPR_BINARY)
