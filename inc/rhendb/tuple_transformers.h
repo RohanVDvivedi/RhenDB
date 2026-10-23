@@ -11,6 +11,7 @@ tuple_transformer* get_new_is_readable_for_mvcc_snapshot_transformer(const mvcc_
 
 tuple_transformer* get_new_simple_projection_transformer(const char* output_table_name, const tuple_def* input_def, uint32_t projections_count, positional_accessor** projections, const char** field_names);
 
+// for outputs from a scalar sub_query you may need this transformer right before the sub_query_output_operator
 tuple_transformer* get_new_scalar_projection_transformer(const tuple_def* input_def, positional_accessor* projection);
 
 tuple_transformer* get_new_row_number_prepender_transformer(const tuple_def* input_def, uint64_t next_row_number);
