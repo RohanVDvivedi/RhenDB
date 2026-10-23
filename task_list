@@ -1,10 +1,9 @@
 PICKED TASKS
 
  * jsonb support
-   * length function to return length of jsonb object or array
    * jsonb_array, jsonb_object, takes input parameters and converts into a jsonb array or object
-   * jsonb_concat, concatenates jsonb arrays or objects into 1 jsonb array, earlier string keys dominate
-   * cast jsonb nodes to bare materialized string or numericupon a cast
+   * jsonb_concat, concatenates jsonb arrays or objects into 1 jsonb array
+   * cast jsonb nodes to bare materialized string or numeric upon a cast
 
  * jsonb support
   * jsonb_aggregation function to take all jsonb nodes and put then in an array or extract key and put in a jsonb object
