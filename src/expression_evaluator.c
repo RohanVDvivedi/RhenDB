@@ -2723,8 +2723,145 @@ static expressed_function* resolve_from_string_to_string_functions(const dstring
 // now() (resolved based on the timestamp of the current query)
 
 // (*future)
-// jsonb, string/integer -> jsonb
-// access() -> jsonb
+// jsonb, string/integer -> jsonb/exists
+// jsonb_get/jsonb_exists() -> jsonb/bool
+static jsonb_node* jsonb_object_get(jsonb_node* root, const dstring* key)
+{
+	if(root == NULL || root->type != JSONB_OBJECT)
+		return NULL;
+	jsonb_object_entry* e = (jsonb_object_entry*) find_equals_in_bst(&(root->jsonb_object), key, FIRST_OCCURENCE);
+	if(e == NULL)
+		return NULL;
+	return e->value;
+}
+static jsonb_node* jsonb_array_get(jsonb_node* root, uint32_t index)
+{
+	if(root == NULL || root->type != JSONB_ARRAY)
+		return NULL;
+	return (jsonb_node*) get_from_front_of_arraylist(&(root->jsonb_array), index);
+}
+static int jsonb_object_exists(jsonb_node* root, const dstring* key)
+{
+	if(root == NULL || root->type != JSONB_OBJECT)
+		return 0;
+	jsonb_object_entry* e = (jsonb_object_entry*) find_equals_in_bst(&(root->jsonb_object), key, FIRST_OCCURENCE);
+	return e != NULL && e->value != NULL;
+}
+static int jsonb_array_exists(jsonb_node* root, uint32_t index)
+{
+	if(root == NULL || root->type != JSONB_ARRAY)
+		return 0;
+	return get_from_front_of_arraylist(&(root->jsonb_array), index) != NULL;
+}
+static void* jsonb_read_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	expr_value* root_node_v = ((expr_value**)params)[0];
+	if(ee_materialize_jsonb(root_node_v, ec_p, error_code))
+		return NULL;
+
+	if(function_context_handle == jsonb_object_get || function_context_handle == jsonb_object_exists)
+	{
+		expr_value* str_v = ((expr_value**)params)[1];
+		if(ee_materialize_tb(str_v, ec_p, error_code))
+			return NULL;
+
+		if(function_context_handle == jsonb_object_get)
+		{
+			jsonb_node* child_jsonb = jsonb_object_get(root_node_v->jsonb_value, &(str_v->string_value));
+
+			expr_value* output = new_val(RHENDB_EXPR_JSONB, ec_p);
+			output->type_info.dti_p = NULL;
+			output->jsonb_value = child_jsonb;
+			output->parent_jsonb_value = root_node_v->parent_jsonb_value;
+			output->buffer_to_free = NULL;
+
+			// parent of this tree is made to now not own the root
+			root_node_v->parent_jsonb_value = NULL;
+
+			return output;
+		}
+		else
+		{
+			int exists = jsonb_object_exists(root_node_v->jsonb_value, &(str_v->string_value));
+			return exists ? ec_p->true_bool : ec_p->false_bool;
+		}
+	}
+	else
+	{
+		expr_value* index_v = ((expr_value**)params)[1];
+
+		if(function_context_handle == jsonb_array_get)
+		{
+			jsonb_node* child_jsonb = jsonb_array_get(root_node_v->jsonb_value, index_v->value.uint_value);
+
+			expr_value* output = new_val(RHENDB_EXPR_JSONB, ec_p);
+			output->type_info.dti_p = NULL;
+			output->jsonb_value = child_jsonb;
+			output->parent_jsonb_value = root_node_v->parent_jsonb_value;
+			output->buffer_to_free = NULL;
+
+			// parent of this tree is made to now not own the root
+			root_node_v->parent_jsonb_value = NULL;
+
+			return output;
+		}
+		else
+		{
+			int exists = jsonb_array_exists(root_node_v->jsonb_value, index_v->value.uint_value);
+			return exists ? ec_p->true_bool : ec_p->false_bool;
+		}
+	}
+}
+static void* jsonb_read_get_return_type(void* function_context_handle, void** param_typs, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	if(function_context_handle == jsonb_array_get || function_context_handle == jsonb_object_get)
+		return new_type(RHENDB_EXPR_JSONB, NULL);
+	else // else it is an exists call, returns only boolean
+		return ec_p->bool_type;
+}
+static expressed_function* resolve_to_jsonb_read_functions(const dstring* identifier_bytes, expr_type_info** param_typs, uint32_t params_count)
+{
+	if(params_count != 1)
+		return NULL;
+
+	expr_type t0 = effective_type(param_typs[0]);
+	if(t0 != RHENDB_EXPR_JSONB)
+		return NULL;
+
+	expr_type t1 = effective_type(param_typs[1]);
+	if(t1 != RHENDB_EXPR_STRING && t1 != RHENDB_EXPR_UINT)
+		return NULL;
+
+	#define to_string_case_for(x) #x
+	#define case_for(name, fn) \
+		if(0 == case_compare_dstring(identifier_bytes, &get_dstring_pointing_to_literal_cstring(to_string_case_for(name)))) \
+		{ \
+			expressed_function* efunc = malloc(sizeof(expressed_function)); \
+			*efunc = (expressed_function){ \
+				.function_context_handle      = fn, \
+				.call_function                = jsonb_read_call_function, \
+				.get_return_type_for_function = jsonb_read_get_return_type, \
+				.destroy_expressed_function   = simple_destroy_expressed_function, \
+			}; \
+			return efunc; \
+		}
+
+	if(t1 == RHENDB_EXPR_STRING)
+	{
+		case_for(jsonb_get, jsonb_object_get)
+		case_for(jsonb_exists, jsonb_object_exists)
+	}
+	if(t1 == RHENDB_EXPR_UINT)
+	{
+		case_for(jsonb_get, jsonb_array_get)
+		case_for(jsonb_exists, jsonb_array_exists)
+	}
+
+	#undef case_for
+	#undef to_string_case_for
+
+	return NULL;
+}
 
 // on first access below function populates the efunc_cache on first access, pointed by byte_array and char_count of the identifier bytes
 // then calls the corresponding callback in the expressed_function* efunc
@@ -2795,6 +2932,8 @@ static expressed_function* resolve_and_populate_efunc_cache(const dstring* ident
 		efunc = resolve_from_string_to_string_functions(identifier_bytes, param_typs, params_count);
 	if(efunc == NULL)
 		efunc = resolve_to_length_function(identifier_bytes, param_typs, params_count);
+	if(efunc == NULL)
+		efunc = resolve_to_jsonb_read_functions(identifier_bytes, param_typs, params_count);
 
 	// lastly populate
 	if(efunc != NULL)
