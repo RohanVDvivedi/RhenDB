@@ -748,6 +748,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				break;
 		}
 		expr_value* v = new_val(RHENDB_EXPR_LARGE_INT, ec_p);
+		v->type_info.dti_p = static_dti_for(RHENDB_EXPR_LARGE_INT, combined_width_bytes(&(a->type_info), &(b->type_info))); // match inferred result width
 		v->value = (datum){.large_int_value = r};
 		return v;
 	}
@@ -770,6 +771,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				break;
 		}
 		expr_value* v = new_val(RHENDB_EXPR_LARGE_UINT, ec_p);
+		v->type_info.dti_p = static_dti_for(RHENDB_EXPR_LARGE_UINT, combined_width_bytes(&(a->type_info), &(b->type_info))); // match inferred result width
 		v->value = (datum){.large_uint_value = r};
 		return v;
 	}
@@ -793,6 +795,7 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				break;
 		}
 		expr_value* v = new_val(RHENDB_EXPR_INT, ec_p);
+		v->type_info.dti_p = static_dti_for(RHENDB_EXPR_INT, combined_width_bytes(&(a->type_info), &(b->type_info))); // match inferred result width (num_result_sized)
 		v->value = (datum){.int_value = r};
 		return v;
 	}
@@ -816,7 +819,10 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 		}
 		expr_value* v = new_val(rt, ec_p);
 		if(rt == RHENDB_EXPR_UINT)
+		{
+			v->type_info.dti_p = static_dti_for(RHENDB_EXPR_UINT, combined_width_bytes(&(a->type_info), &(b->type_info))); // match inferred result width (num_result_sized)
 			v->value = (datum){.uint_value = r};
+		}
 		else
 			v->value = (datum){.bit_field_value = r};
 		return v;
@@ -1041,6 +1047,7 @@ static void* do_bitlogic(void* d1, void* d2, bit_op op, const sql_expr_eval_cont
 		uint256 x = to_u256(a), y = to_u256(b), r;
 		r = (op == B_AND) ? bitwise_and_uint256(x, y) : ((op == B_OR) ? bitwise_or_uint256(x, y) : bitwise_xor_uint256(x, y));
 		expr_value* v = new_val(rt, ec_p);
+		v->type_info.dti_p = static_dti_for(rt, combined_width_bytes(&(a->type_info), &(b->type_info))); // match inferred result width
 		if(rt == RHENDB_EXPR_LARGE_INT)
 			v->value = (datum){.large_int_value = (int256){r}};
 		else
@@ -1051,6 +1058,7 @@ static void* do_bitlogic(void* d1, void* d2, bit_op op, const sql_expr_eval_cont
 	uint64_t x = to_u64(a), y = to_u64(b), r;
 	r = (op == B_AND) ? (x & y) : ((op == B_OR) ? (x | y) : (x ^ y));
 	expr_value* v = new_val(rt, ec_p);
+	v->type_info.dti_p = static_dti_for(rt, combined_width_bytes(&(a->type_info), &(b->type_info))); // match inferred result width
 	if(rt == RHENDB_EXPR_INT)
 		v->value = (datum){.int_value = (int64_t)r};
 	else
@@ -1071,6 +1079,7 @@ static void* rhendb_bit_not(void* data, const sql_expr_eval_context* ec_p, int* 
 	}
 
 	expr_value* v = new_val(t, ec_p);
+	v->type_info.dti_p = a->type_info.dti_p; // match inferred result : operand's exact type/width
 	switch(t)
 	{
 		case RHENDB_EXPR_LARGE_UINT:
@@ -1101,6 +1110,7 @@ static void* do_shift(void* data, void* shift_amt, int left, const sql_expr_eval
 
 	uint32_t amt = (uint32_t)to_u64(s);
 	expr_value* v = new_val(t, ec_p);
+	v->type_info.dti_p = a->type_info.dti_p; // match inferred result : left operand's exact type/width
 	switch(t)
 	{
 		case RHENDB_EXPR_LARGE_UINT:
