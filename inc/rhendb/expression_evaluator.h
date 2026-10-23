@@ -91,6 +91,7 @@ struct expr_value
 
 	void* buffer_to_free; // temporary buffer always to be freed, on destroying the expr_value, may be used by user defined functions returning a complex RHENDB_EXPR_TUPLE or RHENDB_EXPR_ARRAY type
 	// the main use case it solves is to hold a sub query tuple until the references to it are alive
+	// it will primarily only be needed for RHENDB_EXPR_TUPLE, RHENDB_EXPR_ARRAY, RHENDB_EXPR_STRING and RHENDB_EXPR_BINARY, as they very much have bytes being pointer to by their datum or dstring values
 };
 
 // this is what sits in sql_expr_eval_context.context_p
