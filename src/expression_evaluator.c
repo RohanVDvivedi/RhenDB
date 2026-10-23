@@ -2874,6 +2874,13 @@ static void notify_removal_for_efunc_cache_entry(void* resource_p, const void* d
 
 #include<boompar/sync_pipe.h>
 
+/*
+	since the returned type information does not live long enough for the row,
+	we will need to redesign to return type information that is valid for the entirety of the main query life
+	by making a clone function for all the operators and even the query plan itself and store a template query plan in the sql_dql
+	and return it's types and base information, and not of the one executing at that time.
+*/
+
 typedef struct expression_sub_query expression_sub_query;
 struct expression_sub_query
 {
