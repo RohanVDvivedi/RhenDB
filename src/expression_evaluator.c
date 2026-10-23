@@ -2777,6 +2777,14 @@ static int jsonb_array_exists(jsonb_node* root, uint32_t index)
 }
 static void* jsonb_read_call_function(void* function_context_handle, void** params, uint32_t params_count, const sql_expr_eval_context* ec_p, int* error_code)
 {
+	if(((expr_value**)params)[0] == NULL)
+	{
+		if(function_context_handle == jsonb_object_get || function_context_handle == jsonb_array_get)
+			return NULL;
+		else
+			return ec_p->false_bool;
+	}
+
 	expr_value* root_node_v = ((expr_value**)params)[0];
 	if(ee_materialize_jsonb(root_node_v, ec_p, error_code))
 		return NULL;
@@ -2790,6 +2798,8 @@ static void* jsonb_read_call_function(void* function_context_handle, void** para
 		if(function_context_handle == jsonb_object_get)
 		{
 			jsonb_node* child_jsonb = jsonb_object_get(root_node_v->jsonb_value, &(str_v->string_value));
+			if(child_jsonb == NULL || child_jsonb == &jsonb_null) // non existing and NULL jsonb both are taken as NULL
+				return NULL;
 
 			expr_value* output = new_val(RHENDB_EXPR_JSONB, ec_p);
 			output->type_info.dti_p = NULL;
@@ -2812,9 +2822,15 @@ static void* jsonb_read_call_function(void* function_context_handle, void** para
 	{
 		expr_value* index_v = ((expr_value**)params)[1];
 
+		if((index_v->type_info.type == RHENDB_EXPR_INT && (index_v->value.int_value < 0 || index_v->value.int_value >= UINT32_MAX))
+		|| (index_v->type_info.type == RHENDB_EXPR_UINT && index_v->value.uint_value >= UINT32_MAX))
+			return (function_context_handle == jsonb_array_get) ? NULL : ec_p->false_bool;
+
 		if(function_context_handle == jsonb_array_get)
 		{
 			jsonb_node* child_jsonb = jsonb_array_get(root_node_v->jsonb_value, index_v->value.uint_value);
+			if(child_jsonb == NULL || child_jsonb == &jsonb_null) // non existing and NULL jsonb both are taken as NULL
+				return NULL;
 
 			expr_value* output = new_val(RHENDB_EXPR_JSONB, ec_p);
 			output->type_info.dti_p = NULL;
@@ -2843,7 +2859,7 @@ static void* jsonb_read_get_return_type(void* function_context_handle, void** pa
 }
 static expressed_function* resolve_to_jsonb_read_functions(const dstring* identifier_bytes, expr_type_info** param_typs, uint32_t params_count)
 {
-	if(params_count != 1)
+	if(params_count != 2)
 		return NULL;
 
 	expr_type t0 = effective_type(param_typs[0]);
@@ -2851,7 +2867,7 @@ static expressed_function* resolve_to_jsonb_read_functions(const dstring* identi
 		return NULL;
 
 	expr_type t1 = effective_type(param_typs[1]);
-	if(t1 != RHENDB_EXPR_STRING && t1 != RHENDB_EXPR_UINT)
+	if(t1 != RHENDB_EXPR_STRING && t1 != RHENDB_EXPR_UINT && t1 != RHENDB_EXPR_INT)
 		return NULL;
 
 	#define to_string_case_for(x) #x
@@ -2873,7 +2889,7 @@ static expressed_function* resolve_to_jsonb_read_functions(const dstring* identi
 		case_for(jsonb_get, jsonb_object_get)
 		case_for(jsonb_exists, jsonb_object_exists)
 	}
-	if(t1 == RHENDB_EXPR_UINT)
+	if(t1 == RHENDB_EXPR_UINT || t1 == RHENDB_EXPR_INT)
 	{
 		case_for(jsonb_get, jsonb_array_get)
 		case_for(jsonb_exists, jsonb_array_exists)
