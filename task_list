@@ -1,8 +1,6 @@
 PICKED TASKS
 
  * jsonb support
-   * jsonb_leaf -> converts boolean true/false, numeric or integral or float number into jsonb_node
-   * jsonb_array, jsonb_object, takes input parameters and converts into a jsonb array or object
    * jsonb_concat, concatenates jsonb arrays or objects into 1 jsonb array
    * cast jsonb nodes to bare materialized string or numeric upon a cast
 
