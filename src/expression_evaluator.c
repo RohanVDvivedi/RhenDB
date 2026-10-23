@@ -3093,19 +3093,10 @@ static int is_rhendb_sentinel_value(const void* d)
 	    || d == (const void*)(&rhendb_minus_one_number);
 }
 
-// function calls and sub queries are not handled by the constant fold-er yet
-static void reject_unfoldable_expression(const sql_expression* expr, const char* which)
-{
-	if(expr->type == SQL_SUB_QUERY || expr->type == SQL_EXISTS)
-	{
-		printf("ISSUE in (expression_evaluator) :: constant unfolding is not implemented for sub queries, hit in %s\n", which);
-		exit(-1);
-	}
-}
-
 static void* rhendb_pre_eval(const sql_expr_eval_context* ec_p, const sql_expression* expr, void** result)
 {
-	reject_unfoldable_expression(expr, "pre_eval");
+	if(expr->type == SQL_SUB_QUERY || expr->type == SQL_EXISTS) // sub queries are never constant, they may access intermediate parent query tuples as variables
+		return NULL;
 
 	// already proven constant : answer straight from the cache, and skip the whole subtree
 	if((expr->user_meta_flags & RHENDB_EXPR_IS_CONSTANT) && expr->user_meta_value != NULL)
@@ -3122,8 +3113,8 @@ static void* rhendb_pre_eval(const sql_expr_eval_context* ec_p, const sql_expres
 
 static void rhendb_child_eval(const sql_expr_eval_context* ec_p, const sql_expression* expr, const sql_expression* child_expr, void* child_result, void* interim_context)
 {
-	(void)ec_p; (void)expr; (void)child_result;
-	reject_unfoldable_expression(child_expr, "child_eval");
+	if(expr->type == SQL_SUB_QUERY || expr->type == SQL_EXISTS) // sub queries are never constant, they may access intermediate parent query tuples as variables
+		return;
 
 	// a child that could not be proven constant makes this whole expression non constant
 	if(!(child_expr->user_meta_flags & RHENDB_EXPR_IS_CONSTANT))
@@ -3132,7 +3123,8 @@ static void rhendb_child_eval(const sql_expr_eval_context* ec_p, const sql_expre
 
 static void* rhendb_post_eval(const sql_expr_eval_context* ec_p, const sql_expression* expr, void* result, void* interim_context)
 {
-	reject_unfoldable_expression(expr, "post_eval");
+	if(expr->type == SQL_SUB_QUERY || expr->type == SQL_EXISTS) // sub queries are never constant, they may access intermediate parent query tuples as variables
+		return result;
 
 	// a literal is constant by construction, whatever its children may have said
 	if(expr->type == SQL_NUM || expr->type == SQL_STR)
