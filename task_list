@@ -1,7 +1,6 @@
 PICKED TASKS
 
  * jsonb support
-   * jsonb_concat, concatenates jsonb arrays or objects into 1 jsonb array
    * cast jsonb nodes to bare materialized string or numeric upon a cast
 
  * jsonb support
