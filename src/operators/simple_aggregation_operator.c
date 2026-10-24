@@ -167,8 +167,6 @@ operator_resource_counter setup_simple_aggregation_operator(operator* o, operato
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
 	operator_resource_counter result = {.buffer_counter = get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions), .job_counter = 1};
-	if(o == NULL)
-		return result;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;

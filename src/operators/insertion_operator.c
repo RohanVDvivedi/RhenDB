@@ -815,7 +815,7 @@ static void free_resources(operator* o)
 
 operator_resource_counter setup_insertion_operator(operator* o, operator* input_operator, positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags)
 {
-	transaction* tx = input_operator->self_query_plan->curr_tx;
+	transaction* tx = o->self_query_plan->curr_tx;
 
 	if(tx->snapshot == NULL)
 	{

@@ -41,6 +41,8 @@ struct operator
 	// pointer to the query_plan that this operator is part of
 	query_plan* self_query_plan;
 
+	uint64_t index; // index of this operator in the query plan (in the self_query_plan)
+
 	void* inputs;			// pointer for the operator to store input params and it's state
 
 	void (*execute)(operator* o); // the operator's main function that produces tuples until it dies or has nothing in it's input operators

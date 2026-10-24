@@ -582,8 +582,6 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 
 	// there are max_concurrent_jobs_count additional jobs, each one first hashing the key, then comparing it and finally aggregating into one entry
 	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * max(2 * has_extended_type_info3(input_tuple_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE), get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions)), .job_counter = max_concurrent_jobs_count + 1};
-	if(o == NULL)
-		return result;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;

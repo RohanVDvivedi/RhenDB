@@ -738,6 +738,7 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 		exit(-1);
 
 	o->self_query_plan = qp;
+	o->index = get_element_count_arraylist(&(qp->operators));
 
 	o->inputs = NULL;
 

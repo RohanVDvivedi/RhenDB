@@ -182,8 +182,6 @@ operator_resource_counter setup_merge_sorted_inputs_operator(operator* o, operat
 	}
 
 	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
-	if(o == NULL)
-		return result;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;

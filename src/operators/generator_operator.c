@@ -43,8 +43,6 @@ static void execute(operator* o)
 operator_resource_counter setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def)
 {
 	operator_resource_counter result = {.thread_counter = 1};
-	if(o == NULL)
-		return result;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;

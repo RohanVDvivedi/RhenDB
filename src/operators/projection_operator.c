@@ -157,7 +157,7 @@ operator_resource_counter setup_projection_operator(operator* o, operator* input
 {
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
-	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, input_operator->self_query_plan->curr_tx, input_operator->self_query_plan);
+	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, o->self_query_plan->curr_tx, o->self_query_plan);
 
 	int has_sub_query = 0;
 
@@ -183,11 +183,6 @@ operator_resource_counter setup_projection_operator(operator* o, operator* input
 	operator_resource_counter result = has_sub_query
 		? (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .thread_counter = 1}
 		: (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
-	if(o == NULL)
-	{
-		delete_context_p_for_sql_expr_eval_context_for_rhendb(ec.context_p);
-		return result;
-	}
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;

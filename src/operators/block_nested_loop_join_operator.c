@@ -338,7 +338,7 @@ operator_resource_counter setup_block_nested_loop_join_operator(operator* o, ope
 	const tuple_def* left_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(left_input_operator);
 	const tuple_def* right_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(right_input_operator);
 
-	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, left_input_operator->self_query_plan->curr_tx, left_input_operator->self_query_plan);
+	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, o->self_query_plan->curr_tx, o->self_query_plan);
 
 	if(join_expr != NULL)
 	{
@@ -354,11 +354,6 @@ operator_resource_counter setup_block_nested_loop_join_operator(operator* o, ope
 	operator_resource_counter result = has_sub_query_in_sql_exp(join_expr)
 		? (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .thread_counter = 1}
 		: (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
-	if(o == NULL)
-	{
-		delete_context_p_for_sql_expr_eval_context_for_rhendb(ec.context_p);
-		return result;
-	}
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;

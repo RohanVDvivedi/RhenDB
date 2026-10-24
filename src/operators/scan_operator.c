@@ -360,8 +360,6 @@ operator_resource_counter setup_scan_operator(operator* o, query_plan* qp, const
 
 	// there is latch crabbing at every point hence 2 buffers per worker are needed
 	operator_resource_counter result = {.buffer_counter = 2 * max_concurrent_jobs_count, .job_counter = max_concurrent_jobs_count, .thread_counter = max_concurrent_jobs_count};
-	if(o == NULL)
-		return result;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;

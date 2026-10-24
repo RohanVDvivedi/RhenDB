@@ -78,8 +78,6 @@ static void clean_up_resources(operator* o)
 operator_resource_counter setup_stream_output_operator(operator* o, operator* input_operator, stream* out_strm)
 {
 	operator_resource_counter result = {.job_counter = 1};
-	if(o == NULL)
-		return result;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;

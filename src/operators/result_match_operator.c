@@ -135,8 +135,6 @@ operator_resource_counter setup_result_match_operator(operator* o, operator* inp
 	}
 
 	operator_resource_counter result = {.buffer_counter = has_extended_type_info2(input_defs[0], SELF, PERSISTENT_EXT_SUB_TYPE) + has_extended_type_info2(input_defs[1], SELF, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
-	if(o == NULL)
-		return result;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;

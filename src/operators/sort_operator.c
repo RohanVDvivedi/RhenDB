@@ -706,8 +706,6 @@ operator_resource_counter setup_sort_operator(operator* o, tuples_down_counter r
 
 	// there are max_concurrent_jobs_count number of additional jobs each one doing atmost 1 comparison
 	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE) * max_concurrent_jobs_count, .job_counter = max_concurrent_jobs_count + 1};
-	if(o == NULL)
-		return result;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
