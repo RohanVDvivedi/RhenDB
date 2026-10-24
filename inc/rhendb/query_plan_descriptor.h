@@ -17,6 +17,10 @@
 	A query_plan_desc holds an arraylist of operator_desc (pointers), each of which holds an arraylist of
 	tuple_transformer_desc (pointers). It is built ONCE and used to create() a real, executable query_plan
 	many times.
+
+	The query_plan descriptor clones almost all it's input values or takes ownership of what ios passed and passes them shallow copy-ly to the actual operators
+	reducing the memory usage
+	This means a query_plan descriptor's life time must be a superset of the lifetime of all the query_plans created from it
 */
 
 typedef struct transaction transaction;
