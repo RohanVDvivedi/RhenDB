@@ -68,6 +68,25 @@ int print_consumer_custom(void* consumer_context, const void* tuple, const tuple
 
 		mpd_del(&sum_all);
 	}
+	{
+		if(!get_value_from_element_from_tuple(&uval, &dti_temp, input_tuple_def, STATIC_POSITION(22), tuple))
+			return 0;
+
+		int error_code = 0;
+		jsonb_node* jsonb_agg_data = materialize_jsonb(uval, qp->curr_tx->rdb->volatile_rage_engine.jsonb_extended_type_info, qp->curr_tx, &error_code);
+
+		if(error_code)
+		{
+			printf("jsonb_agg materialization error %d\n", error_code);
+			return 0;
+		}
+
+		printf("jsonb_agg : \n");
+		print_jsonb(jsonb_agg_data, 1);
+		printf("\n");
+
+		delete_jsonb_node(jsonb_agg_data);
+	}
 	return 1;
 }
 
@@ -133,6 +152,8 @@ int main(int argc, char** argv)
 		get_min_max_aggregate_function(&tx, record_def.type_info, 0),
 
 		get_concat_aggregate_function(&tx, record_def.type_info->containees[2].al.type_info, get_dstring_pointing_to_literal_cstring("[ "), get_dstring_pointing_to_literal_cstring(" , "), get_dstring_pointing_to_literal_cstring(" ]")),
+
+		get_jsonb_aggregate_function(&tx, record_def.type_info->containees[0].al.type_info),
 	};
 
 	const positional_accessor aggregate_input_positions_SELF[] = {SELF};
@@ -179,6 +200,8 @@ int main(int argc, char** argv)
 		aggregate_input_positions_SELF,
 
 		aggregate_input_positions_2,
+
+		aggregate_input_positions_0,
 	};
 
 	printf("Building pipeline :\n");
