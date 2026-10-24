@@ -302,7 +302,8 @@ jsonb_node* materialize_jsonb(datum uval, const data_type_info* dti, transaction
 
 	// create stream on top of it
 	stream rs;
-	if(!initialize_stream_for_binary_read_iterator_static(&rs, bri, NULL, &abort_error))
+	int stream_inited = initialize_stream_for_binary_read_iterator_static(&rs, bri, NULL, &abort_error);
+	if(!stream_inited)
 	{
 		printf("experienced failure to initialize stream over binary read iterator while materializing jsonb type\n");
 		exit(-1);
