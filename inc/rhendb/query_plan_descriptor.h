@@ -20,6 +20,7 @@
 */
 
 typedef struct transaction transaction;
+typedef struct rhendb rhendb;
 
 // operator params
 
@@ -434,14 +435,16 @@ struct operator_desc
 
 	operator_resource_counter resource_counter;
 
+	sql_expr_eval_context expr_eval_context;
+	int has_expr_eval_context;
+
 	arraylist transformer_descriptors;
 };
 
 typedef struct query_plan_desc query_plan_desc;
 struct query_plan_desc
 {
-	// the transaction used for type inference/validation at insert time and bound into the query_plan at create()
-	transaction* tx;
+	rhendb* rdb;
 
 	const sql_expr_eval_context* parent_expr_eval_context;
 
@@ -452,7 +455,11 @@ struct query_plan_desc
 // factory API
 // ===================================================================================================
 
-query_plan_desc* get_new_query_plan_descriptor(transaction* tx, const sql_expr_eval_context* parent_expr_eval_context);
+query_plan_desc* get_new_query_plan_descriptor(rhendb* rdb, const sql_expr_eval_context* parent_expr_eval_context);
+
+// returns the tuple_def that the consumer of this operator descriptor must read : the output_tuple_def of its
+// last tuple transformer descriptor if it has any, else the operator descriptor's own output_tuple_def
+const tuple_def* get_output_tuple_def_for_operator_descriptor(const operator_desc* operator_descriptor);
 
 operator_desc* insert_constant_dataset_operator_descriptor(query_plan_desc* qpd, interim_tuple_store* constant_dataset_p, const tuple_def* record_def);
 operator_desc* insert_generator_operator_descriptor(query_plan_desc* qpd, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def);
@@ -492,7 +499,7 @@ tuple_transformer_desc* insert_row_identifier_prepender_tuple_transformer_descri
 tuple_transformer_desc* insert_expressioned_selection_tuple_transformer_descriptor(query_plan_desc* qpd, sql_expression* expr);
 tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query_plan_desc* qpd, uint32_t* column_ids_to_transform, uint32_t column_to_transform_count);
 
-query_plan* create_query_plan(query_plan_desc* qpd);
+query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx);
 
 void destroy_query_plan_descriptor(query_plan_desc* qpd);
 
