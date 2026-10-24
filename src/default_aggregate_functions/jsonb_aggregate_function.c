@@ -9,11 +9,13 @@
 
 #include<rhendb/util_numeric_conversions.h>
 
+#include<cutlery/dstring.h>
+
 #include<stdlib.h>
 
-typedef jsonb_node* (*make_jsonb_callback)(const datum input, const data_type_info* input_type_info);
+typedef jsonb_node* (*make_jsonb_callback)(const datum input, const data_type_info* input_type_info, transaction* tx);
 
-jsonb_node* make_jsonb_native_number(const datum input, const data_type_info* input_type_info)
+jsonb_node* make_jsonb_native_number(const datum input, const data_type_info* input_type_info, transaction* tx)
 {
 	if(is_datum_NULL(&input))
 		return &jsonb_null;
@@ -25,29 +27,63 @@ jsonb_node* make_jsonb_native_number(const datum input, const data_type_info* in
 
 	int exponent_too_big = 0;
 	materialized_numeric mn = decimal_to_materialized_numeric(&n, &exponent_too_big);
+	mpd_del(&n);
 	if(exponent_too_big)
-	{
-		mpd_del(&n);
 		return NULL;
-	}
 
 	return new_jsonb_numeric_node2(mn);
 }
 
-jsonb_node* make_jsonb_string(const datum input, const data_type_info* input_type_info)
+jsonb_node* make_jsonb_extended_numeric(const datum input, const data_type_info* input_type_info, transaction* tx)
 {
 	if(is_datum_NULL(&input))
 		return &jsonb_null;
 
-	return &jsonb_null;
+	int error_code = 0;
+	materialized_numeric mn = materialize_numeric1(input, input_type_info, tx, 0, &error_code);
+	if(error_code)
+		return NULL;
+
+	return new_jsonb_numeric_node2(mn);
 }
 
-jsonb_node* make_jsonb_from_jsonb_tuple(const datum input, const data_type_info* input_type_info)
+jsonb_node* make_jsonb_string(const datum input, const data_type_info* input_type_info, transaction* tx)
 {
 	if(is_datum_NULL(&input))
 		return &jsonb_null;
 
-	return &jsonb_null;
+	uint32_t length = 0, capacity = 0;
+	int error_code = 0;
+	char* data = materialize_tbj(input, input_type_info, tx, &length, &capacity, 0, &error_code);
+	if(error_code)
+	{
+		if(capacity > 0)
+			free(data);
+		return NULL;
+	}
+
+	jsonb_node* node = new_jsonb_string_node(&(get_dstring_pointing_to(data, length)));
+	if(capacity > 0)
+		free(data);
+
+	return node;
+}
+
+jsonb_node* make_jsonb_from_jsonb_tuple(const datum input, const data_type_info* input_type_info, transaction* tx)
+{
+	if(is_datum_NULL(&input))
+		return &jsonb_null;
+
+	int error_code = 0;
+	jsonb_node* j = materialize_jsonb(input, input_type_info, tx, &error_code);
+	if(error_code)
+	{
+		if(j != NULL)
+			delete_jsonb_node(j);
+		return NULL;
+	}
+
+	return j;
 }
 
 typedef struct jsonb_state jsonb_state;
@@ -75,6 +111,10 @@ static make_jsonb_callback get_dedicated_jsonb_maker_function(const data_type_in
 
 		case TUPLE :
 		{
+			if(is_numeric_type_info(input_type_info))
+				return make_jsonb_extended_numeric;
+			if(is_text_type_info(input_type_info))
+				return make_jsonb_string;
 			if(is_jsonb_type_info(input_type_info))
 				return make_jsonb_from_jsonb_tuple;
 			return NULL;
@@ -105,7 +145,8 @@ static int process_input(const aggregate_function* af_p, void** state_p, const d
 			((jsonb_state*)(*state_p))->jsonb_array_tuple = NULL;
 		}
 
-		jsonb_node* value = (((jsonb_context*)(af_p->context_p))->make_jsonb_callback)(inputs[0], af_p->input_type_infos[0]);
+		jsonb_context* jc = (jsonb_context*)(af_p->context_p);
+		jsonb_node* value = (jc->make_jsonb_callback)(inputs[0], af_p->input_type_infos[0], jc->tx);
 		if(value == NULL)
 			return 0;
 
@@ -152,6 +193,7 @@ static void destroy_state(const aggregate_function* af_p, void** state_p)
 		free(agg_state->jsonb_array_tuple);
 		agg_state->jsonb_array_tuple = NULL;
 	}
+	free(agg_state);
 	(*state_p) = NULL;
 }
 
@@ -183,9 +225,9 @@ aggregate_function* get_jsonb_aggregate_function(transaction* tx, const data_typ
 
 	af_p->destroy_aggregate_function = destroy_aggregate_function;
 
-	af_p->output_type_info = (data_type_info*) &(tx->rdb->volatile_rage_engine.jsonb_extended_type_info);
+	af_p->output_type_info = tx->rdb->volatile_rage_engine.jsonb_extended_type_info;
 
-	af_p->buffers_resource_count = has_extended_type_info(input_type_info, PERSISTENT_EXT_SUB_TYPE); // only the case with extended numeric to be added
+	af_p->buffers_resource_count = has_extended_type_info(input_type_info, PERSISTENT_EXT_SUB_TYPE);
 
 	af_p->input_type_infos_count = 1;
 	af_p->input_type_infos[0] = input_type_info;
