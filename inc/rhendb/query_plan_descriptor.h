@@ -3,10 +3,11 @@
 
 #include<rhendb/operators.h>
 #include<rhendb/tuple_transformers.h>
+
 #include<rhendb/expression_evaluator.h>
 
 #include<rhendb/mvcc_snapshot.h>
-#include<tuplestore/datum.h>
+#include<tuplestore/tuple_def.h>
 
 #include<cutlery/arraylist.h>
 
