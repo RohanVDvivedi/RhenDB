@@ -1,10 +1,5 @@
 PICKED TASKS
 
- * jsonb support
-  * jsonb_aggregation function to take all jsonb nodes and put then in an array or extract key and put in a jsonb object
-
------------------------------------------------------------------
-
 * sub_query support
   * implement clone function for the operators. tuple_transformers and the query_plan and store it as a template in the parsed sql query
   * return type information of this template when asked, resolved one possible use after free happenning on subquery result
