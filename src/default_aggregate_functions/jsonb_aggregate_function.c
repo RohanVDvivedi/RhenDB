@@ -171,7 +171,21 @@ static int produce_output(const aggregate_function* af_p, datum* output, void** 
 	}
 
 	jsonb_state* agg_state = (*state_p);
+
+	uint32_t total_size = 0;
+	if(!finalize_jsonb(agg_state->jsonb_array_root, &total_size))
+	{
+		(*output) = (*NULL_DATUM);
+		return 0;
+	}
+
 	agg_state->jsonb_array_tuple = tx_temp_store_jsonb(agg_state->jsonb_array_root, af_p->output_type_info, ((jsonb_context*)(af_p->context_p))->tx);
+	if(agg_state->jsonb_array_tuple == NULL)
+	{
+		(*output) = (*NULL_DATUM);
+		return 0;
+	}
+
 	(*output) = (datum){.tuple_value = agg_state->jsonb_array_tuple};
 	return 1;
 }
