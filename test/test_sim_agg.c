@@ -74,7 +74,6 @@ int print_consumer_custom(void* consumer_context, const void* tuple, const tuple
 
 		int error_code = 0;
 		jsonb_node* jsonb_agg_data = materialize_jsonb(uval, qp->curr_tx->rdb->volatile_rage_engine.jsonb_extended_type_info, qp->curr_tx, &error_code);
-
 		if(error_code)
 		{
 			printf("jsonb_agg materialization error %d\n", error_code);
