@@ -209,8 +209,12 @@ int main(int argc, char** argv)
 		setup_stream_input_operator(input_operator, &rs, &record_def);
 		printf("source operator %p\n", input_operator);
 
+		operator* limit_operator = get_new_registered_operator_for_query_plan(qp);
+		setup_offset_limit_operator(limit_operator, input_operator, TUPLES_DOWN_COUNTER_ZERO, TUPLES_DOWN_COUNTER_FIN(4));
+		printf("limit operator %p\n", limit_operator);
+
 		operator* aggregate_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_simple_aggregation_operator(aggregate_operator, input_operator, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS);
+		setup_simple_aggregation_operator(aggregate_operator, limit_operator, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS);
 		printf("aggregate operator %p\n", aggregate_operator);
 
 		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
