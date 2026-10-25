@@ -155,7 +155,7 @@ static void clean_up_resources(operator* o)
 	pthread_mutex_destroy(&(inputs->input_iterators_list_lock));
 }
 
-operator_resource_counter setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count)
+void setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count)
 {
 	if(input_operators_count == 0)
 	{
@@ -172,8 +172,6 @@ operator_resource_counter setup_union_operator(operator* o, operator** input_ope
 			exit(-1);
 		}
 	}
-
-	operator_resource_counter result = {.job_counter = 1};
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -200,6 +198,4 @@ operator_resource_counter setup_union_operator(operator* o, operator** input_ope
 		cit_p->embed_uints[0] = IS_READY;
 		insert_tail_in_linkedlist(&(inputs->ready_input_iterators), cit_p);
 	}
-
-	return result;
 }

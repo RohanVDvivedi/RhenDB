@@ -17,7 +17,7 @@ void setup_consumer_operator(operator* o, operator* input_operator, int (*consum
 
 void setup_result_match_operator(operator* o, operator* input_operators[2]);
 
-operator_resource_counter setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count);
+void setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count);
 
 #include<rhendb/aggregate_functions.h>
 
