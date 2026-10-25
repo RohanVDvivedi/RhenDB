@@ -23,7 +23,7 @@ struct input_values
 
 	uint32_t projection_descriptions_count;
 
-	projection_description* projection_descriptions;
+	const projection_description* projection_descriptions;
 
 	// will have only as many entries as count(projection_descriptions[i].type == PROJECT_IDENTITY)
 	data_type_info** projected_expression_type_infos;
@@ -147,14 +147,19 @@ static void free_resources(operator* o)
 	free((data_type_info*)(inputs->output_tuple_def->type_info));
 	free((tuple_def*)(inputs->output_tuple_def));
 
-	free(inputs->projection_descriptions);
 	free(inputs->projected_expression_type_infos);
 
 	free(inputs);
 }
 
-operator_resource_counter setup_projection_operator(operator* o, operator* input_operator, projection_description* projection_descriptions, uint32_t projection_descriptions_count)
+void setup_projection_operator(operator* o, operator* input_operator, const projection_description* projection_descriptions, uint32_t projection_descriptions_count)
 {
+	if(projection_descriptions_count == 0)
+	{
+		printf("can not have 0 projections for projection_operator\n");
+		exit(-1);
+	}
+
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
 	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, o->self_query_plan->curr_tx, o->self_query_plan->this_sub_query_expr_eval_context);
@@ -178,18 +183,11 @@ operator_resource_counter setup_projection_operator(operator* o, operator* input
 			has_sub_query = has_sub_query || has_sub_query_in_sql_exp(projection_descriptions[i].expr);
 		}
 	}
-	int has_reference_to_extended_type = has_reference_to_persistent_extended_type_from_expression(ec.context_p); // must be called only after validation/inference of type of the expr
-
-	operator_resource_counter result = has_sub_query
-		? (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .thread_counter = 1}
-		: (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->clean_up_resources = clean_up_resources;
 	o->free_resources = free_resources;
-
-	projection_description* projection_descriptions_cloned = malloc(sizeof(projection_description) * projection_descriptions_count);
 
 	data_type_info** projected_expression_type_infos = malloc(sizeof(data_type_info*) * expression_projections_count);
 
@@ -216,8 +214,6 @@ operator_resource_counter setup_projection_operator(operator* o, operator* input
 
 		sprintf(output_dti->containees[i].field_name, "proj_%u", i);
 		output_dti->containees[i].al.type_info = col_dti; // some nested key could be out-of-bounds so making it into a nullable type info is required
-
-		projection_descriptions_cloned[i] = projection_descriptions[i];
 	}
 
 	if(max_output_tuple_size > MAX_INTERMEDIATE_TUPLE_SIZE)
@@ -240,10 +236,8 @@ operator_resource_counter setup_projection_operator(operator* o, operator* input
 		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
 		.ec = ec,
 		.projection_descriptions_count = projection_descriptions_count,
-		.projection_descriptions = projection_descriptions_cloned,
+		.projection_descriptions = projection_descriptions,
 		.projected_expression_type_infos = projected_expression_type_infos,
 		.output_tuple_def = output_tuple_def,
 	};
-
-	return result;
 }
