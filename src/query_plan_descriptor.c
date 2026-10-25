@@ -106,6 +106,17 @@ static compare_direction* deep_clone_compare_directions(const compare_direction*
 	return cloned;
 }
 
+static aggregate_function** shallow_clone_aggregate_functions(aggregate_function* const * src, uint32_t count)
+{
+	if(src == NULL || count == 0)
+		return NULL;
+
+	aggregate_function** cloned = malloc(sizeof(aggregate_functions*) * count);
+	for(uint32_t i = 0; i < count; i++)
+		cloned[i] = src[i];
+	return cloned;
+}
+
 // deep clones aggregate_input_element_ids : an array of `aggregate_functions_count` pointers, whose i-th entry
 // points to a contiguous array of aggregate_functions[i]->input_type_infos_count positional_accessors
 static const positional_accessor** deep_clone_aggregate_input_element_ids(const positional_accessor** src, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions)
@@ -691,7 +702,7 @@ operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qp
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SIMPLE_AGGREGATION);
-	d->params.simple_aggregation = (simple_aggregation_operator_params){input_operator_index, aggregate_functions_count, aggregate_functions, deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions)};
+	d->params.simple_aggregation = (simple_aggregation_operator_params){input_operator_index, aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions)};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
@@ -776,7 +787,7 @@ operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qp
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SORTED_AGGREGATION);
-	d->params.sorted_aggregation = (sorted_aggregation_operator_params){input_operator_index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), aggregate_functions_count, aggregate_functions, deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions)};
+	d->params.sorted_aggregation = (sorted_aggregation_operator_params){input_operator_index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions)};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
@@ -885,7 +896,7 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_HASH_AGGREGATION);
-	d->params.hash_aggregation = (hash_aggregation_operator_params){input_operator_index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), aggregate_functions_count, aggregate_functions, deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions), partitions_count, max_concurrent_jobs_count, max_concurrent_jobs_queue_size, min_build_tuple_buffer_size};
+	d->params.hash_aggregation = (hash_aggregation_operator_params){input_operator_index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions), partitions_count, max_concurrent_jobs_count, max_concurrent_jobs_queue_size, min_build_tuple_buffer_size};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
@@ -2291,6 +2302,7 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 				if(af != NULL && af->destroy_aggregate_function != NULL)
 					af->destroy_aggregate_function(af);
 			}
+			free(d->params.simple_aggregation.aggregate_functions);
 		}
 		else if(d->type == OP_SORTED_AGGREGATION)
 		{
@@ -2300,6 +2312,7 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 				if(af != NULL && af->destroy_aggregate_function != NULL)
 					af->destroy_aggregate_function(af);
 			}
+			free(d->params.sorted_aggregation.aggregate_functions);
 		}
 		else if(d->type == OP_HASH_AGGREGATION)
 		{
@@ -2309,6 +2322,7 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 				if(af != NULL && af->destroy_aggregate_function != NULL)
 					af->destroy_aggregate_function(af);
 			}
+			free(d->params.hash_aggregation.aggregate_functions);
 		}
 
 		// free the cloned input index arrays

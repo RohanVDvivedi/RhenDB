@@ -137,18 +137,11 @@ static void clean_up_resources(operator* o)
 	free(inputs->states);
 
 	free(inputs->input_datums);
-
-	free(inputs->aggregate_input_element_ids);
 }
 
 static void free_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
-
-	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
-		inputs->aggregate_functions[i]->destroy_aggregate_function(inputs->aggregate_functions[i]);
-
-	free(inputs->aggregate_functions);
 
 	free((data_type_info*)(inputs->output_tuple_def->type_info));
 	free((tuple_def*)(inputs->output_tuple_def));
@@ -156,7 +149,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-operator_resource_counter setup_simple_aggregation_operator(operator* o, operator* input_operator, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
+void setup_simple_aggregation_operator(operator* o, operator* input_operator, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
 {
 	if(aggregate_functions_count == 0)
 	{
@@ -165,8 +158,6 @@ operator_resource_counter setup_simple_aggregation_operator(operator* o, operato
 	}
 
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
-
-	operator_resource_counter result = {.buffer_counter = get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions), .job_counter = 1};
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -209,16 +200,10 @@ operator_resource_counter setup_simple_aggregation_operator(operator* o, operato
 		.input_tuple_def = input_tuple_def,
 		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
 		.aggregate_functions_count = aggregate_functions_count,
-		.aggregate_functions = malloc(sizeof(aggregate_function*) * aggregate_functions_count),
+		.aggregate_functions = aggregate_functions,
 		.states = calloc(sizeof(void*), aggregate_functions_count),
 		.input_datums = malloc(sizeof(datum) * input_datums_count),
-		.aggregate_input_element_ids = malloc(sizeof(positional_accessor*) * aggregate_functions_count),
+		.aggregate_input_element_ids = aggregate_input_element_ids,
 		.output_tuple_def = output_tuple_def,
 	};
-
-	memmove(inputs->aggregate_functions, aggregate_functions, sizeof(aggregate_function*) * aggregate_functions_count);
-
-	memmove(inputs->aggregate_input_element_ids, aggregate_input_element_ids, sizeof(positional_accessor*) * aggregate_functions_count);
-
-	return result;
 }
