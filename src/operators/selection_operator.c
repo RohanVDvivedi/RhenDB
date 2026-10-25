@@ -84,7 +84,7 @@ static void clean_up_resources(operator* o)
 	delete_context_p_for_sql_expr_eval_context_for_rhendb(inputs->ec.context_p);
 }
 
-operator_resource_counter setup_selection_operator(operator* o, operator* input_operator, sql_expression* expr)
+void setup_selection_operator(operator* o, operator* input_operator, sql_expression* expr)
 {
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
 
@@ -95,16 +95,6 @@ operator_resource_counter setup_selection_operator(operator* o, operator* input_
 	{
 		printf("type validation errored for selection_operator : %d\n", error_code);
 		exit(-1);
-	}
-	int has_reference_to_extended_type = has_reference_to_persistent_extended_type_from_expression(ec.context_p); // must be called only after validation/inference of type of the expr
-
-	operator_resource_counter result = has_sub_query_in_sql_exp(expr)
-		? (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .thread_counter = 1}
-		: (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
-	if(o == NULL)
-	{
-		delete_context_p_for_sql_expr_eval_context_for_rhendb(ec.context_p);
-		return result;
 	}
 
 	o->execute = execute;
@@ -123,5 +113,4 @@ operator_resource_counter setup_selection_operator(operator* o, operator* input_
 		.expr = expr,
 	};
 
-	return result;
 }
