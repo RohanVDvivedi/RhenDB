@@ -1862,9 +1862,12 @@ tuple_transformer_desc* insert_identity_tuple_transformer_descriptor(query_plan_
 
 	ttd->output_def = input_def;
 
-	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-		exit(-1);
-	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	{
+		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
+		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+			exit(-1);
+		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	}
 
 	return ttd;
 }
@@ -1878,9 +1881,12 @@ tuple_transformer_desc* insert_clone_tuple_transformer_descriptor(query_plan_des
 
 	ttd->output_def = input_def;
 
-	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-		exit(-1);
-	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	{
+		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
+		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+			exit(-1);
+		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	}
 
 	return ttd;
 }
@@ -1895,9 +1901,12 @@ tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_d
 	ttd->params.is_readable_for_mvcc_snapshot = (is_readable_for_mvcc_snapshot_transformer_params){were_hints_updated};
 	ttd->output_def = input_def;
 
-	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-		exit(-1);
-	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	{
+		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
+		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+			exit(-1);
+		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	}
 
 	return ttd;
 }
@@ -1944,9 +1953,12 @@ tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(qu
 	ttd->params.simple_projection = (simple_projection_transformer_params){deep_clone_string(output_table_name), projections_count, deep_clone_positional_accessors(projections, projections_count), deep_clone_strings(field_names, projections_count)};
 	ttd->output_def = output_def;
 
-	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-		exit(-1);
-	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	{
+		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
+		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+			exit(-1);
+		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	}
 
 	return ttd;
 }
@@ -1971,9 +1983,12 @@ tuple_transformer_desc* insert_scalar_projection_tuple_transformer_descriptor(qu
 	ttd->params.scalar_projection = (scalar_projection_transformer_params){deep_clone_positional_accessors(projection, 1)};
 	ttd->output_def = output_def;
 
-	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-		exit(-1);
-	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	{
+		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
+		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+			exit(-1);
+		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	}
 
 	return ttd;
 }
@@ -2011,9 +2026,12 @@ tuple_transformer_desc* insert_row_number_prepender_tuple_transformer_descriptor
 	ttd->params.row_number_prepender = (row_number_prepender_transformer_params){next_row_number};
 	ttd->output_def = output_def;
 
-	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-		exit(-1);
-	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	{
+		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
+		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+			exit(-1);
+		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	}
 
 	return ttd;
 }
@@ -2051,9 +2069,12 @@ tuple_transformer_desc* insert_row_identifier_prepender_tuple_transformer_descri
 	ttd->params.row_identifier_prepender = (row_identifier_prepender_transformer_params){row_identifier};
 	ttd->output_def = output_def;
 
-	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-		exit(-1);
-	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	{
+		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
+		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+			exit(-1);
+		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	}
 
 	return ttd;
 }
@@ -2068,9 +2089,12 @@ tuple_transformer_desc* insert_expressioned_selection_tuple_transformer_descript
 	ttd->params.expressioned_selection = (expressioned_selection_transformer_params){expr};
 	ttd->output_def = input_def;
 
-	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-		exit(-1);
-	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	{
+		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
+		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+			exit(-1);
+		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	}
 
 	return ttd;
 }
@@ -2129,9 +2153,12 @@ tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query
 	ttd->params.unified_typing = (unified_typing_transformer_params){deep_clone_uint32_array(column_ids_to_transform, column_to_transform_count), column_to_transform_count};
 	ttd->output_def = output_def;
 
-	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-		exit(-1);
-	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	{
+		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
+		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+			exit(-1);
+		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+	}
 
 	return ttd;
 }
