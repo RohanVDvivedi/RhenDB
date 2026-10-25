@@ -1,7 +1,7 @@
 #include<rhendb/rhendb.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/operators.h>
+#include<rhendb/query_plan_descriptor.h>
 
 #include<test_dataset_tuple_def.h>
 
@@ -75,42 +75,33 @@ int main(int argc, char** argv)
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, (INPUT_OPERATORS_COUNT) + 30);
+	// make query
 
-	// make operators
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&rdb, NULL);
 
 	printf("Building pipeline :\n");
 	{
-		// source operators
-		operator* sorted_input_operators[INPUT_OPERATORS_COUNT];
+		uint64_t op_index = 0;
+
+		uint64_t sorted_input_operator_indices[INPUT_OPERATORS_COUNT];
 		for(int i = 0; i < INPUT_OPERATORS_COUNT; i++)
 		{
-			generator_contexts[i] = i;
-			sorted_input_operators[i] = get_new_registered_operator_for_query_plan(qp);
-			setup_generator_operator(sorted_input_operators[i], generator, &(generator_contexts[i]), &record_def);
-			printf("source sorted operator - %d %p\n", i, sorted_input_operators[i]);
+			insert_generator_operator_descriptor(qpd, generator, &(generator_contexts[i]), &record_def); op_index++;
+			sorted_input_operator_indices[i] = i;
 		}
 
-		// first pipeline first union then sort
-		operator* u = get_new_registered_operator_for_query_plan(qp);
-		setup_union_operator(u, sorted_input_operators, INPUT_OPERATORS_COUNT);
-		printf("union operator %p\n", u);
+		insert_union_operator_descriptor(qpd, sorted_input_operator_indices, INPUT_OPERATORS_COUNT); op_index++;
 
-		operator* s = get_new_registered_operator_for_query_plan(qp);
-		setup_sort_operator(s, TUPLES_DOWN_COUNTER_INF, u, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-		printf("sorter operator %p\n", s);
+		insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, op_index-1, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
 
-		// second pipeline just merged the sorted source into a single sorted output
-		operator* m  = get_new_registered_operator_for_query_plan(qp);
-		setup_merge_sorted_inputs_operator(m, sorted_input_operators, INPUT_OPERATORS_COUNT, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR);
-		printf("merge sorted operator %p\n", m);
+		insert_merge_sorted_inputs_operator_descriptor(qpd, sorted_input_operator_indices, INPUT_OPERATORS_COUNT, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR); op_index++;
 
-		// finally match both the output of the pipelines
-		operator* r = get_new_registered_operator_for_query_plan(qp);
-		setup_result_match_operator(r, (operator* []){s, m});
-		printf("result match operator %p\n", r);
+		insert_result_match_operator_descriptor(qpd, op_index - 1, op_index - 2); op_index++;
 	}
-	printf("\n\n");
+
+	qp = create_query_plan(qpd, &tx, NULL);
+
+	printf("Pipeline built\n\n");
 
 	// make operators completed
 
@@ -133,6 +124,8 @@ int main(int argc, char** argv)
 		printf("QUERY SUCCESSFULL\n");
 		destroy_query_plan(qp, NULL);
 	}
+
+	destroy_query_plan_descriptor(qpd);
 
 	deinitialize_transaction(&tx);
 

@@ -2324,7 +2324,7 @@ query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx, const sql_e
 					tt = get_new_row_identifier_prepender_transformer(input_def, ttd->params.row_identifier_prepender.row_identifier);
 					break;
 				case TT_EXPRESSIONED_SELECTION :
-					tt = get_new_expressioned_selection_transformer(input_def, tx, ttd->params.expressioned_selection.expr);
+					tt = get_new_expressioned_selection_transformer(input_def, tx, qp, ttd->params.expressioned_selection.expr);
 					break;
 				case TT_UNIFIED_TYPING :
 					tt = get_new_unified_typing_transformer(input_def, tx, ttd->params.unified_typing.column_ids_to_transform, ttd->params.unified_typing.column_to_transform_count);
