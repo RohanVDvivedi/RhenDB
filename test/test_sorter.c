@@ -1,7 +1,7 @@
 #include<rhendb/rhendb.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/operators.h>
+#include<rhendb/query_plan_descriptor.h>
 #include<rhendb/tuple_transformers.h>
 
 #include<test_dataset_tuple_def.h>
@@ -66,15 +66,15 @@ int main(int argc, char** argv)
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, 30);
+	// make query
 
-	// make operators
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&rdb, NULL);
 
 	printf("Building pipeline :\n");
 	{
-		operator* input_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_stream_input_operator(input_operator, &rs, &record_def);
-		printf("source operator %p\n", input_operator);
+		uint64_t op_index = 0;
+
+		insert_stream_input_operator_descriptor(qpd, &rs, &record_def); op_index++;
 
 		tuples_down_counter sorter_result_counter = TUPLES_DOWN_COUNTER_INF;
 		#if defined(LIMIT_CLAUSE) && !defined(OFFSET_CLAUSE)
@@ -83,11 +83,8 @@ int main(int argc, char** argv)
 			sorter_result_counter = TUPLES_DOWN_COUNTER_FIN(OFFSET_CLAUSE + LIMIT_CLAUSE);
 		#endif
 
-		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_sort_operator(sorter_operator, sorter_result_counter, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-		printf("sorter operator %p\n", sorter_operator);
-
-		operator* result_operator = sorter_operator;
+		uint64_t result_index = op_index;
+		insert_sort_operator_descriptor(qpd, sorter_result_counter, op_index - 1, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 
 		#if defined(OFFSET_CLAUSE) || defined(LIMIT_CLAUSE)
 			tuples_down_counter offset;
@@ -102,15 +99,12 @@ int main(int argc, char** argv)
 			#else
 				limit = TUPLES_DOWN_COUNTER_INF;
 			#endif
-			result_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_offset_limit_operator(result_operator, sorter_operator, offset, limit);
-			printf("offset_limit operator %p (offset = %"PRIu64", limit = %"PRIu64")\n", result_operator, offset.counter, limit.counter);
+			result_index = op_index;
+			insert_offset_limit_operator_descriptor(qpd, op_index - 1, offset, limit); op_index++;
 		#endif
 
 		#ifdef PRINT_DATA
-			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_consumer_operator(print_operator, result_operator, PRINT_DATA ? print_consumer : NULL, NULL);
-			printf("output print operator %p\n", print_operator);
+			insert_consumer_operator_descriptor(qpd, result_index, PRINT_DATA ? print_consumer : NULL, NULL); op_index++;
 		#endif
 
 		if(argc >= 2)
@@ -118,14 +112,16 @@ int main(int argc, char** argv)
 			int out_fd = open(argv[1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 			initialize_stream_for_fd(&out_file_stream, out_fd);
 
-			operator* output_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_stream_output_operator(output_operator, result_operator, &out_file_stream);
-			printf("output stream operator %p\n", output_operator);
+			insert_stream_output_operator_descriptor(qpd, result_index, &out_file_stream); op_index++;
 		}
 	}
 	printf("\n\n");
 
-	// make operators completed
+	qp = create_query_plan(qpd, &tx, NULL);
+
+	printf("Pipeline built\n\n");
+
+	// make query completed
 
 	start_all_operators_for_query_plan(qp);
 
@@ -146,6 +142,8 @@ int main(int argc, char** argv)
 		printf("QUERY SUCCESSFULL\n");
 		destroy_query_plan(qp, NULL);
 	}
+
+	destroy_query_plan_descriptor(qpd);
 
 	deinitialize_transaction(&tx);
 
