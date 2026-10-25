@@ -404,6 +404,17 @@ operator_desc* insert_offset_limit_operator_descriptor(query_plan_desc* qpd, uin
 		return NULL;
 	}
 
+	if(is_inf_tuples_down_counter(&offset_counter))
+	{
+		printf("offset can not be infinity for offset_limit_operator_descriptor\n");
+		return NULL;
+	}
+	else if(is_zero_tuples_down_counter(&limit_counter))
+	{
+		printf("limit can not be 0 for offset_limit_operator_descriptor\n");
+		return NULL;
+	}
+
 	operator_resource_counter result = {.job_counter = 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_OFFSET_LIMIT);
