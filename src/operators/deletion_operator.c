@@ -403,7 +403,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-operator_resource_counter setup_deletion_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags)
+void setup_deletion_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags)
 {
 	transaction* tx = o->self_query_plan->curr_tx;
 
@@ -426,8 +426,6 @@ operator_resource_counter setup_deletion_operator(operator* o, operator* input_o
 	}
 
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
-
-	operator_resource_counter result = {.buffer_counter = 1, .job_counter = 1, .thread_counter = 1}; // lock a page delete tuples and exit, so 1 buffer atmost
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -505,6 +503,4 @@ operator_resource_counter setup_deletion_operator(operator* o, operator* input_o
 	input_values* inputs = o->inputs;
 	if(!initialize_pending_deletions(&(inputs->to_be_deleted), deletion_batch_size))
 		exit(-1);
-
-	return result;
 }

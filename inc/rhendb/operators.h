@@ -89,7 +89,7 @@ void* get_tuple_from_subquery_pipe(sync_pipe* spipe, const tuple_def* tpl_d); //
 operator_resource_counter setup_insertion_operator(operator* o, operator* input_operator, positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags);
 
 // deletes (marks deleted) operator for the tuples of the heap table
-operator_resource_counter setup_deletion_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags);
+void setup_deletion_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags);
 
 // scan operator
 void setup_scan_operator(operator* o, query_plan* qp, const fetched_table* ftabl, uint32_t max_concurrent_jobs_count, int output_flags, int additional_flags);
@@ -97,6 +97,6 @@ void setup_scan_operator(operator* o, query_plan* qp, const fetched_table* ftabl
 // looks up tuples by the (partition_id, tuple_pointer) pair for the tuples of the heap table
 // does the same thing as deletion_operator but does not delete the tuples returned
 // ideally to be used after index scans for row lookups on the table
-operator_resource_counter setup_pointer_lookup_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags);
+void setup_pointer_lookup_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags);
 
 #endif

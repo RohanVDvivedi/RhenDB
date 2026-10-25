@@ -2089,11 +2089,9 @@ query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx, const sql_e
 				setup_hash_semi_join_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.hash_semi_join.left_input_operator_index), d->params.hash_semi_join.left_key_element_ids, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.hash_semi_join.right_input_operator_index), d->params.hash_semi_join.right_key_element_ids, d->params.hash_semi_join.key_element_count, d->params.hash_semi_join.stype, d->params.hash_semi_join.partitions_count, d->params.hash_semi_join.max_concurrent_jobs_count, d->params.hash_semi_join.max_concurrent_jobs_queue_size, d->params.hash_semi_join.min_pending_buffer_size);
 				break;
 			case OP_INSERTION :
-				tx->snapshot = get_new_transaction_id(&(tx->rdb->tx_table), tx->snapshot); // writing operator needs a self transaction id
 				setup_insertion_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.insertion.input_operator_index), d->params.insertion.insertion_from_source_positional_accessors, d->params.insertion.ftabl, d->params.insertion.output_flags, d->params.insertion.global_heap_notifier, d->params.insertion.additional_flags);
 				break;
 			case OP_DELETION :
-				tx->snapshot = get_new_transaction_id(&(tx->rdb->tx_table), tx->snapshot); // writing operator needs a self transaction id
 				setup_deletion_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.deletion.input_operator_index), d->params.deletion.partition_id_from_source_positional_accessor, d->params.deletion.tuple_pointer_from_source_positional_accessor, d->params.deletion.ftabl, d->params.deletion.deletion_batch_size, d->params.deletion.output_flags, d->params.deletion.additional_flags);
 				break;
 			case OP_POINTER_LOOKUP :
