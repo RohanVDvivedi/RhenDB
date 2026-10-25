@@ -63,7 +63,7 @@ static void execute(operator* o)
 			return ;
 		}
 
-		int compare = compare_tuples_rhendb(inputs->tuples[0], inputs->input_defs[0], &SELF, inputs->tuples[1], inputs->input_defs[1], &SELF, NULL, inputs->element_count, o->self_query_plan->curr_tx);
+		int compare = compare_tuples_rhendb(inputs->tuples[0], inputs->input_defs[0], &SELF, inputs->tuples[1], inputs->input_defs[1], &SELF, NULL, 1, o->self_query_plan->curr_tx);
 		inputs->tuple_processed++;
 		if(compare != 0)
 		{
