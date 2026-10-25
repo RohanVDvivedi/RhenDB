@@ -1065,12 +1065,6 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 		}
 	}
 
-	if(key_element_count > 0 && key_element_ids != NULL && !are_all_positions_accessible_for_tuple_def(record_def, key_element_ids, key_element_count))
-	{
-		printf("key positions not accessible for merge_sorted_inputs_operator_descriptor\n");
-		return NULL;
-	}
-
 	uint64_t* input_operator_indices_cloned = malloc(sizeof(uint64_t) * input_operators_count);
 	for(uint64_t i = 0; i < input_operators_count; i++)
 		input_operator_indices_cloned[i] = input_operator_indices[i];

@@ -163,7 +163,7 @@ static void clean_up_resources(operator* o)
 	free(inputs->key_dtis);
 }
 
-operator_resource_counter setup_merge_sorted_inputs_operator(operator* o, operator** input_operators, uint32_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
+void setup_merge_sorted_inputs_operator(operator* o, operator** input_operators, uint32_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
 {
 	if(input_operators_count == 0)
 	{
@@ -180,8 +180,6 @@ operator_resource_counter setup_merge_sorted_inputs_operator(operator* o, operat
 			exit(-1);
 		}
 	}
-
-	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -215,6 +213,4 @@ operator_resource_counter setup_merge_sorted_inputs_operator(operator* o, operat
 		cit_p->embed_ptrs[1] = &(inputs->keys[i * key_element_count]);
 		insert_tail_in_singlylist(&(inputs->waiting_input_iterators), cit_p);
 	}
-
-	return result;
 }
