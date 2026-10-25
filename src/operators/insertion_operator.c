@@ -91,7 +91,7 @@ struct input_values
 
 	const fetched_table* ftabl; // fetched_table contains everything about the table
 
-	positional_accessor* insertion_from_source_positional_accessors;
+	const positional_accessor* insertion_from_source_positional_accessors;
 
 	// array to quickly select a particular case for column insertion, for each one of the columns in partition vs insertion_from_source_positional_accessors
 	column_kind* column_kinds;
@@ -813,7 +813,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-operator_resource_counter setup_insertion_operator(operator* o, operator* input_operator, positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags)
+void setup_insertion_operator(operator* o, operator* input_operator, const positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags)
 {
 	transaction* tx = o->self_query_plan->curr_tx;
 
@@ -882,10 +882,6 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 			exit(-1);
 		}
 	}
-
-	operator_resource_counter result = {.buffer_counter = 8, .job_counter = 1}; // 8 maximum buffers as we do not expect any btree in the system to exceed this height
-	if(o == NULL)
-		return result;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -1011,6 +1007,4 @@ operator_resource_counter setup_insertion_operator(operator* o, operator* input_
 	inputs->heap_record_with_extensions = malloc(tx->rdb->persistent_acid_rage_engine.pam_p->pas.page_size);
 	inputs->ext_col_data = malloc(sizeof(extended_column_data) * partition_tuple_def->type_info->element_count);
 	inputs->ext_col_data_size = 0;
-
-	return result;
 }

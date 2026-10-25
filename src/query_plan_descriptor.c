@@ -106,7 +106,7 @@ static compare_direction* deep_clone_compare_directions(const compare_direction*
 	return cloned;
 }
 
-static aggregate_function* const * shallow_clone_aggregate_functions(aggregate_function* const * src, uint32_t count)
+static aggregate_function** shallow_clone_aggregate_functions(aggregate_function* const * src, uint32_t count)
 {
 	if(src == NULL || count == 0)
 		return NULL;
@@ -119,7 +119,7 @@ static aggregate_function* const * shallow_clone_aggregate_functions(aggregate_f
 
 // deep clones aggregate_input_element_ids : an array of `aggregate_functions_count` pointers, whose i-th entry
 // points to a contiguous array of aggregate_functions[i]->input_type_infos_count positional_accessors
-static const positional_accessor** deep_clone_aggregate_input_element_ids(const positional_accessor** src, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions)
+static positional_accessor** deep_clone_aggregate_input_element_ids(const positional_accessor** src, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions)
 {
 	if(src == NULL || aggregate_functions_count == 0)
 		return NULL;
@@ -127,17 +127,17 @@ static const positional_accessor** deep_clone_aggregate_input_element_ids(const 
 	positional_accessor** cloned = malloc(sizeof(positional_accessor*) * aggregate_functions_count);
 	for(uint32_t i = 0; i < aggregate_functions_count; i++)
 		cloned[i] = deep_clone_positional_accessors(src[i], aggregate_functions[i]->input_type_infos_count);
-	return (const positional_accessor**) cloned;
+	return cloned;
 }
 
-static void free_aggregate_input_element_ids(const positional_accessor** arr, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions)
+static void free_aggregate_input_element_ids(positional_accessor** arr, uint32_t aggregate_functions_count, aggregate_function** aggregate_functions)
 {
 	if(arr == NULL)
 		return;
 
 	for(uint32_t i = 0; i < aggregate_functions_count; i++)
-		free_positional_accessors((positional_accessor*) arr[i], aggregate_functions[i]->input_type_infos_count);
-	free((positional_accessor**) arr);
+		free_positional_accessors(arr[i], aggregate_functions[i]->input_type_infos_count);
+	free(arr);
 }
 
 // deep clones an array of `count` pointers, each pointing to a single positional_accessor (simple_projection style)
@@ -1677,7 +1677,7 @@ static tuple_def* build_table_operator_output_tuple_def(rhendb* rdb, const fetch
 	return output_tuple_def;
 }
 
-operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags)
+operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags)
 {
 	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
 	{
@@ -1765,7 +1765,7 @@ operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64
 	return d;
 }
 
-operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags)
+operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags)
 {
 	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
 	{
@@ -1802,7 +1802,7 @@ operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_
 	return d;
 }
 
-operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags)
+operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags)
 {
 	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
 	{
@@ -2027,13 +2027,13 @@ query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx, const sql_e
 				setup_projection_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.projection.input_operator_index), d->params.projection.projection_descriptions, d->params.projection.projection_descriptions_count);
 				break;
 			case OP_SIMPLE_AGGREGATION :
-				setup_simple_aggregation_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.simple_aggregation.input_operator_index), d->params.simple_aggregation.aggregate_functions_count, d->params.simple_aggregation.aggregate_functions, d->params.simple_aggregation.aggregate_input_element_ids);
+				setup_simple_aggregation_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.simple_aggregation.input_operator_index), d->params.simple_aggregation.aggregate_functions_count, d->params.simple_aggregation.aggregate_functions, (positional_accessor const * const *) d->params.simple_aggregation.aggregate_input_element_ids);
 				break;
 			case OP_SORTED_AGGREGATION :
-				setup_sorted_aggregation_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.sorted_aggregation.input_operator_index), d->params.sorted_aggregation.key_element_count, d->params.sorted_aggregation.key_element_ids, d->params.sorted_aggregation.aggregate_functions_count, d->params.sorted_aggregation.aggregate_functions, d->params.sorted_aggregation.aggregate_input_element_ids);
+				setup_sorted_aggregation_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.sorted_aggregation.input_operator_index), d->params.sorted_aggregation.key_element_count, d->params.sorted_aggregation.key_element_ids, d->params.sorted_aggregation.aggregate_functions_count, d->params.sorted_aggregation.aggregate_functions, (positional_accessor const * const *) d->params.sorted_aggregation.aggregate_input_element_ids);
 				break;
 			case OP_HASH_AGGREGATION :
-				setup_hash_aggregation_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.hash_aggregation.input_operator_index), d->params.hash_aggregation.key_element_count, d->params.hash_aggregation.key_element_ids, d->params.hash_aggregation.aggregate_functions_count, d->params.hash_aggregation.aggregate_functions, d->params.hash_aggregation.aggregate_input_element_ids, d->params.hash_aggregation.partitions_count, d->params.hash_aggregation.max_concurrent_jobs_count, d->params.hash_aggregation.max_concurrent_jobs_queue_size, d->params.hash_aggregation.min_build_tuple_buffer_size);
+				setup_hash_aggregation_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.hash_aggregation.input_operator_index), d->params.hash_aggregation.key_element_count, d->params.hash_aggregation.key_element_ids, d->params.hash_aggregation.aggregate_functions_count, d->params.hash_aggregation.aggregate_functions, (positional_accessor const * const *) d->params.hash_aggregation.aggregate_input_element_ids, d->params.hash_aggregation.partitions_count, d->params.hash_aggregation.max_concurrent_jobs_count, d->params.hash_aggregation.max_concurrent_jobs_queue_size, d->params.hash_aggregation.min_build_tuple_buffer_size);
 				break;
 			case OP_CONSUMER :
 				setup_consumer_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.consumer.input_operator_index), d->params.consumer.consumer, d->params.consumer.consumer_context);
@@ -2235,44 +2235,44 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 		switch(d->type)
 		{
 			case OP_SORT :
-				free_positional_accessors((positional_accessor*) d->params.sort.key_element_ids, d->params.sort.key_element_count);
-				free((compare_direction*) d->params.sort.key_compare_direction);
+				free_positional_accessors(d->params.sort.key_element_ids, d->params.sort.key_element_count);
+				free(d->params.sort.key_compare_direction);
 				break;
 			case OP_MERGE_SORTED_INPUTS :
-				free_positional_accessors((positional_accessor*) d->params.merge_sorted_inputs.key_element_ids, d->params.merge_sorted_inputs.key_element_count);
-				free((compare_direction*) d->params.merge_sorted_inputs.key_compare_direction);
+				free_positional_accessors(d->params.merge_sorted_inputs.key_element_ids, d->params.merge_sorted_inputs.key_element_count);
+				free(d->params.merge_sorted_inputs.key_compare_direction);
 				break;
 			case OP_SIMPLE_AGGREGATION :
 				free_aggregate_input_element_ids(d->params.simple_aggregation.aggregate_input_element_ids, d->params.simple_aggregation.aggregate_functions_count, d->params.simple_aggregation.aggregate_functions);
 				break;
 			case OP_SORTED_AGGREGATION :
-				free_positional_accessors((positional_accessor*) d->params.sorted_aggregation.key_element_ids, d->params.sorted_aggregation.key_element_count);
+				free_positional_accessors(d->params.sorted_aggregation.key_element_ids, d->params.sorted_aggregation.key_element_count);
 				free_aggregate_input_element_ids(d->params.sorted_aggregation.aggregate_input_element_ids, d->params.sorted_aggregation.aggregate_functions_count, d->params.sorted_aggregation.aggregate_functions);
 				break;
 			case OP_HASH_AGGREGATION :
-				free_positional_accessors((positional_accessor*) d->params.hash_aggregation.key_element_ids, d->params.hash_aggregation.key_element_count);
+				free_positional_accessors(d->params.hash_aggregation.key_element_ids, d->params.hash_aggregation.key_element_count);
 				free_aggregate_input_element_ids(d->params.hash_aggregation.aggregate_input_element_ids, d->params.hash_aggregation.aggregate_functions_count, d->params.hash_aggregation.aggregate_functions);
 				break;
 			case OP_PROJECTION :
-				free_projection_descriptions((projection_description*) d->params.projection.projection_descriptions, d->params.projection.projection_descriptions_count);
+				free_projection_descriptions(d->params.projection.projection_descriptions, d->params.projection.projection_descriptions_count);
 				break;
 			case OP_SORT_MERGE_JOIN :
-				free_positional_accessors((positional_accessor*) d->params.sort_merge_join.left_key_element_ids, d->params.sort_merge_join.key_element_count);
-				free_positional_accessors((positional_accessor*) d->params.sort_merge_join.right_key_element_ids, d->params.sort_merge_join.key_element_count);
-				free((compare_direction*) d->params.sort_merge_join.key_compare_direction);
+				free_positional_accessors(d->params.sort_merge_join.left_key_element_ids, d->params.sort_merge_join.key_element_count);
+				free_positional_accessors(d->params.sort_merge_join.right_key_element_ids, d->params.sort_merge_join.key_element_count);
+				free(d->params.sort_merge_join.key_compare_direction);
 				break;
 			case OP_HASH_JOIN :
-				free_positional_accessors((positional_accessor*) d->params.hash_join.left_key_element_ids, d->params.hash_join.key_element_count);
-				free_positional_accessors((positional_accessor*) d->params.hash_join.right_key_element_ids, d->params.hash_join.key_element_count);
+				free_positional_accessors(d->params.hash_join.left_key_element_ids, d->params.hash_join.key_element_count);
+				free_positional_accessors(d->params.hash_join.right_key_element_ids, d->params.hash_join.key_element_count);
 				break;
 			case OP_SORT_MERGE_SEMI_JOIN :
-				free_positional_accessors((positional_accessor*) d->params.sort_merge_semi_join.left_key_element_ids, d->params.sort_merge_semi_join.key_element_count);
-				free_positional_accessors((positional_accessor*) d->params.sort_merge_semi_join.right_key_element_ids, d->params.sort_merge_semi_join.key_element_count);
-				free((compare_direction*) d->params.sort_merge_semi_join.key_compare_direction);
+				free_positional_accessors(d->params.sort_merge_semi_join.left_key_element_ids, d->params.sort_merge_semi_join.key_element_count);
+				free_positional_accessors(d->params.sort_merge_semi_join.right_key_element_ids, d->params.sort_merge_semi_join.key_element_count);
+				free(d->params.sort_merge_semi_join.key_compare_direction);
 				break;
 			case OP_HASH_SEMI_JOIN :
-				free_positional_accessors((positional_accessor*) d->params.hash_semi_join.left_key_element_ids, d->params.hash_semi_join.key_element_count);
-				free_positional_accessors((positional_accessor*) d->params.hash_semi_join.right_key_element_ids, d->params.hash_semi_join.key_element_count);
+				free_positional_accessors(d->params.hash_semi_join.left_key_element_ids, d->params.hash_semi_join.key_element_count);
+				free_positional_accessors(d->params.hash_semi_join.right_key_element_ids, d->params.hash_semi_join.key_element_count);
 				break;
 			case OP_INSERTION :
 				free_positional_accessors(d->params.insertion.insertion_from_source_positional_accessors, d->params.insertion.ftabl->table_partition_tuple_defs[d->params.insertion.ftabl->partitions_count - 1].type_info->element_count - 1);
@@ -2300,7 +2300,7 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 				if(af != NULL && af->destroy_aggregate_function != NULL)
 					af->destroy_aggregate_function(af);
 			}
-			free((void*)(d->params.simple_aggregation.aggregate_functions));
+			free((d->params.simple_aggregation.aggregate_functions));
 		}
 		else if(d->type == OP_SORTED_AGGREGATION)
 		{
@@ -2310,7 +2310,7 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 				if(af != NULL && af->destroy_aggregate_function != NULL)
 					af->destroy_aggregate_function(af);
 			}
-			free((void*)(d->params.sorted_aggregation.aggregate_functions));
+			free((d->params.sorted_aggregation.aggregate_functions));
 		}
 		else if(d->type == OP_HASH_AGGREGATION)
 		{
@@ -2320,7 +2320,7 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 				if(af != NULL && af->destroy_aggregate_function != NULL)
 					af->destroy_aggregate_function(af);
 			}
-			free((void*)(d->params.hash_aggregation.aggregate_functions));
+			free((d->params.hash_aggregation.aggregate_functions));
 		}
 
 		// free the cloned input index arrays

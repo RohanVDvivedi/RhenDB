@@ -37,7 +37,7 @@ struct input_values
 	// 2D array of positonal_accessors
 	// aggregate_input_element_ids[i][j]; -> gives the position of the j-th input_param of the i-th aggregate functions
 	// its size is [aggregate_functions_count] and [i][aggregate_functions[i]->input_type_infos_count]
-	const positional_accessor** aggregate_input_element_ids;
+	positional_accessor const * const * aggregate_input_element_ids;
 
 	// consists of all the output_type_infos of all aggregate_functions
 	const tuple_def* output_tuple_def;
@@ -247,7 +247,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-void setup_sorted_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
+void setup_sorted_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, positional_accessor const * const * aggregate_input_element_ids)
 {
 	if(key_element_count == 0)
 	{

@@ -75,8 +75,8 @@ struct simple_aggregation_operator_params
 {
 	uint64_t input_operator_index;
 	uint32_t aggregate_functions_count;
-	aggregate_function* const * aggregate_functions;
-	const positional_accessor** aggregate_input_element_ids;
+	aggregate_function** aggregate_functions;
+	positional_accessor** aggregate_input_element_ids;
 };
 
 typedef struct sort_operator_params sort_operator_params;
@@ -85,8 +85,8 @@ struct sort_operator_params
 	tuples_down_counter result_counter;
 	uint64_t input_operator_index;
 	uint32_t key_element_count;
-	const positional_accessor* key_element_ids;
-	const compare_direction* key_compare_direction;
+	positional_accessor* key_element_ids;
+	compare_direction* key_compare_direction;
 	uint64_t min_run_size;
 	uint32_t N_way_sort;
 	uint32_t max_concurrent_jobs_count;
@@ -103,11 +103,11 @@ struct offset_limit_operator_params
 typedef struct merge_sorted_inputs_operator_params merge_sorted_inputs_operator_params;
 struct merge_sorted_inputs_operator_params
 {
-	uint64_t* input_operator_indices;   // owned copy; freed by destroy
+	uint64_t* input_operator_indices;
 	uint64_t input_operators_count;
 	uint32_t key_element_count;
-	const positional_accessor* key_element_ids;
-	const compare_direction* key_compare_direction;
+	positional_accessor* key_element_ids;
+	compare_direction* key_compare_direction;
 };
 
 typedef struct stream_input_operator_params stream_input_operator_params;
@@ -129,10 +129,10 @@ struct sorted_aggregation_operator_params
 {
 	uint64_t input_operator_index;
 	uint32_t key_element_count;
-	const positional_accessor* key_element_ids;
+	positional_accessor* key_element_ids;
 	uint32_t aggregate_functions_count;
-	aggregate_function* const * aggregate_functions;
-	const positional_accessor** aggregate_input_element_ids;
+	aggregate_function** aggregate_functions;
+	positional_accessor** aggregate_input_element_ids;
 };
 
 typedef struct hash_aggregation_operator_params hash_aggregation_operator_params;
@@ -140,10 +140,10 @@ struct hash_aggregation_operator_params
 {
 	uint64_t input_operator_index;
 	uint32_t key_element_count;
-	const positional_accessor* key_element_ids;
+	positional_accessor* key_element_ids;
 	uint32_t aggregate_functions_count;
-	aggregate_function* const * aggregate_functions;
-	const positional_accessor** aggregate_input_element_ids;
+	aggregate_function** aggregate_functions;
+	positional_accessor** aggregate_input_element_ids;
 	uint32_t partitions_count;
 	uint32_t max_concurrent_jobs_count;
 	uint32_t max_concurrent_jobs_queue_size;
@@ -164,10 +164,10 @@ typedef struct sort_merge_join_operator_params sort_merge_join_operator_params;
 struct sort_merge_join_operator_params
 {
 	uint64_t left_input_operator_index;
-	const positional_accessor* left_key_element_ids;
+	positional_accessor* left_key_element_ids;
 	uint64_t right_input_operator_index;
-	const positional_accessor* right_key_element_ids;
-	const compare_direction* key_compare_direction;
+	positional_accessor* right_key_element_ids;
+	compare_direction* key_compare_direction;
 	uint32_t key_element_count;
 	join_preserve_type ptype;
 	uint32_t min_block_size;
@@ -177,9 +177,9 @@ typedef struct hash_join_operator_params hash_join_operator_params;
 struct hash_join_operator_params
 {
 	uint64_t left_input_operator_index;
-	const positional_accessor* left_key_element_ids;
+	positional_accessor* left_key_element_ids;
 	uint64_t right_input_operator_index;
-	const positional_accessor* right_key_element_ids;
+	positional_accessor* right_key_element_ids;
 	uint32_t key_element_count;
 	join_preserve_type ptype;
 	uint32_t partitions_count;
@@ -202,10 +202,10 @@ typedef struct sort_merge_semi_join_operator_params sort_merge_semi_join_operato
 struct sort_merge_semi_join_operator_params
 {
 	uint64_t left_input_operator_index;
-	const positional_accessor* left_key_element_ids;
+	positional_accessor* left_key_element_ids;
 	uint64_t right_input_operator_index;
-	const positional_accessor* right_key_element_ids;
-	const compare_direction* key_compare_direction;
+	positional_accessor* right_key_element_ids;
+	compare_direction* key_compare_direction;
 	uint32_t key_element_count;
 	semi_join_type stype;
 	uint32_t min_block_size;
@@ -215,9 +215,9 @@ typedef struct hash_semi_join_operator_params hash_semi_join_operator_params;
 struct hash_semi_join_operator_params
 {
 	uint64_t left_input_operator_index;
-	const positional_accessor* left_key_element_ids;
+	positional_accessor* left_key_element_ids;
 	uint64_t right_input_operator_index;
-	const positional_accessor* right_key_element_ids;
+	positional_accessor* right_key_element_ids;
 	uint32_t key_element_count;
 	semi_join_type stype;
 	uint32_t partitions_count;
@@ -488,10 +488,10 @@ operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, u
 operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, sql_expression* expr);
 operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, projection_description* projection_descriptions, uint32_t projection_descriptions_count);
 operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, sync_pipe* out_pipe);
-operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags);
-operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags);
+operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags);
+operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags);
 operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetched_table* ftabl, uint32_t max_concurrent_jobs_count, int output_flags, int additional_flags);
-operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags);
+operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags);
 
 tuple_transformer_desc* insert_identity_tuple_transformer_descriptor(query_plan_desc* qpd);
 tuple_transformer_desc* insert_clone_tuple_transformer_descriptor(query_plan_desc* qpd);

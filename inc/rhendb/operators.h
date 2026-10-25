@@ -22,7 +22,7 @@ void setup_union_operator(operator* o, operator** input_operators, uint32_t inpu
 #include<rhendb/aggregate_functions.h>
 
 // the data_type_infos pointed to by the aggregate_input_element_ids, must be the same as the output from the input_operator and the input of the corresponding aggregate_functions
-void setup_simple_aggregation_operator(operator* o, operator* input_operator, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids);
+void setup_simple_aggregation_operator(operator* o, operator* input_operator, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, positional_accessor const * const * aggregate_input_element_ids);
 
 #include<rhendb/tuples_down_counter.h>
 
@@ -40,9 +40,9 @@ void setup_stream_output_operator(operator* o, operator* input_operator, stream*
 
 // keyed aggregation operators
 
-void setup_sorted_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids);
+void setup_sorted_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, positional_accessor const * const * aggregate_input_element_ids);
 
-void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size);
+void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, positional_accessor const * const * aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size);
 
 // join operators
 
@@ -75,7 +75,7 @@ void setup_selection_operator(operator* o, operator* input_operator, sql_express
 #include<rhendb/projection_type.h>
 
 // projection operator
-void setup_projection_operator(operator* o, operator* input_operator, projection_description* projection_descriptions, uint32_t projection_descriptions_count);
+void setup_projection_operator(operator* o, operator* input_operator, const projection_description* projection_descriptions, uint32_t projection_descriptions_count);
 
 #include<boompar/sync_pipe.h>
 
@@ -86,10 +86,10 @@ void* get_tuple_from_subquery_pipe(sync_pipe* spipe, const tuple_def* tpl_d); //
 #include<rhendb/fetched_table.h>
 
 // insert into heap table's latest visible partition, as per the catalog manager
-operator_resource_counter setup_insertion_operator(operator* o, operator* input_operator, positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags);
+void setup_insertion_operator(operator* o, operator* input_operator, const positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags);
 
 // deletes (marks deleted) operator for the tuples of the heap table
-void setup_deletion_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags);
+void setup_deletion_operator(operator* o, operator* input_operator, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags);
 
 // scan operator
 void setup_scan_operator(operator* o, query_plan* qp, const fetched_table* ftabl, uint32_t max_concurrent_jobs_count, int output_flags, int additional_flags);
@@ -97,6 +97,6 @@ void setup_scan_operator(operator* o, query_plan* qp, const fetched_table* ftabl
 // looks up tuples by the (partition_id, tuple_pointer) pair for the tuples of the heap table
 // does the same thing as deletion_operator but does not delete the tuples returned
 // ideally to be used after index scans for row lookups on the table
-void setup_pointer_lookup_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags);
+void setup_pointer_lookup_operator(operator* o, operator* input_operator, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags);
 
 #endif

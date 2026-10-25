@@ -40,8 +40,8 @@ struct input_values
 
 	const fetched_table* ftabl;
 
-	positional_accessor* partition_id_from_source_positional_accessor;
-	positional_accessor* tuple_pointer_from_source_positional_accessor;
+	const positional_accessor* partition_id_from_source_positional_accessor;
+	const positional_accessor* tuple_pointer_from_source_positional_accessor;
 
 	// number of pending_lookup-s that we buffer, before we sort, and go and read them
 	uint64_t lookup_batch_size;
@@ -380,7 +380,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-void setup_pointer_lookup_operator(operator* o, operator* input_operator, positional_accessor* partition_id_from_source_positional_accessor, positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags)
+void setup_pointer_lookup_operator(operator* o, operator* input_operator, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags)
 {
 	transaction* tx = input_operator->self_query_plan->curr_tx;
 
