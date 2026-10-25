@@ -86,6 +86,7 @@ int main(int argc, char** argv)
 		uint64_t sorted_input_operator_indices[INPUT_OPERATORS_COUNT];
 		for(int i = 0; i < INPUT_OPERATORS_COUNT; i++)
 		{
+			generator_contexts[i] = i;
 			insert_generator_operator_descriptor(qpd, generator, &(generator_contexts[i]), &record_def); op_index++;
 			sorted_input_operator_indices[i] = i;
 		}
