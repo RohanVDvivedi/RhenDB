@@ -46,8 +46,6 @@ static void destroy(tuple_transformer* tt_p)
 		free((data_type_info*)(tt_p->output_def->type_info->containees[i].al.type_info));
 	free(tt_p->output_def->type_info);
 	free((void*)(tt_p->output_def));
-
-	free(tt_p->context);
 }
 
 tuple_transformer* get_new_simple_projection_transformer(const char* output_table_name, const tuple_def* input_def, uint32_t projections_count, const positional_accessor* projections, char const * const * field_names)

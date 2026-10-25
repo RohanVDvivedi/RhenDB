@@ -41,8 +41,6 @@ static void destroy(tuple_transformer* tt_p)
 	if(tt_p->output_def->type_info != UINT_NULLABLE[8])
 		free(tt_p->output_def->type_info);
 	free((void*)(tt_p->output_def));
-
-	free(tt_p->context);
 }
 
 tuple_transformer* get_new_scalar_projection_transformer(const tuple_def* input_def, const positional_accessor* projection)

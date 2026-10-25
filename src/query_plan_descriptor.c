@@ -1733,7 +1733,7 @@ operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64
 	// one source accessor per insertable column of the latest partition (its 0-th column is not insert-provided)
 	uint32_t insertion_accessors_count = partition_tuple_def->type_info->element_count - 1;
 
-	operator_resource_counter result = {.job_counter = 1};
+	operator_resource_counter result = {.buffer_counter = 8, .job_counter = 1}; // 8 maximum buffers as we do not expect any btree in the system to exceed this height
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_INSERTION);
 	d->params.insertion = (insertion_operator_params){input_operator_index, deep_clone_positional_accessors(insertion_from_source_positional_accessors, insertion_accessors_count), ftabl, output_flags, global_heap_notifier, additional_flags};
@@ -1770,7 +1770,7 @@ operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_
 		return NULL;
 	}
 
-	operator_resource_counter result = {.job_counter = 1};
+	operator_resource_counter result = {.buffer_counter = 1, .job_counter = 1, .thread_counter = 1}; // lock a page delete tuples and exit, so 1 buffer atmost
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_DELETION);
 	d->params.deletion = (deletion_operator_params){input_operator_index, deep_clone_positional_accessors(partition_id_from_source_positional_accessor, 1), deep_clone_positional_accessors(tuple_pointer_from_source_positional_accessor, 1), ftabl, deletion_batch_size, output_flags, additional_flags};
@@ -1807,7 +1807,7 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, u
 		return NULL;
 	}
 
-	operator_resource_counter result = {.job_counter = 1};
+	operator_resource_counter result = {.buffer_counter = 1, .job_counter = 1, .thread_counter = 1}; // read lock a page, read tuples and exit, so 1 buffer atmost
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_POINTER_LOOKUP);
 	d->params.pointer_lookup = (pointer_lookup_operator_params){input_operator_index, deep_clone_positional_accessors(partition_id_from_source_positional_accessor, 1), deep_clone_positional_accessors(tuple_pointer_from_source_positional_accessor, 1), ftabl, lookup_batch_size, output_flags, additional_flags};
@@ -1850,10 +1850,6 @@ static tuple_transformer_desc* get_new_tuple_transformer_descriptor_for_last_ope
 
 	ttd->output_def = NULL;
 
-	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-		exit(-1);
-	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
-
 	return ttd;
 }
 
@@ -1865,6 +1861,10 @@ tuple_transformer_desc* insert_identity_tuple_transformer_descriptor(query_plan_
 		return NULL;
 
 	ttd->output_def = input_def;
+
+	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+		exit(-1);
+	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
 
 	return ttd;
 }
@@ -1878,6 +1878,10 @@ tuple_transformer_desc* insert_clone_tuple_transformer_descriptor(query_plan_des
 
 	ttd->output_def = input_def;
 
+	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+		exit(-1);
+	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+
 	return ttd;
 }
 
@@ -1890,6 +1894,10 @@ tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_d
 
 	ttd->params.is_readable_for_mvcc_snapshot = (is_readable_for_mvcc_snapshot_transformer_params){were_hints_updated};
 	ttd->output_def = input_def;
+
+	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+		exit(-1);
+	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
 
 	return ttd;
 }
@@ -1923,7 +1931,7 @@ tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(qu
 	{
 		printf("too big output tuple for simple_projection_transformer\n");
 		for(uint32_t i = 0; i < projections_count; i++)
-			free(output_def->type_info->containees[i].al.type_info);
+			free(output_dti->containees[i].al.type_info);
 		free(output_dti);
 		free(output_def);
 		free(ttd);
@@ -1935,6 +1943,10 @@ tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(qu
 
 	ttd->params.simple_projection = (simple_projection_transformer_params){deep_clone_string(output_table_name), projections_count, deep_clone_positional_accessors(projections, projections_count), deep_clone_strings(field_names, projections_count)};
 	ttd->output_def = output_def;
+
+	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+		exit(-1);
+	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
 
 	return ttd;
 }
@@ -1958,6 +1970,10 @@ tuple_transformer_desc* insert_scalar_projection_tuple_transformer_descriptor(qu
 
 	ttd->params.scalar_projection = (scalar_projection_transformer_params){deep_clone_positional_accessors(projection, 1)};
 	ttd->output_def = output_def;
+
+	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+		exit(-1);
+	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
 
 	return ttd;
 }
@@ -1989,11 +2005,15 @@ tuple_transformer_desc* insert_row_number_prepender_tuple_transformer_descriptor
 		return NULL;
 	}
 
-	initialize_tuple_data_type_info(output_dti, "row_identified", 1, output_max_size, 2);
+	initialize_tuple_data_type_info(output_dti, "row_numbered", 1, output_max_size, 2);
 	initialize_tuple_def(output_def, output_dti);
 
 	ttd->params.row_number_prepender = (row_number_prepender_transformer_params){next_row_number};
 	ttd->output_def = output_def;
+
+	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+		exit(-1);
+	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
 
 	return ttd;
 }
@@ -2031,6 +2051,10 @@ tuple_transformer_desc* insert_row_identifier_prepender_tuple_transformer_descri
 	ttd->params.row_identifier_prepender = (row_identifier_prepender_transformer_params){row_identifier};
 	ttd->output_def = output_def;
 
+	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+		exit(-1);
+	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
+
 	return ttd;
 }
 
@@ -2043,6 +2067,10 @@ tuple_transformer_desc* insert_expressioned_selection_tuple_transformer_descript
 
 	ttd->params.expressioned_selection = (expressioned_selection_transformer_params){expr};
 	ttd->output_def = input_def;
+
+	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+		exit(-1);
+	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
 
 	return ttd;
 }
@@ -2100,6 +2128,10 @@ tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query
 
 	ttd->params.unified_typing = (unified_typing_transformer_params){deep_clone_uint32_array(column_ids_to_transform, column_to_transform_count), column_to_transform_count};
 	ttd->output_def = output_def;
+
+	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
+		exit(-1);
+	push_back_to_arraylist(&(d->transformer_descriptors), ttd);
 
 	return ttd;
 }
