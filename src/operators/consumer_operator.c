@@ -1,7 +1,5 @@
 #include<rhendb/query_plan.h>
 
-#include<rhendb/operator_resource_counter.h>
-
 #include<tuplestore/tuple.h>
 
 #include<stdlib.h>

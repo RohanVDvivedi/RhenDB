@@ -2,8 +2,6 @@
 
 #include<rhendb/transaction.h>
 
-#include<rhendb/operator_resource_counter.h>
-
 #include<rhendb/function_compare.h>
 
 #include<rhendb/interim_tuple_store.h>

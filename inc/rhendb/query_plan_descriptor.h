@@ -2,6 +2,7 @@
 #define QUERY_PLAN_DESCRIPTOR_H
 
 #include<rhendb/operators.h>
+#include<rhendb/operator_resource_counter.h>
 #include<rhendb/tuple_transformers.h>
 
 #include<rhendb/expression_evaluator.h>

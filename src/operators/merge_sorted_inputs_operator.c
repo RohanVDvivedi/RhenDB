@@ -1,7 +1,5 @@
 #include<rhendb/query_plan.h>
 
-#include<rhendb/operator_resource_counter.h>
-
 #include<rhendb/transaction.h>
 
 #include<rhendb/function_compare.h>

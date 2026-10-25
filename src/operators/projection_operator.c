@@ -1,7 +1,5 @@
 #include<rhendb/query_plan.h>
 
-#include<rhendb/operator_resource_counter.h>
-
 #include<rhendb/projection_type.h>
 
 #include<rhendb/transaction.h>

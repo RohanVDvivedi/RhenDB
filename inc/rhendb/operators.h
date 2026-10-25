@@ -3,8 +3,6 @@
 
 #include<rhendb/query_plan.h>
 
-#include<rhendb/operator_resource_counter.h>
-
 // generates fixed set of tuples from constant_dataset_p having tuple_def of record_def, constant_dataset_p is left untouched to use it again by another query_plan from the same descriptor
 void setup_constant_dataset_operator(operator* o, interim_tuple_store* constant_dataset_p, const tuple_def* record_def);
 
