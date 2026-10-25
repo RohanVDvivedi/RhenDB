@@ -60,10 +60,8 @@ static void clean_up_resources(operator* o)
 	}
 }
 
-operator_resource_counter setup_identity_operator(operator* o, operator* input_operator)
+void setup_identity_operator(operator* o, operator* input_operator)
 {
-	operator_resource_counter result = {.job_counter = 1};
-
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->clean_up_resources = clean_up_resources;
@@ -76,6 +74,4 @@ operator_resource_counter setup_identity_operator(operator* o, operator* input_o
 	*((input_values*)(o->inputs)) = (input_values){
 		.input_iterator = create_consumption_iterator(input_operator, o, NULL, NULL),
 	};
-
-	return result;
 }

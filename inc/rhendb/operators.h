@@ -10,7 +10,7 @@ void setup_constant_dataset_operator(operator* o, interim_tuple_store* constant_
 
 void setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def);
 
-operator_resource_counter setup_identity_operator(operator* o, operator* input_operator);
+void setup_identity_operator(operator* o, operator* input_operator);
 
 int print_consumer(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def);
 operator_resource_counter setup_consumer_operator(operator* o, operator* input_operator, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context);
