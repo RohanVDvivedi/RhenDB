@@ -33,24 +33,11 @@ static void execute(operator* o)
 	kill_signal_for_self_operator(o, kill_reason); return ;
 }
 
-void clean_up_resources(operator* o)
+void setup_constant_dataset_operator(operator* o, interim_tuple_store* constant_dataset_p, const tuple_def* record_def)
 {
-	input_values* inputs = o->inputs;
-
-	if(inputs->constant_dataset_p != NULL)
-	{
-		delete_interim_tuple_store(inputs->constant_dataset_p);
-		inputs->constant_dataset_p = NULL;
-	}
-}
-
-operator_resource_counter setup_constant_dataset_operator(operator* o, interim_tuple_store* constant_dataset_p, const tuple_def* record_def)
-{
-	operator_resource_counter result = {.thread_counter = 1};
-
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
-	o->clean_up_resources = clean_up_resources;
+	o->clean_up_resources = OPERATOR_CLEAN_UP_RESOURCE_NO_OP_FUNCTION;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	// this record's record_def, this constant_dataset_p is what we produce
@@ -61,6 +48,4 @@ operator_resource_counter setup_constant_dataset_operator(operator* o, interim_t
 		.constant_dataset_p = constant_dataset_p,
 		.record_def = record_def,
 	};
-
-	return result;
 }
