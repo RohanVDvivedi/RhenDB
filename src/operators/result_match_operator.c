@@ -100,7 +100,7 @@ static void clean_up_resources(operator* o)
 	}
 }
 
-operator_resource_counter setup_result_match_operator(operator* o, operator* input_operators[2])
+void setup_result_match_operator(operator* o, operator* input_operators[2])
 {
 	const tuple_def* input_defs[2] = {
 		get_tuple_def_for_tuples_to_be_consumed_from(input_operators[0]),
@@ -134,8 +134,6 @@ operator_resource_counter setup_result_match_operator(operator* o, operator* inp
 		}
 	}
 
-	operator_resource_counter result = {.buffer_counter = has_extended_type_info2(input_defs[0], SELF, PERSISTENT_EXT_SUB_TYPE) + has_extended_type_info2(input_defs[1], SELF, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
-
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->clean_up_resources = clean_up_resources;
@@ -153,6 +151,4 @@ operator_resource_counter setup_result_match_operator(operator* o, operator* inp
 		.element_count = element_count,
 		.tuple_processed = 0,
 	};
-
-	return result;
 }

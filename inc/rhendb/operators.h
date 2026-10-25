@@ -15,7 +15,7 @@ void setup_identity_operator(operator* o, operator* input_operator);
 int print_consumer(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def);
 void setup_consumer_operator(operator* o, operator* input_operator, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context);
 
-operator_resource_counter setup_result_match_operator(operator* o, operator* input_operators[2]);
+void setup_result_match_operator(operator* o, operator* input_operators[2]);
 
 operator_resource_counter setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count);
 

@@ -1026,13 +1026,18 @@ operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, uin
 		printf("input operator descriptor has no output_tuple_def for result_match_operator_descriptor\n");
 		return NULL;
 	}
+	if(!can_compare_datum_rhendb(input_tuple_def_0->type_info, input_tuple_def_1->type_info))
+	{
+		printf("input operator descriptor's for result_match_operator_descriptor are not comparable\n");
+		return NULL;
+	}
 
 	operator_resource_counter result = {.buffer_counter = has_extended_type_info2(input_tuple_def_0, SELF, PERSISTENT_EXT_SUB_TYPE) + has_extended_type_info2(input_tuple_def_1, SELF, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_RESULT_MATCH);
 	d->params.result_match.input_operator_indices[0] = input_operator_index_0;
 	d->params.result_match.input_operator_indices[1] = input_operator_index_1;
-	d->output_tuple_def = NULL; // result_match's exact output schema is not ported yet (its derivation depends on result_match_operator.c internals)
+	d->output_tuple_def = NULL; // does not output anything
 	d->resource_counter = result;
 
 	return d;
