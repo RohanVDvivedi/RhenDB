@@ -3,6 +3,9 @@
 #include<rhendb/rhendb.h>
 #include<rhendb/nullable_type_info_maker.h>
 
+#include<rhendb/function_compare.h>
+#include<rhendb/function_hash.h>
+
 #include<tuplestore/data_type_info.h>
 #include<tuplestore/data_type_info_defaults.h>
 #include<tuplestore/tuple.h>
