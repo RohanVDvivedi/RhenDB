@@ -84,7 +84,7 @@ int main(int argc, char** argv)
 		#endif
 
 		uint64_t result_index = op_index;
-		insert_sort_operator_descriptor(qpd, sorter_result_counter, op_index - 1, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		insert_sort_operator_descriptor(qpd, sorter_result_counter, op_index - 1, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
 
 		#if defined(OFFSET_CLAUSE) || defined(LIMIT_CLAUSE)
 			tuples_down_counter offset;
