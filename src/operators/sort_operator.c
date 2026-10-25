@@ -670,42 +670,39 @@ static void clean_up_resources(operator* o)
 	pthread_mutex_destroy(&(inputs->runs_lock));
 }
 
-operator_resource_counter setup_sort_operator(operator* o, tuples_down_counter result_counter, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t min_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
+void setup_sort_operator(operator* o, tuples_down_counter result_counter, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t min_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
 {
 	if(is_zero_tuples_down_counter(&result_counter))
 	{
-		printf("result_counter can not be 0 for_sort_operator\n");
+		printf("result_counter can not be 0 for sort_operator\n");
 		exit(-1);
 	}
 
 	if(key_element_count == 0)
 	{
-		printf("key_element_count can not be 0 for_sort_operator\n");
+		printf("key_element_count can not be 0 for sort_operator\n");
 		exit(-1);
 	}
 
 	if(min_run_size == 0)
 	{
-		printf("min_run_size can not be 0 for_sort_operator\n");
+		printf("min_run_size can not be 0 for sort_operator\n");
 		exit(-1);
 	}
 
 	if(N_way_sort < 2)
 	{
-		printf("N_way_sort can not be less than 2 for_sort_operator\n");
+		printf("N_way_sort can not be less than 2 for sort_operator\n");
 		exit(-1);
 	}
 
 	if(max_concurrent_jobs_count == 0)
 	{
-		printf("max_concurrent_jobs_count can not be 0 for_sort_operator\n");
+		printf("max_concurrent_jobs_count can not be 0 for sort_operator\n");
 		exit(-1);
 	}
 
 	const tuple_def* record_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
-
-	// there are max_concurrent_jobs_count number of additional jobs each one doing atmost 1 comparison
-	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE) * max_concurrent_jobs_count, .job_counter = max_concurrent_jobs_count + 1};
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -750,6 +747,4 @@ operator_resource_counter setup_sort_operator(operator* o, tuples_down_counter r
 		initialize_tuple_runs(truns_p);
 		insert_tail_in_linkedlist(&(inputs->job_param_free_list), truns_p);
 	}
-
-	return result;
 }
