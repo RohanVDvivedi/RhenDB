@@ -140,28 +140,6 @@ static void free_aggregate_input_element_ids(positional_accessor** arr, uint32_t
 	free(arr);
 }
 
-// deep clones an array of `count` pointers, each pointing to a single positional_accessor (simple_projection style)
-static positional_accessor** deep_clone_single_accessor_pointers(positional_accessor** src, uint32_t count)
-{
-	if(src == NULL || count == 0)
-		return NULL;
-
-	positional_accessor** cloned = malloc(sizeof(positional_accessor*) * count);
-	for(uint32_t i = 0; i < count; i++)
-		cloned[i] = deep_clone_positional_accessors(src[i], 1);
-	return cloned;
-}
-
-static void free_single_accessor_pointers(positional_accessor** arr, uint32_t count)
-{
-	if(arr == NULL)
-		return;
-
-	for(uint32_t i = 0; i < count; i++)
-		free_positional_accessors(arr[i], 1);
-	free(arr);
-}
-
 // deep clones a projection_descriptions array : the PROJECT_IDENTITY entries own a positional_accessor (cloned),
 // the PROJECT_EXPRESSION entries carry a borrowed sql_expression* (the AST, not cloned)
 static projection_description* deep_clone_projection_descriptions(const projection_description* src, uint32_t count)
@@ -207,25 +185,25 @@ static char* deep_clone_string(const char* src)
 }
 
 // deep clones an array of `count` strings
-static const char** deep_clone_strings(const char** src, uint32_t count)
+static char** deep_clone_strings(char const * const * src, uint32_t count)
 {
 	if(src == NULL || count == 0)
 		return NULL;
 
-	const char** cloned = malloc(sizeof(char*) * count);
+	char** cloned = malloc(sizeof(char*) * count);
 	for(uint32_t i = 0; i < count; i++)
 		cloned[i] = deep_clone_string(src[i]);
 	return cloned;
 }
 
-static void free_strings(const char** arr, uint32_t count)
+static void free_strings(char** arr, uint32_t count)
 {
 	if(arr == NULL)
 		return;
 
 	for(uint32_t i = 0; i < count; i++)
-		free((char*) arr[i]);
-	free((char**) arr);
+		free(arr[i]);
+	free(arr);
 }
 
 // deep clones a contiguous array of `count` uint32_t-s (column_ids_to_transform style)
@@ -1904,18 +1882,18 @@ tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_d
 	return ttd;
 }
 
-tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const char* output_table_name, uint32_t projections_count, positional_accessor** projections, const char** field_names)
+tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const char* output_table_name, uint32_t projections_count, const positional_accessor* projections, char const * const *  field_names)
 {
 	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_SIMPLE_PROJECTION);
 	if(ttd == NULL)
 		return NULL;
 
-	ttd->params.simple_projection = (simple_projection_transformer_params){deep_clone_string(output_table_name), projections_count, deep_clone_single_accessor_pointers(projections, projections_count), deep_clone_strings(field_names, projections_count)};
+	ttd->params.simple_projection = (simple_projection_transformer_params){deep_clone_string(output_table_name), projections_count, deep_clone_positional_accessors(projections, projections_count), deep_clone_strings(field_names, projections_count)};
 
 	return ttd;
 }
 
-tuple_transformer_desc* insert_scalar_projection_tuple_transformer_descriptor(query_plan_desc* qpd, positional_accessor* projection)
+tuple_transformer_desc* insert_scalar_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const positional_accessor* projection)
 {
 	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_SCALAR_PROJECTION);
 	if(ttd == NULL)
@@ -2119,7 +2097,7 @@ query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx, const sql_e
 					tt = get_new_is_readable_for_mvcc_snapshot_transformer(ttd->params.is_readable_for_mvcc_snapshot.mvccsnp_p, ttd->params.is_readable_for_mvcc_snapshot.tsg_p, ttd->params.is_readable_for_mvcc_snapshot.were_hints_updated, input_def);
 					break;
 				case TT_SIMPLE_PROJECTION :
-					tt = get_new_simple_projection_transformer(ttd->params.simple_projection.output_table_name, input_def, ttd->params.simple_projection.projections_count, ttd->params.simple_projection.projections, ttd->params.simple_projection.field_names);
+					tt = get_new_simple_projection_transformer(ttd->params.simple_projection.output_table_name, input_def, ttd->params.simple_projection.projections_count, ttd->params.simple_projection.projections, (char const * const * ) ttd->params.simple_projection.field_names);
 					break;
 				case TT_SCALAR_PROJECTION :
 					tt = get_new_scalar_projection_transformer(input_def, ttd->params.scalar_projection.projection);
@@ -2342,8 +2320,8 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 			switch(ttd->type)
 			{
 				case TT_SIMPLE_PROJECTION :
-					free((char*) ttd->params.simple_projection.output_table_name);
-					free_single_accessor_pointers(ttd->params.simple_projection.projections, ttd->params.simple_projection.projections_count);
+					free(ttd->params.simple_projection.output_table_name);
+					free_positional_accessors(ttd->params.simple_projection.projections, ttd->params.simple_projection.projections_count);
 					free_strings(ttd->params.simple_projection.field_names, ttd->params.simple_projection.projections_count);
 					break;
 				case TT_SCALAR_PROJECTION :

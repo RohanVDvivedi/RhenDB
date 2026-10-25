@@ -50,18 +50,16 @@ static void destroy(tuple_transformer* tt_p)
 	free(tt_p->context);
 }
 
-tuple_transformer* get_new_simple_projection_transformer(const char* output_table_name, const tuple_def* input_def, uint32_t projections_count, positional_accessor** projections, const char** field_names)
+tuple_transformer* get_new_simple_projection_transformer(const char* output_table_name, const tuple_def* input_def, uint32_t projections_count, const positional_accessor* projections, char const * const * field_names)
 {
 	tuple_def* output_def = malloc(sizeof(tuple_def));
 	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(projections_count));
-
-	positional_accessor** projections_context = malloc(sizeof(positional_accessor*) * projections_count);
 
 	uint32_t max_output_tuple_size = 8;
 
 	for(uint32_t i = 0; i < projections_count; i++)
 	{
-		data_type_info* input_dti = shallow_clone_into_nullable_type((data_type_info*) get_type_info_for_element_from_tuple_def(input_def, *projections[i]));
+		data_type_info* input_dti = shallow_clone_into_nullable_type((data_type_info*) get_type_info_for_element_from_tuple_def(input_def, projections[i]));
 
 		strcpy(output_dti->containees[i].field_name, field_names[i]);
 		output_dti->containees[i].al.type_info = input_dti;
@@ -70,8 +68,6 @@ tuple_transformer* get_new_simple_projection_transformer(const char* output_tabl
 			max_output_tuple_size += 9;
 		else
 			max_output_tuple_size += input_dti->is_variable_sized ? (8 + input_dti->max_size) : (1 + input_dti->size);
-
-		projections_context[i] = projections[i];
 	}
 
 	if(max_output_tuple_size > MAX_INTERMEDIATE_TUPLE_SIZE)
@@ -83,5 +79,5 @@ tuple_transformer* get_new_simple_projection_transformer(const char* output_tabl
 	initialize_tuple_data_type_info(output_dti, output_table_name, 1, max_output_tuple_size, projections_count);
 	initialize_tuple_def(output_def, output_dti);
 
-	return get_new_tuple_transformer(projections_context, input_def, output_def, process, destroy);
+	return get_new_tuple_transformer((void*)projections, input_def, output_def, process, destroy);
 }

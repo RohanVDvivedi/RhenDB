@@ -45,7 +45,7 @@ static void destroy(tuple_transformer* tt_p)
 	free(tt_p->context);
 }
 
-tuple_transformer* get_new_scalar_projection_transformer(const tuple_def* input_def, positional_accessor* projection)
+tuple_transformer* get_new_scalar_projection_transformer(const tuple_def* input_def, const positional_accessor* projection)
 {
 	tuple_def* output_def = malloc(sizeof(tuple_def));
 
@@ -59,5 +59,5 @@ tuple_transformer* get_new_scalar_projection_transformer(const tuple_def* input_
 
 	initialize_tuple_def(output_def, output_dti);
 
-	return get_new_tuple_transformer(projection, input_def, output_def, process, destroy);
+	return get_new_tuple_transformer((void*)projection, input_def, output_def, process, destroy);
 }

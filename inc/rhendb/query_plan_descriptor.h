@@ -312,10 +312,10 @@ struct is_readable_for_mvcc_snapshot_transformer_params
 typedef struct simple_projection_transformer_params simple_projection_transformer_params;
 struct simple_projection_transformer_params
 {
-	const char* output_table_name;
+	char* output_table_name;
 	uint32_t projections_count;
-	positional_accessor** projections;
-	const char** field_names;
+	positional_accessor* projections;
+	char** field_names;
 };
 
 typedef struct scalar_projection_transformer_params scalar_projection_transformer_params;
@@ -497,8 +497,8 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, u
 tuple_transformer_desc* insert_identity_tuple_transformer_descriptor(query_plan_desc* qpd);
 tuple_transformer_desc* insert_clone_tuple_transformer_descriptor(query_plan_desc* qpd);
 tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_descriptor(query_plan_desc* qpd, const mvcc_snapshot* mvccsnp_p, transaction_status_getter* tsg_p, int* were_hints_updated);
-tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const char* output_table_name, uint32_t projections_count, positional_accessor** projections, const char** field_names);
-tuple_transformer_desc* insert_scalar_projection_tuple_transformer_descriptor(query_plan_desc* qpd, positional_accessor* projection);
+tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const char* output_table_name, uint32_t projections_count, const positional_accessor* projections, char const * const * field_names);
+tuple_transformer_desc* insert_scalar_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const positional_accessor* projection);
 tuple_transformer_desc* insert_row_number_prepender_tuple_transformer_descriptor(query_plan_desc* qpd, uint64_t next_row_number);
 tuple_transformer_desc* insert_row_identifier_prepender_tuple_transformer_descriptor(query_plan_desc* qpd, uint64_t row_identifier);
 tuple_transformer_desc* insert_expressioned_selection_tuple_transformer_descriptor(query_plan_desc* qpd, sql_expression* expr);
