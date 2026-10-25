@@ -1824,7 +1824,7 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, u
 // parallels get_new_registered_operator_descriptor_for_query_plan_descriptor(), for the transformer that
 // follows the last inserted operator. returns NULL if no operator has been inserted yet, or if that operator
 // produces no tuples of its own (no output_tuple_def) for the transformer chain to consume.
-static tuple_transformer_desc* get_new_tuple_transformer_descriptor_for_last_operator_descriptor(query_plan_desc* qpd, tuple_transformer_descriptor_type type)
+static tuple_transformer_desc* get_new_tuple_transformer_descriptor_for_last_operator_descriptor(query_plan_desc* qpd, tuple_transformer_descriptor_type type, const tuple_def** input_def)
 {
 	if(get_element_count_arraylist(&(qpd->operator_descriptors)) == 0)
 	{
@@ -1846,13 +1846,9 @@ static tuple_transformer_desc* get_new_tuple_transformer_descriptor_for_last_ope
 
 	ttd->type = type;
 
-	// input def of this transformer is this operator's current output : its last transformer's output_def, or
-	// the operator's own output_tuple_def -- exactly what get_output_tuple_def_for_operator_descriptor() returns
-	ttd->output_def = get_output_tuple_def_for_operator_descriptor(d);
+	(*input_def) = get_output_tuple_def_for_operator_descriptor(d);
 
-	// identity and clone preserve the schema; schema changing transformers resolve their output_def at create()
-	if(type != TT_IDENTITY && type != TT_CLONE)
-		ttd->output_def = NULL;
+	ttd->output_def = NULL;
 
 	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
 		exit(-1);
@@ -1863,87 +1859,247 @@ static tuple_transformer_desc* get_new_tuple_transformer_descriptor_for_last_ope
 
 tuple_transformer_desc* insert_identity_tuple_transformer_descriptor(query_plan_desc* qpd)
 {
-	return get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_IDENTITY);
+	const tuple_def* input_def = NULL;
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_IDENTITY, &input_def);
+	if(ttd == NULL)
+		return NULL;
+
+	ttd->output_def = input_def;
+
+	return ttd;
 }
 
 tuple_transformer_desc* insert_clone_tuple_transformer_descriptor(query_plan_desc* qpd)
 {
-	return get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_CLONE);
+	const tuple_def* input_def = NULL;
+	tuple_transformer_desc* ttd =  get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_CLONE, &input_def);
+	if(ttd == NULL)
+		return NULL;
+
+	ttd->output_def = input_def;
+
+	return ttd;
 }
 
 tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_descriptor(query_plan_desc* qpd, int* were_hints_updated)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_IS_READABLE_FOR_MVCC_SNAPSHOT);
+	const tuple_def* input_def = NULL;
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_IS_READABLE_FOR_MVCC_SNAPSHOT, &input_def);
 	if(ttd == NULL)
 		return NULL;
 
 	ttd->params.is_readable_for_mvcc_snapshot = (is_readable_for_mvcc_snapshot_transformer_params){were_hints_updated};
+	ttd->output_def = input_def;
 
 	return ttd;
 }
 
 tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const char* output_table_name, uint32_t projections_count, const positional_accessor* projections, char const * const *  field_names)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_SIMPLE_PROJECTION);
+	const tuple_def* input_def = NULL;
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_SIMPLE_PROJECTION, &input_def);
 	if(ttd == NULL)
 		return NULL;
 
+	tuple_def* output_def = malloc(sizeof(tuple_def));
+	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(projections_count));
+
+	uint32_t max_output_tuple_size = 8;
+
+	for(uint32_t i = 0; i < projections_count; i++)
+	{
+		data_type_info* input_dti = shallow_clone_into_nullable_type((data_type_info*) get_type_info_for_element_from_tuple_def(input_def, projections[i]));
+
+		strcpy(output_dti->containees[i].field_name, field_names[i]);
+		output_dti->containees[i].al.type_info = input_dti;
+
+		if(input_dti->type == BIT_FIELD)
+			max_output_tuple_size += 9;
+		else
+			max_output_tuple_size += input_dti->is_variable_sized ? (8 + input_dti->max_size) : (1 + input_dti->size);
+	}
+
+	if(max_output_tuple_size > MAX_INTERMEDIATE_TUPLE_SIZE)
+	{
+		printf("too big output tuple for simple_projection_transformer\n");
+		for(uint32_t i = 0; i < projections_count; i++)
+			free(output_def->type_info->containees[i].al.type_info);
+		free(output_dti);
+		free(output_def);
+		free(ttd);
+		return NULL;
+	}
+
+	initialize_tuple_data_type_info(output_dti, output_table_name, 1, max_output_tuple_size, projections_count);
+	initialize_tuple_def(output_def, output_dti);
+
 	ttd->params.simple_projection = (simple_projection_transformer_params){deep_clone_string(output_table_name), projections_count, deep_clone_positional_accessors(projections, projections_count), deep_clone_strings(field_names, projections_count)};
+	ttd->output_def = output_def;
 
 	return ttd;
 }
 
 tuple_transformer_desc* insert_scalar_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const positional_accessor* projection)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_SCALAR_PROJECTION);
+	const tuple_def* input_def = NULL;
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_SCALAR_PROJECTION, &input_def);
 	if(ttd == NULL)
 		return NULL;
 
+	tuple_def* output_def = malloc(sizeof(tuple_def));
+	data_type_info* output_dti = NULL;
+	data_type_info* input_dti = (data_type_info*) get_type_info_for_element_from_tuple_def(input_def, *projection);
+	if(input_dti->type == BIT_FIELD)
+		output_dti = UINT_NULLABLE[8]; // a integer big enough to hold it, a bit_field always lives in some container
+	else
+		output_dti = shallow_clone_into_nullable_type(input_dti);
+
+	initialize_tuple_def(output_def, output_dti);
+
 	ttd->params.scalar_projection = (scalar_projection_transformer_params){deep_clone_positional_accessors(projection, 1)};
+	ttd->output_def = output_def;
 
 	return ttd;
 }
 
 tuple_transformer_desc* insert_row_number_prepender_tuple_transformer_descriptor(query_plan_desc* qpd, uint64_t next_row_number)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_ROW_NUMBER_PREPENDER);
+	const tuple_def* input_def = NULL;
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_ROW_NUMBER_PREPENDER, &input_def);
 	if(ttd == NULL)
 		return NULL;
 
+	tuple_def* output_def = malloc(sizeof(tuple_def));
+	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(2));
+
+	uint32_t output_max_size = get_maximum_tuple_size(input_def) + 24;
+
+	strcpy(output_dti->containees[0].field_name, "row_number");
+	output_dti->containees[0].al.type_info = UINT_NON_NULLABLE[8];
+
+	strcpy(output_dti->containees[1].field_name, "row");
+	output_dti->containees[1].al.type_info = input_def->type_info;
+
+	if(output_max_size > MAX_INTERMEDIATE_TUPLE_SIZE)
+	{
+		printf("too big output tuple for row_number_prepender_transformer\n");
+		free(output_def);
+		free(output_dti);
+		free(ttd);
+		return NULL;
+	}
+
+	initialize_tuple_data_type_info(output_dti, "row_identified", 1, output_max_size, 2);
+	initialize_tuple_def(output_def, output_dti);
+
 	ttd->params.row_number_prepender = (row_number_prepender_transformer_params){next_row_number};
+	ttd->output_def = output_def;
 
 	return ttd;
 }
 
 tuple_transformer_desc* insert_row_identifier_prepender_tuple_transformer_descriptor(query_plan_desc* qpd, uint64_t row_identifier)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_ROW_IDENTIFIER_PREPENDER);
+	const tuple_def* input_def = NULL;
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_ROW_IDENTIFIER_PREPENDER, &input_def);
 	if(ttd == NULL)
 		return NULL;
 
+	tuple_def* output_def = malloc(sizeof(tuple_def));
+	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(2));
+
+	uint32_t output_max_size = get_maximum_tuple_size(input_def) + 24;
+
+	strcpy(output_dti->containees[0].field_name, "row_identifier");
+	output_dti->containees[0].al.type_info = UINT_NON_NULLABLE[8];
+
+	strcpy(output_dti->containees[1].field_name, "row");
+	output_dti->containees[1].al.type_info = input_def->type_info;
+
+	if(output_max_size > MAX_INTERMEDIATE_TUPLE_SIZE)
+	{
+		printf("too big output tuple for row_identifier_prepender_transformer\n");
+		free(output_def);
+		free(output_dti);
+		free(ttd);
+		return NULL;
+	}
+
+	initialize_tuple_data_type_info(output_dti, "row_identified", 1, output_max_size, 2);
+	initialize_tuple_def(output_def, output_dti);
+
 	ttd->params.row_identifier_prepender = (row_identifier_prepender_transformer_params){row_identifier};
+	ttd->output_def = output_def;
 
 	return ttd;
 }
 
 tuple_transformer_desc* insert_expressioned_selection_tuple_transformer_descriptor(query_plan_desc* qpd, sql_expression* expr)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_EXPRESSIONED_SELECTION);
+	const tuple_def* input_def = NULL;
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_EXPRESSIONED_SELECTION, &input_def);
 	if(ttd == NULL)
 		return NULL;
 
 	ttd->params.expressioned_selection = (expressioned_selection_transformer_params){expr};
+	ttd->output_def = input_def;
 
 	return ttd;
 }
 
 tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query_plan_desc* qpd, uint32_t* column_ids_to_transform, uint32_t column_to_transform_count)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_UNIFIED_TYPING);
+	const tuple_def* input_def = NULL;
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_UNIFIED_TYPING, &input_def);
 	if(ttd == NULL)
 		return NULL;
 
+	tuple_def* output_def = malloc(sizeof(tuple_def));
+	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(input_def->type_info->element_count));
+
+	uint32_t max_output_tuple_size = 8;
+
+	for(uint32_t i = 0, j = 0; i < input_def->type_info->element_count; i++)
+	{
+		strncpy(output_dti->containees[i].field_name, input_def->type_info->containees[i].field_name, 64);
+		output_dti->containees[i].al.type_info = (data_type_info*) get_type_info_for_element_from_tuple_def(input_def, STATIC_POSITION(i));
+
+		if(j < column_to_transform_count && column_ids_to_transform[j] == i)
+		{
+			if(is_extended_type_info(output_dti->containees[i].al.type_info) || is_unified_type_info(output_dti->containees[i].al.type_info))
+			{
+				if(is_text_type_info(output_dti->containees[i].al.type_info))
+					output_dti->containees[i].al.type_info = qpd->rdb->union_text_type_info;
+				else if(is_blob_type_info(output_dti->containees[i].al.type_info))
+					output_dti->containees[i].al.type_info = qpd->rdb->union_blob_type_info;
+				else if(is_numeric_type_info(output_dti->containees[i].al.type_info))
+					output_dti->containees[i].al.type_info = qpd->rdb->union_numeric_type_info;
+				else if(is_jsonb_type_info(output_dti->containees[i].al.type_info))
+					output_dti->containees[i].al.type_info = qpd->rdb->union_jsonb_type_info;
+			}
+			j++;
+		}
+
+		if(output_dti->containees[i].al.type_info->type == BIT_FIELD)
+			max_output_tuple_size += 9;
+		else
+			max_output_tuple_size += output_dti->containees[i].al.type_info->is_variable_sized ? (8 + output_dti->containees[i].al.type_info->max_size) : (1 + output_dti->containees[i].al.type_info->size);
+	}
+
+	if(max_output_tuple_size > MAX_INTERMEDIATE_TUPLE_SIZE)
+	{
+		printf("too big output tuple for simple_projection_transformer\n");
+		free(output_dti);
+		free(output_def);
+		free(ttd);
+		return NULL;
+	}
+
+	initialize_tuple_data_type_info(output_dti, input_def->type_info->type_name, 1, max_output_tuple_size, input_def->type_info->element_count);
+	initialize_tuple_def(output_def, output_dti);
+
 	ttd->params.unified_typing = (unified_typing_transformer_params){deep_clone_uint32_array(column_ids_to_transform, column_to_transform_count), column_to_transform_count};
+	ttd->output_def = output_def;
 
 	return ttd;
 }
@@ -2316,6 +2472,33 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 		for(uint64_t t = 0; t < transformer_count; t++)
 		{
 			tuple_transformer_desc* ttd = (tuple_transformer_desc*) get_from_front_of_arraylist(&(d->transformer_descriptors), t);
+
+			switch(ttd->type)
+			{
+				case TT_ROW_IDENTIFIER_PREPENDER :
+				case TT_ROW_NUMBER_PREPENDER :
+					free(ttd->output_def->type_info);
+					free((void*)ttd->output_def);
+					break;
+				case TT_SIMPLE_PROJECTION :
+					uint32_t element_count = ttd->output_def->type_info->element_count;
+					for(uint32_t i = 0; i < element_count; i++)
+						free((data_type_info*)(ttd->output_def->type_info->containees[i].al.type_info));
+					free(ttd->output_def->type_info);
+					free((void*)(ttd->output_def));
+					break;
+				case TT_SCALAR_PROJECTION :
+					if(ttd->output_def->type_info != UINT_NULLABLE[8])
+						free(ttd->output_def->type_info);
+					free((void*)(ttd->output_def));
+					break;
+				case TT_UNIFIED_TYPING :
+					free(ttd->output_def->type_info);
+					free((void*)(ttd->output_def));
+					break;
+				default :
+					break;
+			}
 
 			switch(ttd->type)
 			{

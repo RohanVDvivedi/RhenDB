@@ -1,5 +1,7 @@
 #include<rhendb/tuple_transformer_interface.h>
 
+#include<rhendb/max_intermediate_tuple_size.h>
+
 #include<tuplestore/tuple.h>
 #include<tuplestore/tuple_def.h>
 
@@ -59,6 +61,12 @@ tuple_transformer* get_new_row_number_prepender_transformer(const tuple_def* inp
 
 	initialize_tuple_data_type_info(output_dti, "row_numbered", 1, output_max_size, 2);
 	initialize_tuple_def(output_def, output_dti);
+
+	if(output_max_size > MAX_INTERMEDIATE_TUPLE_SIZE)
+	{
+		printf("too big output tuple for row_number_prepender_transformer\n");
+		exit(-1);
+	}
 
 	return get_new_tuple_transformer(context_p, input_def, output_def, process, destroy);
 }
