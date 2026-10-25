@@ -53,7 +53,7 @@ void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint
 // DOES_IT_PRESERVE_RIGHT(ptype) must be 0
 // we can not do right size preserving joins
 // if join_expr == NULL, this becomes a cross join operator
-operator_resource_counter setup_block_nested_loop_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, sql_expression* join_expr, join_preserve_type ptype, uint32_t min_block_size);
+void setup_block_nested_loop_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, sql_expression* join_expr, join_preserve_type ptype, uint32_t min_block_size);
 
 // equi join for sort merge join
 // REMEMBER OUTPUT OF SORT-MERGE JOIN MAY NOT BE SORTED UNLESS IT IS INNER JOIN
@@ -63,7 +63,7 @@ operator_resource_counter setup_hash_join_operator(operator* o, operator* left_i
 
 // semi and anti joins
 
-operator_resource_counter setup_block_nested_loop_semi_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, sql_expression* join_expr, semi_join_type stype, uint32_t min_block_size);
+void setup_block_nested_loop_semi_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, sql_expression* join_expr, semi_join_type stype, uint32_t min_block_size);
 
 operator_resource_counter setup_sort_merge_semi_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype, uint32_t min_block_size);
 

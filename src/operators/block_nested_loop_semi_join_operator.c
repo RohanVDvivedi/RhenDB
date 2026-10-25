@@ -262,7 +262,7 @@ static void clean_up_resources(operator* o)
 	delete_context_p_for_sql_expr_eval_context_for_rhendb(inputs->ec.context_p);
 }
 
-operator_resource_counter setup_block_nested_loop_semi_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, sql_expression* join_expr, semi_join_type stype, uint32_t min_block_size)
+void setup_block_nested_loop_semi_join_operator(operator* o, operator* left_input_operator, operator* right_input_operator, sql_expression* join_expr, semi_join_type stype, uint32_t min_block_size)
 {
 	if(min_block_size == 0)
 	{
@@ -284,11 +284,6 @@ operator_resource_counter setup_block_nested_loop_semi_join_operator(operator* o
 			exit(-1);
 		}
 	}
-	int has_reference_to_extended_type = has_reference_to_persistent_extended_type_from_expression(ec.context_p); // must be called only after validation/inference of type of the expr
-
-	operator_resource_counter result = has_sub_query_in_sql_exp(join_expr)
-		? (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .thread_counter = 1}
-		: (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1}; // * 2 if the expression compares 2 extended types
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -313,6 +308,4 @@ operator_resource_counter setup_block_nested_loop_semi_join_operator(operator* o
 		.stype = stype,
 		.min_block_size = min_block_size,
 	};
-
-	return result;
 }
