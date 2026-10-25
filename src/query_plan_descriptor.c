@@ -1067,7 +1067,7 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 
 	if(key_element_count == 0)
 	{
-		printf("key_element_count can not be 0 for sort_operator_descriptor\n");
+		printf("key_element_count can not be 0 for merge_sorted_inputs_operator_descriptor\n");
 		return NULL;
 	}
 

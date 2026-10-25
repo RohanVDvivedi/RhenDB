@@ -181,6 +181,12 @@ void setup_merge_sorted_inputs_operator(operator* o, operator** input_operators,
 		}
 	}
 
+	if(key_element_count == 0)
+	{
+		printf("key_element_count can not be 0 for merge_sorted_inputs_operator\n");
+		exit(-1);
+	}
+
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->clean_up_resources = clean_up_resources;
