@@ -231,7 +231,8 @@ struct query_plan
 	int query_errored;
 };
 
-query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count);
+// parent_expr_eval_context = NULL for main query, else it is the expression_evaluator context for the operator resolving it
+query_plan* get_new_query_plan(transaction* curr_tx, const sql_expr_eval_context* parent_expr_eval_context, uint32_t operators_count);
 
 operator* get_new_registered_operator_for_query_plan(query_plan* qp);
 

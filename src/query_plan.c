@@ -712,7 +712,7 @@ const tuple_def* get_tuple_def_for_tuples_to_be_consumed_from(operator* o)
 
 // query plan functions
 
-query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count)
+query_plan* get_new_query_plan(transaction* curr_tx, const sql_expr_eval_context* parent_expr_eval_context, uint32_t operators_count)
 {
 	query_plan* qp = malloc(sizeof(query_plan));
 	if(qp == NULL)
@@ -720,7 +720,7 @@ query_plan* get_new_query_plan(transaction* curr_tx, uint32_t operators_count)
 
 	qp->curr_tx = curr_tx;
 
-	qp->parent_expr_eval_context = NULL;
+	qp->parent_expr_eval_context = parent_expr_eval_context;
 
 	if(!initialize_arraylist(&(qp->operators), operators_count))
 		exit(-1);
