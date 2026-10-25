@@ -173,7 +173,7 @@ static void clean_up_resources(operator* o)
 	}
 }
 
-operator_resource_counter setup_sort_merge_semi_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype, uint32_t min_block_size)
+void setup_sort_merge_semi_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype, uint32_t min_block_size)
 {
 	if(key_element_count == 0)
 	{
@@ -199,8 +199,6 @@ operator_resource_counter setup_sort_merge_semi_join_operator(operator* o, opera
 		}
 	}
 
-	operator_resource_counter result = {.buffer_counter = has_extended_type_info3(left_input_tuple_def, key_element_count, left_key_element_ids, PERSISTENT_EXT_SUB_TYPE) + has_extended_type_info3(right_input_tuple_def, key_element_count, right_key_element_ids, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
-
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->clean_up_resources = clean_up_resources;
@@ -224,6 +222,4 @@ operator_resource_counter setup_sort_merge_semi_join_operator(operator* o, opera
 		.stype = stype,
 		.min_block_size = min_block_size,
 	};
-
-	return result;
 }
