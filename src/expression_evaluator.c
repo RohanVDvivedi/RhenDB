@@ -2055,10 +2055,10 @@ static void* rhendb_get_variable(const dstring* identifier_bytes, const sql_expr
 	const var_cache_entry* e = get_or_resolve_entry(ctx, identifier_bytes, error_code);
 	if(e == NULL)
 	{
-		if((*error_code) == RHENDB_EE_UNKNOWN_VARIABLE && ctx->parent_context != NULL)
+		if((*error_code) == RHENDB_EE_UNKNOWN_VARIABLE && ctx->this_sub_query_expr_eval_context != NULL)
 		{
 			(*error_code) = 0;
-			return rhendb_get_variable(identifier_bytes, ctx->parent_context, error_code);
+			return rhendb_get_variable(identifier_bytes, ctx->this_sub_query_expr_eval_context, error_code);
 		}
 		return NULL;
 	}
@@ -2101,10 +2101,10 @@ static void* rhendb_get_type_for_variable(const dstring* identifier_bytes, const
 	const var_cache_entry* e = get_or_resolve_entry(ctx, identifier_bytes, error_code);
 	if(e == NULL)
 	{
-		if((*error_code) == RHENDB_EE_UNKNOWN_VARIABLE && ctx->parent_context != NULL)
+		if((*error_code) == RHENDB_EE_UNKNOWN_VARIABLE && ctx->this_sub_query_expr_eval_context != NULL)
 		{
 			(*error_code) = 0;
-			return rhendb_get_type_for_variable(identifier_bytes, ctx->parent_context, error_code);
+			return rhendb_get_type_for_variable(identifier_bytes, ctx->this_sub_query_expr_eval_context, error_code);
 		}
 		return NULL;
 	}
@@ -3339,6 +3339,7 @@ struct expression_sub_query
 
 #define SUB_QUERY_OUTPUT_PIPE_CAPACITY 1024
 
+// returned query_plan->this_sub_query_expr_eval_context = ec_p; must suffice
 query_plan* build_query_plan_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, sync_pipe* out_pipe, tuple_def** out_def, int* error_code){return NULL;}
 
 tuple_def* infer_output_def_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code){return NULL;}
@@ -3382,7 +3383,6 @@ void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p
 	}
 
 	esq->sub_query_plan = qp;
-	esq->sub_query_plan->parent_expr_eval_context = ec_p; // set the parent_expr_eval_context to the current expression context that created it
 	esq->sub_query_output_pipe = out_pipe;
 	esq->sub_query_output_def = output_def;
 	return esq;
@@ -3608,7 +3608,7 @@ static void* rhendb_post_eval(const sql_expr_eval_context* ec_p, const sql_expre
 	return result;
 }
 
-sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, transaction* tx, query_plan* qp)
+sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tuple_defs, uint32_t input_tuples_count, transaction* tx, const sql_expr_eval_context* this_sub_query_expr_eval_context)
 {
 	rhendb_bool_type = (expr_type_info){.type = RHENDB_EXPR_BIT_FIELD, .dti_p = BIT_FIELD_NULLABLE[1]};
 	rhendb_true_bool = (expr_value){.type_info = rhendb_bool_type, .value = (datum){.bit_field_value = 1}, .buffer_to_free = NULL};
@@ -3713,7 +3713,7 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 
 	context_p->tx = tx;
 
-	context_p->parent_context = qp->parent_expr_eval_context;
+	context_p->this_sub_query_expr_eval_context = this_sub_query_expr_eval_context;
 
 	return eval_context;
 }

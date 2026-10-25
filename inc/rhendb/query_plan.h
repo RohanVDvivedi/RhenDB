@@ -218,9 +218,9 @@ struct query_plan
 	transaction* curr_tx;
 
 	// expression evaluator context for this query to access parent operator variables
-	// this should be set after the get_new_query_plan() by the parent query operator in the expression to optionally access parent operator tuples as variables
-	// and must be static throughoput the life of the query_plan
-	const sql_expr_eval_context* parent_expr_eval_context;
+	// this is only needed by the sub_queries, for main query it is NULL
+	// the expression evaluator must set it to it's own context when creating this sub_query
+	const sql_expr_eval_context* this_sub_query_expr_eval_context;
 
 	// operators like scans, writers, and also the joins, sorts and groupbys
 	// anything that implements the operator interface
@@ -231,8 +231,8 @@ struct query_plan
 	int query_errored;
 };
 
-// parent_expr_eval_context = NULL for main query, else it is the expression_evaluator context for the operator resolving it
-query_plan* get_new_query_plan(transaction* curr_tx, const sql_expr_eval_context* parent_expr_eval_context, uint32_t operators_count);
+// this_sub_query_expr_eval_context = NULL for main query, else it is the expression_evaluator context for the operator resolving it from the expression_evaluator
+query_plan* get_new_query_plan(transaction* curr_tx, const sql_expr_eval_context* this_sub_query_expr_eval_context, uint64_t operators_count);
 
 operator* get_new_registered_operator_for_query_plan(query_plan* qp);
 

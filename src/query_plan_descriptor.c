@@ -36,14 +36,14 @@ static operator_desc* get_new_registered_operator_descriptor_for_query_plan_desc
 	return d;
 }
 
-query_plan_desc* get_new_query_plan_descriptor(rhendb* rdb, const sql_expr_eval_context* parent_expr_eval_context)
+query_plan_desc* get_new_query_plan_descriptor(rhendb* rdb, const sql_expr_eval_context* this_sub_query_expr_eval_context)
 {
 	query_plan_desc* qpd = malloc(sizeof(query_plan_desc));
 	if(qpd == NULL)
 		exit(-1);
 
 	qpd->rdb = rdb;
-	qpd->parent_expr_eval_context = parent_expr_eval_context;
+	qpd->this_sub_query_expr_eval_context = this_sub_query_expr_eval_context;
 
 	initialize_arraylist(&(qpd->operator_descriptors), 16);
 
@@ -427,11 +427,7 @@ operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, uint64
 		return NULL;
 	}
 
-	query_plan stub_query_plan = {};
-	stub_query_plan.curr_tx = NULL;
-	stub_query_plan.parent_expr_eval_context = qpd->parent_expr_eval_context;
-
-	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, NULL, &stub_query_plan);
+	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, NULL, qpd->this_sub_query_expr_eval_context);
 
 	int error_code = 0;
 	if(!is_valid_using_infer_sql_expr_for_rhendb(expr, &ec, &error_code))
@@ -514,11 +510,7 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint6
 		return NULL;
 	}
 
-	query_plan stub_query_plan = {};
-	stub_query_plan.curr_tx = NULL;
-	stub_query_plan.parent_expr_eval_context = qpd->parent_expr_eval_context;
-
-	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, NULL, &stub_query_plan);
+	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, NULL, qpd->this_sub_query_expr_eval_context);
 
 	int has_sub_query = 0;
 
@@ -1078,11 +1070,7 @@ operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc
 	int has_sub_query = 0;
 	if(join_expr != NULL)
 	{
-		query_plan stub_query_plan = {};
-		stub_query_plan.curr_tx = NULL;
-		stub_query_plan.parent_expr_eval_context = qpd->parent_expr_eval_context;
-
-		ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, NULL, &stub_query_plan);
+		ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, NULL, qpd->this_sub_query_expr_eval_context);
 
 		int error_code = 0;
 		if(!is_valid_using_infer_sql_expr_for_rhendb(join_expr, &ec, &error_code))
@@ -1320,11 +1308,7 @@ operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan
 	int has_sub_query = 0;
 	if(join_expr != NULL)
 	{
-		query_plan stub_query_plan = {};
-		stub_query_plan.curr_tx = NULL;
-		stub_query_plan.parent_expr_eval_context = qpd->parent_expr_eval_context;
-
-		ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, NULL, &stub_query_plan);
+		ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, NULL, qpd->this_sub_query_expr_eval_context);
 
 		int error_code = 0;
 		if(!is_valid_using_infer_sql_expr_for_rhendb(join_expr, &ec, &error_code))
@@ -1702,7 +1686,7 @@ tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query
 // create : build a real, executable query_plan from the descriptor
 // ---------------------------------------------------------------------------------------------------
 
-query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx)
+query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx, const sql_expr_eval_context* this_sub_query_expr_eval_context)
 {
 	if(tx == NULL || tx->rdb != qpd->rdb)
 	{
@@ -1712,7 +1696,7 @@ query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx)
 
 	uint64_t count = get_element_count_arraylist(&(qpd->operator_descriptors));
 
-	query_plan* qp = get_new_query_plan(tx, (uint32_t) count);
+	query_plan* qp = get_new_query_plan(tx, this_sub_query_expr_eval_context, count);
 	if(qp == NULL)
 		return NULL;
 
