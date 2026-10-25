@@ -1873,7 +1873,7 @@ static tuple_transformer_desc* get_new_tuple_transformer_descriptor_for_last_ope
 	ttd->output_def = get_output_tuple_def_for_operator_descriptor(d);
 
 	// identity and clone preserve the schema; schema changing transformers resolve their output_def at create()
-	if(type != TTD_IDENTITY && type != TTD_CLONE)
+	if(type != TT_IDENTITY && type != TT_CLONE)
 		ttd->output_def = NULL;
 
 	if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
@@ -1885,17 +1885,17 @@ static tuple_transformer_desc* get_new_tuple_transformer_descriptor_for_last_ope
 
 tuple_transformer_desc* insert_identity_tuple_transformer_descriptor(query_plan_desc* qpd)
 {
-	return get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TTD_IDENTITY);
+	return get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_IDENTITY);
 }
 
 tuple_transformer_desc* insert_clone_tuple_transformer_descriptor(query_plan_desc* qpd)
 {
-	return get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TTD_CLONE);
+	return get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_CLONE);
 }
 
 tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_descriptor(query_plan_desc* qpd, const mvcc_snapshot* mvccsnp_p, transaction_status_getter* tsg_p, int* were_hints_updated)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TTD_IS_READABLE_FOR_MVCC_SNAPSHOT);
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_IS_READABLE_FOR_MVCC_SNAPSHOT);
 	if(ttd == NULL)
 		return NULL;
 
@@ -1906,7 +1906,7 @@ tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_d
 
 tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const char* output_table_name, uint32_t projections_count, positional_accessor** projections, const char** field_names)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TTD_SIMPLE_PROJECTION);
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_SIMPLE_PROJECTION);
 	if(ttd == NULL)
 		return NULL;
 
@@ -1917,7 +1917,7 @@ tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(qu
 
 tuple_transformer_desc* insert_scalar_projection_tuple_transformer_descriptor(query_plan_desc* qpd, positional_accessor* projection)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TTD_SCALAR_PROJECTION);
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_SCALAR_PROJECTION);
 	if(ttd == NULL)
 		return NULL;
 
@@ -1928,7 +1928,7 @@ tuple_transformer_desc* insert_scalar_projection_tuple_transformer_descriptor(qu
 
 tuple_transformer_desc* insert_row_number_prepender_tuple_transformer_descriptor(query_plan_desc* qpd, uint64_t next_row_number)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TTD_ROW_NUMBER_PREPENDER);
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_ROW_NUMBER_PREPENDER);
 	if(ttd == NULL)
 		return NULL;
 
@@ -1939,7 +1939,7 @@ tuple_transformer_desc* insert_row_number_prepender_tuple_transformer_descriptor
 
 tuple_transformer_desc* insert_row_identifier_prepender_tuple_transformer_descriptor(query_plan_desc* qpd, uint64_t row_identifier)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TTD_ROW_IDENTIFIER_PREPENDER);
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_ROW_IDENTIFIER_PREPENDER);
 	if(ttd == NULL)
 		return NULL;
 
@@ -1950,7 +1950,7 @@ tuple_transformer_desc* insert_row_identifier_prepender_tuple_transformer_descri
 
 tuple_transformer_desc* insert_expressioned_selection_tuple_transformer_descriptor(query_plan_desc* qpd, sql_expression* expr)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TTD_EXPRESSIONED_SELECTION);
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_EXPRESSIONED_SELECTION);
 	if(ttd == NULL)
 		return NULL;
 
@@ -1961,7 +1961,7 @@ tuple_transformer_desc* insert_expressioned_selection_tuple_transformer_descript
 
 tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query_plan_desc* qpd, uint32_t* column_ids_to_transform, uint32_t column_to_transform_count)
 {
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TTD_UNIFIED_TYPING);
+	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_UNIFIED_TYPING);
 	if(ttd == NULL)
 		return NULL;
 
@@ -2109,31 +2109,31 @@ query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx, const sql_e
 			tuple_transformer* tt = NULL;
 			switch(ttd->type)
 			{
-				case TTD_IDENTITY :
+				case TT_IDENTITY :
 					tt = get_new_identity_tuple_transformer(input_def);
 					break;
-				case TTD_CLONE :
+				case TT_CLONE :
 					tt = get_new_clone_tuple_transformer(input_def);
 					break;
-				case TTD_IS_READABLE_FOR_MVCC_SNAPSHOT :
+				case TT_IS_READABLE_FOR_MVCC_SNAPSHOT :
 					tt = get_new_is_readable_for_mvcc_snapshot_transformer(ttd->params.is_readable_for_mvcc_snapshot.mvccsnp_p, ttd->params.is_readable_for_mvcc_snapshot.tsg_p, ttd->params.is_readable_for_mvcc_snapshot.were_hints_updated, input_def);
 					break;
-				case TTD_SIMPLE_PROJECTION :
+				case TT_SIMPLE_PROJECTION :
 					tt = get_new_simple_projection_transformer(ttd->params.simple_projection.output_table_name, input_def, ttd->params.simple_projection.projections_count, ttd->params.simple_projection.projections, ttd->params.simple_projection.field_names);
 					break;
-				case TTD_SCALAR_PROJECTION :
+				case TT_SCALAR_PROJECTION :
 					tt = get_new_scalar_projection_transformer(input_def, ttd->params.scalar_projection.projection);
 					break;
-				case TTD_ROW_NUMBER_PREPENDER :
+				case TT_ROW_NUMBER_PREPENDER :
 					tt = get_new_row_number_prepender_transformer(input_def, ttd->params.row_number_prepender.next_row_number);
 					break;
-				case TTD_ROW_IDENTIFIER_PREPENDER :
+				case TT_ROW_IDENTIFIER_PREPENDER :
 					tt = get_new_row_identifier_prepender_transformer(input_def, ttd->params.row_identifier_prepender.row_identifier);
 					break;
-				case TTD_EXPRESSIONED_SELECTION :
+				case TT_EXPRESSIONED_SELECTION :
 					tt = get_new_expressioned_selection_transformer(input_def, tx, ttd->params.expressioned_selection.expr);
 					break;
-				case TTD_UNIFIED_TYPING :
+				case TT_UNIFIED_TYPING :
 					tt = get_new_unified_typing_transformer(input_def, tx, ttd->params.unified_typing.column_ids_to_transform, ttd->params.unified_typing.column_to_transform_count);
 					break;
 			}
@@ -2341,15 +2341,15 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 
 			switch(ttd->type)
 			{
-				case TTD_SIMPLE_PROJECTION :
+				case TT_SIMPLE_PROJECTION :
 					free((char*) ttd->params.simple_projection.output_table_name);
 					free_single_accessor_pointers(ttd->params.simple_projection.projections, ttd->params.simple_projection.projections_count);
 					free_strings(ttd->params.simple_projection.field_names, ttd->params.simple_projection.projections_count);
 					break;
-				case TTD_SCALAR_PROJECTION :
+				case TT_SCALAR_PROJECTION :
 					free_positional_accessors(ttd->params.scalar_projection.projection, 1);
 					break;
-				case TTD_UNIFIED_TYPING :
+				case TT_UNIFIED_TYPING :
 					free(ttd->params.unified_typing.column_ids_to_transform);
 					break;
 				default :
