@@ -304,8 +304,6 @@ struct clone_tuple_transformer_params { int unused; };
 typedef struct is_readable_for_mvcc_snapshot_transformer_params is_readable_for_mvcc_snapshot_transformer_params;
 struct is_readable_for_mvcc_snapshot_transformer_params
 {
-	const mvcc_snapshot* mvccsnp_p;
-	transaction_status_getter* tsg_p;
 	int* were_hints_updated;
 };
 
@@ -496,7 +494,7 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, u
 
 tuple_transformer_desc* insert_identity_tuple_transformer_descriptor(query_plan_desc* qpd);
 tuple_transformer_desc* insert_clone_tuple_transformer_descriptor(query_plan_desc* qpd);
-tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_descriptor(query_plan_desc* qpd, const mvcc_snapshot* mvccsnp_p, transaction_status_getter* tsg_p, int* were_hints_updated);
+tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_descriptor(query_plan_desc* qpd, int* were_hints_updated);
 tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const char* output_table_name, uint32_t projections_count, const positional_accessor* projections, char const * const * field_names);
 tuple_transformer_desc* insert_scalar_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const positional_accessor* projection);
 tuple_transformer_desc* insert_row_number_prepender_tuple_transformer_descriptor(query_plan_desc* qpd, uint64_t next_row_number);

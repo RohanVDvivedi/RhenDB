@@ -1871,13 +1871,13 @@ tuple_transformer_desc* insert_clone_tuple_transformer_descriptor(query_plan_des
 	return get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_CLONE);
 }
 
-tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_descriptor(query_plan_desc* qpd, const mvcc_snapshot* mvccsnp_p, transaction_status_getter* tsg_p, int* were_hints_updated)
+tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_descriptor(query_plan_desc* qpd, int* were_hints_updated)
 {
 	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_IS_READABLE_FOR_MVCC_SNAPSHOT);
 	if(ttd == NULL)
 		return NULL;
 
-	ttd->params.is_readable_for_mvcc_snapshot = (is_readable_for_mvcc_snapshot_transformer_params){mvccsnp_p, tsg_p, were_hints_updated};
+	ttd->params.is_readable_for_mvcc_snapshot = (is_readable_for_mvcc_snapshot_transformer_params){were_hints_updated};
 
 	return ttd;
 }
@@ -2094,7 +2094,7 @@ query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx, const sql_e
 					tt = get_new_clone_tuple_transformer(input_def);
 					break;
 				case TT_IS_READABLE_FOR_MVCC_SNAPSHOT :
-					tt = get_new_is_readable_for_mvcc_snapshot_transformer(ttd->params.is_readable_for_mvcc_snapshot.mvccsnp_p, ttd->params.is_readable_for_mvcc_snapshot.tsg_p, ttd->params.is_readable_for_mvcc_snapshot.were_hints_updated, input_def);
+					tt = get_new_is_readable_for_mvcc_snapshot_transformer(tx->snapshot, &(tx->rdb->tsg), ttd->params.is_readable_for_mvcc_snapshot.were_hints_updated, input_def);
 					break;
 				case TT_SIMPLE_PROJECTION :
 					tt = get_new_simple_projection_transformer(ttd->params.simple_projection.output_table_name, input_def, ttd->params.simple_projection.projections_count, ttd->params.simple_projection.projections, (char const * const * ) ttd->params.simple_projection.field_names);
