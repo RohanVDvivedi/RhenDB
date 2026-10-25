@@ -1,7 +1,7 @@
 #include<rhendb/rhendb.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/operators.h>
+#include<rhendb/query_plan_descriptor.h>
 #include<rhendb/tuple_transformers.h>
 
 #include<test_dataset_tuple_def.h>
@@ -19,7 +19,7 @@
 
 #define TESTCASE_SIZE 1000000
 
-#define RANDOMIZE_DATA
+//#define RANDOMIZE_DATA
 
 #define PRINT_DATA 0
 
@@ -99,32 +99,24 @@ int main(int argc, char** argv)
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, 30);
+	// make query
 
-	// make operators
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&rdb, NULL);
 
 	printf("Building pipeline :\n");
 	{
-		operator* input_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_generator_operator(input_operator,
+		uint64_t op_index = 0;
+
+		insert_generator_operator_descriptor(qpd,
 		#ifdef RANDOMIZE_DATA
 			random_generator
 		#else
 			sorted_generator
 		#endif
-		, NULL, &record_def);
-		printf("source operator %s %p\n",
-		#ifdef RANDOMIZE_DATA
-			"random_generator"
-		#else
-			"sorted_generator"
-		#endif
-		, input_operator);
+		, NULL, &record_def); op_index++;
 
 		#ifdef PRINT_DATA
-			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_consumer_operator(print_operator, input_operator, PRINT_DATA ? print_consumer : NULL, NULL);
-			printf("output print operator %p\n", print_operator);
+			insert_consumer_operator_descriptor(qpd, 0, PRINT_DATA ? print_consumer : NULL, NULL); op_index++;
 		#endif
 
 		if(argc >= 2)
@@ -132,14 +124,15 @@ int main(int argc, char** argv)
 			int out_fd = open(argv[1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 			initialize_stream_for_fd(&out_file_stream, out_fd);
 
-			operator* output_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_stream_output_operator(output_operator, input_operator, &out_file_stream);
-			printf("output stream operator %p\n", output_operator);
+			insert_stream_output_operator_descriptor(qpd, 0, &out_file_stream);
 		}
 	}
-	printf("\n\n");
 
-	// make operators completed
+	qp = create_query_plan(qpd, &tx, NULL);
+
+	printf("Pipeline built\n\n");
+
+	// make query completed
 
 	start_all_operators_for_query_plan(qp);
 
@@ -160,6 +153,8 @@ int main(int argc, char** argv)
 		printf("QUERY SUCCESSFULL\n");
 		destroy_query_plan(qp, NULL);
 	}
+
+	destroy_query_plan_descriptor(qpd);
 
 	deinitialize_transaction(&tx);
 
