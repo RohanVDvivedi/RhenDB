@@ -8,7 +8,7 @@
 // generates fixed set of tuples from constant_dataset_p having tuple_def of record_def, constant_dataset_p is left untouched to use it again by another query_plan from the same descriptor
 void setup_constant_dataset_operator(operator* o, interim_tuple_store* constant_dataset_p, const tuple_def* record_def);
 
-operator_resource_counter setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def);
+void setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def);
 
 operator_resource_counter setup_identity_operator(operator* o, operator* input_operator);
 

@@ -40,10 +40,8 @@ static void execute(operator* o)
 	kill_signal_for_self_operator(o, kill_reason); return ;
 }
 
-operator_resource_counter setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def)
+void setup_generator_operator(operator* o, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def)
 {
-	operator_resource_counter result = {.thread_counter = 1};
-
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->clean_up_resources = OPERATOR_CLEAN_UP_RESOURCE_NO_OP_FUNCTION;
@@ -58,6 +56,4 @@ operator_resource_counter setup_generator_operator(operator* o, void* (*generato
 		.generator_context = generator_context,
 		.generator_tuple_def = generator_tuple_def,
 	};
-
-	return result;
 }
