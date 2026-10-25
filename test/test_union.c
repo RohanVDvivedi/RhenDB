@@ -103,7 +103,7 @@ int main(int argc, char** argv)
 
 	printf("Pipeline built\n\n");
 
-	// make operators completed
+	// make query completed
 
 	start_all_operators_for_query_plan(qp);
 
