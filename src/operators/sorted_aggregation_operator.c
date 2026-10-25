@@ -26,7 +26,7 @@ struct input_values
 	const positional_accessor* key_element_ids;
 
 	uint32_t aggregate_functions_count;
-	aggregate_function** aggregate_functions;
+	aggregate_function* const * aggregate_functions;
 
 	// array of void pointers, of size aggregate_functions_count, one for each aggregate functions
 	void** states;

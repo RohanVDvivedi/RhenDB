@@ -106,12 +106,12 @@ static compare_direction* deep_clone_compare_directions(const compare_direction*
 	return cloned;
 }
 
-static aggregate_function** shallow_clone_aggregate_functions(aggregate_function* const * src, uint32_t count)
+static aggregate_function* const * shallow_clone_aggregate_functions(aggregate_function* const * src, uint32_t count)
 {
 	if(src == NULL || count == 0)
 		return NULL;
 
-	aggregate_function** cloned = malloc(sizeof(aggregate_functions*) * count);
+	aggregate_function** cloned = malloc(sizeof(aggregate_function*) * count);
 	for(uint32_t i = 0; i < count; i++)
 		cloned[i] = src[i];
 	return cloned;
@@ -2302,7 +2302,7 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 				if(af != NULL && af->destroy_aggregate_function != NULL)
 					af->destroy_aggregate_function(af);
 			}
-			free(d->params.simple_aggregation.aggregate_functions);
+			free((void*)(d->params.simple_aggregation.aggregate_functions));
 		}
 		else if(d->type == OP_SORTED_AGGREGATION)
 		{
@@ -2312,7 +2312,7 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 				if(af != NULL && af->destroy_aggregate_function != NULL)
 					af->destroy_aggregate_function(af);
 			}
-			free(d->params.sorted_aggregation.aggregate_functions);
+			free((void*)(d->params.sorted_aggregation.aggregate_functions));
 		}
 		else if(d->type == OP_HASH_AGGREGATION)
 		{
@@ -2322,7 +2322,7 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 				if(af != NULL && af->destroy_aggregate_function != NULL)
 					af->destroy_aggregate_function(af);
 			}
-			free(d->params.hash_aggregation.aggregate_functions);
+			free((void*)(d->params.hash_aggregation.aggregate_functions));
 		}
 
 		// free the cloned input index arrays

@@ -42,7 +42,7 @@ struct input_values
 	const positional_accessor* key_element_ids;
 
 	uint32_t aggregate_functions_count;
-	aggregate_function** aggregate_functions;
+	aggregate_function* const * aggregate_functions;
 
 	// maximum number of input parameters to any of the aggregation functions
 	uint32_t max_of_aggregation_function_input_params_count;
@@ -655,6 +655,4 @@ void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint
 	}
 
 	initialize_linkedlist(&(inputs->tuple_buffers_to_insert), offsetof(interim_tuple_store, embed_node_ll));
-
-	return result;
 }
