@@ -509,8 +509,6 @@ static void clean_up_resources(operator* o)
 		inputs->pending_build_buffer = NULL;
 	}
 
-	free(inputs->aggregate_input_element_ids);
-
 	for(uint32_t i = 0; i < inputs->partitions_count; i++)
 	{
 		if(inputs->partitions[i] == NULL)
@@ -532,11 +530,6 @@ static void free_resources(operator* o)
 {
 	input_values* inputs = o->inputs;
 
-	for(uint32_t i = 0; i < inputs->aggregate_functions_count; i++)
-		inputs->aggregate_functions[i]->destroy_aggregate_function(inputs->aggregate_functions[i]);
-
-	free(inputs->aggregate_functions);
-
 	// all key_dtis were made into nullable types, so free them first
 	for(uint32_t i = 0; i < inputs->key_element_count; i++)
 		free((data_type_info*)(inputs->output_tuple_def->type_info->containees[i].al.type_info));
@@ -546,7 +539,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-operator_resource_counter setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
+void setup_hash_aggregation_operator(operator* o, operator* input_operator, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
 {
 	if(key_element_count == 0)
 	{
@@ -579,9 +572,6 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 	}
 
 	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
-
-	// there are max_concurrent_jobs_count additional jobs, each one first hashing the key, then comparing it and finally aggregating into one entry
-	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * max(2 * has_extended_type_info3(input_tuple_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE), get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions)), .job_counter = max_concurrent_jobs_count + 1};
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -639,9 +629,9 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 		.key_element_count = key_element_count,
 		.key_element_ids = key_element_ids,
 		.aggregate_functions_count = aggregate_functions_count,
-		.aggregate_functions = malloc(sizeof(aggregate_function*) * aggregate_functions_count),
+		.aggregate_functions = aggregate_functions,
 		.max_of_aggregation_function_input_params_count = input_datums_count,
-		.aggregate_input_element_ids = malloc(sizeof(positional_accessor*) * aggregate_functions_count),
+		.aggregate_input_element_ids = aggregate_input_element_ids,
 		.output_tuple_def = output_tuple_def,
 		.partitions_count = partitions_count,
 		.partitions = malloc(sizeof(rash_table_partition*) * partitions_count),
@@ -656,10 +646,6 @@ operator_resource_counter setup_hash_aggregation_operator(operator* o, operator*
 		.probe_jobs_started = 0,
 		.pending_build_buffer = NULL,
 	};
-
-	memmove(inputs->aggregate_functions, aggregate_functions, sizeof(aggregate_function*) * aggregate_functions_count);
-
-	memmove(inputs->aggregate_input_element_ids, aggregate_input_element_ids, sizeof(positional_accessor*) * aggregate_functions_count);
 
 	for(uint32_t i = 0; i < partitions_count; i++)
 	{
