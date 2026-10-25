@@ -65,7 +65,7 @@ static void execute(operator* o)
 			return ;
 		}
 
-		int compare = compare_tuples_rhendb(inputs->tuples[0], inputs->input_defs[0], NULL, inputs->tuples[1], inputs->input_defs[1], NULL, NULL, inputs->element_count, o->self_query_plan->curr_tx);
+		int compare = compare_tuples_rhendb(inputs->tuples[0], inputs->input_defs[0], &SELF, inputs->tuples[1], inputs->input_defs[1], &SELF, NULL, inputs->element_count, o->self_query_plan->curr_tx);
 		inputs->tuple_processed++;
 		if(compare != 0)
 		{
@@ -124,14 +124,10 @@ void setup_result_match_operator(operator* o, operator* input_operators[2])
 
 	uint32_t element_count = input_defs[0]->type_info->element_count;
 
-	for(uint32_t i = 0; i < element_count; i++)
+	if(!can_compare_datum_rhendb(input_defs[0]->type_info, input_defs[1]->type_info))
 	{
-		if(!can_compare_datum_rhendb(get_data_type_info_for_containee_of_container_without_data(input_defs[0]->type_info, i),
-			get_data_type_info_for_containee_of_container_without_data(input_defs[1]->type_info, i)))
-		{
-			printf("input tuple def's element types must be comparable for match operator\n");
-			exit(-1);
-		}
+		printf("input tuple def's element types must be comparable for match operator\n");
+		exit(-1);
 	}
 
 	o->execute = execute;
