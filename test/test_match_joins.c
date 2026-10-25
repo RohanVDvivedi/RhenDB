@@ -1,7 +1,7 @@
 #include<rhendb/rhendb.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/operators.h>
+#include<rhendb/query_plan_descriptor.h>
 #include<rhendb/tuple_transformers.h>
 
 #include<sqltoast/sqltoast.h>
@@ -85,88 +85,76 @@ int main(int argc, char** argv)
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, 30);
-
 	// make operators
 
 	positional_accessor O_KEY_POS[2] = {STATIC_POSITION(0,0), STATIC_POSITION(1,0)};
 	compare_direction O_CMP_DIR[2] = {ASC, ASC};
 
-	const char* field_names_input_operator2[] = {
-		"num", "order", "num_in_words", "digits", "value_in_string", "some_numeric", "some_float"
-	};
+	// make query
 
-	positional_accessor* projections_input_operator2[] = {
-		&(STATIC_POSITION(0)), &(STATIC_POSITION(1)), &(STATIC_POSITION(2)), &(STATIC_POSITION(3)), &(STATIC_POSITION(4)), &(STATIC_POSITION(5)), &(STATIC_POSITION(6))
-	};
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&rdb, NULL);
 
 	printf("Building pipeline :\n");
 	{
-		operator* input_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_stream_input_operator(input_operator, &rs, &record_def);
-		printf("source operator %p\n", input_operator);
+		uint64_t op_index = 0;
 
-		operator* bnlj = NULL;
+		// 0
+		insert_stream_input_operator_descriptor(qpd, &rs, &record_def); op_index++;
+
 		{
-			// input_operator2 is just a rename to record2
-			operator* input_operator2 = get_new_registered_operator_for_query_plan(qp);
-			setup_identity_operator(input_operator2, input_operator);
-			append_tuple_transformer(&(input_operator2->output_tuple_transformers), get_new_simple_projection_transformer("record2", get_tuple_def_for_tuples_to_be_consumed_from(input_operator2), 7, projections_input_operator2, field_names_input_operator2));
-			printf("source operator2 only for bnlj %p\n", input_operator2);
+			// 1
+			insert_identity_operator_descriptor(qpd, 0); op_index++;
+			insert_simple_projection_tuple_transformer_descriptor(qpd, "record2", 7, (positional_accessor[]){
+				STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2), STATIC_POSITION(3), STATIC_POSITION(4), STATIC_POSITION(5), STATIC_POSITION(6)
+			}, (const char* []){
+				"num", "order", "num_in_words", "digits", "value_in_string", "some_numeric", "some_float"
+			});
 
-			bnlj = get_new_registered_operator_for_query_plan(qp);
-			setup_block_nested_loop_join_operator(bnlj, input_operator, input_operator2, join_expr_sql->expr, PRESERVE_NONE, MIN_BLOCK_SIZE);
-			printf("block nested loop join operator %p\n", bnlj);
+			// 2
+			insert_block_nested_loop_join_operator_descriptor(qpd, 0, 1, join_expr_sql->expr, PRESERVE_NONE, MIN_BLOCK_SIZE); op_index++;
 		}
 
-		operator* smj = NULL;
 		{
-			operator* input_sorted_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_sort_operator(input_sorted_operator, TUPLES_DOWN_COUNTER_INF, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-			printf("sorter for smj operator %p\n", input_sorted_operator);
+			// 3
+			insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 0, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
 
-			smj = get_new_registered_operator_for_query_plan(qp);
-			setup_sort_merge_join_operator(smj, input_sorted_operator, KEY_POS, input_sorted_operator, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, MIN_BLOCK_SIZE);
-			printf("sort merge join operator %p\n", smj);
+			// 4
+			insert_sort_merge_join_operator_descriptor(qpd, 3, KEY_POS, 3, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, MIN_BLOCK_SIZE); op_index++;
 		}
 
-		operator* hj = NULL;
 		{
-			hj = get_new_registered_operator_for_query_plan(qp);
-			setup_hash_join_operator(hj, input_operator, KEY_POS, input_operator, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, PARTITIONS_COUNT, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE);
-			printf("hash join operator %p\n", hj);
+			// 5
+			insert_hash_join_operator_descriptor(qpd, 0, KEY_POS, 0, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, PARTITIONS_COUNT, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE); op_index++;
 		}
 
 		// match phase
 		{
-			operator* output_bnlj_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_sort_operator(output_bnlj_operator, TUPLES_DOWN_COUNTER_INF, bnlj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-			printf("sorter for output of bnlj operator %p\n", output_bnlj_operator);
+			// 6
+			insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 2, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
 
-			operator* output_smj_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_sort_operator(output_smj_operator, TUPLES_DOWN_COUNTER_INF, smj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-			printf("sorter for output of smj operator %p\n", output_smj_operator);
+			// 7
+			insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 4, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
 
-			operator* output_hj_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_sort_operator(output_hj_operator, TUPLES_DOWN_COUNTER_INF, hj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-			printf("sorter for output of hj operator %p\n", output_hj_operator);
+			// 8
+			insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 5, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
 
-			operator* matcher1 = get_new_registered_operator_for_query_plan(qp);
-			setup_result_match_operator(matcher1, (operator* []){output_bnlj_operator, output_smj_operator});
-			printf("result match1 operator %p\n", matcher1);
+			// 9
+			insert_result_match_operator_descriptor(qpd, 6, 7); op_index++;
 
-			operator* matcher2 = get_new_registered_operator_for_query_plan(qp);
-			setup_result_match_operator(matcher2, (operator* []){output_bnlj_operator, output_hj_operator});
-			printf("result match2 operator %p\n", matcher2);
+			// 10
+			insert_result_match_operator_descriptor(qpd, 7, 8); op_index++;
 
-			operator* matcher3 = get_new_registered_operator_for_query_plan(qp);
-			setup_result_match_operator(matcher3, (operator* []){output_smj_operator, output_hj_operator});
-			printf("result match3 operator %p\n", matcher3);
+			// 11
+			insert_result_match_operator_descriptor(qpd, 6, 8); op_index++;
 		}
 	}
 	printf("\n\n");
 
-	// make operators completed
+	qp = create_query_plan(qpd, &tx, NULL);
+
+	printf("Pipeline built\n\n");
+
+	// make query completed
 
 	start_all_operators_for_query_plan(qp);
 
@@ -187,6 +175,8 @@ int main(int argc, char** argv)
 		printf("QUERY SUCCESSFULL\n");
 		destroy_query_plan(qp, NULL);
 	}
+
+	destroy_query_plan_descriptor(qpd);
 
 	delete_sql(join_expr_sql);
 
