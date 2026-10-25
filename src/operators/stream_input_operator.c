@@ -107,10 +107,8 @@ static void clean_up_resources(operator* o)
 	}
 }
 
-operator_resource_counter setup_stream_input_operator(operator* o, stream* in_strm, const tuple_def* input_tuple_def)
+void setup_stream_input_operator(operator* o, stream* in_strm, const tuple_def* input_tuple_def)
 {
-	operator_resource_counter result = {.thread_counter = 1};
-
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->clean_up_resources = clean_up_resources;
@@ -124,6 +122,4 @@ operator_resource_counter setup_stream_input_operator(operator* o, stream* in_st
 		.in_strm = in_strm,
 		.input_tuple_def = input_tuple_def,
 	};
-
-	return result;
 }

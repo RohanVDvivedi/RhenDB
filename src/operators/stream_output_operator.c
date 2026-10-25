@@ -75,10 +75,8 @@ static void clean_up_resources(operator* o)
 	}
 }
 
-operator_resource_counter setup_stream_output_operator(operator* o, operator* input_operator, stream* out_strm)
+void setup_stream_output_operator(operator* o, operator* input_operator, stream* out_strm)
 {
-	operator_resource_counter result = {.job_counter = 1};
-
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
 	o->clean_up_resources = clean_up_resources;
@@ -90,6 +88,4 @@ operator_resource_counter setup_stream_output_operator(operator* o, operator* in
 		.input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator),
 		.out_strm = out_strm,
 	};
-
-	return result;
 }
