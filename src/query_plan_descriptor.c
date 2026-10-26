@@ -39,13 +39,13 @@ static operator_desc* get_new_registered_operator_descriptor_for_query_plan_desc
 	return d;
 }
 
-query_plan_desc* get_new_query_plan_descriptor(rhendb* rdb, const sql_expr_eval_context* this_sub_query_expr_eval_context)
+query_plan_desc* get_new_query_plan_descriptor(transaction* tx, const sql_expr_eval_context* this_sub_query_expr_eval_context)
 {
 	query_plan_desc* qpd = malloc(sizeof(query_plan_desc));
 	if(qpd == NULL)
 		exit(-1);
 
-	qpd->rdb = rdb;
+	qpd->tx = tx;
 	qpd->this_sub_query_expr_eval_context = this_sub_query_expr_eval_context;
 
 	initialize_arraylist(&(qpd->operator_descriptors), 16);
@@ -284,13 +284,17 @@ operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetch
 		return NULL;
 	}
 
+	if(qpd->tx->snapshot == NULL)
+	{
+		printf("must have a snapshot for scan_operator_descriptor\n");
+		return NULL;
+	}
+
 	if(max_concurrent_jobs_count == 0)
 	{
 		printf("max_concurrent_jobs_count can not be 0 for scan_operator_descriptor\n");
 		return NULL;
 	}
-
-	rhendb* rdb = qpd->rdb;
 
 	operator_resource_counter result = {.buffer_counter = 2 * max_concurrent_jobs_count, .job_counter = max_concurrent_jobs_count, .thread_counter = max_concurrent_jobs_count};
 
@@ -325,7 +329,7 @@ operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetch
 		if(MUST_OUTPUT_TUPLE_POINTER_ID(output_flags))
 		{
 			strncpy(output_dti->containees[output_dti_element_count].field_name, "tuple_pointer", 64);
-			output_dti->containees[output_dti_element_count].al.type_info = &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_type_info);
+			output_dti->containees[output_dti_element_count].al.type_info = &(qpd->tx->rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_type_info);
 
 			output_tuple_max_size += sizeof(tuple_pointer);
 			output_dti_element_count++;
@@ -436,7 +440,7 @@ operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, uint64
 		return NULL;
 	}
 
-	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, NULL, qpd->this_sub_query_expr_eval_context);
+	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, qpd->tx, qpd->this_sub_query_expr_eval_context);
 
 	int error_code = 0;
 	if(!is_valid_using_infer_sql_expr_for_rhendb(expr, &ec, &error_code))
@@ -549,7 +553,7 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint6
 		return NULL;
 	}
 
-	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, NULL, qpd->this_sub_query_expr_eval_context);
+	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, qpd->tx, qpd->this_sub_query_expr_eval_context);
 
 	int has_sub_query = 0;
 
@@ -1144,7 +1148,7 @@ operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc
 	int has_sub_query = 0;
 	if(join_expr != NULL)
 	{
-		ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, NULL, qpd->this_sub_query_expr_eval_context);
+		ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, qpd->tx, qpd->this_sub_query_expr_eval_context);
 
 		int error_code = 0;
 		if(!is_valid_using_infer_sql_expr_for_rhendb(join_expr, &ec, &error_code))
@@ -1448,7 +1452,7 @@ operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan
 	int has_sub_query = 0;
 	if(join_expr != NULL)
 	{
-		ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, NULL, qpd->this_sub_query_expr_eval_context);
+		ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, qpd->tx, qpd->this_sub_query_expr_eval_context);
 
 		int error_code = 0;
 		if(!is_valid_using_infer_sql_expr_for_rhendb(join_expr, &ec, &error_code))
@@ -1663,6 +1667,18 @@ operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64
 		return NULL;
 	}
 
+	if(qpd->tx->snapshot == NULL)
+	{
+		printf("must have writable snapshot for insertion_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(!qpd->tx->snapshot->has_self_transaction_id)
+	{
+		printf("must have self_transaction_id for insertion_operator_descriptor\n");
+		return NULL;
+	}
+
 	if(ftabl == NULL)
 	{
 		printf("ftabl can not be NULL for insertion_operator_descriptor\n");
@@ -1737,7 +1753,7 @@ operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_INSERTION);
 	d->params.insertion = (insertion_operator_params){input_operator_index, deep_clone_positional_accessors(insertion_from_source_positional_accessors, insertion_accessors_count), ftabl, output_flags, global_heap_notifier, additional_flags};
-	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->rdb, ftabl, output_flags, "inserted_tuple_context");
+	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->tx->rdb, ftabl, output_flags, "inserted_tuple_context");
 	d->resource_counter = result;
 
 	return d;
@@ -1749,6 +1765,18 @@ operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_
 	{
 		printf("input_operator_index out of range for deletion_operator_descriptor\n");
 		return NULL;
+	}
+
+	if(qpd->tx->snapshot == NULL)
+	{
+		printf("must have writable snapshot for deletion_operator_descriptor\n");
+		exit(-1);
+	}
+
+	if(!qpd->tx->snapshot->has_self_transaction_id)
+	{
+		printf("must have self_transaction_id for deletion_operator_descriptor\n");
+		exit(-1);
 	}
 
 	if(ftabl == NULL)
@@ -1774,7 +1802,7 @@ operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_DELETION);
 	d->params.deletion = (deletion_operator_params){input_operator_index, deep_clone_positional_accessors(partition_id_from_source_positional_accessor, 1), deep_clone_positional_accessors(tuple_pointer_from_source_positional_accessor, 1), ftabl, deletion_batch_size, output_flags, additional_flags};
-	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->rdb, ftabl, output_flags, "deleted_tuple_context");
+	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->tx->rdb, ftabl, output_flags, "deleted_tuple_context");
 	d->resource_counter = result;
 
 	return d;
@@ -1786,6 +1814,12 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, u
 	{
 		printf("input_operator_index out of range for pointer_lookup_operator_descriptor\n");
 		return NULL;
+	}
+
+	if(qpd->tx->snapshot == NULL)
+	{
+		printf("must have a snapshot for pointer_lookup_operator_descriptor\n");
+		exit(-1);
 	}
 
 	if(ftabl == NULL)
@@ -1811,7 +1845,7 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, u
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_POINTER_LOOKUP);
 	d->params.pointer_lookup = (pointer_lookup_operator_params){input_operator_index, deep_clone_positional_accessors(partition_id_from_source_positional_accessor, 1), deep_clone_positional_accessors(tuple_pointer_from_source_positional_accessor, 1), ftabl, lookup_batch_size, output_flags, additional_flags};
-	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->rdb, ftabl, output_flags, "looked_up_tuple_context");
+	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->tx->rdb, ftabl, output_flags, "looked_up_tuple_context");
 	d->resource_counter = result;
 
 	return d;
@@ -2121,13 +2155,13 @@ tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query
 			if(is_extended_type_info(output_dti->containees[i].al.type_info) || is_unified_type_info(output_dti->containees[i].al.type_info))
 			{
 				if(is_text_type_info(output_dti->containees[i].al.type_info))
-					output_dti->containees[i].al.type_info = qpd->rdb->union_text_type_info;
+					output_dti->containees[i].al.type_info = qpd->tx->rdb->union_text_type_info;
 				else if(is_blob_type_info(output_dti->containees[i].al.type_info))
-					output_dti->containees[i].al.type_info = qpd->rdb->union_blob_type_info;
+					output_dti->containees[i].al.type_info = qpd->tx->rdb->union_blob_type_info;
 				else if(is_numeric_type_info(output_dti->containees[i].al.type_info))
-					output_dti->containees[i].al.type_info = qpd->rdb->union_numeric_type_info;
+					output_dti->containees[i].al.type_info = qpd->tx->rdb->union_numeric_type_info;
 				else if(is_jsonb_type_info(output_dti->containees[i].al.type_info))
-					output_dti->containees[i].al.type_info = qpd->rdb->union_jsonb_type_info;
+					output_dti->containees[i].al.type_info = qpd->tx->rdb->union_jsonb_type_info;
 			}
 			j++;
 		}
@@ -2167,17 +2201,11 @@ tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query
 // create : build a real, executable query_plan from the descriptor
 // ---------------------------------------------------------------------------------------------------
 
-query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx, const sql_expr_eval_context* this_sub_query_expr_eval_context)
+query_plan* create_query_plan(query_plan_desc* qpd, const sql_expr_eval_context* this_sub_query_expr_eval_context)
 {
-	if(tx == NULL || tx->rdb != qpd->rdb)
-	{
-		printf("create_query_plan requires a transaction belonging to the descriptor's rdb\n");
-		return NULL;
-	}
-
 	uint64_t count = get_element_count_arraylist(&(qpd->operator_descriptors));
 
-	query_plan* qp = get_new_query_plan(tx, this_sub_query_expr_eval_context, count);
+	query_plan* qp = get_new_query_plan(qpd->tx, this_sub_query_expr_eval_context, count);
 	if(qp == NULL)
 		return NULL;
 
@@ -2309,7 +2337,7 @@ query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx, const sql_e
 					tt = get_new_clone_tuple_transformer(input_def);
 					break;
 				case TT_IS_READABLE_FOR_MVCC_SNAPSHOT :
-					tt = get_new_is_readable_for_mvcc_snapshot_transformer(tx->snapshot, &(tx->rdb->tsg), ttd->params.is_readable_for_mvcc_snapshot.were_hints_updated, input_def);
+					tt = get_new_is_readable_for_mvcc_snapshot_transformer(qp->curr_tx->snapshot, &(qp->curr_tx->rdb->tsg), ttd->params.is_readable_for_mvcc_snapshot.were_hints_updated, input_def);
 					break;
 				case TT_SIMPLE_PROJECTION :
 					tt = get_new_simple_projection_transformer(ttd->params.simple_projection.output_table_name, input_def, ttd->params.simple_projection.projections_count, ttd->params.simple_projection.projections, (char const * const * ) ttd->params.simple_projection.field_names);
@@ -2324,10 +2352,10 @@ query_plan* create_query_plan(query_plan_desc* qpd, transaction* tx, const sql_e
 					tt = get_new_row_identifier_prepender_transformer(input_def, ttd->params.row_identifier_prepender.row_identifier);
 					break;
 				case TT_EXPRESSIONED_SELECTION :
-					tt = get_new_expressioned_selection_transformer(input_def, tx, qp, ttd->params.expressioned_selection.expr);
+					tt = get_new_expressioned_selection_transformer(input_def, qp->curr_tx, qp, ttd->params.expressioned_selection.expr);
 					break;
 				case TT_UNIFIED_TYPING :
-					tt = get_new_unified_typing_transformer(input_def, tx, ttd->params.unified_typing.column_ids_to_transform, ttd->params.unified_typing.column_to_transform_count);
+					tt = get_new_unified_typing_transformer(input_def, qp->curr_tx, ttd->params.unified_typing.column_ids_to_transform, ttd->params.unified_typing.column_to_transform_count);
 					break;
 			}
 
