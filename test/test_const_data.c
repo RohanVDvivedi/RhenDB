@@ -1,7 +1,7 @@
 #include<rhendb/rhendb.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/operators.h>
+#include<rhendb/query_plan_descriptor.h>
 #include<rhendb/tuple_transformers.h>
 
 #include<sqltoast/sqltoast.h>
@@ -46,9 +46,11 @@ int main(int argc, char** argv)
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, TOTAL_OPERATORS_COUNT);
+	// make query
 
-	// make operators
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&rdb, NULL);
+
+	printf("Building pipeline :\n");
 
 	interim_tuple_store* its_p = get_new_interim_tuple_store(4096);
 	for(int i = 40; i < 151; i++)
@@ -85,30 +87,31 @@ int main(int argc, char** argv)
 		"data",
 	};
 
-	positional_accessor* projections[] = {
-		&STATIC_POSITION(1,0),
-		&STATIC_POSITION(0),
-		&STATIC_POSITION(1,1),
+	positional_accessor projections[] = {
+		STATIC_POSITION(1,0),
+		STATIC_POSITION(0),
+		STATIC_POSITION(1,1),
 	};
 
-	printf("Building pipeline :\n");
 	{
-		operator* source = get_new_registered_operator_for_query_plan(qp);
-		setup_constant_dataset_operator(source, its_p, &record_def);
-		printf("source operator %p\n", source);
-		if(filter_expr_sql != NULL)
-			append_tuple_transformer(&(source->output_tuple_transformers), get_new_expressioned_selection_transformer(get_tuple_def_for_tuples_to_be_consumed_from(source), &tx, filter_expr_sql->expr));
-		append_tuple_transformer(&(source->output_tuple_transformers), get_new_row_identifier_prepender_transformer(get_tuple_def_for_tuples_to_be_consumed_from(source), 7));
-		append_tuple_transformer(&(source->output_tuple_transformers), get_new_row_number_prepender_transformer(get_tuple_def_for_tuples_to_be_consumed_from(source), 1));
-		append_tuple_transformer(&(source->output_tuple_transformers), get_new_simple_projection_transformer("output", get_tuple_def_for_tuples_to_be_consumed_from(source), sizeof(field_names)/sizeof(field_names[0]), projections, field_names));
+		uint64_t op_index = 0;
 
-		operator* sink = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(sink, source, print_consumer, NULL);
-		printf("sink operator %p\n", sink);
+		insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def); op_index++;
+		if(filter_expr_sql != NULL)
+			insert_expressioned_selection_tuple_transformer_descriptor(qpd, filter_expr_sql->expr);
+		insert_row_identifier_prepender_tuple_transformer_descriptor(qpd, 7);
+		insert_row_number_prepender_tuple_transformer_descriptor(qpd, 1);
+		insert_simple_projection_tuple_transformer_descriptor(qpd, "output", sizeof(field_names)/sizeof(field_names[0]), projections, field_names);
+
+		insert_consumer_operator_descriptor(qpd, 0, print_consumer, NULL); op_index++;
 	}
 	printf("\n\n");
 
-	// make operators completed
+	qp = create_query_plan(qpd, &tx, NULL);
+
+	printf("Pipeline built\n\n");
+
+	// make query completed
 
 	start_all_operators_for_query_plan(qp);
 
@@ -129,6 +132,8 @@ int main(int argc, char** argv)
 		printf("QUERY SUCCESSFULL\n");
 		destroy_query_plan(qp, NULL);
 	}
+
+	destroy_query_plan_descriptor(qpd);
 
 	if(filter_expr_sql != NULL)
 		delete_sql(filter_expr_sql);
