@@ -1,7 +1,7 @@
 #include<rhendb/rhendb.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/operators.h>
+#include<rhendb/query_plan_descriptor.h>
 #include<rhendb/tuple_transformers.h>
 
 #include<test_dataset_tuple_def.h>
@@ -57,9 +57,11 @@ int main(int argc, char** argv)
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, 30);
+	// make query
 
-	// make operators
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&rdb, NULL);
+
+	printf("Building pipeline :\n");
 
 	aggregate_function* const AGGREGATES[] = {
 		get_count_aggregate_function(record_def.type_info),
@@ -110,31 +112,26 @@ int main(int argc, char** argv)
 
 	positional_accessor FINAL_SORT_KEY[1] = {STATIC_POSITION(3)};
 
-	printf("Building pipeline :\n");
 	{
-		operator* input_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_stream_input_operator(input_operator, &rs, &record_def);
-		printf("source operator %p\n", input_operator);
+		uint64_t op_index = 0;
 
-		operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_sort_operator(sorter_operator, TUPLES_DOWN_COUNTER_INF, input_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-		printf("sorter operator %p\n", sorter_operator);
+		insert_stream_input_operator_descriptor(qpd, &rs, &record_def); op_index++;
 
-		operator* aggregate_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_sorted_aggregation_operator(aggregate_operator, sorter_operator, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS);
-		printf("aggregate operator %p\n", aggregate_operator);
+		insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 0, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
 
-		operator* sorter_operator2 = get_new_registered_operator_for_query_plan(qp);
-		setup_sort_operator(sorter_operator2, TUPLES_DOWN_COUNTER_INF, aggregate_operator, 1, FINAL_SORT_KEY, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-		printf("sorter operator %p\n", sorter_operator2);
+		insert_sorted_aggregation_operator_descriptor(qpd, 1, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS); op_index++;
 
-		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(print_operator, sorter_operator2, print_consumer, NULL);
-		printf("output print operator %p\n", print_operator);
+		insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 2, 1, FINAL_SORT_KEY, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
+
+		insert_consumer_operator_descriptor(qpd, 3, print_consumer, NULL); op_index++;
 	}
 	printf("\n\n");
 
-	// make operators completed
+	qp = create_query_plan(qpd, &tx, NULL);
+
+	printf("Pipeline built\n\n");
+
+	// make query completed
 
 	start_all_operators_for_query_plan(qp);
 
@@ -155,6 +152,8 @@ int main(int argc, char** argv)
 		printf("QUERY SUCCESSFULL\n");
 		destroy_query_plan(qp, NULL);
 	}
+
+	destroy_query_plan_descriptor(qpd);
 
 	deinitialize_transaction(&tx);
 
