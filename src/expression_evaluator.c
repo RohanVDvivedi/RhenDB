@@ -3750,6 +3750,7 @@ void delete_context_p_for_sql_expr_eval_context_for_rhendb(rhendb_expr_eval_cont
 	drain_free_list_for_expr_value(context_p);          /* the ONLY place the free list is released */
 
 	deinitialize_hashmap(&(context_p->var_cache));
+	deinitialize_hashmap(&(context_p->efunc_cache));
 	free(context_p->input_tuple_defs);
 	free(context_p->input_tuples);
 	free(context_p);
