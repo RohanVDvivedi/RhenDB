@@ -1,7 +1,7 @@
 #include<rhendb/rhendb.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/operators.h>
+#include<rhendb/query_plan_descriptor.h>
 #include<rhendb/tuple_transformers.h>
 
 #include<rhendb/util_materialization.h>
@@ -112,9 +112,11 @@ int main(int argc, char** argv)
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, 30);
+	// make query
 
-	// make operators
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&rdb, NULL);
+
+	printf("Building pipeline :\n");
 
 	aggregate_function* const AGGREGATES[] = {
 		get_count_aggregate_function(record_def.type_info),
@@ -203,31 +205,26 @@ int main(int argc, char** argv)
 		aggregate_input_positions_0,
 	};
 
-	printf("Building pipeline :\n");
 	{
-		operator* input_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_stream_input_operator(input_operator, &rs, &record_def);
-		printf("source operator %p\n", input_operator);
+		uint64_t op_index = 0;
 
-		operator* limit_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_offset_limit_operator(limit_operator, input_operator, TUPLES_DOWN_COUNTER_ZERO, TUPLES_DOWN_COUNTER_FIN(4));
-		printf("limit operator %p\n", limit_operator);
+		insert_stream_input_operator_descriptor(qpd, &rs, &record_def); op_index++;
 
-		operator* aggregate_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_simple_aggregation_operator(aggregate_operator, limit_operator, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS);
-		printf("aggregate operator %p\n", aggregate_operator);
+		insert_offset_limit_operator_descriptor(qpd, 0, TUPLES_DOWN_COUNTER_ZERO, TUPLES_DOWN_COUNTER_FIN(4)); op_index++;
 
-		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(print_operator, aggregate_operator, print_consumer, NULL);
-		printf("output print operator %p\n", print_operator);
+		insert_simple_aggregation_operator_descriptor(qpd, 1, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS); op_index++;
 
-		operator* print_operator2 = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(print_operator2, aggregate_operator, print_consumer_custom, NULL);
-		printf("output print operator2 %p\n", print_operator2);
+		insert_consumer_operator_descriptor(qpd, 2, print_consumer, NULL); op_index++;
+
+		insert_consumer_operator_descriptor(qpd, 2, print_consumer_custom, NULL); op_index++;
 	}
 	printf("\n\n");
 
-	// make operators completed
+	qp = create_query_plan(qpd, &tx, NULL);
+
+	printf("Pipeline built\n\n");
+
+	// make query completed
 
 	start_all_operators_for_query_plan(qp);
 
@@ -248,6 +245,8 @@ int main(int argc, char** argv)
 		printf("QUERY SUCCESSFULL\n");
 		destroy_query_plan(qp, NULL);
 	}
+
+	destroy_query_plan_descriptor(qpd);
 
 	deinitialize_transaction(&tx);
 
