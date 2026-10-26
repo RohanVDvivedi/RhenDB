@@ -49,9 +49,9 @@ void initialize_tuple_defs()
 	printf("\n\n");
 }
 
-positional_accessor* projections[] = {
-	&STATIC_POSITION(2),
-	&STATIC_POSITION(0),
+positional_accessor projections[] = {
+	STATIC_POSITION(2),
+	STATIC_POSITION(0),
 };
 
 static void destroy_NOP(tuple_transformer* tt_p){}
@@ -225,7 +225,7 @@ int main()
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, TOTAL_OPERATORS_COUNT);
+	qp = get_new_query_plan(&tx, NULL, TOTAL_OPERATORS_COUNT);
 
 	// make operators
 
