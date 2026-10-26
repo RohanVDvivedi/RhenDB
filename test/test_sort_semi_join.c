@@ -1,7 +1,7 @@
 #include<rhendb/rhendb.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/operators.h>
+#include<rhendb/query_plan_descriptor.h>
 #include<rhendb/tuple_transformers.h>
 
 #include<test_dataset_tuple_def.h>
@@ -135,39 +135,33 @@ int main(int argc, char** argv)
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, 30);
+	// make query
 
-	// make operators
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&rdb, NULL);
 
 	printf("Building pipeline :\n");
 	{
-		operator* left_input_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_generator_operator(left_input_operator, left_generator, NULL, &record_def);
-		printf("source left operator %p\n", left_input_operator);
+		uint64_t op_index = 0;
 
-		operator* left_sorter_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_sort_operator(left_sorter_operator, TUPLES_DOWN_COUNTER_INF, left_input_operator, RECORD_S_KEY_ELEMENT_COUNT, LEFT_KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-		printf("sorter for left operator %p\n", left_sorter_operator);
+		insert_generator_operator_descriptor(qpd, left_generator, NULL, &record_def); op_index++;
 
-		operator* right_input_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_generator_operator(right_input_operator, right_generator, NULL, &record_def2);
-		printf("source right operator %p\n", right_input_operator);
+		insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 0, RECORD_S_KEY_ELEMENT_COUNT, LEFT_KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
 
-		operator* right_sorter_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_sort_operator(right_sorter_operator, TUPLES_DOWN_COUNTER_INF, right_input_operator, RECORD_S_KEY_ELEMENT_COUNT, RIGHT_KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-		printf("sorter for right operator %p\n", right_sorter_operator);
+		insert_generator_operator_descriptor(qpd, right_generator, NULL, &record_def2); op_index++;
 
-		operator* join_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_sort_merge_semi_join_operator(join_operator, left_sorter_operator, LEFT_KEY_POS, right_sorter_operator, RIGHT_KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, LEFT_SEMI_JOIN, MIN_BLOCK_SIZE);
-		printf("join operator %p\n", join_operator);
+		insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 2, RECORD_S_KEY_ELEMENT_COUNT, RIGHT_KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
 
-		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(print_operator, join_operator, PRINT_DATA ? print_consumer : NULL, NULL);
-		printf("output print operator %p\n", print_operator);
+		insert_sort_merge_semi_join_operator_descriptor(qpd, 1, LEFT_KEY_POS, 3, RIGHT_KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, LEFT_SEMI_JOIN, MIN_BLOCK_SIZE); op_index++;
+
+		insert_consumer_operator_descriptor(qpd, 4, PRINT_DATA ? print_consumer : NULL, NULL); op_index++;
 	}
 	printf("\n\n");
 
-	// make operators completed
+	qp = create_query_plan(qpd, &tx, NULL);
+
+	printf("Pipeline built\n\n");
+
+	// make query completed
 
 	start_all_operators_for_query_plan(qp);
 
@@ -188,6 +182,8 @@ int main(int argc, char** argv)
 		printf("QUERY SUCCESSFULL\n");
 		destroy_query_plan(qp, NULL);
 	}
+
+	destroy_query_plan_descriptor(qpd);
 
 	deinitialize_transaction(&tx);
 
