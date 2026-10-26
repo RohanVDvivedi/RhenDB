@@ -1,7 +1,7 @@
 #include<rhendb/rhendb.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/operators.h>
+#include<rhendb/query_plan_descriptor.h>
 #include<rhendb/tuple_transformers.h>
 
 #include<sqltoast/sqltoast.h>
@@ -70,27 +70,27 @@ int main(int argc, char** argv)
 
 	transaction tx = initialize_transaction(&rdb);
 
-	qp = get_new_query_plan(&tx, 30);
+	// make query
 
-	// make operators
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&rdb, NULL);
 
 	printf("Building pipeline :\n");
 	{
-		operator* input_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_stream_input_operator(input_operator, &rs, &record_def);
-		printf("source operator %p\n", input_operator);
+		uint64_t op_index = 0;
 
-		operator* selection_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_selection_operator(selection_operator, input_operator, filter_expr_sql->expr);
-		printf("selection operator %p\n", selection_operator);
+		insert_stream_input_operator_descriptor(qpd, &rs, &record_def); op_index++;
 
-		operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(print_operator, selection_operator, PRINT_DATA ? print_consumer : NULL, NULL);
-		printf("output print operator %p\n", print_operator);
+		insert_selection_operator_descriptor(qpd, 0, filter_expr_sql->expr); op_index++;
+
+		insert_consumer_operator_descriptor(qpd, 1, PRINT_DATA ? print_consumer : NULL, NULL); op_index++;
 	}
 	printf("\n\n");
 
-	// make operators completed
+	qp = create_query_plan(qpd, &tx, NULL);
+
+	printf("Pipeline built\n\n");
+
+	// make query completed
 
 	start_all_operators_for_query_plan(qp);
 
@@ -111,6 +111,8 @@ int main(int argc, char** argv)
 		printf("QUERY SUCCESSFULL\n");
 		destroy_query_plan(qp, NULL);
 	}
+
+	destroy_query_plan_descriptor(qpd);
 
 	delete_sql(filter_expr_sql);
 
