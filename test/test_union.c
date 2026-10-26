@@ -77,7 +77,7 @@ int main(int argc, char** argv)
 
 	// make query
 
-	query_plan_desc* qpd = get_new_query_plan_descriptor(&rdb, NULL);
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
 	printf("Building pipeline :\n");
 	{
@@ -100,7 +100,7 @@ int main(int argc, char** argv)
 		insert_result_match_operator_descriptor(qpd, op_index - 1, op_index - 2); op_index++;
 	}
 
-	qp = create_query_plan(qpd, &tx, NULL);
+	qp = create_query_plan(qpd, NULL);
 
 	printf("Pipeline built\n\n");
 

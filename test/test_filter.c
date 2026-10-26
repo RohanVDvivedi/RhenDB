@@ -72,7 +72,7 @@ int main(int argc, char** argv)
 
 	// make query
 
-	query_plan_desc* qpd = get_new_query_plan_descriptor(&rdb, NULL);
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
 	printf("Building pipeline :\n");
 	{
@@ -86,7 +86,7 @@ int main(int argc, char** argv)
 	}
 	printf("\n\n");
 
-	qp = create_query_plan(qpd, &tx, NULL);
+	qp = create_query_plan(qpd, NULL);
 
 	printf("Pipeline built\n\n");
 
