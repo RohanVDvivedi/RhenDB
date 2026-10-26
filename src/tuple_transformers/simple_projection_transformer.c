@@ -17,7 +17,7 @@ static void* process(tuple_transformer* tt_p, void* tuple)
 	void* output_tuple = malloc(output_tuple_size);
 	init_tuple(tt_p->output_def, output_tuple);
 
-	positional_accessor** projections = tt_p->context;
+	positional_accessor* projections = tt_p->context;
 
 	uint32_t element_count = get_element_count_for_element_from_tuple(tt_p->output_def, SELF, output_tuple);
 
@@ -25,7 +25,7 @@ static void* process(tuple_transformer* tt_p, void* tuple)
 	{
 		const data_type_info* dti_temp;
 		datum output_uval;
-		if(get_value_from_element_from_tuple(&output_uval, &dti_temp, tt_p->input_def, *(projections[i]), tuple))
+		if(get_value_from_element_from_tuple(&output_uval, &dti_temp, tt_p->input_def, projections[i], tuple))
 		{
 			while(!set_element_in_tuple(tt_p->output_def, STATIC_POSITION(i), output_tuple, &output_uval, output_tuple_capacity - output_tuple_size))
 			{
