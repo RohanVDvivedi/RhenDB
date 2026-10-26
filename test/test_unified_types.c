@@ -1,7 +1,7 @@
 #include<rhendb/rhendb.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/operators.h>
+#include<rhendb/query_plan_descriptor.h>
 #include<rhendb/tuple_transformers.h>
 
 #include<rhendb/util_transaction_ext_storer.h>
@@ -120,20 +120,21 @@ int main()
 	insert_in_interim_tuple_store(its_p, "Rupa", "\x44\x10\x01\x55\x11\x11\xdd\x11\xdd\x11", "60");
 
 	{
-		qp = get_new_query_plan(&tx, 30);
+		query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
 		positional_accessor input_positions[3] = {STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2)};
 		// insert these rows into the table
 		{
-			operator* input_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_constant_dataset_operator(input_operator, its_p, &record_def);
+			uint64_t op_index = 0;
 
-			operator* insertion_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_insertion_operator(insertion_operator, input_operator, input_positions, ftbl, TABLE_ID_IN_OUTPUT | PARTITION_ID_IN_OUTPUT | TUPLE_POINTER_IN_OUTPUT | HEAP_TUPLE_IN_OUTPUT, NULL, SAVEPOINT_LOGGING_ENABLED);
+			insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def); op_index++;
 
-			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_consumer_operator(print_operator, insertion_operator, print_consumer, NULL);
+			insert_insertion_operator_descriptor(qpd, 0, input_positions, ftbl, TABLE_ID_IN_OUTPUT | PARTITION_ID_IN_OUTPUT | TUPLE_POINTER_IN_OUTPUT | HEAP_TUPLE_IN_OUTPUT, NULL, SAVEPOINT_LOGGING_ENABLED); op_index++;
+
+			insert_consumer_operator_descriptor(qpd, 1, print_consumer, NULL); op_index++;
 		}
+
+		qp = create_query_plan(qpd, NULL);
 
 		start_all_operators_for_query_plan(qp);
 
@@ -154,6 +155,8 @@ int main()
 			printf("QUERY SUCCESSFULL\n");
 			destroy_query_plan(qp, NULL);
 		}
+
+		destroy_query_plan_descriptor(qpd);
 	}
 
 	// a query completed so reset it's ext stores
@@ -224,15 +227,17 @@ int main()
 
 	// run a sample pipeline
 	{
-		qp = get_new_query_plan(&tx, 30);
+		query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
 		{
-			operator* input_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_scan_operator(input_operator, qp, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0);
+			uint64_t op_index = 0;
 
-			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_consumer_operator(print_operator, input_operator, print_consumer, NULL);
+			insert_scan_operator_descriptor(qpd, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0); op_index++;
+
+			insert_consumer_operator_descriptor(qpd, 0, print_consumer, NULL); op_index++;
 		}
+
+		qp = create_query_plan(qpd, NULL);
 
 		start_all_operators_for_query_plan(qp);
 
@@ -253,6 +258,8 @@ int main()
 			printf("QUERY SUCCESSFULL\n");
 			destroy_query_plan(qp, NULL);
 		}
+
+		destroy_query_plan_descriptor(qpd);
 	}
 
 	// a query completed so reset it's ext stores
@@ -266,7 +273,7 @@ int main()
 
 	// run a sample pipeline
 	{
-		qp = get_new_query_plan(&tx, 30);
+		query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
 		const positional_accessor key_pos[] = {STATIC_POSITION(0)};
 
@@ -297,30 +304,27 @@ int main()
 
 		compare_direction CMP_DIR[1] = {ASC};
 
-		positional_accessor* projections_for_table[3] = {&STATIC_POSITION(0,1), &STATIC_POSITION(0,2), &STATIC_POSITION(0,3)};
+		positional_accessor projections_for_table[3] = {STATIC_POSITION(0,1), STATIC_POSITION(0,2), STATIC_POSITION(0,3)};
 		{
-			operator* input_operator1 = get_new_registered_operator_for_query_plan(qp);
-			setup_scan_operator(input_operator1, qp, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0);
-			tuple_transformer* projs = get_new_simple_projection_transformer("projecteds", get_tuple_def_for_tuples_to_be_consumed_from(input_operator1), 3, projections_for_table, ((char const *[]){"column1", "column2", "column3"}));
-			append_tuple_transformer(&(input_operator1->output_tuple_transformers), projs);
-			append_tuple_transformer(&(input_operator1->output_tuple_transformers), get_new_unified_typing_transformer(get_tuple_def_for_tuples_to_be_consumed_from(input_operator1), &tx, (uint32_t[]){0,1,2}, 3));
+			uint64_t op_index = 0;
 
-			operator* input_operator2 = get_new_registered_operator_for_query_plan(qp);
-			setup_constant_dataset_operator(input_operator2, its_p, &record_def);
-			append_tuple_transformer(&(input_operator2->output_tuple_transformers), get_new_unified_typing_transformer(get_tuple_def_for_tuples_to_be_consumed_from(input_operator2), &tx, (uint32_t[]){0,1,2}, 3));
+			insert_scan_operator_descriptor(qpd, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0); op_index++;
+			insert_simple_projection_tuple_transformer_descriptor(qpd, "projecteds", 3, projections_for_table, ((char const *[]){"column1", "column2", "column3"}));
+			insert_unified_typing_tuple_transformer_descriptor(qpd, (uint32_t[]){0,1,2}, 3);
 
-			operator* union_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_union_operator(union_operator, (operator* []){input_operator1, input_operator2}, 2);
+			insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def); op_index++;
+			insert_unified_typing_tuple_transformer_descriptor(qpd, (uint32_t[]){0,1,2}, 3);
 
-			operator* aggregate_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_hash_aggregation_operator(aggregate_operator, union_operator, 1, key_pos, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, 4, 1, 1, 1000);
+			insert_union_operator_descriptor(qpd, (uint64_t []){0, 1}, 2); op_index++;
 
-			operator* sorter_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_sort_operator(sorter_operator, TUPLES_DOWN_COUNTER_INF, aggregate_operator, 1, key_pos, CMP_DIR, 10, 2, 1);
+			insert_hash_aggregation_operator_descriptor(qpd, 2, 1, key_pos, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, 4, 1, 1, 1000); op_index++;
 
-			operator* print_operator = get_new_registered_operator_for_query_plan(qp);
-			setup_consumer_operator(print_operator, sorter_operator, print_consumer, NULL);
+			insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 3, 1, key_pos, CMP_DIR, 10, 2, 1); op_index++;
+
+			insert_consumer_operator_descriptor(qpd, 4, print_consumer, NULL); op_index++;
 		}
+
+		qp = create_query_plan(qpd, NULL);
 
 		start_all_operators_for_query_plan(qp);
 
@@ -341,6 +345,8 @@ int main()
 			printf("QUERY SUCCESSFULL\n");
 			destroy_query_plan(qp, NULL);
 		}
+
+		destroy_query_plan_descriptor(qpd);
 	}
 
 	// a query completed so reset it's ext stores
