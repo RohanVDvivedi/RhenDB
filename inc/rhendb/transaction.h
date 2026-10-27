@@ -105,6 +105,7 @@ struct transaction
 	// there can be only 1 main_query running at a time
 	// every query_plan after get_new_query_plan() and until right before destroy_query_plan() must be kept registered here, if the registration fails you must shutdown that query immediately
 	pthread_mutex_t curr_queries_lock;
+	unsigned int is_curr_queries_freezed:1; // if set no more query_plans may be registered untill all of the query_plans are de-registered
 	linkedlist curr_queries;
 
 	// every inserted tuple pointer must be registered here, so the source operator scans can skip it
@@ -131,6 +132,21 @@ struct transaction
 #define IS_SAVEPOINT_LOGGING_ENABLED(flags)  ((flags) & SAVEPOINT_LOGGING_ENABLED)
 
 transaction initialize_transaction(rhendb* rdb);
+
+// must be called right after creating any of the query plan for this transaction
+int register_query_plan(transaction* tx, query_plan* qp);
+
+// must be called right defore destroying the query plan linked to this transaction
+void deregister_query_plan(transaction* tx, query_plan* qp);
+
+// safely shuts down the query plans, and curr_queries list and freezes the insertions until they all exit
+void shutdown_all_query_plans(transaction* tx, dstring kill_reason);
+
+/*
+	callbacks for lock_manager
+*/
+
+void notify_deadlocked(void* context_p, void* transaction_vp);
 
 // registers that there was an insert at the given tuple_pointer for the current query
 void register_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr);

@@ -806,7 +806,7 @@ void shutdown_query_plan(query_plan* qp, dstring kill_reason)
 	pthread_mutex_unlock(&(qp->curr_tx->rdb->lock_manager_external_lock));
 }
 
-static void shutdown_query_plan_LOCK_TABLE_UNSAFE(query_plan* qp, dstring kill_reason)
+void shutdown_query_plan_LOCK_TABLE_UNSAFE(query_plan* qp, dstring kill_reason)
 {
 	// send kill signal to all the operators
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
@@ -925,19 +925,4 @@ void notify_unblocked(void* context_p, void* transaction_vp, void* task_vp)
 	}
 	else
 		printf("notify_unblocked( trx_id = %"PRIuPTR" , task_id = %"PRIuPTR" )\n\n", ((uintptr_t)transaction_vp), ((uintptr_t)task_vp));
-}
-
-void notify_deadlocked(void* context_p, void* transaction_vp)
-{
-	// rhendb provided the callback so we are the context
-	//rhendb* rdb = context_p;
-
-	// notify the right transaction's curr_query, for the deadlock
-	if(((uintptr_t)transaction_vp) >= 1024)
-	{
-		transaction* tx = transaction_vp;
-		shutdown_query_plan_LOCK_TABLE_UNSAFE(tx->curr_query, get_dstring_pointing_to_literal_cstring("DEADLOCK_DETECTED"));
-	}
-	else
-		printf("notify_deadlocked( trx_id = %"PRIuPTR" )\n\n",  ((uintptr_t)transaction_vp));
 }

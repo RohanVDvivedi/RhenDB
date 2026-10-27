@@ -252,6 +252,7 @@ void start_all_operators_for_query_plan(query_plan* qp);
 
 // may be called as many times as you desire, from the inside of the operators or from outside
 void shutdown_query_plan(query_plan* qp, dstring kill_reasons);
+void shutdown_query_plan_LOCK_TABLE_UNSAFE(query_plan* qp, dstring kill_reason);
 
 // right after this call succeeds, you may check the query_errored
 void wait_for_shutdown_of_query_plan(query_plan* qp);
@@ -279,7 +280,5 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons);
 */
 
 void notify_unblocked(void* context_p, void* transaction, void* task);
-
-void notify_deadlocked(void* context_p, void* transaction);
 
 #endif
