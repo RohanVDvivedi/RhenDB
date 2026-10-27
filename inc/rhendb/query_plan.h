@@ -231,12 +231,18 @@ struct query_plan
 	// this is the value that needs to be checked to see if the query resulted into an error
 	// do this only after the query stops producing the results
 	int query_errored;
+
+	// used by the transaction->curr_queries linkedlist to list all the active queries for this transaction
+	llnode curr_queries_node;
 };
 
 // this_sub_query_expr_eval_context = NULL for main query, else it is the expression_evaluator context for the operator resolving it from the expression_evaluator
 query_plan* get_new_query_plan(transaction* curr_tx, const sql_expr_eval_context* this_sub_query_expr_eval_context, uint64_t operators_count);
 
 operator* get_new_registered_operator_for_query_plan(query_plan* qp);
+
+// once the query_plan is ready, after all the get_new_query_plan() and get_new_registered_operator_for_query_plan(), and the setup operator calls you must register_query_plan() with the transaction
+// and if it fails you must shutdown the query, wait for shutdown and destroy it
 
 // a main query_plan will have this_sub_query_expr_eval_context == NULL
 // a main query is the one that is not a sub-query
@@ -264,6 +270,7 @@ void wait_for_shutdown_of_query_plan(query_plan* qp);
 */
 
 // must be called only after the query_plan is shutdown
+// and right before this callyou must deregister_query_plan() from the transaction
 // kill_reasons is an optional parameter, it can be NULL if the results are not expected to be received
 void destroy_query_plan(query_plan* qp, dstring* kill_reasons);
 

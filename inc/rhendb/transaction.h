@@ -101,8 +101,11 @@ struct transaction
 	// mvcc snapshot, for isolation level
 	mvcc_snapshot* snapshot;
 
-	// curr_query is the parent most query being run, hels up kill the whole query when needed
-	query_plan* curr_query;
+	// we preserve the list of all sub_query and the main_query here, need not be maintained as a tree
+	// there can be only 1 main_query running at a time
+	// every query_plan after get_new_query_plan() and until right before destroy_query_plan() must be kept registered here, if the registration fails you must shutdown that query immediately
+	pthread_mutex_t curr_queries_lock;
+	linkedlist curr_queries;
 
 	// every inserted tuple pointer must be registered here, so the source operator scans can skip it
 	hashset_for_tuple_pointers inserted_tuple_pointers;

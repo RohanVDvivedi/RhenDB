@@ -505,6 +505,8 @@ tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query
 // a main query is the one that is not a sub-query
 int is_main_query_plan_descriptor(const query_plan_desc* qpd);
 
+// once the query_plan is ready and is returned by this function, you must register_query_plan() with the transaction
+// and if it fails you must shutdown the query, wait for shutdown and destroy it
 query_plan* create_query_plan(query_plan_desc* qpd, const sql_expr_eval_context* this_sub_query_expr_eval_context);
 
 void destroy_query_plan_descriptor(query_plan_desc* qpd);
