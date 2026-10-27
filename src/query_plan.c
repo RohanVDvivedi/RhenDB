@@ -773,6 +773,11 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	return o;
 }
 
+int is_main_query_plan(const query_plan* qp)
+{
+	return qp->this_sub_query_expr_eval_context == NULL;
+}
+
 void start_all_operators_for_query_plan(query_plan* qp)
 {
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)

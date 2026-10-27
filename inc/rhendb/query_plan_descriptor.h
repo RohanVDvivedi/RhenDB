@@ -502,6 +502,9 @@ tuple_transformer_desc* insert_row_identifier_prepender_tuple_transformer_descri
 tuple_transformer_desc* insert_expressioned_selection_tuple_transformer_descriptor(query_plan_desc* qpd, sql_expression* expr);
 tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query_plan_desc* qpd, uint32_t* column_ids_to_transform, uint32_t column_to_transform_count);
 
+// a main query is the one that is not a sub-query
+int is_main_query_plan_descriptor(const query_plan_desc* qpd);
+
 query_plan* create_query_plan(query_plan_desc* qpd, const sql_expr_eval_context* this_sub_query_expr_eval_context);
 
 void destroy_query_plan_descriptor(query_plan_desc* qpd);

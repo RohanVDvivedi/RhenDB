@@ -2198,6 +2198,15 @@ tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query
 }
 
 // ---------------------------------------------------------------------------------------------------
+// main_query has this_sub_query_expr_eval_context == NULL
+// ---------------------------------------------------------------------------------------------------
+
+int is_main_query_plan_descriptor(const query_plan_desc* qpd)
+{
+	return qpd->this_sub_query_expr_eval_context == NULL;
+}
+
+// ---------------------------------------------------------------------------------------------------
 // create : build a real, executable query_plan from the descriptor
 // ---------------------------------------------------------------------------------------------------
 

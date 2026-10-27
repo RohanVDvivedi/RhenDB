@@ -236,6 +236,10 @@ query_plan* get_new_query_plan(transaction* curr_tx, const sql_expr_eval_context
 
 operator* get_new_registered_operator_for_query_plan(query_plan* qp);
 
+// a main query_plan will have this_sub_query_expr_eval_context == NULL
+// a main query is the one that is not a sub-query
+int is_main_query_plan(const query_plan* qp);
+
 void start_all_operators_for_query_plan(query_plan* qp);
 
 // may be called as many times as you desire, from the inside of the operators or from outside
