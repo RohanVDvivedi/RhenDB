@@ -82,7 +82,8 @@ int main()
 	initialize_tuple_defs();
 
 	// create a write only transaction
-	transaction tx = initialize_transaction(&rdb);
+	transaction tx;
+	initialize_transaction(&tx, &rdb);
 	txn = &tx;
 	// make it have a writer snapshot capable of writing
 	tx.snapshot = get_new_transaction_id(&(rdb.tx_table), NULL);
@@ -135,11 +136,13 @@ int main()
 		}
 
 		qp = create_query_plan(qpd, NULL);
+		register_query_plan(&tx, qp);
 
 		start_all_operators_for_query_plan(qp);
 
 		wait_for_shutdown_of_query_plan(qp);
 
+		deregister_query_plan(&tx, qp);
 		if(qp->query_errored)
 		{
 			dstring kill_reasons = new_dstring("", 0);
@@ -238,11 +241,13 @@ int main()
 		}
 
 		qp = create_query_plan(qpd, NULL);
+		register_query_plan(&tx, qp);
 
 		start_all_operators_for_query_plan(qp);
 
 		wait_for_shutdown_of_query_plan(qp);
 
+		deregister_query_plan(&tx, qp);
 		if(qp->query_errored)
 		{
 			dstring kill_reasons = new_dstring("", 0);
@@ -325,11 +330,13 @@ int main()
 		}
 
 		qp = create_query_plan(qpd, NULL);
+		register_query_plan(&tx, qp);
 
 		start_all_operators_for_query_plan(qp);
 
 		wait_for_shutdown_of_query_plan(qp);
 
+		deregister_query_plan(&tx, qp);
 		if(qp->query_errored)
 		{
 			dstring kill_reasons = new_dstring("", 0);

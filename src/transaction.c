@@ -15,63 +15,59 @@ positional_accessor key_element_positions_for_hashset_for_savepoint_names[1] = {
 	SELF,
 };
 
-transaction initialize_transaction(rhendb* rdb)
+void initialize_transaction(transaction* tx, rhendb* rdb)
 {
-	transaction tx = {
-		.rdb = rdb,
-		.snapshot = NULL,
-	};
+	tx->rdb = rdb;
+	tx->snapshot = NULL;
 
 	{
 		int abort_error_dummy = 0;
-		init_hash_table_tuple_definitions(&(tx.inserted_tuple_pointers.httd), &(rdb->volatile_rage_engine.pam_p->pas), &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_tuple_def), key_element_positions_for_hashset_for_tuple_pointers, sizeof(key_element_positions_for_hashset_for_tuple_pointers)/ sizeof(positional_accessor), FNV_64_TUPLE_HASHER);
-		tx.inserted_tuple_pointers.root_handle = get_new_hash_table(64, &(tx.inserted_tuple_pointers.httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
-		initialize_rwlock(&(tx.inserted_tuple_pointers.hash_table_lock), NULL);
+		init_hash_table_tuple_definitions(&(tx->inserted_tuple_pointers.httd), &(rdb->volatile_rage_engine.pam_p->pas), &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_tuple_def), key_element_positions_for_hashset_for_tuple_pointers, sizeof(key_element_positions_for_hashset_for_tuple_pointers)/ sizeof(positional_accessor), FNV_64_TUPLE_HASHER);
+		tx->inserted_tuple_pointers.root_handle = get_new_hash_table(64, &(tx->inserted_tuple_pointers.httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+		initialize_rwlock(&(tx->inserted_tuple_pointers.hash_table_lock), NULL);
 	}
 
 	{
 		int abort_error_dummy = 0;
 
-		tx.savepoint_logs.savepoint_name_dti = malloc(sizeof(data_type_info));
-		(*(tx.savepoint_logs.savepoint_name_dti)) = get_variable_length_string_type("savepoint_name", 80);
-		tx.savepoint_logs.savepoint_name_def = malloc(sizeof(tuple_def));
-		initialize_tuple_def(tx.savepoint_logs.savepoint_name_def, tx.savepoint_logs.savepoint_name_dti);
+		tx->savepoint_logs.savepoint_name_dti = malloc(sizeof(data_type_info));
+		(*(tx->savepoint_logs.savepoint_name_dti)) = get_variable_length_string_type("savepoint_name", 80);
+		tx->savepoint_logs.savepoint_name_def = malloc(sizeof(tuple_def));
+		initialize_tuple_def(tx->savepoint_logs.savepoint_name_def, tx->savepoint_logs.savepoint_name_dti);
 
-		tx.savepoint_logs.savepoint_log_dti = malloc(sizeof_tuple_data_type_info(5));
-		strcpy(tx.savepoint_logs.savepoint_log_dti->containees[0].field_name, "log_type");
-		tx.savepoint_logs.savepoint_log_dti->containees[0].al.type_info = UINT_NON_NULLABLE[1];
-		strcpy(tx.savepoint_logs.savepoint_log_dti->containees[1].field_name, "savepoint_name");
-		tx.savepoint_logs.savepoint_log_dti->containees[1].al.type_info = tx.savepoint_logs.savepoint_name_dti;
-		strcpy(tx.savepoint_logs.savepoint_log_dti->containees[2].field_name, "table_id");
-		tx.savepoint_logs.savepoint_log_dti->containees[2].al.type_info = UINT_NON_NULLABLE[8];
-		strcpy(tx.savepoint_logs.savepoint_log_dti->containees[3].field_name, "partition_id");
-		tx.savepoint_logs.savepoint_log_dti->containees[3].al.type_info = UINT_NON_NULLABLE[8];
-		strcpy(tx.savepoint_logs.savepoint_log_dti->containees[4].field_name, "tuple_pointer");
-		tx.savepoint_logs.savepoint_log_dti->containees[4].al.type_info = &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_type_info);
-		initialize_tuple_data_type_info(tx.savepoint_logs.savepoint_log_dti, "savepoint_log_def", 1, 8 + 4 + 8 + 80 + 8 + 8 + sizeof(tuple_pointer), 5);
-		tx.savepoint_logs.savepoint_log_def = malloc(sizeof(tuple_def));
-		initialize_tuple_def(tx.savepoint_logs.savepoint_log_def, tx.savepoint_logs.savepoint_log_dti);
+		tx->savepoint_logs.savepoint_log_dti = malloc(sizeof_tuple_data_type_info(5));
+		strcpy(tx->savepoint_logs.savepoint_log_dti->containees[0].field_name, "log_type");
+		tx->savepoint_logs.savepoint_log_dti->containees[0].al.type_info = UINT_NON_NULLABLE[1];
+		strcpy(tx->savepoint_logs.savepoint_log_dti->containees[1].field_name, "savepoint_name");
+		tx->savepoint_logs.savepoint_log_dti->containees[1].al.type_info = tx->savepoint_logs.savepoint_name_dti;
+		strcpy(tx->savepoint_logs.savepoint_log_dti->containees[2].field_name, "table_id");
+		tx->savepoint_logs.savepoint_log_dti->containees[2].al.type_info = UINT_NON_NULLABLE[8];
+		strcpy(tx->savepoint_logs.savepoint_log_dti->containees[3].field_name, "partition_id");
+		tx->savepoint_logs.savepoint_log_dti->containees[3].al.type_info = UINT_NON_NULLABLE[8];
+		strcpy(tx->savepoint_logs.savepoint_log_dti->containees[4].field_name, "tuple_pointer");
+		tx->savepoint_logs.savepoint_log_dti->containees[4].al.type_info = &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_type_info);
+		initialize_tuple_data_type_info(tx->savepoint_logs.savepoint_log_dti, "savepoint_log_def", 1, 8 + 4 + 8 + 80 + 8 + 8 + sizeof(tuple_pointer), 5);
+		tx->savepoint_logs.savepoint_log_def = malloc(sizeof(tuple_def));
+		initialize_tuple_def(tx->savepoint_logs.savepoint_log_def, tx->savepoint_logs.savepoint_log_dti);
 
-		init_linked_page_list_tuple_definitions(&(tx.savepoint_logs.savepoint_log_defs), &(rdb->volatile_rage_engine.pam_p->pas), tx.savepoint_logs.savepoint_log_def);
-		tx.savepoint_logs.savepoint_log_root = get_new_linked_page_list(&(tx.savepoint_logs.savepoint_log_defs), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
-		tx.savepoint_logs.savepoint_logs_count = 0;
+		init_linked_page_list_tuple_definitions(&(tx->savepoint_logs.savepoint_log_defs), &(rdb->volatile_rage_engine.pam_p->pas), tx->savepoint_logs.savepoint_log_def);
+		tx->savepoint_logs.savepoint_log_root = get_new_linked_page_list(&(tx->savepoint_logs.savepoint_log_defs), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+		tx->savepoint_logs.savepoint_logs_count = 0;
 
-		init_hash_table_tuple_definitions(&(tx.savepoint_logs.savepoint_names_set_tuple_defs), &(rdb->volatile_rage_engine.pam_p->pas), tx.savepoint_logs.savepoint_name_def, key_element_positions_for_hashset_for_savepoint_names, 1, FNV_64_TUPLE_HASHER);
-		tx.savepoint_logs.savepoint_names_set_handle = get_new_hash_table(64, &(tx.savepoint_logs.savepoint_names_set_tuple_defs), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
-		tx.savepoint_logs.savepoint_names_count = 0;
+		init_hash_table_tuple_definitions(&(tx->savepoint_logs.savepoint_names_set_tuple_defs), &(rdb->volatile_rage_engine.pam_p->pas), tx->savepoint_logs.savepoint_name_def, key_element_positions_for_hashset_for_savepoint_names, 1, FNV_64_TUPLE_HASHER);
+		tx->savepoint_logs.savepoint_names_set_handle = get_new_hash_table(64, &(tx->savepoint_logs.savepoint_names_set_tuple_defs), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+		tx->savepoint_logs.savepoint_names_count = 0;
 		
-		pthread_mutex_init(&(tx.savepoint_logs.savepoint_lock), NULL);
+		pthread_mutex_init(&(tx->savepoint_logs.savepoint_lock), NULL);
 	}
 
 	for(uint32_t i = 0; i < TEMPORARY_EXTENSION_STORE_COUNT; i++)
 	{
 		int abort_error_dummy = 0;
-		tx.temp_ext_stores[i].blob_store_root_page_id = get_new_blob_store(&(rdb->volatile_rage_engine.bstd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
-		initialize_heap_table_accumulative_notifier(&(tx.temp_ext_stores[i].htan), MAX_ENTRIES_IN_VOL_BLOBS_HTAN);
-		initialize_rwlock(&(tx.temp_ext_stores[i].blob_store_lock), NULL);
+		tx->temp_ext_stores[i].blob_store_root_page_id = get_new_blob_store(&(rdb->volatile_rage_engine.bstd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
+		initialize_heap_table_accumulative_notifier(&(tx->temp_ext_stores[i].htan), MAX_ENTRIES_IN_VOL_BLOBS_HTAN);
+		initialize_rwlock(&(tx->temp_ext_stores[i].blob_store_lock), NULL);
 	}
-
-	return tx;
 }
 
 int register_query_plan(transaction* tx, query_plan* qp)

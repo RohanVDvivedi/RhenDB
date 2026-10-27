@@ -101,12 +101,12 @@ positional_accessor RIGHT_KEY_POS[1] = {STATIC_POSITION(1)};*/
 
 compare_direction CMP_DIR[1] = {ASC};
 
-query_plan* qp = NULL;
+transaction tx;
 
 void intHandler(int dummy)
 {
 	printf("\nCaught Ctrl+C! shuting down query plan\n");
-	shutdown_query_plan(qp, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
+	shutdown_all_query_plans(&tx, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
 }
 
 int main(int argc, char** argv)
@@ -133,7 +133,7 @@ int main(int argc, char** argv)
 	initialize_tuple_defs();
 	initialize_tuple_defs2();
 
-	transaction tx = initialize_transaction(&rdb);
+	initialize_transaction(&tx, &rdb);
 
 	// make query
 
@@ -157,7 +157,8 @@ int main(int argc, char** argv)
 	}
 	printf("\n\n");
 
-	qp = create_query_plan(qpd, NULL);
+	query_plan* qp = create_query_plan(qpd, NULL);
+	register_query_plan(&tx, qp);
 
 	printf("Pipeline built\n\n");
 
@@ -167,6 +168,7 @@ int main(int argc, char** argv)
 
 	wait_for_shutdown_of_query_plan(qp);
 
+	deregister_query_plan(&tx, qp);
 	if(qp->query_errored)
 	{
 		dstring kill_reasons = new_dstring("", 0);

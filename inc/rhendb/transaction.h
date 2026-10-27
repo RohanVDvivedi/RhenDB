@@ -131,7 +131,7 @@ struct transaction
 
 #define IS_SAVEPOINT_LOGGING_ENABLED(flags)  ((flags) & SAVEPOINT_LOGGING_ENABLED)
 
-transaction initialize_transaction(rhendb* rdb);
+void initialize_transaction(transaction* tx, rhendb* rdb);
 
 // must be called right after creating any of the query plan for this transaction
 int register_query_plan(transaction* tx, query_plan* qp);
