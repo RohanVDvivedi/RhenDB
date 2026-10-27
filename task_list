@@ -1,9 +1,7 @@
 PICKED TASKS
 
 * sub_query support
-  * store list of curr_queries, with calls like register_main_query, clears the shutdown_called flag, and sets main query
-  * same for sub_query, we also need register deregister fucntion, to add and remove from linkedlist
-  * plan to pick the query_plan_descriptor from the sql_dql query node and make a query_plan out of it
+  * integrate with expression evaluator
 
 -----------------------------------------------------------------
 
