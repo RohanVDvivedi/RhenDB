@@ -111,7 +111,7 @@ void shutdown_all_query_plans(transaction* tx, dstring kill_reason)
 
 	pthread_mutex_lock(&(tx->curr_queries_lock));
 
-	tx->is_curr_queries_freezed = 1; // freeze curr_queries list until, they all exit
+	tx->is_curr_queries_freezed = 1; // freeze curr_queries list, until they all exit
 
 	for(query_plan* qp = (query_plan*) get_head_of_linkedlist(&(tx->curr_queries)); qp != NULL; qp = (query_plan*) get_next_of_in_linkedlist(&(tx->curr_queries), qp))
 		shutdown_query_plan_LOCK_TABLE_UNSAFE(qp, kill_reason);
@@ -123,9 +123,11 @@ void shutdown_all_query_plans(transaction* tx, dstring kill_reason)
 
 void notify_deadlocked(void* context_p, void* transaction_vp)
 {
+	transaction* tx = transaction_vp;
+
 	pthread_mutex_lock(&(tx->curr_queries_lock));
 
-	tx->is_curr_queries_freezed = 1; // freeze curr_queries list until, they all exit
+	tx->is_curr_queries_freezed = 1; // freeze curr_queries list, until they all exit
 
 	for(query_plan* qp = (query_plan*) get_head_of_linkedlist(&(tx->curr_queries)); qp != NULL; qp = (query_plan*) get_next_of_in_linkedlist(&(tx->curr_queries), qp))
 		shutdown_query_plan_LOCK_TABLE_UNSAFE(qp, get_dstring_pointing_to_literal_cstring("DEADLOCK_DETECTED"));
