@@ -20,6 +20,10 @@ void initialize_transaction(transaction* tx, rhendb* rdb)
 	tx->rdb = rdb;
 	tx->snapshot = NULL;
 
+	pthread_mutex_init(&(tx->curr_queries_lock), NULL);
+	tx->is_curr_queries_freezed = 0;
+	initialize_linkedlist(&(tx->curr_queries), offsetof(query_plan, curr_queries_node));
+
 	{
 		int abort_error_dummy = 0;
 		init_hash_table_tuple_definitions(&(tx->inserted_tuple_pointers.httd), &(rdb->volatile_rage_engine.pam_p->pas), &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_tuple_def), key_element_positions_for_hashset_for_tuple_pointers, sizeof(key_element_positions_for_hashset_for_tuple_pointers)/ sizeof(positional_accessor), FNV_64_TUPLE_HASHER);
@@ -716,6 +720,8 @@ void deinitialize_transaction(transaction* tx)
 		deinit_hash_table_tuple_definitions(&(tx->inserted_tuple_pointers.httd));
 		deinitialize_rwlock(&(tx->inserted_tuple_pointers.hash_table_lock));
 	}
+
+	pthread_mutex_destroy(&(tx->curr_queries_lock));
 
 	tx->rdb = NULL;
 	tx->snapshot = NULL;
