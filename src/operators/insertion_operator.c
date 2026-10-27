@@ -730,7 +730,7 @@ static void execute(operator* o)
 					page_latches_to_be_borrowed--; // done customarily
 				}
 
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+				kill_signal_for_self_operator(o, OPERATOR_COULD_NOT_PRODUCE_REASON);
 				return ;
 			}
 		}

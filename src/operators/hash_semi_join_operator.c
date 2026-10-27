@@ -171,7 +171,7 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 				{
 					if(!produce_tuple_from_operator(o, tuple))
 					{
-						kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+						kill_signal_for_self_operator(o, OPERATOR_COULD_NOT_PRODUCE_REASON);
 						failed = 1;
 					}
 				}
@@ -182,7 +182,7 @@ static void probe_right_side_partitions_using_left_tuples(operator* o, void* par
 				{
 					if(!produce_tuple_from_operator(o, tuple))
 					{
-						kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+						kill_signal_for_self_operator(o, OPERATOR_COULD_NOT_PRODUCE_REASON);
 						failed = 1;
 					}
 				}

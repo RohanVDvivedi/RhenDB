@@ -196,7 +196,7 @@ static int scan_partition(operator* o, uint64_t partition_index_in_info)
 
 			if(!produce_output_for_scanned_tuple(o, partition_index_in_info, tptr, heap_record))
 			{
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+				kill_signal_for_self_operator(o, OPERATOR_COULD_NOT_PRODUCE_REASON);
 				release_lock_on_persistent_page(engine->pam_p, NULL, &ppage, NONE_OPTION, &abort_error);
 				delete_heap_table_iterator(hti_p, NULL, &abort_error);
 				hti_p = NULL;

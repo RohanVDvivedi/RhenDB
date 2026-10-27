@@ -15,7 +15,9 @@
 
 typedef struct query_plan query_plan;
 
-#define OPERATOR_SUCCESS_REASON get_dstring_pointing_to_literal_cstring("completed_and_killed")
+// following 2 are the only 2 safe reasons to kill operator and still not be marked as error
+#define OPERATOR_SUCCESS_REASON           get_dstring_pointing_to_literal_cstring("completed_and_killed") // implies safe completion
+#define OPERATOR_COULD_NOT_PRODUCE_REASON get_dstring_pointing_to_literal_cstring("could_not_produce")    // implies not able to produce because all consumers of this operator died
 
 typedef enum operator_state operator_state;
 enum operator_state

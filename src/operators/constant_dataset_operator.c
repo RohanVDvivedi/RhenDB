@@ -23,7 +23,7 @@ static void execute(operator* o)
 		int produced = produce_tuple_from_operator(o, curr_tuple);
 		if(!produced)
 		{
-			kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
+			kill_reason = OPERATOR_COULD_NOT_PRODUCE_REASON;
 			break;
 		}
 	});

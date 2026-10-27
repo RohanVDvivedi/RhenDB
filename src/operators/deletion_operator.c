@@ -154,7 +154,7 @@ static int produce_output_for_pending_deletion(operator* o, const pending_deleti
 	return produced;
 }
 
-static int mark_buffered_tuples_deleted(operator* o, const char** kill_reason)
+static int mark_buffered_tuples_deleted(operator* o, dstring* kill_reason)
 {
 	input_values* inputs = o->inputs;
 
@@ -271,7 +271,7 @@ static int mark_buffered_tuples_deleted(operator* o, const char** kill_reason)
 					const void* record = get_nth_tuple_on_persistent_page(&ppage, engine->pam_p->pas.page_size, &(partition_tuple_def->size_def), pd->tptr.tuple_index);
 					if(!produce_output_for_pending_deletion(o, pd, record, p))
 					{
-						(*kill_reason) = "could_not_produce";
+						(*kill_reason) = OPERATOR_COULD_NOT_PRODUCE_REASON;
 						return 0;
 					}
 				}
@@ -313,10 +313,10 @@ static void execute(operator* o)
 		if(no_more_data)
 		{
 			// the input operator has been killed, so mark whatever we have buffered, deleted
-			const char* kill_reason = NULL;
+			dstring kill_reason = OPERATOR_SUCCESS_REASON;
 			if(!mark_buffered_tuples_deleted(o, &kill_reason))
 			{
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring(kill_reason));
+				kill_signal_for_self_operator(o, kill_reason);
 				return ;
 			}
 
@@ -360,10 +360,10 @@ static void execute(operator* o)
 		// the buffer is full, so mark everything that we have buffered, deleted
 		if(get_element_count_pending_deletions(&(inputs->to_be_deleted)) >= inputs->deletion_batch_size)
 		{
-			const char* kill_reason = NULL;
+			dstring kill_reason = OPERATOR_SUCCESS_REASON;
 			if(!mark_buffered_tuples_deleted(o, &kill_reason))
 			{
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring(kill_reason));
+				kill_signal_for_self_operator(o, kill_reason);
 				return ;
 			}
 		}

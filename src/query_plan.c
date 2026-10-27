@@ -32,7 +32,7 @@ void send_kill_signal_to_operator(operator* o, dstring kill_reason)
 {
 	pthread_mutex_lock(&(o->state_lock));
 
-	if(0 != compare_dstring(&kill_reason, &OPERATOR_SUCCESS_REASON))
+	if(0 != compare_dstring(&kill_reason, &OPERATOR_SUCCESS_REASON) && 0 != compare_dstring(&kill_reason, &OPERATOR_COULD_NOT_PRODUCE_REASON))
 		o->self_query_plan->query_errored = 1;
 
 	// concatenate the kill reason passed

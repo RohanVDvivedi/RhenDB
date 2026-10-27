@@ -158,7 +158,7 @@ static int produce_output_for_pending_lookup(operator* o, const pending_lookup* 
 // the snapshot of this transaction, the invisible ones are silently skipped.
 // this is a read only operator, so no mini transaction is ever allotted, pages are only read locked.
 // returns 0, only if an output could not be produced, in which case the caller must kill itself
-static int lookup_buffered_tuples(operator* o, const char** kill_reason)
+static int lookup_buffered_tuples(operator* o, dstring* kill_reason)
 {
 	input_values* inputs = o->inputs;
 
@@ -208,7 +208,7 @@ static int lookup_buffered_tuples(operator* o, const char** kill_reason)
 			persistent_page ppage = acquire_persistent_page_with_lock(engine->pam_p, NULL, page_id, READ_LOCK, &abort_error);
 			if(abort_error)
 			{
-				(*kill_reason) = "pointer_lookup_read_only_page_read_aborted";
+				(*kill_reason) = get_dstring_pointing_to_literal_cstring("pointer_lookup_read_only_page_read_aborted");
 				return 0;
 			}
 
@@ -254,7 +254,7 @@ static int lookup_buffered_tuples(operator* o, const char** kill_reason)
 				if(!produce_output_for_pending_lookup(o, pl, record, p))
 				{
 					release_lock_on_persistent_page(engine->pam_p, NULL, &ppage, NONE_OPTION, &abort_error);
-					(*kill_reason) = "could_not_produce";
+					(*kill_reason) = OPERATOR_COULD_NOT_PRODUCE_REASON;
 					return 0;
 				}
 
@@ -265,7 +265,7 @@ static int lookup_buffered_tuples(operator* o, const char** kill_reason)
 			release_lock_on_persistent_page(engine->pam_p, NULL, &ppage, NONE_OPTION, &abort_error);
 			if(abort_error)
 			{
-				(*kill_reason) = "pointer_lookup_read_only_page_release_aborted";
+				(*kill_reason) = get_dstring_pointing_to_literal_cstring("pointer_lookup_read_only_page_release_aborted");
 				return 0;
 			}
 		}
@@ -290,10 +290,10 @@ static void execute(operator* o)
 		if(no_more_data)
 		{
 			// the input operator has been killed, so look up whatever we still have buffered
-			const char* kill_reason = NULL;
+			dstring kill_reason = OPERATOR_SUCCESS_REASON;
 			if(!lookup_buffered_tuples(o, &kill_reason))
 			{
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring(kill_reason));
+				kill_signal_for_self_operator(o, kill_reason);
 				return ;
 			}
 
@@ -337,10 +337,10 @@ static void execute(operator* o)
 		// the buffer is full, so look up everything that we have buffered
 		if(get_element_count_pending_lookups(&(inputs->to_be_looked_up)) >= inputs->lookup_batch_size)
 		{
-			const char* kill_reason = NULL;
+			dstring kill_reason = OPERATOR_SUCCESS_REASON;
 			if(!lookup_buffered_tuples(o, &kill_reason))
 			{
-				kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring(kill_reason));
+				kill_signal_for_self_operator(o, kill_reason);
 				return ;
 			}
 		}

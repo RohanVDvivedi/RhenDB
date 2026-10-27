@@ -158,7 +158,7 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 					// region used for the outer loop
 					unmap_for_interim_tuple_region(&_temp_tuple_region);
 
-					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+					kill_signal_for_self_operator(o, OPERATOR_COULD_NOT_PRODUCE_REASON);
 					return 0;
 				}
 			}
@@ -187,7 +187,7 @@ static int produce_batched_left_block_loop_over_all_right(operator* o)
 					if(left_tuple_matched_bitmap != NULL)
 						free(left_tuple_matched_bitmap);
 
-					kill_signal_for_self_operator(o, get_dstring_pointing_to_literal_cstring("could_not_produce"));
+					kill_signal_for_self_operator(o, OPERATOR_COULD_NOT_PRODUCE_REASON);
 					return 0;
 				}
 			}

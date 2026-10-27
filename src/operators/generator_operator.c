@@ -30,7 +30,7 @@ static void execute(operator* o)
 		free(curr_tuple);
 		if(!produced)
 		{
-			kill_reason = get_dstring_pointing_to_literal_cstring("could_not_produce");
+			kill_reason = OPERATOR_COULD_NOT_PRODUCE_REASON;
 			break;
 		}
 	}
