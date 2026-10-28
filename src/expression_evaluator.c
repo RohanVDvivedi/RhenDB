@@ -3331,21 +3331,46 @@ struct expression_sub_query
 
 	sync_pipe* sub_query_output_pipe;
 
-	tuple_def* sub_query_output_def;
+	const tuple_def* sub_query_output_def;
 };
 
 // ============================================================================
 // SUB-QUERY SUPPORT
 
+#include<rhendb/query_plan.h>
+#include<rhendb/query_plan_descriptor.h>
+
 #define SUB_QUERY_OUTPUT_PIPE_CAPACITY 1024
 
-// returned query_plan->this_sub_query_expr_eval_context = ec_p; must suffice
-query_plan* build_query_plan_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, sync_pipe* out_pipe, tuple_def** out_def, int* error_code){return NULL;}
+// last operator is always the sub_query_output and the one befoe that produces the input for the sub_query_output operator
+query_plan* build_query_plan_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, sync_pipe* out_pipe, const tuple_def** out_def, int* error_code)
+{
+	query_plan_desc* qpd = dql->physical_plan;
 
-tuple_def* infer_output_def_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code){return NULL;}
+	operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 2);
+	(*out_def) = get_output_tuple_def_for_operator_descriptor(d);
+
+	d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
+	d->params.subquery_output.out_pipe = out_pipe;
+
+	query_plan* qp = create_query_plan(qpd, ec_p);
+	if(qp == NULL)
+		(*error_code) = RHENDB_EE_FAILED_SUB_QUERY;
+	return qp;
+}
+
+const tuple_def* infer_output_def_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
+{
+	query_plan_desc* qpd = dql->physical_plan;
+
+	operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 2);
+	return get_output_tuple_def_for_operator_descriptor(d);
+}
 
 void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
 {
+	rhendb_expr_eval_context* ctx = ec_p->context_p;
+
 	// a fresh sync_pipe, created and owned by us, that the sub-query plan writes its output rows into
 	sync_pipe* out_pipe = new_sync_pipe(SUB_QUERY_OUTPUT_PIPE_CAPACITY);
 	if(out_pipe == NULL)
@@ -3355,11 +3380,20 @@ void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p
 	}
 
 	// build the runnable plan around our pipe; it also hands back the output row's type
-	tuple_def* output_def = NULL;
+	const tuple_def* output_def = NULL;
 	query_plan* qp = build_query_plan_for_sub_query(dql, ec_p, out_pipe, &output_def, error_code);
 	if(qp == NULL)
 	{
 		delete_sync_pipe(out_pipe);
+		return NULL;
+	}
+
+	if(!register_query_plan(ctx->tx, qp))
+	{
+		shutdown_query_plan(qp, OPERATOR_SUCCESS_REASON);
+		wait_for_shutdown_of_query_plan(qp);
+		destroy_query_plan(qp, NULL);
+		(*error_code) = RHENDB_EE_FAILED_SUB_QUERY;
 		return NULL;
 	}
 
@@ -3374,6 +3408,8 @@ void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p
 		// shutdown the query plan
 		shutdown_query_plan(qp, OPERATOR_SUCCESS_REASON);
 		wait_for_shutdown_of_query_plan(qp);
+
+		deregister_query_plan(ctx->tx, qp);
 		destroy_query_plan(qp, NULL);
 
 		// close and delete the sync pipe
@@ -3443,12 +3479,16 @@ void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, cons
 
 void rhendb_delete_sub_query(void* sub_query, const sql_expr_eval_context* ec_p)
 {
+	rhendb_expr_eval_context* ctx = ec_p->context_p;
+
 	expression_sub_query* esq = sub_query;
 
 	close_sync_pipe(esq->sub_query_output_pipe);
 
 	shutdown_query_plan(esq->sub_query_plan, OPERATOR_SUCCESS_REASON);
 	wait_for_shutdown_of_query_plan(esq->sub_query_plan);
+
+	deregister_query_plan(ctx->tx, esq->sub_query_plan);
 	destroy_query_plan(esq->sub_query_plan, NULL);
 
 	delete_sync_pipe(esq->sub_query_output_pipe);
@@ -3459,7 +3499,7 @@ void rhendb_delete_sub_query(void* sub_query, const sql_expr_eval_context* ec_p)
 void* rhendb_get_type_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	// inference pass : just the output row's type -- no plan built, nothing executed.
-	tuple_def* output_def = infer_output_def_for_sub_query(dql, ec_p, error_code);
+	const tuple_def* output_def = infer_output_def_for_sub_query(dql, ec_p, error_code);
 	if(output_def == NULL)
 		return NULL;                       // *error_code set by the inferer
 
