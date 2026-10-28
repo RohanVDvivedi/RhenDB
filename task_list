@@ -1,7 +1,8 @@
 PICKED TASKS
 
-* sub_query support
-  * integrate with expression evaluator
+ * test and review of sub_query support
+ * get review of query_plan_descriptor
+ * get review of the transaction curr_queries list integration
 
 -----------------------------------------------------------------
 
