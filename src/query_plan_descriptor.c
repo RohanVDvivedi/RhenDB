@@ -1770,13 +1770,13 @@ operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_
 	if(qpd->tx->snapshot == NULL)
 	{
 		printf("must have writable snapshot for deletion_operator_descriptor\n");
-		exit(-1);
+		return NULL;
 	}
 
 	if(!qpd->tx->snapshot->has_self_transaction_id)
 	{
 		printf("must have self_transaction_id for deletion_operator_descriptor\n");
-		exit(-1);
+		return NULL;
 	}
 
 	if(ftabl == NULL)
@@ -1819,7 +1819,7 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, u
 	if(qpd->tx->snapshot == NULL)
 	{
 		printf("must have a snapshot for pointer_lookup_operator_descriptor\n");
-		exit(-1);
+		return NULL;
 	}
 
 	if(ftabl == NULL)
