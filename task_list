@@ -1,11 +1,5 @@
 PICKED TASKS
 
- * test and review of sub_query support
- * get review of query_plan_descriptor
- * get review of the transaction curr_queries list integration
-
------------------------------------------------------------------
-
 * also cache materialized values by chunk_pointer and by what rage_engine pointer they live in
  * resets everytime new input_tuples are set
 
