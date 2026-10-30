@@ -3390,10 +3390,14 @@ void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p
 
 	if(!register_query_plan(ctx->tx, qp))
 	{
+		(*error_code) = RHENDB_EE_FAILED_SUB_QUERY;
+
 		shutdown_query_plan(qp, OPERATOR_SUCCESS_REASON);
 		wait_for_shutdown_of_query_plan(qp);
 		destroy_query_plan(qp, NULL);
-		(*error_code) = RHENDB_EE_FAILED_SUB_QUERY;
+
+		close_sync_pipe(out_pipe);
+		delete_sync_pipe(out_pipe);
 		return NULL;
 	}
 
@@ -3447,9 +3451,15 @@ void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, cons
 	const data_type_info* dti = NULL;
 	datum d;
 	if(!get_value_from_element_from_tuple(&d, &dti, esq->sub_query_output_def, SELF, sub_query_tuple))
+	{
+		free(sub_query_tuple);
 		return NULL;
+	}
 	if(is_datum_NULL(&d))
+	{
+		free(sub_query_tuple);
 		return NULL;
+	}
 
 	expr_value* v = new_val(RHENDB_EXPR_INT, ec_p);
 	if(dti->type == TUPLE || dti->type == ARRAY)
