@@ -67,4 +67,5 @@ FUTURE TASKS
 ARCHITECTURAL CHANGEs
  * remove tuple_transformers completely, all that it does will be done by the operators, that also allow fan-out
  * make operators produce interim_tuple_store, and consumers get consumption_iterator that points into these output_buffer interim_tuple_store increasing the one in context's reference counter
+ * production can have an interface like produce_stage() gives pointer to enough space for get/set and memcpy, and produce_finalize(), finalizes the write and releases the lock
  * only producers own their produce, now we need a way to figure out how consumer gets parallelism from this stream
