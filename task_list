@@ -63,3 +63,8 @@ FUTURE TASKS
   * implement get date, time, with timezone, and time in string to unix epoch
 
  8.* support for user-defined expressioned-functions and aggregate-functions
+
+ARCHITECTURAL CHANGEs
+ * remove tuple_transformers completely, all that it does will be done by the operators, that also allow fan-out
+ * make operators produce interim_tuple_store, and consumers get consumption_iterator that points into these output_buffer interim_tuple_store increasing the one in context's reference counter
+ * only producers own their produce, now we need a way to figure out how consumer gets parallelism from this stream
