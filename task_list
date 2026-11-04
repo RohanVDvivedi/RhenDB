@@ -1,11 +1,6 @@
 PICKED TASKS
 
  * discard tuple_transformers from the architecture completely
- * make the project such that tuple transformers are not playing any role at all and every in-memory tuple carries unified-type instead of concrete extended dti
-   * do this at projection and dql/dml operators
-   * projections to carry output table name and projected column names
-   * do the same for aggregate function calls, to return unified types
-   * everything is either a extended persistent type (on disk) or unified type(in-memory), after this change at the raw tuple
  * pass around tuples as pointers instead of interim_tuple_store plumbing, implemented volcano model, with passing tuple pointers
   * any operator can have more than 1 source, but only 1 destination operator, pull based operator, child returns exacly  tuple or NULL upon completion
    * complete pass through for limit/offset, identity, selection, sort(unless spilling), union, merge_sorted and semi/anti joins
