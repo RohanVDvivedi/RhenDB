@@ -23,7 +23,7 @@ struct input_values
 
 	const projection_description* projection_descriptions;
 
-	// will have only as many entries as count(projection_descriptions[i].type == PROJECT_IDENTITY)
+	// will have only as many entries as count(projection_descriptions[i].type == PROJECT_EXPRESSION)
 	data_type_info** projected_expression_type_infos;
 
 	const tuple_def* output_tuple_def;
