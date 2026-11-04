@@ -47,17 +47,17 @@ enum expr_type
 	RHENDB_EXPR_BINARY     = 10,
 	// find the above types in expr_value.string_value or expr_value.blob_value
 	// they may optionally have a dti_p
-	// if absent project them into volatile_rage_engine.text/blob_extended_type_info
+	// if absent project them into volatile_rage_engine.text/blob_extended_type_info inside a unified type
 
 	RHENDB_EXPR_NUMERIC    = 11,
 	// find the above types in expr_value.numeric_value
 	// they will not have a dti_p
-	// project them into volatile_rage_engine.numeric_extended_type_info
+	// project them into volatile_rage_engine.numeric_extended_type_info inside a unified type
 
 	RHENDB_EXPR_JSONB      = 12,
 	// find the above types in expr_value.jsonb_value
 	// they will not have a dti_p
-	// project them into volatile_rage_engine.jsonb_extended_type_info
+	// project them into volatile_rage_engine.jsonb_extended_type_info inside a unified type
 };
 
 typedef struct expr_type_info expr_type_info;

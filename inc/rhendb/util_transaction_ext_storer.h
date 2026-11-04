@@ -14,7 +14,7 @@
 	this utility sotres the text/blob into transaction's extension_store
 */
 
-// ext_type_info is always expected to be volatile_rage_engine->blob/text/jsonb_extended_type_info
+// ext_type_info is always expected to be volatile_rage_engine.blob/text/jsonb_extended_type_info or rdb->union_(blob/text/jsonb)_type_info
 // data must not be NULL, and is left owned by the caller
 // returned pointer if not NULL must be freed, after setting it into the tuple
 void* tx_temp_store_tbj(const char* data, uint32_t data_size, const data_type_info* ext_type_info, transaction* tx);
@@ -22,12 +22,12 @@ void* tx_temp_store_tbj(const char* data, uint32_t data_size, const data_type_in
 #define tx_temp_store_text tx_temp_store_tbj
 #define tx_temp_store_blob tx_temp_store_tbj
 
-// ext_type_info is always expected to be volatile_rage_engine->numeric_extended_type_info
+// ext_type_info is always expected to be volatile_rage_engine.numeric_extended_type_info or rdb->union_numeric_type_info
 // number must not be NULL, and is left owned by the caller
 // returned pointer if not NULL must be freed, after setting it into the tuple
 void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, transaction* tx);
 
-// ext_type_info is always expected to be volatile_rage_engine->jsonb_extended_type_info
+// ext_type_info is always expected to be volatile_rage_engine.jsonb_extended_type_info or rdb->union_jsonb_type_info
 // json must not be NULL, and is left owned by the caller
 // returned pointer if not NULL must be freed, after setting it into the tuple
 // the parameter json_root must have succeeded the call to finalize_jsonb, after you completed making jsonb and before you make this call
