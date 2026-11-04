@@ -3893,13 +3893,13 @@ data_type_info* infer_projected_type_sql_expr_for_rhendb(sql_expression* expr, s
 	// below 4 may not have a src->dti_p
 
 	if(scalar == RHENDB_EXPR_STRING)
-		return tx->rdb->volatile_rage_engine.text_extended_type_info;
+		return tx->rdb->union_text_type_info;
 	else if(scalar == RHENDB_EXPR_BINARY)
-		return tx->rdb->volatile_rage_engine.blob_extended_type_info;
+		return tx->rdb->union_blob_type_info;
 	else if(scalar == RHENDB_EXPR_NUMERIC)
-		return tx->rdb->volatile_rage_engine.numeric_extended_type_info;
+		return tx->rdb->union_numeric_type_info;
 	else if(scalar == RHENDB_EXPR_JSONB)
-		return tx->rdb->volatile_rage_engine.jsonb_extended_type_info;
+		return tx->rdb->union_jsonb_type_info;
 
 	return NULL;
 }
@@ -3953,13 +3953,6 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 
 	data_type_info* projection_type_info = pti;
 
-	// projection only ever produces a VOLATILE extended type; a persistent target is rejected outright.
-	if(has_extended_type_info(projection_type_info, PERSISTENT_EXT_SUB_TYPE))
-	{
-		*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
-		return res;
-	}
-
 	expr_value* v = evaluate_sql_expr(expr, ec_p, error_code);
 	if(*error_code)
 		return res;
@@ -3974,7 +3967,6 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 		return res;
 	}
 
-	// same type_info for the projections, must pass for cases of et_is_native_number() || RHENDB_EXPR_TUPLE || RHENDB_EXPR_ARRAY
 	if(v->type_info.dti_p != NULL && are_identical_type_info(v->type_info.dti_p, projection_type_info))
 	{
 		res.value = v->value;
@@ -3984,23 +3976,29 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 		return res;
 	}
 
+	if(v->type_info.dti_p != NULL && is_unified_type_info(projection_type_info) && !is_unified_type_info(v->type_info.dti_p))
+	{
+		tuple_def tpl_d;
+		initialize_tuple_def(&tpl_d, projection_type_info);
+		res.buffer_to_free = malloc(projection_type_info->max_size);
+		init_tuple(&tpl_d, res.buffer_to_free);
+		set_element_in_tuple(&tpl_d, has_extended_type_info(v->type_info.dti_p, VOLATILE_EXT_SUB_TYPE) ? STATIC_POSITION(0) : STATIC_POSITION(1), res.buffer_to_free, &(v->value), UINT32_MAX);
+		res.value = (datum){.tuple_value = res.buffer_to_free};
+		delete_data(v, ec_p);
+		return res;
+	}
+
 	transaction* tx = tx_from_ctx(ec_p);
 
 	// the target is the type inference handed to us, so its kind already matches the result.
-	int to_ext_text = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_text_type_info(projection_type_info);
-	int to_ext_blob = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_blob_type_info(projection_type_info);
-	int to_ext_num = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_numeric_type_info(projection_type_info);
-	int to_ext_jsonb = has_extended_type_info(projection_type_info, VOLATILE_EXT_SUB_TYPE) && is_jsonb_type_info(projection_type_info);
+	int to_ext_text = is_text_type_info(projection_type_info);
+	int to_ext_blob = is_blob_type_info(projection_type_info);
+	int to_ext_num = is_numeric_type_info(projection_type_info);
+	int to_ext_jsonb = is_jsonb_type_info(projection_type_info);
 
-	// ---- extended volatile text / blob target ----
 	if(to_ext_text || to_ext_blob)
 	{
-		if(ee_materialize_tb(v, ec_p, error_code) != RHENDB_EE_OK)
-		{
-			delete_data(v, ec_p);
-			return res;
-		}
-		if(!is_sb_operand(v))
+		if(v->type_info.type != RHENDB_EXPR_STRING && v->type_info.type != RHENDB_EXPR_BINARY)
 		{
 			delete_data(v, ec_p);
 			*error_code = RHENDB_EE_INCOMPATIBLE_PROJECTION;
@@ -4014,7 +4012,6 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 		return res;
 	}
 
-	// ---- extended volatile numeric target ----
 	if(to_ext_num)
 	{
 		mpd_t scratch = (mpd_t){0}; int owns = 0;
@@ -4029,14 +4026,8 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 		return res;
 	}
 
-	// ---- extended volatile jsonb target ----
 	if(to_ext_jsonb)
 	{
-		if(ee_materialize_jsonb(v, ec_p, error_code) != RHENDB_EE_OK)
-		{
-			delete_data(v, ec_p);
-			return res;
-		}
 		if(v->type_info.type != RHENDB_EXPR_JSONB)
 		{
 			delete_data(v, ec_p);
