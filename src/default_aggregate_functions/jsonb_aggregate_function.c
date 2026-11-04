@@ -239,7 +239,7 @@ aggregate_function* get_jsonb_aggregate_function(transaction* tx, const data_typ
 
 	af_p->destroy_aggregate_function = destroy_aggregate_function;
 
-	af_p->output_type_info = tx->rdb->volatile_rage_engine.jsonb_extended_type_info;
+	af_p->output_type_info = tx->rdb->union_jsonb_type_info;
 
 	af_p->buffers_resource_count = has_extended_type_info(input_type_info, PERSISTENT_EXT_SUB_TYPE);
 

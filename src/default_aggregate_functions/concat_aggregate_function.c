@@ -46,6 +46,7 @@ static concat_state* create_concat_state(const aggregate_function* af_p)
 	state->bytes_appended = 0;
 	state->result = malloc(af_p->output_type_info->max_size);
 	init_tuple(&(cc->output_tuple_def), state->result);
+	set_element_in_tuple(&(cc->output_tuple_def), STATIC_POSITION(0), state->result, EMPTY_DATUM, UINT32_MAX);
 	state->tail_pointer = get_NULL_tuple_pointer(&(cc->tx->rdb->volatile_rage_engine.pam_p->pas));
 	state->temp_ext_store = NULL;
 
@@ -64,7 +65,7 @@ static int append_bytes(const aggregate_function* af_p, concat_state* state, con
 
 	rage_engine* ex_engine = &(cc->tx->rdb->volatile_rage_engine);
 
-	binary_write_iterator* wr = get_new_binary_write_iterator(state->result, &(cc->output_tuple_def), SELF, (state->temp_ext_store == NULL) ? 0 /*dummy root*/ : state->temp_ext_store->blob_store_root_page_id, state->tail_pointer, ex_engine->max_prefix_size_in_bytes, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
+	binary_write_iterator* wr = get_new_binary_write_iterator(state->result, &(cc->output_tuple_def), STATIC_POSITION(0), (state->temp_ext_store == NULL) ? 0 /*dummy root*/ : state->temp_ext_store->blob_store_root_page_id, state->tail_pointer, ex_engine->max_prefix_size_in_bytes, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
 
 	if(state->temp_ext_store != NULL)
 		write_lock(&(state->temp_ext_store->blob_store_lock), BLOCKING);
@@ -90,7 +91,7 @@ static int append_bytes(const aggregate_function* af_p, concat_state* state, con
 
 				if(state->bytes_appended == ex_engine->max_prefix_size_in_bytes)
 				{
-					state->temp_ext_store = &(cc->tx->temp_ext_stores[hash_element_within_tuple(state->result, &(cc->output_tuple_def), EXTENDED_PREFIX_POS_ACC, FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT]);
+					state->temp_ext_store = &(cc->tx->temp_ext_stores[hash_element_within_tuple(state->result, &(cc->output_tuple_def), STATIC_POSITION(0, EXTENDED_PREFIX_POS_VAL), FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT]);
 					write_lock(&(state->temp_ext_store->blob_store_lock), BLOCKING);
 					wr->blob_store_root_page_id = state->temp_ext_store->blob_store_root_page_id;
 				}
@@ -235,7 +236,7 @@ aggregate_function* get_concat_aggregate_function(transaction* tx, const data_ty
 
 	af_p->destroy_aggregate_function = destroy_aggregate_function;
 
-	af_p->output_type_info = is_text_type_info(input_type_info) ? tx->rdb->volatile_rage_engine.text_extended_type_info : tx->rdb->volatile_rage_engine.blob_extended_type_info;
+	af_p->output_type_info = is_text_type_info(input_type_info) ? tx->rdb->union_text_type_info : tx->rdb->union_blob_type_info;
 
 	initialize_tuple_def(&(((concat_context*)(af_p->context_p))->output_tuple_def), (data_type_info*)af_p->output_type_info);
 

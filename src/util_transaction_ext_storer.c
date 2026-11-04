@@ -39,7 +39,7 @@ void* tx_temp_store_tbj(const char* data, uint32_t data_size, const data_type_in
 		// write the extension
 		if(bytes_written < data_size)
 		{
-			temp_ext_store = &(tx->temp_ext_stores[hash_element_within_tuple(output_buffer, &output_tuple_def, EXTENDED_PREFIX_POS_ACC, FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT]);
+			temp_ext_store = &(tx->temp_ext_stores[hash_element_within_tuple(output_buffer, &output_tuple_def, (is_unified_type_info(ext_type_info) ? STATIC_POSITION(0, EXTENDED_PREFIX_POS_VAL) : EXTENDED_PREFIX_POS_ACC), FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT]);
 
 			// set the write iterator with new root_page_id and take the lock before any further access
 			write_lock(&(temp_ext_store->blob_store_lock), BLOCKING);
@@ -118,7 +118,11 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 			// write the extension
 			if(digits_written < digits_count)
 			{
-				temp_ext_store = &(tx->temp_ext_stores[hash_element_within_tuple(output_buffer, &output_tuple_def, EXTENDED_PREFIX_POS_ACC, FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT]);
+				datum active_element;
+				const data_type_info* active_element_dti = NULL;
+				get_value_from_element_from_tuple(&active_element, &active_element_dti, &output_tuple_def, pos_to_write, output_buffer);
+
+				temp_ext_store = &(tx->temp_ext_stores[hash_element_within_tuple(output_buffer, &output_tuple_def, (is_unified_type_info(ext_type_info) ? STATIC_POSITION(0, EXTENDED_PREFIX_POS_VAL) : EXTENDED_PREFIX_POS_ACC), FNV_64_TUPLE_HASHER) % TEMPORARY_EXTENSION_STORE_COUNT]);
 
 				// set the write iterator with new root_page_id and take the lock before any further access
 				write_lock(&(temp_ext_store->blob_store_lock), BLOCKING);
