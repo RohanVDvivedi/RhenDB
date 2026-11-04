@@ -167,10 +167,7 @@ void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void*
 			continue;
 		}
 
-		if( (final_readers_tuple_def->type_info->containees[f].al.type_info == ftabl->rdb->union_text_type_info)
-		|| (final_readers_tuple_def->type_info->containees[f].al.type_info == ftabl->rdb->union_blob_type_info)
-		|| (final_readers_tuple_def->type_info->containees[f].al.type_info == ftabl->rdb->union_numeric_type_info)
-		|| (final_readers_tuple_def->type_info->containees[f].al.type_info == ftabl->rdb->union_jsonb_type_info) )
+		if(is_unified_type_info(final_readers_tuple_def->type_info->containees[f].al.type_info))
 		{
 			while(!set_element_in_tuple(final_readers_tuple_def, STATIC_POSITION(f), projected_tuple, EMPTY_DATUM, projected_tuple_capacity - projected_tuple_size))
 			{
@@ -215,13 +212,7 @@ void destroy_fetched_table(fetched_table* ftabl)
 	// of the last partition itself, hence it is not to be destroyed here
 	for(uint32_t i = 1; i < ftabl->final_readers_tuple_def.type_info->element_count; i++)
 	{
-		if(ftabl->final_readers_tuple_def.type_info->containees[i].al.type_info == ftabl->rdb->union_text_type_info)
-			continue;
-		else if(ftabl->final_readers_tuple_def.type_info->containees[i].al.type_info == ftabl->rdb->union_blob_type_info)
-			continue;
-		else if(ftabl->final_readers_tuple_def.type_info->containees[i].al.type_info == ftabl->rdb->union_numeric_type_info)
-			continue;
-		else if(ftabl->final_readers_tuple_def.type_info->containees[i].al.type_info == ftabl->rdb->union_jsonb_type_info)
+		if(is_unified_type_info(ftabl->final_readers_tuple_def.type_info->containees[i].al.type_info))
 			continue;
 		else
 			free((void*)(ftabl->final_readers_tuple_def.type_info->containees[i].al.type_info));
