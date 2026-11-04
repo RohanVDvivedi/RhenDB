@@ -10,11 +10,18 @@ void* tx_temp_store_tbj(const char* data, uint32_t data_size, const data_type_in
 	void* output_buffer = malloc(ext_type_info->max_size);
 	init_tuple(&output_tuple_def, output_buffer);
 
+	positional_accessor pos_to_write = SELF;
+	if(is_unified_type_info(ext_type_info))
+	{
+		pos_to_write = STATIC_POSITION(0);
+		set_element_in_tuple(&output_tuple_def, pos_to_write, output_buffer, EMPTY_DATUM, UINT32_MAX);
+	}
+
 	{
 		int abort_error_dummy = 0;
 		rage_engine* ex_engine = &(tx->rdb->volatile_rage_engine);
 
-		binary_write_iterator* wr = get_new_binary_write_iterator(output_buffer, &output_tuple_def, SELF, 0 /*dummy root*/, get_NULL_tuple_pointer(&(ex_engine->pam_p->pas)), ex_engine->max_prefix_size_in_bytes, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
+		binary_write_iterator* wr = get_new_binary_write_iterator(output_buffer, &output_tuple_def, pos_to_write, 0 /*dummy root*/, get_NULL_tuple_pointer(&(ex_engine->pam_p->pas)), ex_engine->max_prefix_size_in_bytes, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
 
 		temporary_extension_store* temp_ext_store = NULL;
 		uint32_t bytes_written = 0;
@@ -70,10 +77,17 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 	void* output_buffer = malloc(ext_type_info->max_size);
 	init_tuple(&output_tuple_def, output_buffer);
 
+	positional_accessor pos_to_write = SELF;
+	if(is_unified_type_info(ext_type_info))
+	{
+		pos_to_write = STATIC_POSITION(0);
+		set_element_in_tuple(&output_tuple_def, pos_to_write, output_buffer, EMPTY_DATUM, UINT32_MAX);
+	}
+
 	int exponent_too_big = 0;
 	materialized_numeric mn = decimal_to_materialized_numeric(number, &exponent_too_big);
 
-	set_sign_bits_and_exponent_for_numeric(mn.sign_bits, mn.exponent, output_buffer, &output_tuple_def, SELF);
+	set_sign_bits_and_exponent_for_numeric(mn.sign_bits, mn.exponent, output_buffer, &output_tuple_def, pos_to_write);
 
 	if(mn.sign_bits == POSITIVE_NUMERIC || mn.sign_bits == NEGATIVE_NUMERIC)
 	{
@@ -83,7 +97,7 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 			int abort_error_dummy = 0;
 			rage_engine* ex_engine = &(tx->rdb->volatile_rage_engine);
 
-			digit_write_iterator* wr = get_new_digit_write_iterator(output_buffer, &output_tuple_def, SELF, 0 /*dummy root*/, get_NULL_tuple_pointer(&(ex_engine->pam_p->pas)), ex_engine->max_prefix_size_in_bytes / BYTES_PER_NUMERIC_DIGIT, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
+			digit_write_iterator* wr = get_new_digit_write_iterator(output_buffer, &output_tuple_def, pos_to_write, 0 /*dummy root*/, get_NULL_tuple_pointer(&(ex_engine->pam_p->pas)), ex_engine->max_prefix_size_in_bytes / BYTES_PER_NUMERIC_DIGIT, &(ex_engine->bstd), ex_engine->pam_p, ex_engine->pmm_p);
 
 			temporary_extension_store* temp_ext_store = NULL;
 			uint32_t digits_written = 0;
