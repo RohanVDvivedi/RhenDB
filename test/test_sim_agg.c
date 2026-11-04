@@ -40,7 +40,7 @@ int print_consumer_custom(void* consumer_context, const void* tuple, const tuple
 		int error_code = 0;
 		uint32_t length = 0;
 		uint32_t capacity = 0;
-		char* group_concat_data = materialize_tbj(uval, qp->curr_tx->rdb->volatile_rage_engine.text_extended_type_info, qp->curr_tx, &length, &capacity, 0, &error_code);
+		char* group_concat_data = materialize_tbj(uval, dti_temp, qp->curr_tx, &length, &capacity, 0, &error_code);
 
 		if(error_code)
 		{
@@ -57,7 +57,7 @@ int print_consumer_custom(void* consumer_context, const void* tuple, const tuple
 			return 0;
 
 		int error_code = 0;
-		mpd_t sum_all = materialize_numeric(uval, qp->curr_tx->rdb->volatile_rage_engine.numeric_extended_type_info, qp->curr_tx, 0, &error_code);
+		mpd_t sum_all = materialize_numeric(uval, dti_temp, qp->curr_tx, 0, &error_code);
 		if(error_code)
 		{
 			printf("sum all numeric materialization error %d\n", error_code);
@@ -75,7 +75,7 @@ int print_consumer_custom(void* consumer_context, const void* tuple, const tuple
 			return 0;
 
 		int error_code = 0;
-		jsonb_node* jsonb_agg_data = materialize_jsonb(uval, qp->curr_tx->rdb->volatile_rage_engine.jsonb_extended_type_info, qp->curr_tx, &error_code);
+		jsonb_node* jsonb_agg_data = materialize_jsonb(uval, dti_temp, qp->curr_tx, &error_code);
 		if(error_code)
 		{
 			printf("jsonb_agg materialization error %d\n", error_code);
