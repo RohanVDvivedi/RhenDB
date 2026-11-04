@@ -1,5 +1,20 @@
 PICKED TASKS
 
+ * discard tuple_transformers from the architecture completely
+ * make the project such that tuple transformers are not playing any role at all and every in-memory tuple carries unified-type instead of concrete extended dti
+   * do this at projection and dql/dml operators
+   * projections to carry output table name and projected column names
+   * do the same for aggregate function calls, to return unified types
+   * everything is either a extended persistent type (on disk) or unified type(in-memory), after this change at the raw tuple
+ * pass around tuples as pointers instead of interim_tuple_store plumbing, implemented volcano model, with passing tuple pointers
+  * any operator can have more than 1 source, but only 1 destination operator, pull based operator, child returns exacly  tuple or NULL upon completion
+   * complete pass through for limit/offset, identity, selection, sort(unless spilling), union, merge_sorted and semi/anti joins
+   * tuple constructions required only for joins(may spill), projection, aggregations(keyed)
+   * sources like scan output tuple for only a particular partition as is, and projection takes care of selecting columns and filtering before the union operator
+   * initial attempt everything will be single threaded
+
+-----------------------------------------------------------------
+
 * also cache materialized values by chunk_pointer and by what rage_engine pointer they live in
  * resets everytime new input_tuples are set
 
@@ -63,9 +78,3 @@ FUTURE TASKS
   * implement get date, time, with timezone, and time in string to unix epoch
 
  8.* support for user-defined expressioned-functions and aggregate-functions
-
-ARCHITECTURAL CHANGEs
- * remove tuple_transformers completely, all that it does will be done by the operators, that also allow fan-out
- * make operators produce interim_tuple_store, and consumers get consumption_iterator that points into these output_buffer interim_tuple_store increasing the one in context's reference counter
- * production can have an interface like produce_stage() gives pointer to enough space for get/set and memcpy, and produce_finalize(), finalizes the write and releases the lock
- * only producers own their produce, now we need a way to figure out how consumer gets parallelism from this stream
