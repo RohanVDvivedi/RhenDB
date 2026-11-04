@@ -140,6 +140,17 @@ static void free_aggregate_input_element_ids(positional_accessor** arr, uint32_t
 	free(arr);
 }
 
+static char* deep_clone_string(const char* src)
+{
+	if(src == NULL)
+		return NULL;
+
+	uint32_t length = strlen(src);
+	char* cloned = malloc(length + 1);
+	memcpy(cloned, src, length + 1);
+	return cloned;
+}
+
 // deep clones a projection_descriptions array : the PROJECT_IDENTITY entries own a positional_accessor (cloned),
 // the PROJECT_EXPRESSION entries carry a borrowed sql_expression* (the AST, not cloned)
 static projection_description* deep_clone_projection_descriptions(const projection_description* src, uint32_t count)
@@ -151,6 +162,7 @@ static projection_description* deep_clone_projection_descriptions(const projecti
 	for(uint32_t i = 0; i < count; i++)
 	{
 		cloned[i] = src[i];
+		cloned[i].column_name = deep_clone_string(src[i].column_name);
 		if(src[i].type == PROJECT_IDENTITY)
 		{
 			cloned[i].pa.positions_length = src[i].pa.positions_length;
@@ -168,20 +180,13 @@ static void free_projection_descriptions(projection_description* arr, uint32_t c
 		return;
 
 	for(uint32_t i = 0; i < count; i++)
+	{
+		if(arr[i].column_name != NULL)
+			free(arr[i].column_name);
 		if(arr[i].type == PROJECT_IDENTITY)
 			free(arr[i].pa.positions);
+	}
 	free(arr);
-}
-
-static char* deep_clone_string(const char* src)
-{
-	if(src == NULL)
-		return NULL;
-
-	uint32_t length = strlen(src);
-	char* cloned = malloc(length + 1);
-	memcpy(cloned, src, length + 1);
-	return cloned;
 }
 
 // deep clones an array of `count` strings

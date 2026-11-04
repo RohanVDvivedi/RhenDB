@@ -16,6 +16,9 @@ typedef struct projection_description projection_description;
 struct projection_description
 {
 	projection_type type;
+
+	char* column_name; // if NULL, PROJECT_IDENTITY -> take from incomming column, PROJECT_EXPRESSION -> "proj-<no>"
+
 	union
 	{
 		positional_accessor pa; // for PROJECT_IDENTITY
@@ -23,7 +26,7 @@ struct projection_description
 	};
 };
 
-#define project_from(pa_v)        ((projection_description){.type = PROJECT_IDENTITY, .pa = pa_v})
-#define project_using(expr_v_p)   ((projection_description){.type = PROJECT_EXPRESSION, .expr = expr_v_p})
+#define project_from(col_name, pa_v)        ((projection_description){.type = PROJECT_IDENTITY, .column_name = col_name, .pa = pa_v})
+#define project_using(col_name, expr_v_p)   ((projection_description){.type = PROJECT_EXPRESSION, .column_name = col_name, .expr = expr_v_p})
 
 #endif
