@@ -28,8 +28,8 @@ A relational database storage engine, akin to InnoDB and PostgreSQL's storage en
  * do not forget to include appropriate public api headers as and when needed. this includes
    * `#include<rhendb/rhendb.h>`
    * `#include<rhendb/transaction_table.h>`
-   * `#include<rohedb/lock_manager.h>`
-   * `#include<rohedb/temp_tuple_store.h>`
+   * `#include<rhendb/lock_manager.h>`
+   * `#include<rhendb/temp_tuple_store.h>`
 
 ## Instructions for uninstalling library
 
