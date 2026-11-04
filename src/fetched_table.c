@@ -72,7 +72,6 @@ fetched_table* fetch_table_from_catalog_manager(rhendb* rdb, const mvcc_snapshot
 	if(ftabl == NULL)
 		exit(-1);
 
-	ftabl->rdb = rdb;
 	ftabl->table_info = (*table_info);
 	free(table_info);
 

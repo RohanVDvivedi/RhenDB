@@ -7,8 +7,6 @@
 typedef struct fetched_table fetched_table;
 struct fetched_table
 {
-	rhendb* rdb;
-
 	rhendb_table table_info;
 
 	// will always be non zero
