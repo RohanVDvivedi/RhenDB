@@ -150,7 +150,7 @@ static void free_resources(operator* o)
 	free(inputs);
 }
 
-void setup_projection_operator(operator* o, operator* input_operator, const projection_description* projection_descriptions, uint32_t projection_descriptions_count)
+void setup_projection_operator(operator* o, operator* input_operator, const char* output_name, const projection_description* projection_descriptions, uint32_t projection_descriptions_count)
 {
 	if(projection_descriptions_count == 0)
 	{
@@ -225,7 +225,7 @@ void setup_projection_operator(operator* o, operator* input_operator, const proj
 		exit(-1);
 	}
 
-	initialize_tuple_data_type_info(output_dti, "projection", 0, max_output_tuple_size, projection_descriptions_count);
+	initialize_tuple_data_type_info(output_dti, ((output_name == NULL) ? "projection" : output_name), 0, max_output_tuple_size, projection_descriptions_count);
 
 	tuple_def* output_tuple_def = malloc(sizeof(tuple_def));
 	initialize_tuple_def(output_tuple_def, output_dti);

@@ -536,7 +536,7 @@ operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down
 // projection
 // ---------------------------------------------------------------------------------------------------
 
-operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, projection_description* projection_descriptions, uint32_t projection_descriptions_count)
+operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const char* output_name, projection_description* projection_descriptions, uint32_t projection_descriptions_count)
 {
 	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
 	{
@@ -626,7 +626,7 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint6
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_PROJECTION);
-	d->params.projection = (projection_operator_params){input_operator_index, deep_clone_projection_descriptions(projection_descriptions, projection_descriptions_count), projection_descriptions_count};
+	d->params.projection = (projection_operator_params){input_operator_index, deep_clone_string(output_name), deep_clone_projection_descriptions(projection_descriptions, projection_descriptions_count), projection_descriptions_count};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 	d->expr_eval_context = ec;
@@ -2259,7 +2259,7 @@ query_plan* create_query_plan(query_plan_desc* qpd, const sql_expr_eval_context*
 				setup_sort_operator(o, d->params.sort.result_counter, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.sort.input_operator_index), d->params.sort.key_element_count, d->params.sort.key_element_ids, d->params.sort.key_compare_direction, d->params.sort.min_run_size, d->params.sort.N_way_sort, d->params.sort.max_concurrent_jobs_count);
 				break;
 			case OP_PROJECTION :
-				setup_projection_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.projection.input_operator_index), d->params.projection.projection_descriptions, d->params.projection.projection_descriptions_count);
+				setup_projection_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.projection.input_operator_index), d->params.projection.output_name, d->params.projection.projection_descriptions, d->params.projection.projection_descriptions_count);
 				break;
 			case OP_SIMPLE_AGGREGATION :
 				setup_simple_aggregation_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.simple_aggregation.input_operator_index), d->params.simple_aggregation.aggregate_functions_count, d->params.simple_aggregation.aggregate_functions, (positional_accessor const * const *) d->params.simple_aggregation.aggregate_input_element_ids);
@@ -2563,6 +2563,9 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 			free(d->params.union_op.input_operator_indices);
 		else if(d->type == OP_MERGE_SORTED_INPUTS)
 			free(d->params.merge_sorted_inputs.input_operator_indices);
+
+		if(d->type == OP_PROJECTION)
+			free(d->params.projection.output_name);
 
 		// delete the expression evaluation context template, if this operator built one
 		if(d->has_expr_eval_context)

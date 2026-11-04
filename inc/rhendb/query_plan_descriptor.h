@@ -238,6 +238,7 @@ typedef struct projection_operator_params projection_operator_params;
 struct projection_operator_params
 {
 	uint64_t input_operator_index;
+	char* output_name;
 	projection_description* projection_descriptions; // borrowed
 	uint32_t projection_descriptions_count;
 };
@@ -485,7 +486,7 @@ operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan
 operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* qpd, uint64_t left_input_operator_index, const positional_accessor* left_key_element_ids, uint64_t right_input_operator_index, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype, uint32_t min_block_size);
 operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, uint64_t left_input_operator_index, const positional_accessor* left_key_element_ids, uint64_t right_input_operator_index, const positional_accessor* right_key_element_ids, uint32_t key_element_count, semi_join_type stype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size);
 operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, sql_expression* expr);
-operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, projection_description* projection_descriptions, uint32_t projection_descriptions_count);
+operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const char* output_name, projection_description* projection_descriptions, uint32_t projection_descriptions_count);
 operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, sync_pipe* out_pipe);
 operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags);
 operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags);
