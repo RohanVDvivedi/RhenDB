@@ -620,7 +620,7 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint6
 		return NULL;
 	}
 
-	initialize_tuple_data_type_info(output_dti, "projection", 0, max_output_tuple_size, projection_descriptions_count);
+	initialize_tuple_data_type_info(output_dti, ((output_name == NULL) ? "projection" : output_name), 0, max_output_tuple_size, projection_descriptions_count);
 
 	tuple_def* output_tuple_def = malloc(sizeof(tuple_def));
 	initialize_tuple_def(output_tuple_def, output_dti);

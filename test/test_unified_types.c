@@ -24,16 +24,16 @@ tuple_def record_def;
 void initialize_tuple_defs()
 {
 	data_type_info* record_type_info = malloc(sizeof_tuple_data_type_info(3));
-	initialize_tuple_data_type_info(record_type_info, "record", 0, 900, 3);
+	initialize_tuple_data_type_info(record_type_info, "record", 0, 8 + (rdb.union_text_type_info->max_size + 8) + (rdb.union_blob_type_info->max_size + 8) + (rdb.union_numeric_type_info->max_size + 8), 3);
 
 	strcpy(record_type_info->containees[0].field_name, "key");
-	record_type_info->containees[0].al.type_info = rdb.volatile_rage_engine.text_extended_type_info;
+	record_type_info->containees[0].al.type_info = rdb.union_text_type_info;
 
 	strcpy(record_type_info->containees[1].field_name, "value_blob");
-	record_type_info->containees[1].al.type_info = rdb.volatile_rage_engine.blob_extended_type_info;
+	record_type_info->containees[1].al.type_info = rdb.union_blob_type_info;
 
 	strcpy(record_type_info->containees[2].field_name, "value_numeric");
-	record_type_info->containees[2].al.type_info = rdb.volatile_rage_engine.numeric_extended_type_info;
+	record_type_info->containees[2].al.type_info = rdb.union_numeric_type_info;
 
 	initialize_tuple_def(&record_def, record_type_info);
 
@@ -315,10 +315,8 @@ int main()
 
 			insert_scan_operator_descriptor(qpd, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0); op_index++;
 			insert_simple_projection_tuple_transformer_descriptor(qpd, "projecteds", 3, projections_for_table, ((char const *[]){"column1", "column2", "column3"}));
-			insert_unified_typing_tuple_transformer_descriptor(qpd, (uint32_t[]){0,1,2}, 3);
 
 			insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def); op_index++;
-			insert_unified_typing_tuple_transformer_descriptor(qpd, (uint32_t[]){0,1,2}, 3);
 
 			insert_union_operator_descriptor(qpd, (uint64_t []){0, 1}, 2); op_index++;
 
