@@ -84,21 +84,21 @@ int main(int argc, char** argv)
 		uint32_t count2 = argc - 1;
 		projection_description* pd = alloca(sizeof(projection_description) * (count1 + count2));
 		uint32_t p = 0;
-		pd[p++] = project_from(SELF);
-		pd[p++] = project_from(STATIC_POSITION(0));
-		pd[p++] = project_from(STATIC_POSITION(1));
-		pd[p++] = project_from(STATIC_POSITION(2));
-		pd[p++] = project_from(STATIC_POSITION(3));
-		pd[p++] = project_from(STATIC_POSITION(4));
-		pd[p++] = project_from(STATIC_POSITION(5));
-		pd[p++] = project_from(STATIC_POSITION(6));
-		pd[p++] = project_from(STATIC_POSITION(2,0));
-		pd[p++] = project_from(STATIC_POSITION(2,1));
-		pd[p++] = project_from(STATIC_POSITION(2,2));
+		pd[p++] = project_from(NULL, SELF);
+		pd[p++] = project_from(NULL, STATIC_POSITION(0));
+		pd[p++] = project_from(NULL, STATIC_POSITION(1));
+		pd[p++] = project_from(NULL, STATIC_POSITION(2));
+		pd[p++] = project_from(NULL, STATIC_POSITION(3));
+		pd[p++] = project_from(NULL, STATIC_POSITION(4));
+		pd[p++] = project_from(NULL, STATIC_POSITION(5));
+		pd[p++] = project_from(NULL, STATIC_POSITION(6));
+		pd[p++] = project_from(NULL, STATIC_POSITION(2,0));
+		pd[p++] = project_from(NULL, STATIC_POSITION(2,1));
+		pd[p++] = project_from(NULL, STATIC_POSITION(2,2));
 		for(; p < count1 + count2; p++)
-			pd[p] = project_using(proj_expr_sql[p-count1]->expr);
+			pd[p] = project_using(NULL, proj_expr_sql[p-count1]->expr);
 
-		insert_projection_operator_descriptor(qpd, 0, pd, (count1 + count2)); op_index++;
+		insert_projection_operator_descriptor(qpd, 0, "record", pd, (count1 + count2)); op_index++;
 
 		insert_consumer_operator_descriptor(qpd, 1, PRINT_DATA ? print_consumer : NULL, NULL); op_index++;
 	}

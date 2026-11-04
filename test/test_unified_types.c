@@ -112,7 +112,7 @@ int main()
 	insert_new_savepoint(&tx, &get_dstring_pointing_to_literal_cstring("savepoint-1"));
 
 	// read cache version of the table called ftbl
-	fetched_table* ftbl = fetch_table_from_catalog_manager(&(rdb.cat_mgr), tx.snapshot, "my_table", table_id);
+	fetched_table* ftbl = fetch_table_from_catalog_manager(&rdb, tx.snapshot, "my_table", table_id);
 
 	// create sample interim tuple store for constant dataset operator for insertion
 	interim_tuple_store* its_p = get_new_interim_tuple_store(4096);
