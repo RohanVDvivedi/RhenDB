@@ -80,29 +80,16 @@ int main(int argc, char** argv)
 		}
 	}
 
-	const char* field_names[] = {
-		"row_id",
-		"row_no",
-		"data",
-	};
-
-	positional_accessor projections[] = {
-		STATIC_POSITION(1,0),
-		STATIC_POSITION(0),
-		STATIC_POSITION(1,1),
-	};
-
 	{
 		uint64_t op_index = 0;
 
 		insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def); op_index++;
 		if(filter_expr_sql != NULL)
-			insert_expressioned_selection_tuple_transformer_descriptor(qpd, filter_expr_sql->expr);
-		insert_row_identifier_prepender_tuple_transformer_descriptor(qpd, 7);
-		insert_row_number_prepender_tuple_transformer_descriptor(qpd, 1);
-		insert_simple_projection_tuple_transformer_descriptor(qpd, "output", sizeof(field_names)/sizeof(field_names[0]), projections, field_names);
+		{
+			insert_selection_operator_descriptor(qpd, op_index - 1, filter_expr_sql->expr); op_index++;
+		}
 
-		insert_consumer_operator_descriptor(qpd, 0, print_consumer, NULL); op_index++;
+		insert_consumer_operator_descriptor(qpd, op_index - 1, print_consumer, NULL); op_index++;
 	}
 	printf("\n\n");
 

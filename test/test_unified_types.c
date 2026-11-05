@@ -308,22 +308,26 @@ int main()
 
 		compare_direction CMP_DIR[1] = {ASC};
 
-		positional_accessor projections_for_table[3] = {STATIC_POSITION(0,1), STATIC_POSITION(0,2), STATIC_POSITION(0,3)};
 		{
 			uint64_t op_index = 0;
 
 			insert_scan_operator_descriptor(qpd, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0); op_index++;
-			insert_simple_projection_tuple_transformer_descriptor(qpd, "projecteds", 3, projections_for_table, ((char const *[]){"column1", "column2", "column3"}));
+
+			insert_projection_operator_descriptor(qpd, 0, "projecteds", (projection_description[]){
+				project_from("column1", STATIC_POSITION(0,1)),
+				project_from("column2", STATIC_POSITION(0,2)),
+				project_from("column3", STATIC_POSITION(0,3)),
+			}, 7); op_index++;
 
 			insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def); op_index++;
 
-			insert_union_operator_descriptor(qpd, (uint64_t []){0, 1}, 2); op_index++;
+			insert_union_operator_descriptor(qpd, (uint64_t []){1, 2}, 2); op_index++;
 
-			insert_hash_aggregation_operator_descriptor(qpd, 2, 1, key_pos, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, 4, 1, 1, 1000); op_index++;
+			insert_hash_aggregation_operator_descriptor(qpd, 3, 1, key_pos, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, 4, 1, 1, 1000); op_index++;
 
-			insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 3, 1, key_pos, CMP_DIR, 10, 2, 1); op_index++;
+			insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 4, 1, key_pos, CMP_DIR, 10, 2, 1); op_index++;
 
-			insert_consumer_operator_descriptor(qpd, 4, print_consumer, NULL); op_index++;
+			insert_consumer_operator_descriptor(qpd, 5, print_consumer, NULL); op_index++;
 		}
 
 		qp = create_query_plan(qpd, NULL);

@@ -48,40 +48,6 @@ void initialize_tuple_defs()
 	printf("\n\n");
 }
 
-positional_accessor projections[] = {
-	STATIC_POSITION(2),
-	STATIC_POSITION(0),
-};
-
-static void destroy_NOP(tuple_transformer* tt_p){}
-
-typedef struct between_context between_context;
-struct between_context
-{
-	uint64_t min_value;
-	uint64_t max_value;
-};
-
-static void* process_between(tuple_transformer* tt_p, void* tuple)
-{
-	between_context* bc = tt_p->context;
-	const data_type_info* dti_temp;
-	datum num;
-	get_value_from_element_from_tuple(&num, &dti_temp, &record_def, STATIC_POSITION(0), tuple);
-	if(bc->min_value <= num.uint_value && num.uint_value <= bc->max_value)
-		return tuple;
-	else
-		return NULL;
-}
-
-tuple_transformer* get_new_between_tuple_transformer(between_context* bc)
-{
-	return get_new_tuple_transformer(bc, &record_def, &record_def, process_between, destroy_NOP);
-}
-
-between_context bc0 = {8, 145};
-between_context bc1 = {3, 45};
-
 void deinitialize_tuple_defs()
 {
 	free(record_type_info);
@@ -236,21 +202,13 @@ int main()
 	{
 		operator* o = get_new_registered_operator_for_query_plan(qp);
 		setup_generator_operator(o, generator, &generator_number, &record_def);
-		for(int j = 0; j < 4; j++)
-		{
-			if(j%2 == 0)
-				append_tuple_transformer(&(o->output_tuple_transformers), get_new_identity_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(o)));
-			else
-				append_tuple_transformer(&(o->output_tuple_transformers), get_new_clone_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(o)));
-		}
-		append_tuple_transformer(&(o->output_tuple_transformers), get_new_between_tuple_transformer(&bc0));
 		printf("source operator %p\n", o);
 		operator* input = o;
 
 		operator* i1 = get_new_registered_operator_for_query_plan(qp);
 		setup_identity_operator(i1, input);
-		append_tuple_transformer(&(i1->output_tuple_transformers), get_new_row_number_prepender_transformer(get_tuple_def_for_tuples_to_be_consumed_from(i1), 7));
 		printf("i1 operator %p\n", i1);
+
 		o = get_new_registered_operator_for_query_plan(qp);
 		setup_consumer_operator(o, i1, print_consumer, NULL);
 		printf("sink operator %p\n", o);
@@ -259,36 +217,16 @@ int main()
 		{
 			o = get_new_registered_operator_for_query_plan(qp);
 			setup_identity_operator(o, input);
-			for(int j = 0; j < 4; j++)
-			{
-				if(i%2 == 0)
-					append_tuple_transformer(&(o->output_tuple_transformers), get_new_identity_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(o)));
-				else
-				{
-					if(j%2 == 0)
-						append_tuple_transformer(&(o->output_tuple_transformers), get_new_clone_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(o)));
-					else
-						append_tuple_transformer(&(o->output_tuple_transformers), get_new_identity_tuple_transformer(get_tuple_def_for_tuples_to_be_consumed_from(o)));
-				}
-			}
-			if(i == 0)
-				append_tuple_transformer(&(o->output_tuple_transformers), get_new_between_tuple_transformer(&bc1));
-			if(i == 1)
-			{
-				tuple_transformer* projs = get_new_simple_projection_transformer("projecteds", get_tuple_def_for_tuples_to_be_consumed_from(o), 2, projections, ((char const *[]){"column1", "column0"}));
-				append_tuple_transformer(&(o->output_tuple_transformers), projs);
-			}
 			printf("identity operator %p\n", o);
 			input = o;
 		}
 
 		operator* i2 = get_new_registered_operator_for_query_plan(qp);
 		setup_identity_operator(i2, input);
-		append_tuple_transformer(&(i2->output_tuple_transformers), get_new_row_identifier_prepender_transformer(get_tuple_def_for_tuples_to_be_consumed_from(i2), 777));
 		printf("i2 operator %p\n", i2);
 
 		operator* sq = i2;
-		spipe_def = get_tuple_def_for_tuples_to_be_consumed_from(sq);
+		spipe_def = sq->output_tuple_def;
 		operator* mq = get_new_registered_operator_for_query_plan(qp);
 		setup_subquery_output_operator(mq, sq, spipe);
 		printf("mq operator %p\n", mq);
@@ -296,6 +234,12 @@ int main()
 		o = get_new_registered_operator_for_query_plan(qp);
 		setup_consumer_operator(o, i2, print_consumer, NULL);
 		printf("sink operator %p\n", o);
+
+		/*
+			generator -> i1 -> print
+			   \-------> IDENTITY_OPERATORS_COUNT identities -> i2 -> sub_query_output
+			                                                     \--> print
+		*/
 	}
 	printf("\n\n");
 
