@@ -28,7 +28,7 @@ static operator_desc* get_new_registered_operator_descriptor_for_query_plan_desc
 	d->index = get_element_count_arraylist(&(qpd->operator_descriptors));
 	d->output_tuple_def = NULL;
 	d->resource_counter = (operator_resource_counter){};
-	d->has_expr_eval_context = 0;
+	d->expr_eval_context = NULL;
 
 	if(is_full_arraylist(&(qpd->operator_descriptors)) && !expand_arraylist(&(qpd->operator_descriptors)))
 		exit(-1);
@@ -420,8 +420,8 @@ operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, uint64
 	d->params.selection = (selection_operator_params){input_operator_index, expr};
 	d->output_tuple_def = input_tuple_def;
 	d->resource_counter = result;
-	d->expr_eval_context = ec;
-	d->has_expr_eval_context = 1;
+	d->expr_eval_context = malloc(sizeof(sql_expr_eval_context));
+	*(d->expr_eval_context) = ec;
 
 	return d;
 }
@@ -585,8 +585,8 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint6
 	d->params.projection = (projection_operator_params){input_operator_index, deep_clone_string(output_name), deep_clone_projection_descriptions(projection_descriptions, projection_descriptions_count), projection_descriptions_count};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
-	d->expr_eval_context = ec;
-	d->has_expr_eval_context = 1;
+	d->expr_eval_context = malloc(sizeof(sql_expr_eval_context));
+	*(d->expr_eval_context) = ec;
 
 	return d;
 }
@@ -1177,8 +1177,9 @@ operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc
 	d->resource_counter = result;
 	if(has_expr_eval_context)
 	{
-		d->expr_eval_context = ec;
-		d->has_expr_eval_context = 1;
+		d->expr_eval_context = malloc(sizeof(sql_expr_eval_context));
+		*(d->expr_eval_context) = ec;
+
 	}
 
 	return d;
@@ -1438,8 +1439,9 @@ operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan
 	d->resource_counter = result;
 	if(has_expr_eval_context)
 	{
-		d->expr_eval_context = ec;
-		d->has_expr_eval_context = 1;
+		d->expr_eval_context = malloc(sizeof(sql_expr_eval_context));
+		*(d->expr_eval_context) = ec;
+
 	}
 
 	return d;
@@ -2136,8 +2138,11 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 			free(d->params.projection.output_name);
 
 		// delete the expression evaluation context template, if this operator built one
-		if(d->has_expr_eval_context)
-			delete_context_p_for_sql_expr_eval_context_for_rhendb(d->expr_eval_context.context_p);
+		if(d->expr_eval_context != NULL)
+		{
+			delete_context_p_for_sql_expr_eval_context_for_rhendb(d->expr_eval_context->context_p);
+			free(d->expr_eval_context);
+		}
 
 		free(d);
 	}

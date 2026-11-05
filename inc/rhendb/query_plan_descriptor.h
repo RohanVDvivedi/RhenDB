@@ -351,8 +351,7 @@ struct operator_desc
 
 	operator_resource_counter resource_counter;
 
-	sql_expr_eval_context expr_eval_context;
-	int has_expr_eval_context;
+	sql_expr_eval_context* expr_eval_context; // non-NULL only if the operator actually needs it to resolve expressions
 };
 
 typedef struct query_plan_desc query_plan_desc;
