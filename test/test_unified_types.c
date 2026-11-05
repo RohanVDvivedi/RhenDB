@@ -317,7 +317,7 @@ int main()
 				project_from("column1", STATIC_POSITION(0,1)),
 				project_from("column2", STATIC_POSITION(0,2)),
 				project_from("column3", STATIC_POSITION(0,3)),
-			}, 7); op_index++;
+			}, 3); op_index++;
 
 			insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def); op_index++;
 
