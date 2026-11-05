@@ -1,5 +1,8 @@
 PICKED TASKS
 
+ * review code changes for removal ioif tuple transformer and makeing the in-memory types as unified types related changes
+ * review if the plumbing change below is a good design
+
  * pass around tuples as pointers instead of interim_tuple_store plumbing, implemented volcano model, with passing tuple pointers
   * any operator can have more than 1 source, but only 1 destination operator, pull based operator, child returns exacly  tuple or NULL upon completion
    * complete pass through for limit/offset, identity, selection, sort(unless spilling), union, merge_sorted and semi/anti joins
