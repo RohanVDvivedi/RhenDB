@@ -559,7 +559,12 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint6
 		else
 			max_output_tuple_size += col_dti->is_variable_sized ? (8 + col_dti->max_size) : (1 + col_dti->size);
 
-		sprintf(output_dti->containees[i].field_name, "proj_%u", i);
+		// if projection has a column name use that, else make a custom unique one
+		if(projection_descriptions[i].column_name != NULL)
+			sprintf(output_dti->containees[i].field_name, projection_descriptions[i].column_name, i);
+		else
+			sprintf(output_dti->containees[i].field_name, "proj_%u", i);
+
 		output_dti->containees[i].al.type_info = col_dti;
 	}
 
