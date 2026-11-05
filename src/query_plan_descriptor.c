@@ -30,8 +30,6 @@ static operator_desc* get_new_registered_operator_descriptor_for_query_plan_desc
 	d->resource_counter = (operator_resource_counter){};
 	d->has_expr_eval_context = 0;
 
-	initialize_arraylist(&(d->transformer_descriptors), 4);
-
 	if(is_full_arraylist(&(qpd->operator_descriptors)) && !expand_arraylist(&(qpd->operator_descriptors)))
 		exit(-1);
 	push_back_to_arraylist(&(qpd->operator_descriptors), d);
@@ -51,14 +49,6 @@ query_plan_desc* get_new_query_plan_descriptor(transaction* tx, const sql_expr_e
 	initialize_arraylist(&(qpd->operator_descriptors), 16);
 
 	return qpd;
-}
-
-const tuple_def* get_output_tuple_def_for_operator_descriptor(const operator_desc* operator_descriptor)
-{
-	if(get_element_count_arraylist(&(operator_descriptor->transformer_descriptors)) == 0)
-		return operator_descriptor->output_tuple_def;
-
-	return ((const tuple_transformer_desc*) get_from_front_of_arraylist(&(operator_descriptor->transformer_descriptors), get_element_count_arraylist(&(operator_descriptor->transformer_descriptors)) - 1))->output_def;
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -187,40 +177,6 @@ static void free_projection_descriptions(projection_description* arr, uint32_t c
 			free(arr[i].pa.positions);
 	}
 	free(arr);
-}
-
-// deep clones an array of `count` strings
-static char** deep_clone_strings(char const * const * src, uint32_t count)
-{
-	if(src == NULL || count == 0)
-		return NULL;
-
-	char** cloned = malloc(sizeof(char*) * count);
-	for(uint32_t i = 0; i < count; i++)
-		cloned[i] = deep_clone_string(src[i]);
-	return cloned;
-}
-
-static void free_strings(char** arr, uint32_t count)
-{
-	if(arr == NULL)
-		return;
-
-	for(uint32_t i = 0; i < count; i++)
-		free(arr[i]);
-	free(arr);
-}
-
-// deep clones a contiguous array of `count` uint32_t-s (column_ids_to_transform style)
-static uint32_t* deep_clone_uint32_array(const uint32_t* src, uint32_t count)
-{
-	if(src == NULL || count == 0)
-		return NULL;
-
-	uint32_t* cloned = malloc(sizeof(uint32_t) * count);
-	for(uint32_t i = 0; i < count; i++)
-		cloned[i] = src[i];
-	return cloned;
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -375,7 +331,7 @@ operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, uint64_
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	const tuple_def* input_tuple_def = get_output_tuple_def_for_operator_descriptor(input_operator_desc);
+	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for identity_operator_descriptor\n");
@@ -401,7 +357,7 @@ operator_desc* insert_offset_limit_operator_descriptor(query_plan_desc* qpd, uin
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	const tuple_def* input_tuple_def = get_output_tuple_def_for_operator_descriptor(input_operator_desc);
+	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for offset_limit_operator_descriptor\n");
@@ -438,7 +394,7 @@ operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, uint64
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	const tuple_def* input_tuple_def = get_output_tuple_def_for_operator_descriptor(input_operator_desc);
+	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for selection_operator_descriptor\n");
@@ -509,7 +465,7 @@ operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	const tuple_def* record_def = get_output_tuple_def_for_operator_descriptor(input_operator_desc);
+	const tuple_def* record_def = input_operator_desc->output_tuple_def;
 	if(record_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for sort_operator_descriptor\n");
@@ -551,7 +507,7 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint6
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	const tuple_def* input_tuple_def = get_output_tuple_def_for_operator_descriptor(input_operator_desc);
+	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for projection_operator_descriptor\n");
@@ -654,7 +610,7 @@ operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qp
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	if(get_output_tuple_def_for_operator_descriptor(input_operator_desc) == NULL)
+	if(input_operator_desc->output_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for simple_aggregation_operator_descriptor\n");
 		return NULL;
@@ -717,7 +673,7 @@ operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qp
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	const tuple_def* input_tuple_def = get_output_tuple_def_for_operator_descriptor(input_operator_desc);
+	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for sorted_aggregation_operator_descriptor\n");
@@ -826,7 +782,7 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	const tuple_def* input_tuple_def = get_output_tuple_def_for_operator_descriptor(input_operator_desc);
+	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for hash_aggregation_operator_descriptor\n");
@@ -903,7 +859,7 @@ operator_desc* insert_consumer_operator_descriptor(query_plan_desc* qpd, uint64_
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	if(get_output_tuple_def_for_operator_descriptor(input_operator_desc) == NULL)
+	if(input_operator_desc->output_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for consumer_operator_descriptor\n");
 		return NULL;
@@ -928,7 +884,7 @@ operator_desc* insert_stream_output_operator_descriptor(query_plan_desc* qpd, ui
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	if(get_output_tuple_def_for_operator_descriptor(input_operator_desc) == NULL)
+	if(input_operator_desc->output_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for stream_output_operator_descriptor\n");
 		return NULL;
@@ -953,7 +909,7 @@ operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc* qpd, 
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	if(get_output_tuple_def_for_operator_descriptor(input_operator_desc) == NULL)
+	if(input_operator_desc->output_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for subquery_output_operator_descriptor\n");
 		return NULL;
@@ -990,7 +946,7 @@ operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, const uint
 		}
 	}
 
-	const tuple_def* input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_indices[0]));
+	const tuple_def* input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_indices[0]))->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for union_operator_descriptor\n");
@@ -998,7 +954,7 @@ operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, const uint
 	}
 	for(uint64_t i = 1; i < input_operators_count; i++)
 	{
-		const tuple_def* other_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_indices[i]));
+		const tuple_def* other_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_indices[i]))->output_tuple_def;
 		if(other_tuple_def == NULL)
 		{
 			printf("input operator descriptor has no output_tuple_def for union_operator_descriptor\n");
@@ -1042,7 +998,7 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 		}
 	}
 
-	const tuple_def* record_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_indices[0]));
+	const tuple_def* record_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_indices[0]))->output_tuple_def;
 	if(record_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for merge_sorted_inputs_operator_descriptor\n");
@@ -1050,7 +1006,7 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 	}
 	for(uint64_t i = 1; i < input_operators_count; i++)
 	{
-		const tuple_def* other_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_indices[i]));
+		const tuple_def* other_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_indices[i]))->output_tuple_def;
 		if(other_tuple_def == NULL)
 		{
 			printf("input operator descriptor has no output_tuple_def for merge_sorted_inputs_operator_descriptor\n");
@@ -1091,8 +1047,8 @@ operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, uin
 		return NULL;
 	}
 
-	const tuple_def* input_tuple_def_0 = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index_0));
-	const tuple_def* input_tuple_def_1 = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index_1));
+	const tuple_def* input_tuple_def_0 = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index_0))->output_tuple_def;
+	const tuple_def* input_tuple_def_1 = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index_1))->output_tuple_def;
 	if(input_tuple_def_0 == NULL || input_tuple_def_1 == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for result_match_operator_descriptor\n");
@@ -1139,8 +1095,8 @@ operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc
 		return NULL;
 	}
 
-	const tuple_def* left_input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index));
-	const tuple_def* right_input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index));
+	const tuple_def* left_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index))->output_tuple_def;
+	const tuple_def* right_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index))->output_tuple_def;
 	if(left_input_tuple_def == NULL || right_input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for block_nested_loop_join_operator_descriptor\n");
@@ -1248,8 +1204,8 @@ operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc* qpd, 
 		return NULL;
 	}
 
-	const tuple_def* left_input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index));
-	const tuple_def* right_input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index));
+	const tuple_def* left_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index))->output_tuple_def;
+	const tuple_def* right_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index))->output_tuple_def;
 	if(left_input_tuple_def == NULL || right_input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for sort_merge_join_operator_descriptor\n");
@@ -1354,8 +1310,8 @@ operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, uint64
 		return NULL;
 	}
 
-	const tuple_def* left_input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index));
-	const tuple_def* right_input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index));
+	const tuple_def* left_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index))->output_tuple_def;
+	const tuple_def* right_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index))->output_tuple_def;
 	if(left_input_tuple_def == NULL || right_input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for hash_join_operator_descriptor\n");
@@ -1443,8 +1399,8 @@ operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan
 		return NULL;
 	}
 
-	const tuple_def* left_input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index));
-	const tuple_def* right_input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index));
+	const tuple_def* left_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index))->output_tuple_def;
+	const tuple_def* right_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index))->output_tuple_def;
 	if(left_input_tuple_def == NULL || right_input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for block_nested_loop_semi_join_operator_descriptor\n");
@@ -1509,8 +1465,8 @@ operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* 
 		return NULL;
 	}
 
-	const tuple_def* left_input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index));
-	const tuple_def* right_input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index));
+	const tuple_def* left_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index))->output_tuple_def;
+	const tuple_def* right_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index))->output_tuple_def;
 	if(left_input_tuple_def == NULL || right_input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for sort_merge_semi_join_operator_descriptor\n");
@@ -1574,8 +1530,8 @@ operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, u
 		return NULL;
 	}
 
-	const tuple_def* left_input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index));
-	const tuple_def* right_input_tuple_def = get_output_tuple_def_for_operator_descriptor((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index));
+	const tuple_def* left_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index))->output_tuple_def;
+	const tuple_def* right_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index))->output_tuple_def;
 	if(left_input_tuple_def == NULL || right_input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for hash_semi_join_operator_descriptor\n");
@@ -1691,7 +1647,7 @@ operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	const tuple_def* input_tuple_def = get_output_tuple_def_for_operator_descriptor(input_operator_desc);
+	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for insertion_operator_descriptor\n");
@@ -1797,7 +1753,7 @@ operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	if(get_output_tuple_def_for_operator_descriptor(input_operator_desc) == NULL)
+	if(input_operator_desc->output_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for deletion_operator_descriptor\n");
 		return NULL;
@@ -1840,7 +1796,7 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, u
 	}
 
 	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
-	if(get_output_tuple_def_for_operator_descriptor(input_operator_desc) == NULL)
+	if(input_operator_desc->output_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for pointer_lookup_operator_descriptor\n");
 		return NULL;
@@ -1854,352 +1810,6 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, u
 	d->resource_counter = result;
 
 	return d;
-}
-
-// ---------------------------------------------------------------------------------------------------
-// tuple transformer descriptors, each appended to the last inserted operator descriptor
-// ---------------------------------------------------------------------------------------------------
-
-// parallels get_new_registered_operator_descriptor_for_query_plan_descriptor(), for the transformer that
-// follows the last inserted operator. returns NULL if no operator has been inserted yet, or if that operator
-// produces no tuples of its own (no output_tuple_def) for the transformer chain to consume.
-static tuple_transformer_desc* get_new_tuple_transformer_descriptor_for_last_operator_descriptor(query_plan_desc* qpd, tuple_transformer_descriptor_type type, const tuple_def** input_def)
-{
-	if(get_element_count_arraylist(&(qpd->operator_descriptors)) == 0)
-	{
-		printf("no operator descriptor to attach a tuple transformer descriptor to\n");
-		return NULL;
-	}
-
-	operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
-
-	if(d->output_tuple_def == NULL)
-	{
-		printf("can not append a tuple transformer descriptor to an operator descriptor that has no output_tuple_def\n");
-		return NULL;
-	}
-
-	tuple_transformer_desc* ttd = malloc(sizeof(tuple_transformer_desc));
-	if(ttd == NULL)
-		exit(-1);
-
-	ttd->type = type;
-
-	(*input_def) = get_output_tuple_def_for_operator_descriptor(d);
-
-	ttd->output_def = NULL;
-
-	return ttd;
-}
-
-tuple_transformer_desc* insert_identity_tuple_transformer_descriptor(query_plan_desc* qpd)
-{
-	const tuple_def* input_def = NULL;
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_IDENTITY, &input_def);
-	if(ttd == NULL)
-		return NULL;
-
-	ttd->output_def = input_def;
-
-	{
-		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
-		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-			exit(-1);
-		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
-	}
-
-	return ttd;
-}
-
-tuple_transformer_desc* insert_clone_tuple_transformer_descriptor(query_plan_desc* qpd)
-{
-	const tuple_def* input_def = NULL;
-	tuple_transformer_desc* ttd =  get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_CLONE, &input_def);
-	if(ttd == NULL)
-		return NULL;
-
-	ttd->output_def = input_def;
-
-	{
-		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
-		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-			exit(-1);
-		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
-	}
-
-	return ttd;
-}
-
-tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_descriptor(query_plan_desc* qpd, int* were_hints_updated)
-{
-	const tuple_def* input_def = NULL;
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_IS_READABLE_FOR_MVCC_SNAPSHOT, &input_def);
-	if(ttd == NULL)
-		return NULL;
-
-	ttd->params.is_readable_for_mvcc_snapshot = (is_readable_for_mvcc_snapshot_transformer_params){were_hints_updated};
-	ttd->output_def = input_def;
-
-	{
-		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
-		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-			exit(-1);
-		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
-	}
-
-	return ttd;
-}
-
-tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const char* output_table_name, uint32_t projections_count, const positional_accessor* projections, char const * const *  field_names)
-{
-	const tuple_def* input_def = NULL;
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_SIMPLE_PROJECTION, &input_def);
-	if(ttd == NULL)
-		return NULL;
-
-	tuple_def* output_def = malloc(sizeof(tuple_def));
-	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(projections_count));
-
-	uint32_t max_output_tuple_size = 8;
-
-	for(uint32_t i = 0; i < projections_count; i++)
-	{
-		data_type_info* input_dti = shallow_clone_into_nullable_type((data_type_info*) get_type_info_for_element_from_tuple_def(input_def, projections[i]));
-
-		strcpy(output_dti->containees[i].field_name, field_names[i]);
-		output_dti->containees[i].al.type_info = input_dti;
-
-		if(input_dti->type == BIT_FIELD)
-			max_output_tuple_size += 9;
-		else
-			max_output_tuple_size += input_dti->is_variable_sized ? (8 + input_dti->max_size) : (1 + input_dti->size);
-	}
-
-	if(max_output_tuple_size > MAX_INTERMEDIATE_TUPLE_SIZE)
-	{
-		printf("too big output tuple for simple_projection_transformer\n");
-		for(uint32_t i = 0; i < projections_count; i++)
-			free(output_dti->containees[i].al.type_info);
-		free(output_dti);
-		free(output_def);
-		free(ttd);
-		return NULL;
-	}
-
-	initialize_tuple_data_type_info(output_dti, output_table_name, 1, max_output_tuple_size, projections_count);
-	initialize_tuple_def(output_def, output_dti);
-
-	ttd->params.simple_projection = (simple_projection_transformer_params){deep_clone_string(output_table_name), projections_count, deep_clone_positional_accessors(projections, projections_count), deep_clone_strings(field_names, projections_count)};
-	ttd->output_def = output_def;
-
-	{
-		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
-		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-			exit(-1);
-		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
-	}
-
-	return ttd;
-}
-
-tuple_transformer_desc* insert_scalar_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const positional_accessor* projection)
-{
-	const tuple_def* input_def = NULL;
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_SCALAR_PROJECTION, &input_def);
-	if(ttd == NULL)
-		return NULL;
-
-	tuple_def* output_def = malloc(sizeof(tuple_def));
-	data_type_info* output_dti = NULL;
-	data_type_info* input_dti = (data_type_info*) get_type_info_for_element_from_tuple_def(input_def, *projection);
-	if(input_dti->type == BIT_FIELD)
-		output_dti = UINT_NULLABLE[8]; // a integer big enough to hold it, a bit_field always lives in some container
-	else
-		output_dti = shallow_clone_into_nullable_type(input_dti);
-
-	initialize_tuple_def(output_def, output_dti);
-
-	ttd->params.scalar_projection = (scalar_projection_transformer_params){deep_clone_positional_accessors(projection, 1)};
-	ttd->output_def = output_def;
-
-	{
-		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
-		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-			exit(-1);
-		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
-	}
-
-	return ttd;
-}
-
-tuple_transformer_desc* insert_row_number_prepender_tuple_transformer_descriptor(query_plan_desc* qpd, uint64_t next_row_number)
-{
-	const tuple_def* input_def = NULL;
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_ROW_NUMBER_PREPENDER, &input_def);
-	if(ttd == NULL)
-		return NULL;
-
-	tuple_def* output_def = malloc(sizeof(tuple_def));
-	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(2));
-
-	uint32_t output_max_size = get_maximum_tuple_size(input_def) + 24;
-
-	strcpy(output_dti->containees[0].field_name, "row_number");
-	output_dti->containees[0].al.type_info = UINT_NON_NULLABLE[8];
-
-	strcpy(output_dti->containees[1].field_name, "row");
-	output_dti->containees[1].al.type_info = input_def->type_info;
-
-	if(output_max_size > MAX_INTERMEDIATE_TUPLE_SIZE)
-	{
-		printf("too big output tuple for row_number_prepender_transformer\n");
-		free(output_def);
-		free(output_dti);
-		free(ttd);
-		return NULL;
-	}
-
-	initialize_tuple_data_type_info(output_dti, "row_numbered", 1, output_max_size, 2);
-	initialize_tuple_def(output_def, output_dti);
-
-	ttd->params.row_number_prepender = (row_number_prepender_transformer_params){next_row_number};
-	ttd->output_def = output_def;
-
-	{
-		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
-		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-			exit(-1);
-		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
-	}
-
-	return ttd;
-}
-
-tuple_transformer_desc* insert_row_identifier_prepender_tuple_transformer_descriptor(query_plan_desc* qpd, uint64_t row_identifier)
-{
-	const tuple_def* input_def = NULL;
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_ROW_IDENTIFIER_PREPENDER, &input_def);
-	if(ttd == NULL)
-		return NULL;
-
-	tuple_def* output_def = malloc(sizeof(tuple_def));
-	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(2));
-
-	uint32_t output_max_size = get_maximum_tuple_size(input_def) + 24;
-
-	strcpy(output_dti->containees[0].field_name, "row_identifier");
-	output_dti->containees[0].al.type_info = UINT_NON_NULLABLE[8];
-
-	strcpy(output_dti->containees[1].field_name, "row");
-	output_dti->containees[1].al.type_info = input_def->type_info;
-
-	if(output_max_size > MAX_INTERMEDIATE_TUPLE_SIZE)
-	{
-		printf("too big output tuple for row_identifier_prepender_transformer\n");
-		free(output_def);
-		free(output_dti);
-		free(ttd);
-		return NULL;
-	}
-
-	initialize_tuple_data_type_info(output_dti, "row_identified", 1, output_max_size, 2);
-	initialize_tuple_def(output_def, output_dti);
-
-	ttd->params.row_identifier_prepender = (row_identifier_prepender_transformer_params){row_identifier};
-	ttd->output_def = output_def;
-
-	{
-		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
-		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-			exit(-1);
-		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
-	}
-
-	return ttd;
-}
-
-tuple_transformer_desc* insert_expressioned_selection_tuple_transformer_descriptor(query_plan_desc* qpd, sql_expression* expr)
-{
-	const tuple_def* input_def = NULL;
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_EXPRESSIONED_SELECTION, &input_def);
-	if(ttd == NULL)
-		return NULL;
-
-	ttd->params.expressioned_selection = (expressioned_selection_transformer_params){expr};
-	ttd->output_def = input_def;
-
-	{
-		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
-		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-			exit(-1);
-		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
-	}
-
-	return ttd;
-}
-
-tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query_plan_desc* qpd, uint32_t* column_ids_to_transform, uint32_t column_to_transform_count)
-{
-	const tuple_def* input_def = NULL;
-	tuple_transformer_desc* ttd = get_new_tuple_transformer_descriptor_for_last_operator_descriptor(qpd, TT_UNIFIED_TYPING, &input_def);
-	if(ttd == NULL)
-		return NULL;
-
-	tuple_def* output_def = malloc(sizeof(tuple_def));
-	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(input_def->type_info->element_count));
-
-	uint32_t max_output_tuple_size = 8;
-
-	for(uint32_t i = 0, j = 0; i < input_def->type_info->element_count; i++)
-	{
-		strncpy(output_dti->containees[i].field_name, input_def->type_info->containees[i].field_name, 64);
-		output_dti->containees[i].al.type_info = (data_type_info*) get_type_info_for_element_from_tuple_def(input_def, STATIC_POSITION(i));
-
-		if(j < column_to_transform_count && column_ids_to_transform[j] == i)
-		{
-			if(is_extended_type_info(output_dti->containees[i].al.type_info) || is_unified_type_info(output_dti->containees[i].al.type_info))
-			{
-				if(is_text_type_info(output_dti->containees[i].al.type_info))
-					output_dti->containees[i].al.type_info = qpd->tx->rdb->union_text_type_info;
-				else if(is_blob_type_info(output_dti->containees[i].al.type_info))
-					output_dti->containees[i].al.type_info = qpd->tx->rdb->union_blob_type_info;
-				else if(is_numeric_type_info(output_dti->containees[i].al.type_info))
-					output_dti->containees[i].al.type_info = qpd->tx->rdb->union_numeric_type_info;
-				else if(is_jsonb_type_info(output_dti->containees[i].al.type_info))
-					output_dti->containees[i].al.type_info = qpd->tx->rdb->union_jsonb_type_info;
-			}
-			j++;
-		}
-
-		if(output_dti->containees[i].al.type_info->type == BIT_FIELD)
-			max_output_tuple_size += 9;
-		else
-			max_output_tuple_size += output_dti->containees[i].al.type_info->is_variable_sized ? (8 + output_dti->containees[i].al.type_info->max_size) : (1 + output_dti->containees[i].al.type_info->size);
-	}
-
-	if(max_output_tuple_size > MAX_INTERMEDIATE_TUPLE_SIZE)
-	{
-		printf("too big output tuple for simple_projection_transformer\n");
-		free(output_dti);
-		free(output_def);
-		free(ttd);
-		return NULL;
-	}
-
-	initialize_tuple_data_type_info(output_dti, input_def->type_info->type_name, 1, max_output_tuple_size, input_def->type_info->element_count);
-	initialize_tuple_def(output_def, output_dti);
-
-	ttd->params.unified_typing = (unified_typing_transformer_params){deep_clone_uint32_array(column_ids_to_transform, column_to_transform_count), column_to_transform_count};
-	ttd->output_def = output_def;
-
-	{
-		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
-		if(is_full_arraylist(&(d->transformer_descriptors)) && !expand_arraylist(&(d->transformer_descriptors)))
-			exit(-1);
-		push_back_to_arraylist(&(d->transformer_descriptors), ttd);
-	}
-
-	return ttd;
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -2332,48 +1942,6 @@ query_plan* create_query_plan(query_plan_desc* qpd, const sql_expr_eval_context*
 			case OP_POINTER_LOOKUP :
 				setup_pointer_lookup_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.pointer_lookup.input_operator_index), d->params.pointer_lookup.partition_id_from_source_positional_accessor, d->params.pointer_lookup.tuple_pointer_from_source_positional_accessor, d->params.pointer_lookup.ftabl, d->params.pointer_lookup.lookup_batch_size, d->params.pointer_lookup.output_flags, d->params.pointer_lookup.additional_flags);
 				break;
-		}
-
-		// append the transformer chain that follows this operator
-		uint64_t transformer_count = get_element_count_arraylist(&(d->transformer_descriptors));
-		for(uint64_t t = 0; t < transformer_count; t++)
-		{
-			tuple_transformer_desc* ttd = (tuple_transformer_desc*) get_from_front_of_arraylist(&(d->transformer_descriptors), t);
-			const tuple_def* input_def = get_output_def_for_tuple_transformers(&(o->output_tuple_transformers));
-
-			tuple_transformer* tt = NULL;
-			switch(ttd->type)
-			{
-				case TT_IDENTITY :
-					tt = get_new_identity_tuple_transformer(input_def);
-					break;
-				case TT_CLONE :
-					tt = get_new_clone_tuple_transformer(input_def);
-					break;
-				case TT_IS_READABLE_FOR_MVCC_SNAPSHOT :
-					tt = get_new_is_readable_for_mvcc_snapshot_transformer(qp->curr_tx->snapshot, &(qp->curr_tx->rdb->tsg), ttd->params.is_readable_for_mvcc_snapshot.were_hints_updated, input_def);
-					break;
-				case TT_SIMPLE_PROJECTION :
-					tt = get_new_simple_projection_transformer(ttd->params.simple_projection.output_table_name, input_def, ttd->params.simple_projection.projections_count, ttd->params.simple_projection.projections, (char const * const * ) ttd->params.simple_projection.field_names);
-					break;
-				case TT_SCALAR_PROJECTION :
-					tt = get_new_scalar_projection_transformer(input_def, ttd->params.scalar_projection.projection);
-					break;
-				case TT_ROW_NUMBER_PREPENDER :
-					tt = get_new_row_number_prepender_transformer(input_def, ttd->params.row_number_prepender.next_row_number);
-					break;
-				case TT_ROW_IDENTIFIER_PREPENDER :
-					tt = get_new_row_identifier_prepender_transformer(input_def, ttd->params.row_identifier_prepender.row_identifier);
-					break;
-				case TT_EXPRESSIONED_SELECTION :
-					tt = get_new_expressioned_selection_transformer(input_def, qp->curr_tx, qp, ttd->params.expressioned_selection.expr);
-					break;
-				case TT_UNIFIED_TYPING :
-					tt = get_new_unified_typing_transformer(input_def, qp->curr_tx, ttd->params.unified_typing.column_ids_to_transform, ttd->params.unified_typing.column_to_transform_count);
-					break;
-			}
-
-			append_tuple_transformer(&(o->output_tuple_transformers), tt);
 		}
 	}
 
@@ -2570,60 +2138,6 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 		// delete the expression evaluation context template, if this operator built one
 		if(d->has_expr_eval_context)
 			delete_context_p_for_sql_expr_eval_context_for_rhendb(d->expr_eval_context.context_p);
-
-		// free the deep-cloned arrays / strings each tuple transformer descriptor owns, then the descriptors and the list
-		uint64_t transformer_count = get_element_count_arraylist(&(d->transformer_descriptors));
-		for(uint64_t t = 0; t < transformer_count; t++)
-		{
-			tuple_transformer_desc* ttd = (tuple_transformer_desc*) get_from_front_of_arraylist(&(d->transformer_descriptors), t);
-
-			switch(ttd->type)
-			{
-				case TT_ROW_IDENTIFIER_PREPENDER :
-				case TT_ROW_NUMBER_PREPENDER :
-					free(ttd->output_def->type_info);
-					free((void*)ttd->output_def);
-					break;
-				case TT_SIMPLE_PROJECTION :
-					uint32_t element_count = ttd->output_def->type_info->element_count;
-					for(uint32_t i = 0; i < element_count; i++)
-						free((data_type_info*)(ttd->output_def->type_info->containees[i].al.type_info));
-					free(ttd->output_def->type_info);
-					free((void*)(ttd->output_def));
-					break;
-				case TT_SCALAR_PROJECTION :
-					if(ttd->output_def->type_info != UINT_NULLABLE[8])
-						free(ttd->output_def->type_info);
-					free((void*)(ttd->output_def));
-					break;
-				case TT_UNIFIED_TYPING :
-					free(ttd->output_def->type_info);
-					free((void*)(ttd->output_def));
-					break;
-				default :
-					break;
-			}
-
-			switch(ttd->type)
-			{
-				case TT_SIMPLE_PROJECTION :
-					free(ttd->params.simple_projection.output_table_name);
-					free_positional_accessors(ttd->params.simple_projection.projections, ttd->params.simple_projection.projections_count);
-					free_strings(ttd->params.simple_projection.field_names, ttd->params.simple_projection.projections_count);
-					break;
-				case TT_SCALAR_PROJECTION :
-					free_positional_accessors(ttd->params.scalar_projection.projection, 1);
-					break;
-				case TT_UNIFIED_TYPING :
-					free(ttd->params.unified_typing.column_ids_to_transform);
-					break;
-				default :
-					break;
-			}
-
-			free(ttd);
-		}
-		deinitialize_arraylist(&(d->transformer_descriptors));
 
 		free(d);
 	}

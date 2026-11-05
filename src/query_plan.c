@@ -410,12 +410,6 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 {
 	int pushed = 0;
 
-	// perform the output transformations
-	int need_to_free_output_tuple = 0;
-	tuple = process_tuple_transformers(&(o->output_tuple_transformers), tuple, &need_to_free_output_tuple);
-	if(tuple == NULL) // this implies selection/filter failed, so just return success for the produce operation
-		return 1;
-
 	pthread_mutex_lock(&(o->output_lock));
 
 	// make sure that there is some alive consumer
@@ -459,8 +453,8 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 		}
 
 		// append the tuple in this tail interim_tuple_store
-		append_tuple_to_interim_tuple_store2(its_p, &(its_p->embed_regions[0]), tuple, &(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers))->size_def), MIN_BYTES_TO_MMAP);
-		o->output_buffer_bytes_unnotified += get_tuple_size(get_output_def_for_tuple_transformers(&(o->output_tuple_transformers)), tuple);
+		append_tuple_to_interim_tuple_store2(its_p, &(its_p->embed_regions[0]), tuple, &(o->output_tuple_def->size_def), MIN_BYTES_TO_MMAP);
+		o->output_buffer_bytes_unnotified += get_tuple_size(o->output_tuple_def, tuple);
 	}
 
 	// wake up all consumers, only if we pushed
@@ -471,9 +465,6 @@ int produce_tuple_from_operator(operator* o, void* tuple)
 	}
 
 	pthread_mutex_unlock(&(o->output_lock));
-
-	if(need_to_free_output_tuple)
-		free(tuple);
 
 	return pushed;
 }
@@ -532,7 +523,7 @@ consumption_iterator* create_consumption_iterator(operator* producer, operator* 
 	pthread_mutex_unlock(&(producer->output_lock));
 
 	if(perform_mmap_for_reading)
-		mmap_for_reading_tuple_from_snapshot(&perform_mmap_for_reading_snapshot, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(producer)->size_def), MIN_BYTES_TO_MMAP);
+		mmap_for_reading_tuple_from_snapshot(&perform_mmap_for_reading_snapshot, &(cit_p->curr_region), offset, &(producer->output_tuple_def->size_def), MIN_BYTES_TO_MMAP);
 
 	return cit_p;
 }
@@ -698,16 +689,11 @@ const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* n
 
 	if(perform_mmap_for_reading)
 	{
-		mmap_for_reading_tuple_from_snapshot(&perform_mmap_for_reading_snapshot, &(cit_p->curr_region), offset, &(get_tuple_def_for_tuples_to_be_consumed_from(cit_p->producer)->size_def), MIN_BYTES_TO_MMAP);
+		mmap_for_reading_tuple_from_snapshot(&perform_mmap_for_reading_snapshot, &(cit_p->curr_region), offset, &(cit_p->producer->output_tuple_def->size_def), MIN_BYTES_TO_MMAP);
 		tuple = cit_p->curr_region.tuple;
 	}
 
 	return tuple;
-}
-
-const tuple_def* get_tuple_def_for_tuples_to_be_consumed_from(operator* o)
-{
-	return get_output_def_for_tuple_transformers(&(o->output_tuple_transformers));
 }
 
 // query plan functions
@@ -757,7 +743,7 @@ operator* get_new_registered_operator_for_query_plan(query_plan* qp)
 	o->output_buffer_bytes_unnotified = 0;
 	initialize_singlylist(&(o->free_output_buffers), offsetof(interim_tuple_store, embed_node_sl));
 	initialize_linkedlist(&(o->output_consumers), offsetof(consumption_iterator, embed_node_for_output_consumers));
-	init_tuple_transformers(&(o->output_tuple_transformers), NULL); // must initialize it again, unless it is the sink operator
+	o->output_tuple_def = NULL; // must initialize it again, unless it is the sink operator
 
 	pthread_mutex_init(&(o->state_lock), NULL);
 	pthread_cond_init_with_monotonic_clock(&(o->wait_until_completion));
@@ -880,7 +866,7 @@ void destroy_query_plan(query_plan* qp, dstring* kill_reasons)
 			delete_interim_tuple_store(its_p);
 		}
 
-		destroy_tuple_transformers(&(o->output_tuple_transformers));
+		o->output_tuple_def = NULL;
 
 		pthread_mutex_destroy(&(o->output_lock));
 

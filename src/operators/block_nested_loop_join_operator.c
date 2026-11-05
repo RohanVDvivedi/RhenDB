@@ -333,8 +333,8 @@ void setup_block_nested_loop_join_operator(operator* o, operator* left_input_ope
 		exit(-1);
 	}
 
-	const tuple_def* left_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(left_input_operator);
-	const tuple_def* right_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(right_input_operator);
+	const tuple_def* left_input_tuple_def = left_input_operator->output_tuple_def;
+	const tuple_def* right_input_tuple_def = right_input_operator->output_tuple_def;
 
 	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def* []){(tuple_def*)left_input_tuple_def, (tuple_def*)right_input_tuple_def}, 2, o->self_query_plan->curr_tx, o->self_query_plan->this_sub_query_expr_eval_context);
 
@@ -391,7 +391,7 @@ void setup_block_nested_loop_join_operator(operator* o, operator* left_input_ope
 	tuple_def* output_tuple_def = malloc(sizeof(tuple_def));
 	initialize_tuple_def(output_tuple_def, output_dti);
 
-	init_tuple_transformers(&(o->output_tuple_transformers), output_tuple_def);
+	o->output_tuple_def = output_tuple_def;
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){

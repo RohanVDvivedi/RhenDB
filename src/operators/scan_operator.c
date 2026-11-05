@@ -411,7 +411,7 @@ void setup_scan_operator(operator* o, query_plan* qp, const fetched_table* ftabl
 		initialize_tuple_def(output_tuple_def, output_dti);
 	}
 
-	init_tuple_transformers(&(o->output_tuple_transformers), output_tuple_def);
+	o->output_tuple_def = output_tuple_def;
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){

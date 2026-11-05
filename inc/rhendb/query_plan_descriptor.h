@@ -3,7 +3,6 @@
 
 #include<rhendb/operators.h>
 #include<rhendb/operator_resource_counter.h>
-#include<rhendb/tuple_transformers.h>
 
 #include<rhendb/expression_evaluator.h>
 
@@ -294,60 +293,6 @@ struct pointer_lookup_operator_params
 	int additional_flags;
 };
 
-// tuple transformer params
-
-typedef struct identity_tuple_transformer_params identity_tuple_transformer_params;
-struct identity_tuple_transformer_params { int unused; };
-
-typedef struct clone_tuple_transformer_params clone_tuple_transformer_params;
-struct clone_tuple_transformer_params { int unused; };
-
-typedef struct is_readable_for_mvcc_snapshot_transformer_params is_readable_for_mvcc_snapshot_transformer_params;
-struct is_readable_for_mvcc_snapshot_transformer_params
-{
-	int* were_hints_updated;
-};
-
-typedef struct simple_projection_transformer_params simple_projection_transformer_params;
-struct simple_projection_transformer_params
-{
-	char* output_table_name;
-	uint32_t projections_count;
-	positional_accessor* projections;
-	char** field_names;
-};
-
-typedef struct scalar_projection_transformer_params scalar_projection_transformer_params;
-struct scalar_projection_transformer_params
-{
-	positional_accessor* projection;
-};
-
-typedef struct row_number_prepender_transformer_params row_number_prepender_transformer_params;
-struct row_number_prepender_transformer_params
-{
-	uint64_t next_row_number;
-};
-
-typedef struct row_identifier_prepender_transformer_params row_identifier_prepender_transformer_params;
-struct row_identifier_prepender_transformer_params
-{
-	uint64_t row_identifier;
-};
-
-typedef struct expressioned_selection_transformer_params expressioned_selection_transformer_params;
-struct expressioned_selection_transformer_params
-{
-	sql_expression* expr;
-};
-
-typedef struct unified_typing_transformer_params unified_typing_transformer_params;
-struct unified_typing_transformer_params
-{
-	uint32_t* column_ids_to_transform;
-	uint32_t column_to_transform_count;
-};
-
 // ===================================================================================================
 // descriptor types
 // ===================================================================================================
@@ -362,39 +307,6 @@ enum operator_descriptor_type
 	OP_BLOCK_NESTED_LOOP_SEMI_JOIN, OP_SORT_MERGE_SEMI_JOIN, OP_HASH_SEMI_JOIN,
 	OP_SELECTION, OP_PROJECTION, OP_SUBQUERY_OUTPUT,
 	OP_INSERTION, OP_DELETION, OP_SCAN, OP_POINTER_LOOKUP,
-};
-
-typedef enum tuple_transformer_descriptor_type tuple_transformer_descriptor_type;
-enum tuple_transformer_descriptor_type
-{
-	TT_IDENTITY, TT_CLONE, TT_IS_READABLE_FOR_MVCC_SNAPSHOT,
-	TT_SIMPLE_PROJECTION, TT_SCALAR_PROJECTION,
-	TT_ROW_NUMBER_PREPENDER, TT_ROW_IDENTIFIER_PREPENDER,
-	TT_EXPRESSIONED_SELECTION, TT_UNIFIED_TYPING,
-};
-
-typedef struct tuple_transformer_desc tuple_transformer_desc;
-struct tuple_transformer_desc
-{
-	tuple_transformer_descriptor_type type;
-
-	union
-	{
-		identity_tuple_transformer_params                  identity;
-		clone_tuple_transformer_params                     clone;
-		is_readable_for_mvcc_snapshot_transformer_params   is_readable_for_mvcc_snapshot;
-		simple_projection_transformer_params               simple_projection;
-		scalar_projection_transformer_params               scalar_projection;
-		row_number_prepender_transformer_params            row_number_prepender;
-		row_identifier_prepender_transformer_params        row_identifier_prepender;
-		expressioned_selection_transformer_params          expressioned_selection;
-		unified_typing_transformer_params                  unified_typing;
-	} params;
-
-	// the def this transformer produces for the one that follows it in the chain.
-	// built identically to the transformer (borrowing), where derivable at insert; NULL means "resolved at
-	// create() from the live chain" (schema-changing transformers whose derivation is not ported yet).
-	const tuple_def* output_def;
 };
 
 typedef struct operator_desc operator_desc;
@@ -441,8 +353,6 @@ struct operator_desc
 
 	sql_expr_eval_context expr_eval_context;
 	int has_expr_eval_context;
-
-	arraylist transformer_descriptors;
 };
 
 typedef struct query_plan_desc query_plan_desc;
@@ -460,10 +370,6 @@ struct query_plan_desc
 // ===================================================================================================
 
 query_plan_desc* get_new_query_plan_descriptor(transaction* tx, const sql_expr_eval_context* this_sub_query_expr_eval_context);
-
-// returns the tuple_def that the consumer of this operator descriptor must read : the output_tuple_def of its
-// last tuple transformer descriptor if it has any, else the operator descriptor's own output_tuple_def
-const tuple_def* get_output_tuple_def_for_operator_descriptor(const operator_desc* operator_descriptor);
 
 operator_desc* insert_constant_dataset_operator_descriptor(query_plan_desc* qpd, interim_tuple_store* constant_dataset_p, const tuple_def* record_def);
 operator_desc* insert_generator_operator_descriptor(query_plan_desc* qpd, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def);
@@ -492,16 +398,6 @@ operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64
 operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags);
 operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetched_table* ftabl, uint32_t max_concurrent_jobs_count, int output_flags, int additional_flags);
 operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags);
-
-tuple_transformer_desc* insert_identity_tuple_transformer_descriptor(query_plan_desc* qpd);
-tuple_transformer_desc* insert_clone_tuple_transformer_descriptor(query_plan_desc* qpd);
-tuple_transformer_desc* insert_is_readable_for_mvcc_snapshot_tuple_transformer_descriptor(query_plan_desc* qpd, int* were_hints_updated);
-tuple_transformer_desc* insert_simple_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const char* output_table_name, uint32_t projections_count, const positional_accessor* projections, char const * const * field_names);
-tuple_transformer_desc* insert_scalar_projection_tuple_transformer_descriptor(query_plan_desc* qpd, const positional_accessor* projection);
-tuple_transformer_desc* insert_row_number_prepender_tuple_transformer_descriptor(query_plan_desc* qpd, uint64_t next_row_number);
-tuple_transformer_desc* insert_row_identifier_prepender_tuple_transformer_descriptor(query_plan_desc* qpd, uint64_t row_identifier);
-tuple_transformer_desc* insert_expressioned_selection_tuple_transformer_descriptor(query_plan_desc* qpd, sql_expression* expr);
-tuple_transformer_desc* insert_unified_typing_tuple_transformer_descriptor(query_plan_desc* qpd, uint32_t* column_ids_to_transform, uint32_t column_to_transform_count);
 
 // a main query is the one that is not a sub-query
 int is_main_query_plan_descriptor(const query_plan_desc* qpd);

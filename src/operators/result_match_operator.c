@@ -17,9 +17,7 @@ struct input_values
 
 	int no_more_data[2];
 
-	uint32_t element_count;
-
-	uint64_t tuple_processed;
+	uint64_t tuples_processed;
 };
 
 static void execute(operator* o)
@@ -58,16 +56,16 @@ static void execute(operator* o)
 
 		if(inputs->no_more_data[0] == 1)
 		{
-			printf("matched %"PRIu64" tuples\n", inputs->tuple_processed);
+			printf("matched %"PRIu64" tuples\n", inputs->tuples_processed);
 			kill_signal_for_self_operator(o, OPERATOR_SUCCESS_REASON);
 			return ;
 		}
 
 		int compare = compare_tuples_rhendb(inputs->tuples[0], inputs->input_defs[0], &SELF, inputs->tuples[1], inputs->input_defs[1], &SELF, NULL, 1, o->self_query_plan->curr_tx);
-		inputs->tuple_processed++;
+		inputs->tuples_processed++;
 		if(compare != 0)
 		{
-			printf("result_match_operator says outputs do not match for %"PRIu64"-th tuple:\n", inputs->tuple_processed);
+			printf("result_match_operator says outputs do not match for %"PRIu64"-th tuple:\n", inputs->tuples_processed);
 			print_tuple(inputs->tuples[0], inputs->input_defs[0]);
 			print_tuple(inputs->tuples[1], inputs->input_defs[1]);
 			printf("\n\n");
@@ -101,26 +99,9 @@ static void clean_up_resources(operator* o)
 void setup_result_match_operator(operator* o, operator* input_operators[2])
 {
 	const tuple_def* input_defs[2] = {
-		get_tuple_def_for_tuples_to_be_consumed_from(input_operators[0]),
-		get_tuple_def_for_tuples_to_be_consumed_from(input_operators[1]),
+		input_operators[0]->output_tuple_def,
+		input_operators[1]->output_tuple_def,
 	};
-
-	for(int i = 0; i < 2; i++)
-	{
-		if(input_defs[i]->type_info->type != TUPLE)
-		{
-			printf("%d-th input is not a TUPLE for match operator\n", i);
-			exit(-1);
-		}
-	}
-
-	if(input_defs[0]->type_info->element_count != input_defs[1]->type_info->element_count)
-	{
-		printf("input tuple def's element counts must match for match operator\n");
-		exit(-1);
-	}
-
-	uint32_t element_count = input_defs[0]->type_info->element_count;
 
 	if(!can_compare_datum_rhendb(input_defs[0]->type_info, input_defs[1]->type_info))
 	{
@@ -142,7 +123,6 @@ void setup_result_match_operator(operator* o, operator* input_operators[2])
 		},
 		.tuples = {NULL, NULL},
 		.no_more_data = {0, 0},
-		.element_count = element_count,
-		.tuple_processed = 0,
+		.tuples_processed = 0,
 	};
 }

@@ -502,8 +502,8 @@ void setup_hash_semi_join_operator(operator* o, operator* left_input_operator, c
 		exit(-1);
 	}
 
-	const tuple_def* left_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(left_input_operator);
-	const tuple_def* right_input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(right_input_operator);
+	const tuple_def* left_input_tuple_def = left_input_operator->output_tuple_def;
+	const tuple_def* right_input_tuple_def = right_input_operator->output_tuple_def;
 
 	for(uint32_t i = 0; i < key_element_count; i++)
 	{
@@ -519,7 +519,7 @@ void setup_hash_semi_join_operator(operator* o, operator* left_input_operator, c
 	o->clean_up_resources = clean_up_resources;
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
-	init_tuple_transformers(&(o->output_tuple_transformers), left_input_tuple_def);
+	o->output_tuple_def = left_input_tuple_def;
 
 	o->inputs = malloc(sizeof(input_values));
 	input_values* inputs = o->inputs;

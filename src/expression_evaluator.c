@@ -3348,7 +3348,7 @@ query_plan* build_query_plan_for_sub_query(const sql_dql* dql, const sql_expr_ev
 	query_plan_desc* qpd = dql->physical_plan;
 
 	operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 2);
-	(*out_def) = get_output_tuple_def_for_operator_descriptor(d);
+	(*out_def) = d->output_tuple_def;
 
 	d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
 	d->params.subquery_output.out_pipe = out_pipe;
@@ -3364,7 +3364,7 @@ const tuple_def* infer_output_def_for_sub_query(const sql_dql* dql, const sql_ex
 	query_plan_desc* qpd = dql->physical_plan;
 
 	operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 2);
-	return get_output_tuple_def_for_operator_descriptor(d);
+	return d->output_tuple_def;
 }
 
 void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)

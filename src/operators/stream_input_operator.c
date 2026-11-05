@@ -113,7 +113,7 @@ void setup_stream_input_operator(operator* o, stream* in_strm, const tuple_def* 
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	// generator's output is what we produce
-	init_tuple_transformers(&(o->output_tuple_transformers), input_tuple_def);
+	o->output_tuple_def = input_tuple_def;
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){

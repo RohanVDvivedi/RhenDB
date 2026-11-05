@@ -84,7 +84,7 @@ static void clean_up_resources(operator* o)
 
 void setup_selection_operator(operator* o, operator* input_operator, sql_expression* expr)
 {
-	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
+	const tuple_def* input_tuple_def = input_operator->output_tuple_def;
 
 	sql_expr_eval_context ec = get_sql_expr_eval_context_for_rhendb((tuple_def**)(&input_tuple_def), 1, o->self_query_plan->curr_tx, o->self_query_plan->this_sub_query_expr_eval_context);
 
@@ -101,7 +101,7 @@ void setup_selection_operator(operator* o, operator* input_operator, sql_express
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	// it is an identity operator, produces the same thing as it consumes
-	init_tuple_transformers(&(o->output_tuple_transformers), input_tuple_def);
+	o->output_tuple_def = input_tuple_def;
 
 	o->inputs = malloc(sizeof(input_values));
 	input_values* inputs = o->inputs;

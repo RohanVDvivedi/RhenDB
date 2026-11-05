@@ -700,7 +700,7 @@ void setup_sort_operator(operator* o, tuples_down_counter result_counter, operat
 		exit(-1);
 	}
 
-	const tuple_def* record_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
+	const tuple_def* record_def = input_operator->output_tuple_def;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -708,7 +708,7 @@ void setup_sort_operator(operator* o, tuples_down_counter result_counter, operat
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	// it produces the same thing as it consumes
-	init_tuple_transformers(&(o->output_tuple_transformers), record_def);
+	o->output_tuple_def = record_def;
 
 	o->inputs = malloc(sizeof(input_values));
 	input_values* inputs = o->inputs;

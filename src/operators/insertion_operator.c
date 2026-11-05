@@ -827,7 +827,7 @@ void setup_insertion_operator(operator* o, operator* input_operator, const posit
 		exit(-1);
 	}
 
-	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
+	const tuple_def* input_tuple_def = input_operator->output_tuple_def;
 
 	const tuple_def* partition_tuple_def = &(ftabl->table_partition_tuple_defs[ftabl->partitions_count-1]);
 	for(uint32_t i = 0; i < partition_tuple_def->type_info->element_count - 1; i++)
@@ -936,7 +936,7 @@ void setup_insertion_operator(operator* o, operator* input_operator, const posit
 		initialize_tuple_def(output_tuple_def, output_dti);
 	}
 
-	init_tuple_transformers(&(o->output_tuple_transformers), output_tuple_def);
+	o->output_tuple_def = output_tuple_def;
 
 	o->inputs = malloc(sizeof(input_values));
 	input_values* inputs = o->inputs;

@@ -169,10 +169,10 @@ void setup_merge_sorted_inputs_operator(operator* o, operator** input_operators,
 		exit(-1);
 	}
 
-	const tuple_def* record_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operators[0]);
+	const tuple_def* record_def = input_operators[0]->output_tuple_def;
 	for(uint32_t i = 1; i < input_operators_count; i++)
 	{
-		if(!are_accessibly_equivalent_type_info(record_def->type_info, get_tuple_def_for_tuples_to_be_consumed_from(input_operators[i])->type_info)) // if they are accessibly_equivalent, then they must be comparable
+		if(!are_accessibly_equivalent_type_info(record_def->type_info, input_operators[i]->output_tuple_def->type_info)) // if they are accessibly_equivalent, then they must be comparable
 		{
 			printf("input_operators must produce identical outputs for merge_sorted_inputs_operator\n");
 			exit(-1);
@@ -191,7 +191,7 @@ void setup_merge_sorted_inputs_operator(operator* o, operator** input_operators,
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	// it is an union operator (identity-like), produces the same thing as it consumes
-	init_tuple_transformers(&(o->output_tuple_transformers), record_def);
+	o->output_tuple_def = record_def;
 
 	o->inputs = malloc(sizeof(input_values));
 	input_values* inputs = o->inputs;

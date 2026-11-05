@@ -4,7 +4,6 @@
 #include<pthread.h>
 
 #include<rhendb/interim_tuple_store.h>
-#include<rhendb/tuple_transformer_interface.h>
 
 #include<tuplestore/tuple_def.h>
 #include<tuplestore/tuple.h>
@@ -86,10 +85,8 @@ struct operator
 	// list of consumption_iterator-s, pointing into tuple_regions in output_buffers
 	linkedlist output_consumers;
 
-	// this transformations will be applicable to all the tuples produced by this operator
-	// as soon as it call produce_tuple/s_from_operator
-	// remember output_lock will not be held while calling any of the transformers
-	tuple_transformers output_tuple_transformers; // [MUST BE SET DURING THE SETUP PHASE]
+	// output definition for the tuples, only pointer is shallow copied here and is owned by the operator
+	const tuple_def* output_tuple_def; // [MUST BE SET DURING THE SETUP PHASE]
 
 	// -----------------------------------------------------------------------------------------------------
 
@@ -204,10 +201,6 @@ int points_to_same_tuple_for_consumtion_iterators(const consumption_iterator* ci
 // consume the tuple using the iterator provided that has the producer consumer pair
 // it presents the pointer from the tuple_region itself
 const void* consume_for_consumption_iterator(consumption_iterator* cit_p, int* no_more_data);
-
-// this is the tuple_def that the consumer of the operator should be ready to consume
-// this is the tuple_def that is required to be used to read tuples returned from consume_from_operator()
-const tuple_def* get_tuple_def_for_tuples_to_be_consumed_from(operator* o);
 
 typedef struct transaction transaction;
 

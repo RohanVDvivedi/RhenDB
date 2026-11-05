@@ -39,7 +39,7 @@ void setup_constant_dataset_operator(operator* o, interim_tuple_store* constant_
 	o->free_resources = OPERATOR_FREE_RESOURCE_NO_OP_FUNCTION;
 
 	// this record's record_def, this constant_dataset_p is what we produce
-	init_tuple_transformers(&(o->output_tuple_transformers), record_def);
+	o->output_tuple_def = record_def;
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){

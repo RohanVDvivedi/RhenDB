@@ -423,7 +423,7 @@ void setup_deletion_operator(operator* o, operator* input_operator, const positi
 		exit(-1);
 	}
 
-	const tuple_def* input_tuple_def = get_tuple_def_for_tuples_to_be_consumed_from(input_operator);
+	const tuple_def* input_tuple_def = input_operator->output_tuple_def;
 
 	o->execute = execute;
 	o->operator_release_latches_and_store_context = OPERATOR_RELEASE_LATCH_NO_OP_FUNCTION;
@@ -480,7 +480,7 @@ void setup_deletion_operator(operator* o, operator* input_operator, const positi
 		initialize_tuple_def(output_tuple_def, output_dti);
 	}
 
-	init_tuple_transformers(&(o->output_tuple_transformers), output_tuple_def);
+	o->output_tuple_def = output_tuple_def;
 
 	o->inputs = malloc(sizeof(input_values));
 	*((input_values*)(o->inputs)) = (input_values){
