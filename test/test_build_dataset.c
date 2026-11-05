@@ -18,7 +18,7 @@
 
 #define TESTCASE_SIZE 1000000
 
-//#define RANDOMIZE_DATA
+#define RANDOMIZE_DATA
 
 #define PRINT_DATA 0
 
