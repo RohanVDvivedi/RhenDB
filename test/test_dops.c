@@ -2,7 +2,6 @@
 
 #include<rhendb/transaction.h>
 #include<rhendb/operators.h>
-#include<rhendb/tuple_transformers.h>
 
 #include<stdlib.h>
 #include<unistd.h>

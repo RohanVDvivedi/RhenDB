@@ -2,7 +2,6 @@
 
 #include<rhendb/transaction.h>
 #include<rhendb/query_plan_descriptor.h>
-#include<rhendb/tuple_transformers.h>
 
 #include<test_dataset_tuple_def.h>
 #include<test_dataset_2_tuple_def.h>

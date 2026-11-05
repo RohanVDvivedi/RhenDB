@@ -2,7 +2,6 @@
 
 #include<rhendb/transaction.h>
 #include<rhendb/query_plan_descriptor.h>
-#include<rhendb/tuple_transformers.h>
 
 #include<sqltoast/sqltoast.h>
 #include<sqltoast/sql_expression_eval.h>
