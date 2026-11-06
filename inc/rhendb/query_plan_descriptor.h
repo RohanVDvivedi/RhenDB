@@ -370,11 +370,11 @@ struct query_plan_desc
 
 query_plan_desc* get_new_query_plan_descriptor(transaction* tx, const sql_expr_eval_context* this_sub_query_expr_eval_context);
 
-int query_plan_descriptor_contains_operator_descriptor(const query_plan_desc* qpd, const operator_desc* d);
+int does_query_plan_descriptor_contains_operator_descriptor(const query_plan_desc* qpd, const operator_desc* d);
 
 operator_desc* insert_constant_dataset_operator_descriptor(query_plan_desc* qpd, interim_tuple_store* constant_dataset_p, const tuple_def* record_def);
 operator_desc* insert_generator_operator_descriptor(query_plan_desc* qpd, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def);
-operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index);
+operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc);
 operator_desc* insert_consumer_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context);
 operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index_0, uint64_t input_operator_index_1);
 operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, const uint64_t* input_operator_indices, uint64_t input_operators_count);

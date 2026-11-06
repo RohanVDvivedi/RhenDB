@@ -327,15 +327,14 @@ operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetch
 // single input, schema preserving
 // ---------------------------------------------------------------------------------------------------
 
-operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index)
+operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for identity_operator_descriptor\n");
+		printf("input_operator_desc invalid for identity_operator_descriptor\n");
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
@@ -346,7 +345,7 @@ operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, uint64_
 	operator_resource_counter result = {.job_counter = 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_IDENTITY);
-	d->params.identity = (identity_operator_params){input_operator_index};
+	d->params.identity = (identity_operator_params){input_operator_desc->index};
 	d->output_tuple_def = input_tuple_def;
 	d->resource_counter = result;
 
