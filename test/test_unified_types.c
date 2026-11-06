@@ -125,13 +125,11 @@ int main()
 		positional_accessor input_positions[3] = {STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2)};
 		// insert these rows into the table
 		{
-			uint64_t op_index = 0;
+			const operator_desc* cdata = insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def);
 
-			insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def); op_index++;
+			const operator_desc* insertions = insert_insertion_operator_descriptor(qpd, cdata, input_positions, ftbl, TABLE_ID_IN_OUTPUT | PARTITION_ID_IN_OUTPUT | TUPLE_POINTER_IN_OUTPUT | HEAP_TUPLE_IN_OUTPUT, NULL, SAVEPOINT_LOGGING_ENABLED);
 
-			insert_insertion_operator_descriptor(qpd, 0, input_positions, ftbl, TABLE_ID_IN_OUTPUT | PARTITION_ID_IN_OUTPUT | TUPLE_POINTER_IN_OUTPUT | HEAP_TUPLE_IN_OUTPUT, NULL, SAVEPOINT_LOGGING_ENABLED); op_index++;
-
-			insert_consumer_operator_descriptor(qpd, 1, print_consumer, NULL); op_index++;
+			insert_consumer_operator_descriptor(qpd, insertions, print_consumer, NULL);
 		}
 
 		qp = create_query_plan(qpd, NULL);
@@ -232,11 +230,9 @@ int main()
 		query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
 		{
-			uint64_t op_index = 0;
+			const operator_desc* scanner = insert_scan_operator_descriptor(qpd, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0);
 
-			insert_scan_operator_descriptor(qpd, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0); op_index++;
-
-			insert_consumer_operator_descriptor(qpd, 0, print_consumer, NULL); op_index++;
+			insert_consumer_operator_descriptor(qpd, scanner, print_consumer, NULL);
 		}
 
 		qp = create_query_plan(qpd, NULL);
@@ -309,25 +305,23 @@ int main()
 		compare_direction CMP_DIR[1] = {ASC};
 
 		{
-			uint64_t op_index = 0;
+			const operator_desc* scanner = insert_scan_operator_descriptor(qpd, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0);
 
-			insert_scan_operator_descriptor(qpd, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0); op_index++;
-
-			insert_projection_operator_descriptor(qpd, 0, "projecteds", (projection_description[]){
+			const operator_desc* proj = insert_projection_operator_descriptor(qpd, scanner, "projecteds", (projection_description[]){
 				project_from("column1", STATIC_POSITION(0,1)),
 				project_from("column2", STATIC_POSITION(0,2)),
 				project_from("column3", STATIC_POSITION(0,3)),
-			}, 3); op_index++;
+			}, 3);
 
-			insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def); op_index++;
+			const operator_desc* cdata = insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def);
 
-			insert_union_operator_descriptor(qpd, (uint64_t []){1, 2}, 2); op_index++;
+			const operator_desc* union_op = insert_union_operator_descriptor(qpd, (const operator_desc* []){proj, cdata}, 2);
 
-			insert_hash_aggregation_operator_descriptor(qpd, 3, 1, key_pos, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, 4, 1, 1, 1000); op_index++;
+			const operator_desc* agg = insert_hash_aggregation_operator_descriptor(qpd, union_op, 1, key_pos, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, 4, 1, 1, 1000);
 
-			insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 4, 1, key_pos, CMP_DIR, 10, 2, 1); op_index++;
+			const operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, agg, 1, key_pos, CMP_DIR, 10, 2, 1);
 
-			insert_consumer_operator_descriptor(qpd, 5, print_consumer, NULL); op_index++;
+			insert_consumer_operator_descriptor(qpd, sort, print_consumer, NULL);
 		}
 
 		qp = create_query_plan(qpd, NULL);

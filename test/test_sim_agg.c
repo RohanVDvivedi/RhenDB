@@ -207,15 +207,13 @@ int main(int argc, char** argv)
 	};
 
 	{
-		uint64_t op_index = 0;
+		const operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
 
-		insert_stream_input_operator_descriptor(qpd, &rs, &record_def); op_index++;
+		const operator_desc* agg = insert_simple_aggregation_operator_descriptor(qpd, strm_in, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS);
 
-		insert_simple_aggregation_operator_descriptor(qpd, 0, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS); op_index++;
+		insert_consumer_operator_descriptor(qpd, agg, print_consumer, NULL);
 
-		insert_consumer_operator_descriptor(qpd, 1, print_consumer, NULL); op_index++;
-
-		insert_consumer_operator_descriptor(qpd, 1, print_consumer_custom, NULL); op_index++;
+		insert_consumer_operator_descriptor(qpd, agg, print_consumer_custom, NULL);
 	}
 	printf("\n\n");
 

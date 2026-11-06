@@ -75,9 +75,7 @@ int main(int argc, char** argv)
 
 	printf("Building pipeline :\n");
 	{
-		uint64_t op_index = 0;
-
-		insert_stream_input_operator_descriptor(qpd, &rs, &record_def); op_index++;
+		const operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
 
 		uint32_t count1 = 11;
 		uint32_t count2 = argc - 1;
@@ -97,9 +95,9 @@ int main(int argc, char** argv)
 		for(; p < count1 + count2; p++)
 			pd[p] = project_using(NULL, proj_expr_sql[p-count1]->expr);
 
-		insert_projection_operator_descriptor(qpd, 0, "record", pd, (count1 + count2)); op_index++;
+		const operator_desc* proj = insert_projection_operator_descriptor(qpd, strm_in, "record", pd, (count1 + count2));
 
-		insert_consumer_operator_descriptor(qpd, 1, PRINT_DATA ? print_consumer : NULL, NULL); op_index++;
+		insert_consumer_operator_descriptor(qpd, proj, PRINT_DATA ? print_consumer : NULL, NULL);
 	}
 	printf("\n\n");
 

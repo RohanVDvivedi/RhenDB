@@ -145,23 +145,21 @@ int main(int argc, char** argv)
 
 	printf("Building pipeline :\n");
 	{
-		uint64_t op_index = 0;
+		const operator_desc* left = insert_generator_operator_descriptor(qpd, left_generator, NULL, &record_def);
 
-		insert_generator_operator_descriptor(qpd, left_generator, NULL, &record_def); op_index++;
+		const operator_desc* left_sorted = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, left, RECORD_S_KEY_ELEMENT_COUNT, LEFT_KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 
-		insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 0, RECORD_S_KEY_ELEMENT_COUNT, LEFT_KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
+		const operator_desc* right = insert_generator_operator_descriptor(qpd, right_generator, NULL, &record_def2);
 
-		insert_generator_operator_descriptor(qpd, right_generator, NULL, &record_def2); op_index++;
+		const operator_desc* right_sorted = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, right, RECORD_S_KEY_ELEMENT_COUNT, RIGHT_KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 
-		insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 2, RECORD_S_KEY_ELEMENT_COUNT, RIGHT_KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
-
-		insert_sort_merge_join_operator_descriptor(qpd, 1, LEFT_KEY_POS, 3, RIGHT_KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_BOTH, MIN_BLOCK_SIZE); op_index++;
+		const operator_desc* join = insert_sort_merge_join_operator_descriptor(qpd, left_sorted, LEFT_KEY_POS, right_sorted, RIGHT_KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_BOTH, MIN_BLOCK_SIZE);
 
 		// REMEMBER OUTPUT OF SORT-MERGE JOIN MAY NOT BE SORTED UNLESS IT IS INNER JOIN
 
-		insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 4, 2, FINAL_KEY_POS, FINAL_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
+		const operator_desc* sort_final = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, join, 2, FINAL_KEY_POS, FINAL_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 
-		insert_consumer_operator_descriptor(qpd, 5, PRINT_DATA ? print_consumer : NULL, NULL); op_index++;
+		insert_consumer_operator_descriptor(qpd, sort_final, PRINT_DATA ? print_consumer : NULL, NULL);
 	}
 	printf("\n\n");
 

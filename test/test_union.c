@@ -81,23 +81,20 @@ int main(int argc, char** argv)
 
 	printf("Building pipeline :\n");
 	{
-		uint64_t op_index = 0;
-
-		uint64_t sorted_input_operator_indices[INPUT_OPERATORS_COUNT];
+		const operator_desc* sorted_inputs[INPUT_OPERATORS_COUNT];
 		for(int i = 0; i < INPUT_OPERATORS_COUNT; i++)
 		{
 			generator_contexts[i] = i;
-			insert_generator_operator_descriptor(qpd, generator, &(generator_contexts[i]), &record_def); op_index++;
-			sorted_input_operator_indices[i] = i;
+			sorted_inputs[i] = insert_generator_operator_descriptor(qpd, generator, &(generator_contexts[i]), &record_def);
 		}
 
-		insert_union_operator_descriptor(qpd, sorted_input_operator_indices, INPUT_OPERATORS_COUNT); op_index++;
+		const operator_desc* union_op = insert_union_operator_descriptor(qpd, sorted_inputs, INPUT_OPERATORS_COUNT);
 
-		insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, op_index-1, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
+		const operator_desc* sort_union_op = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, union_op, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 
-		insert_merge_sorted_inputs_operator_descriptor(qpd, sorted_input_operator_indices, INPUT_OPERATORS_COUNT, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR); op_index++;
+		const operator_desc* merge_sorted_op = insert_merge_sorted_inputs_operator_descriptor(qpd, sorted_inputs, INPUT_OPERATORS_COUNT, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR);
 
-		insert_result_match_operator_descriptor(qpd, op_index - 1, op_index - 2); op_index++;
+		insert_result_match_operator_descriptor(qpd, sort_union_op, merge_sorted_op);
 	}
 
 	query_plan* qp = create_query_plan(qpd, NULL);

@@ -71,9 +71,7 @@ int main(int argc, char** argv)
 
 	printf("Building pipeline :\n");
 	{
-		uint64_t op_index = 0;
-
-		insert_stream_input_operator_descriptor(qpd, &rs, &record_def); op_index++;
+		const operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
 
 		tuples_down_counter sorter_result_counter = TUPLES_DOWN_COUNTER_INF;
 		#if defined(LIMIT_CLAUSE) && !defined(OFFSET_CLAUSE)
@@ -82,9 +80,9 @@ int main(int argc, char** argv)
 			sorter_result_counter = TUPLES_DOWN_COUNTER_FIN(OFFSET_CLAUSE + LIMIT_CLAUSE);
 		#endif
 
-		uint64_t result_index = op_index;
-		insert_sort_operator_descriptor(qpd, sorter_result_counter, op_index - 1, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
+		const operator_desc* sorted = insert_sort_operator_descriptor(qpd, sorter_result_counter, strm_in, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 
+		const operator_desc* limited_sorted = sorted;
 		#if defined(OFFSET_CLAUSE) || defined(LIMIT_CLAUSE)
 			tuples_down_counter offset;
 			#ifdef OFFSET_CLAUSE
@@ -98,12 +96,11 @@ int main(int argc, char** argv)
 			#else
 				limit = TUPLES_DOWN_COUNTER_INF;
 			#endif
-			result_index = op_index;
-			insert_offset_limit_operator_descriptor(qpd, op_index - 1, offset, limit); op_index++;
+			limited_sorted = insert_offset_limit_operator_descriptor(qpd, sorted, offset, limit);
 		#endif
 
 		#ifdef PRINT_DATA
-			insert_consumer_operator_descriptor(qpd, result_index, PRINT_DATA ? print_consumer : NULL, NULL); op_index++;
+			insert_consumer_operator_descriptor(qpd, limited_sorted, PRINT_DATA ? print_consumer : NULL, NULL);
 		#endif
 
 		if(argc >= 2)
@@ -111,7 +108,7 @@ int main(int argc, char** argv)
 			int out_fd = open(argv[1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 			initialize_stream_for_fd(&out_file_stream, out_fd);
 
-			insert_stream_output_operator_descriptor(qpd, result_index, &out_file_stream); op_index++;
+			insert_stream_output_operator_descriptor(qpd, limited_sorted, &out_file_stream);
 		}
 	}
 	printf("\n\n");

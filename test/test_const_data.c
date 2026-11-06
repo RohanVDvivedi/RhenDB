@@ -81,15 +81,13 @@ int main(int argc, char** argv)
 	}
 
 	{
-		uint64_t op_index = 0;
+		const operator_desc* cdata = insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def);
 
-		insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def); op_index++;
+		const operator_desc* filtered = cdata;
 		if(filter_expr_sql != NULL)
-		{
-			insert_selection_operator_descriptor(qpd, op_index - 1, filter_expr_sql->expr); op_index++;
-		}
+			filtered = insert_selection_operator_descriptor(qpd, cdata, filter_expr_sql->expr);
 
-		insert_consumer_operator_descriptor(qpd, op_index - 1, print_consumer, NULL); op_index++;
+		insert_consumer_operator_descriptor(qpd, filtered, print_consumer, NULL);
 	}
 	printf("\n\n");
 

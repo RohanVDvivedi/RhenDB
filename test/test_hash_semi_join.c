@@ -143,17 +143,15 @@ int main(int argc, char** argv)
 
 	printf("Building pipeline :\n");
 	{
-		uint64_t op_index = 0;
+		const operator_desc* left = insert_generator_operator_descriptor(qpd, left_generator, NULL, &record_def);
 
-		insert_generator_operator_descriptor(qpd, left_generator, NULL, &record_def); op_index++;
+		const operator_desc* right = insert_generator_operator_descriptor(qpd, right_generator, NULL, &record_def2);
 
-		insert_generator_operator_descriptor(qpd, right_generator, NULL, &record_def2); op_index++;
+		const operator_desc* join = insert_hash_semi_join_operator_descriptor(qpd, left, LEFT_KEY_POS, right, RIGHT_KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, LEFT_SEMI_JOIN, PARTITIONS_COUNT, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE);
 
-		insert_hash_semi_join_operator_descriptor(qpd, 0, LEFT_KEY_POS, 1, RIGHT_KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, LEFT_SEMI_JOIN, PARTITIONS_COUNT, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE); op_index++;
+		const operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, join, RECORD_S_KEY_ELEMENT_COUNT, LEFT_KEY_POS, FINAL_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 
-		insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 2, RECORD_S_KEY_ELEMENT_COUNT, LEFT_KEY_POS, FINAL_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
-
-		insert_consumer_operator_descriptor(qpd, 3, PRINT_DATA ? print_consumer : NULL, NULL); op_index++;
+		insert_consumer_operator_descriptor(qpd, sort, PRINT_DATA ? print_consumer : NULL, NULL);
 	}
 	printf("\n\n");
 

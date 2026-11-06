@@ -112,17 +112,15 @@ int main(int argc, char** argv)
 	positional_accessor FINAL_SORT_KEY[1] = {STATIC_POSITION(3)};
 
 	{
-		uint64_t op_index = 0;
+		const operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
 
-		insert_stream_input_operator_descriptor(qpd, &rs, &record_def); op_index++;
+		const operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, strm_in, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 
-		insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 0, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
+		const operator_desc* agg = insert_sorted_aggregation_operator_descriptor(qpd, sort, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS);
 
-		insert_sorted_aggregation_operator_descriptor(qpd, 1, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS); op_index++;
+		const operator_desc* sort_final = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, agg, 1, FINAL_SORT_KEY, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 
-		insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 2, 1, FINAL_SORT_KEY, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
-
-		insert_consumer_operator_descriptor(qpd, 3, print_consumer, NULL); op_index++;
+		insert_consumer_operator_descriptor(qpd, sort_final, print_consumer, NULL);
 	}
 	printf("\n\n");
 

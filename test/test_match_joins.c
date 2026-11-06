@@ -95,60 +95,39 @@ int main(int argc, char** argv)
 
 	printf("Building pipeline :\n");
 	{
-		uint64_t op_index = 0;
+//---------------------------------
+		const operator_desc* input = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
+//---------------------------
+		const operator_desc* input_1 = insert_projection_operator_descriptor(qpd, input, "record2", (projection_description[]){
+			project_from("num", STATIC_POSITION(0)),
+			project_from("order", STATIC_POSITION(1)),
+			project_from("num_in_words", STATIC_POSITION(2)),
+			project_from("digits", STATIC_POSITION(3)),
+			project_from("value_in_string", STATIC_POSITION(4)),
+			project_from("some_numeric", STATIC_POSITION(5)),
+			project_from("some_float", STATIC_POSITION(6)),
+		}, 7);
 
-		// 0
-		insert_stream_input_operator_descriptor(qpd, &rs, &record_def); op_index++;
+		const operator_desc* bnlj = insert_block_nested_loop_join_operator_descriptor(qpd, input, input_1, join_expr_sql->expr, PRESERVE_NONE, MIN_BLOCK_SIZE);
+//---------------------------------
+		const operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, input, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 
-		{
-			// 1
-			insert_projection_operator_descriptor(qpd, 0, "record2", (projection_description[]){
-				project_from("num", STATIC_POSITION(0)),
-				project_from("order", STATIC_POSITION(1)),
-				project_from("num_in_words", STATIC_POSITION(2)),
-				project_from("digits", STATIC_POSITION(3)),
-				project_from("value_in_string", STATIC_POSITION(4)),
-				project_from("some_numeric", STATIC_POSITION(5)),
-				project_from("some_float", STATIC_POSITION(6)),
-			}, 7); op_index++;
+		const operator_desc* sort_join = insert_sort_merge_join_operator_descriptor(qpd, sort, KEY_POS, sort, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, MIN_BLOCK_SIZE);
+//---------------------------------
+		const operator_desc* hash_join = insert_hash_join_operator_descriptor(qpd, input, KEY_POS, input, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, PARTITIONS_COUNT, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE);
+//---------------------------------
+		const operator_desc* bnlj_sorted = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, bnlj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 
-			// 2
-			insert_block_nested_loop_join_operator_descriptor(qpd, 0, 1, join_expr_sql->expr, PRESERVE_NONE, MIN_BLOCK_SIZE); op_index++;
-		}
+		const operator_desc* sort_join_sorder = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, sort_join, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
 
-		{
-			// 3
-			insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 0, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
+		const operator_desc* hash_join_sorted = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, hash_join, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+//---------------------------------
+		insert_result_match_operator_descriptor(qpd, bnlj_sorted, sort_join_sorder);
 
-			// 4
-			insert_sort_merge_join_operator_descriptor(qpd, 3, KEY_POS, 3, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, MIN_BLOCK_SIZE); op_index++;
-		}
+		insert_result_match_operator_descriptor(qpd, sort_join_sorder, hash_join_sorted);
 
-		{
-			// 5
-			insert_hash_join_operator_descriptor(qpd, 0, KEY_POS, 0, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, PARTITIONS_COUNT, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE); op_index++;
-		}
-
-		// match phase
-		{
-			// 6
-			insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 2, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
-
-			// 7
-			insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 4, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
-
-			// 8
-			insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, 5, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT); op_index++;
-
-			// 9
-			insert_result_match_operator_descriptor(qpd, 6, 7); op_index++;
-
-			// 10
-			insert_result_match_operator_descriptor(qpd, 7, 8); op_index++;
-
-			// 11
-			insert_result_match_operator_descriptor(qpd, 6, 8); op_index++;
-		}
+		insert_result_match_operator_descriptor(qpd, bnlj_sorted, hash_join_sorted);
+//---------------------------------
 	}
 	printf("\n\n");
 

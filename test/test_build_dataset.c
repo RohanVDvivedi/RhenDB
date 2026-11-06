@@ -104,18 +104,16 @@ int main(int argc, char** argv)
 
 	printf("Building pipeline :\n");
 	{
-		uint64_t op_index = 0;
-
-		insert_generator_operator_descriptor(qpd,
+		const operator_desc* gen = insert_generator_operator_descriptor(qpd,
 		#ifdef RANDOMIZE_DATA
 			random_generator
 		#else
 			sorted_generator
 		#endif
-		, NULL, &record_def); op_index++;
+		, NULL, &record_def);
 
 		#ifdef PRINT_DATA
-			insert_consumer_operator_descriptor(qpd, 0, PRINT_DATA ? print_consumer : NULL, NULL); op_index++;
+			insert_consumer_operator_descriptor(qpd, gen, PRINT_DATA ? print_consumer : NULL, NULL);
 		#endif
 
 		if(argc >= 2)
@@ -123,7 +121,7 @@ int main(int argc, char** argv)
 			int out_fd = open(argv[1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 			initialize_stream_for_fd(&out_file_stream, out_fd);
 
-			insert_stream_output_operator_descriptor(qpd, 0, &out_file_stream);
+			insert_stream_output_operator_descriptor(qpd, gen, &out_file_stream);
 		}
 	}
 

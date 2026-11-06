@@ -75,13 +75,11 @@ int main(int argc, char** argv)
 
 	printf("Building pipeline :\n");
 	{
-		uint64_t op_index = 0;
+		const operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
 
-		insert_stream_input_operator_descriptor(qpd, &rs, &record_def); op_index++;
+		const operator_desc* filter = insert_selection_operator_descriptor(qpd, strm_in, filter_expr_sql->expr);
 
-		insert_selection_operator_descriptor(qpd, 0, filter_expr_sql->expr); op_index++;
-
-		insert_consumer_operator_descriptor(qpd, 1, PRINT_DATA ? print_consumer : NULL, NULL); op_index++;
+		insert_consumer_operator_descriptor(qpd, filter, PRINT_DATA ? print_consumer : NULL, NULL);
 	}
 	printf("\n\n");
 
