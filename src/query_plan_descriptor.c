@@ -51,6 +51,11 @@ query_plan_desc* get_new_query_plan_descriptor(transaction* tx, const sql_expr_e
 	return qpd;
 }
 
+int query_plan_descriptor_contains_operator_descriptor(const query_plan_desc* qpd, const operator_desc* d)
+{
+	return d == get_from_front_of_arraylist(&(qpd->operator_descriptors), d->index);
+}
+
 // ---------------------------------------------------------------------------------------------------
 // deep clone / free helpers for the borrowed arrays and strings the descriptor must own
 // (a positional_accessor itself owns a positions array, so cloning one clones that array too)
