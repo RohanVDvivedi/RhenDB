@@ -51,7 +51,7 @@ query_plan_desc* get_new_query_plan_descriptor(transaction* tx, const sql_expr_e
 	return qpd;
 }
 
-int query_plan_descriptor_contains_operator_descriptor(const query_plan_desc* qpd, const operator_desc* d)
+int does_query_plan_descriptor_contains_operator_descriptor(const query_plan_desc* qpd, const operator_desc* d)
 {
 	return d == get_from_front_of_arraylist(&(qpd->operator_descriptors), d->index);
 }
@@ -188,7 +188,7 @@ static void free_projection_descriptions(projection_description* arr, uint32_t c
 // leaves
 // ---------------------------------------------------------------------------------------------------
 
-operator_desc* insert_constant_dataset_operator_descriptor(query_plan_desc* qpd, interim_tuple_store* constant_dataset_p, const tuple_def* record_def)
+const operator_desc* insert_constant_dataset_operator_descriptor(query_plan_desc* qpd, interim_tuple_store* constant_dataset_p, const tuple_def* record_def)
 {
 	if(record_def == NULL)
 	{
@@ -206,7 +206,7 @@ operator_desc* insert_constant_dataset_operator_descriptor(query_plan_desc* qpd,
 	return d;
 }
 
-operator_desc* insert_generator_operator_descriptor(query_plan_desc* qpd, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def)
+const operator_desc* insert_generator_operator_descriptor(query_plan_desc* qpd, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def)
 {
 	if(generator_tuple_def == NULL)
 	{
@@ -224,7 +224,7 @@ operator_desc* insert_generator_operator_descriptor(query_plan_desc* qpd, void* 
 	return d;
 }
 
-operator_desc* insert_stream_input_operator_descriptor(query_plan_desc* qpd, stream* in_strm, const tuple_def* input_tuple_def)
+const operator_desc* insert_stream_input_operator_descriptor(query_plan_desc* qpd, stream* in_strm, const tuple_def* input_tuple_def)
 {
 	if(input_tuple_def == NULL)
 	{
@@ -242,7 +242,7 @@ operator_desc* insert_stream_input_operator_descriptor(query_plan_desc* qpd, str
 	return d;
 }
 
-operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetched_table* ftabl, uint32_t max_concurrent_jobs_count, int output_flags, int additional_flags)
+const operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetched_table* ftabl, uint32_t max_concurrent_jobs_count, int output_flags, int additional_flags)
 {
 	if(ftabl == NULL)
 	{
@@ -327,7 +327,7 @@ operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetch
 // single input, schema preserving
 // ---------------------------------------------------------------------------------------------------
 
-operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc)
+const operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -352,15 +352,14 @@ operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, operato
 	return d;
 }
 
-operator_desc* insert_offset_limit_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, tuples_down_counter offset_counter, tuples_down_counter limit_counter)
+const operator_desc* insert_offset_limit_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, tuples_down_counter offset_counter, tuples_down_counter limit_counter)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for offset_limit_operator_descriptor\n");
+		printf("input_operator_desc invalid for offset_limit_operator_descriptor\n");
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
@@ -382,22 +381,21 @@ operator_desc* insert_offset_limit_operator_descriptor(query_plan_desc* qpd, uin
 	operator_resource_counter result = {.job_counter = 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_OFFSET_LIMIT);
-	d->params.offset_limit = (offset_limit_operator_params){input_operator_index, offset_counter, limit_counter};
+	d->params.offset_limit = (offset_limit_operator_params){input_operator_desc->index, offset_counter, limit_counter};
 	d->output_tuple_def = input_tuple_def;
 	d->resource_counter = result;
 
 	return d;
 }
 
-operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, sql_expression* expr)
+const operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, sql_expression* expr)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for selection_operator_descriptor\n");
+		printf("input_operator_desc invalid for selection_operator_descriptor\n");
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
@@ -421,7 +419,7 @@ operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, uint64
 		: (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SELECTION);
-	d->params.selection = (selection_operator_params){input_operator_index, expr};
+	d->params.selection = (selection_operator_params){input_operator_desc->index, expr};
 	d->output_tuple_def = input_tuple_def;
 	d->resource_counter = result;
 	d->expr_eval_context = malloc(sizeof(sql_expr_eval_context));
@@ -430,11 +428,11 @@ operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, uint64
 	return d;
 }
 
-operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down_counter result_counter, uint64_t input_operator_index, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t min_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
+const operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down_counter result_counter, const operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t min_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for sort_operator_descriptor\n");
+		printf("input_operator_desc invalid for sort_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -468,7 +466,6 @@ operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	const tuple_def* record_def = input_operator_desc->output_tuple_def;
 	if(record_def == NULL)
 	{
@@ -485,7 +482,7 @@ operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down
 	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE) * max_concurrent_jobs_count, .job_counter = max_concurrent_jobs_count + 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SORT);
-	d->params.sort = (sort_operator_params){result_counter, input_operator_index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), deep_clone_compare_directions(key_compare_direction, key_element_count), min_run_size, N_way_sort, max_concurrent_jobs_count};
+	d->params.sort = (sort_operator_params){result_counter, input_operator_desc->index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), deep_clone_compare_directions(key_compare_direction, key_element_count), min_run_size, N_way_sort, max_concurrent_jobs_count};
 	d->output_tuple_def = record_def;
 	d->resource_counter = result;
 
@@ -496,11 +493,11 @@ operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down
 // projection
 // ---------------------------------------------------------------------------------------------------
 
-operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const char* output_name, projection_description* projection_descriptions, uint32_t projection_descriptions_count)
+const operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, const char* output_name, projection_description* projection_descriptions, uint32_t projection_descriptions_count)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for projection_operator_descriptor\n");
+		printf("input_operator_desc invalid for projection_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -510,7 +507,6 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint6
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
@@ -591,7 +587,7 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint6
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_PROJECTION);
-	d->params.projection = (projection_operator_params){input_operator_index, deep_clone_string(output_name), deep_clone_projection_descriptions(projection_descriptions, projection_descriptions_count), projection_descriptions_count};
+	d->params.projection = (projection_operator_params){input_operator_desc->index, deep_clone_string(output_name), deep_clone_projection_descriptions(projection_descriptions, projection_descriptions_count), projection_descriptions_count};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 	d->expr_eval_context = malloc(sizeof(sql_expr_eval_context));
@@ -604,11 +600,11 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, uint6
 // aggregations
 // ---------------------------------------------------------------------------------------------------
 
-operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
+const operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for simple_aggregation_operator_descriptor\n");
+		printf("input_operator_desc invalid for simple_aggregation_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -618,7 +614,6 @@ operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qp
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	if(input_operator_desc->output_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for simple_aggregation_operator_descriptor\n");
@@ -654,18 +649,18 @@ operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qp
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SIMPLE_AGGREGATION);
-	d->params.simple_aggregation = (simple_aggregation_operator_params){input_operator_index, aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions)};
+	d->params.simple_aggregation = (simple_aggregation_operator_params){input_operator_desc->index, aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions)};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
 	return d;
 }
 
-operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
+const operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for sorted_aggregation_operator_descriptor\n");
+		printf("input_operator_desc invalid for sorted_aggregation_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -681,7 +676,6 @@ operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qp
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
@@ -739,18 +733,18 @@ operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qp
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SORTED_AGGREGATION);
-	d->params.sorted_aggregation = (sorted_aggregation_operator_params){input_operator_index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions)};
+	d->params.sorted_aggregation = (sorted_aggregation_operator_params){input_operator_desc->index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions)};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
 	return d;
 }
 
-operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
+const operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for hash_aggregation_operator_descriptor\n");
+		printf("input_operator_desc invalid for hash_aggregation_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -790,7 +784,6 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
@@ -848,7 +841,7 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_HASH_AGGREGATION);
-	d->params.hash_aggregation = (hash_aggregation_operator_params){input_operator_index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions), partitions_count, max_concurrent_jobs_count, max_concurrent_jobs_queue_size, min_build_tuple_buffer_size};
+	d->params.hash_aggregation = (hash_aggregation_operator_params){input_operator_desc->index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions), partitions_count, max_concurrent_jobs_count, max_concurrent_jobs_queue_size, min_build_tuple_buffer_size};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
@@ -859,15 +852,14 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 // sinks (no output tuple_def)
 // ---------------------------------------------------------------------------------------------------
 
-operator_desc* insert_consumer_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context)
+const operator_desc* insert_consumer_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for consumer_operator_descriptor\n");
+		printf("input_operator_desc invalid for consumer_operator_descriptor\n");
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	if(input_operator_desc->output_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for consumer_operator_descriptor\n");
@@ -877,22 +869,21 @@ operator_desc* insert_consumer_operator_descriptor(query_plan_desc* qpd, uint64_
 	operator_resource_counter result = {.job_counter = 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_CONSUMER);
-	d->params.consumer = (consumer_operator_params){input_operator_index, consumer, consumer_context};
+	d->params.consumer = (consumer_operator_params){input_operator_desc->index, consumer, consumer_context};
 	d->output_tuple_def = NULL;
 	d->resource_counter = result;
 
 	return d;
 }
 
-operator_desc* insert_stream_output_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, stream* out_strm)
+const operator_desc* insert_stream_output_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, stream* out_strm)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for stream_output_operator_descriptor\n");
+		printf("input_operator_desc invalid for stream_output_operator_descriptor\n");
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	if(input_operator_desc->output_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for stream_output_operator_descriptor\n");
@@ -902,22 +893,21 @@ operator_desc* insert_stream_output_operator_descriptor(query_plan_desc* qpd, ui
 	operator_resource_counter result = {.job_counter = 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_STREAM_OUTPUT);
-	d->params.stream_output = (stream_output_operator_params){input_operator_index, out_strm};
+	d->params.stream_output = (stream_output_operator_params){input_operator_desc->index, out_strm};
 	d->output_tuple_def = NULL;
 	d->resource_counter = result;
 
 	return d;
 }
 
-operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, sync_pipe* out_pipe)
+const operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, sync_pipe* out_pipe)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for subquery_output_operator_descriptor\n");
+		printf("input_operator_desc invalid for subquery_output_operator_descriptor\n");
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	if(input_operator_desc->output_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for subquery_output_operator_descriptor\n");
@@ -927,7 +917,7 @@ operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc* qpd, 
 	operator_resource_counter result = {.thread_counter = 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SUBQUERY_OUTPUT);
-	d->params.subquery_output = (subquery_output_operator_params){input_operator_index, out_pipe};
+	d->params.subquery_output = (subquery_output_operator_params){input_operator_desc->index, out_pipe};
 	d->output_tuple_def = NULL;
 	d->resource_counter = result;
 
@@ -938,9 +928,9 @@ operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc* qpd, 
 // multiple inputs
 // ---------------------------------------------------------------------------------------------------
 
-operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, const uint64_t* input_operator_indices, uint64_t input_operators_count)
+const operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, const operator_desc** input_operator_descs, uint64_t input_operators_count)
 {
-	if(input_operators_count == 0 || input_operator_indices == NULL)
+	if(input_operators_count == 0 || input_operator_descs == NULL)
 	{
 		printf("input_operators can not be empty for union_operator_descriptor\n");
 		return NULL;
@@ -948,14 +938,14 @@ operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, const uint
 
 	for(uint64_t i = 0; i < input_operators_count; i++)
 	{
-		if(input_operator_indices[i] >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+		if(input_operator_descs[i] == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_descs[i]))
 		{
-			printf("input_operator_index out of range for union_operator_descriptor\n");
+			printf("input_operator_desc invalid for union_operator_descriptor\n");
 			return NULL;
 		}
 	}
 
-	const tuple_def* input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_indices[0]))->output_tuple_def;
+	const tuple_def* input_tuple_def = input_operator_descs[0]->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for union_operator_descriptor\n");
@@ -963,7 +953,7 @@ operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, const uint
 	}
 	for(uint64_t i = 1; i < input_operators_count; i++)
 	{
-		const tuple_def* other_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_indices[i]))->output_tuple_def;
+		const tuple_def* other_tuple_def = input_operator_descs[i]->output_tuple_def;
 		if(other_tuple_def == NULL)
 		{
 			printf("input operator descriptor has no output_tuple_def for union_operator_descriptor\n");
@@ -978,7 +968,7 @@ operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, const uint
 
 	uint64_t* input_operator_indices_cloned = malloc(sizeof(uint64_t) * input_operators_count);
 	for(uint64_t i = 0; i < input_operators_count; i++)
-		input_operator_indices_cloned[i] = input_operator_indices[i];
+		input_operator_indices_cloned[i] = input_operator_descs[i]->index;
 
 	operator_resource_counter result = {.job_counter = 1};
 
@@ -990,9 +980,9 @@ operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, const uint
 	return d;
 }
 
-operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* qpd, const uint64_t* input_operator_indices, uint64_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
+const operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* qpd, const operator_desc** input_operator_descs, uint64_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
 {
-	if(input_operators_count == 0 || input_operator_indices == NULL)
+	if(input_operators_count == 0 || input_operator_descs == NULL)
 	{
 		printf("input_operators can not be empty for merge_sorted_inputs_operator_descriptor\n");
 		return NULL;
@@ -1000,14 +990,14 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 
 	for(uint64_t i = 0; i < input_operators_count; i++)
 	{
-		if(input_operator_indices[i] >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+		if(input_operator_descs[i] == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_descs[i]))
 		{
-			printf("input_operator_index out of range for merge_sorted_inputs_operator_descriptor\n");
+			printf("input_operator_desc invalid for merge_sorted_inputs_operator_descriptor\n");
 			return NULL;
 		}
 	}
 
-	const tuple_def* record_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_indices[0]))->output_tuple_def;
+	const tuple_def* record_def = input_operator_descs[0]->output_tuple_def;
 	if(record_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for merge_sorted_inputs_operator_descriptor\n");
@@ -1015,7 +1005,7 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 	}
 	for(uint64_t i = 1; i < input_operators_count; i++)
 	{
-		const tuple_def* other_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_indices[i]))->output_tuple_def;
+		const tuple_def* other_tuple_def = input_operator_descs[i]->output_tuple_def;
 		if(other_tuple_def == NULL)
 		{
 			printf("input operator descriptor has no output_tuple_def for merge_sorted_inputs_operator_descriptor\n");
@@ -1036,7 +1026,7 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 
 	uint64_t* input_operator_indices_cloned = malloc(sizeof(uint64_t) * input_operators_count);
 	for(uint64_t i = 0; i < input_operators_count; i++)
-		input_operator_indices_cloned[i] = input_operator_indices[i];
+		input_operator_indices_cloned[i] = input_operator_descs[i]->index;
 
 	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
 
@@ -1048,16 +1038,16 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 	return d;
 }
 
-operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index_0, uint64_t input_operator_index_1)
+const operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc_0, const operator_desc* input_operator_desc_1)
 {
-	if(input_operator_index_0 >= get_element_count_arraylist(&(qpd->operator_descriptors)) || input_operator_index_1 >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc_0 == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc_0) || input_operator_desc_1 == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc_1))
 	{
-		printf("input_operator_index out of range for result_match_operator_descriptor\n");
+		printf("input_operator_desc invalid for result_match_operator_descriptor\n");
 		return NULL;
 	}
 
-	const tuple_def* input_tuple_def_0 = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index_0))->output_tuple_def;
-	const tuple_def* input_tuple_def_1 = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index_1))->output_tuple_def;
+	const tuple_def* input_tuple_def_0 = input_operator_desc_0->output_tuple_def;
+	const tuple_def* input_tuple_def_1 = input_operator_desc_1->output_tuple_def;
 	if(input_tuple_def_0 == NULL || input_tuple_def_1 == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for result_match_operator_descriptor\n");
@@ -1072,8 +1062,8 @@ operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, uin
 	operator_resource_counter result = {.buffer_counter = has_extended_type_info2(input_tuple_def_0, SELF, PERSISTENT_EXT_SUB_TYPE) + has_extended_type_info2(input_tuple_def_1, SELF, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_RESULT_MATCH);
-	d->params.result_match.input_operator_indices[0] = input_operator_index_0;
-	d->params.result_match.input_operator_indices[1] = input_operator_index_1;
+	d->params.result_match.input_operator_indices[0] = input_operator_desc_0->index;
+	d->params.result_match.input_operator_indices[1] = input_operator_desc_1->index;
 	d->output_tuple_def = NULL; // does not output anything
 	d->resource_counter = result;
 
@@ -1084,11 +1074,11 @@ operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, uin
 // joins ([0] = left, [1] = right), output is the two columns "left" and "right"
 // ---------------------------------------------------------------------------------------------------
 
-operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc* qpd, uint64_t left_input_operator_index, uint64_t right_input_operator_index, sql_expression* join_expr, join_preserve_type ptype, uint32_t min_block_size)
+const operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc* qpd, const operator_desc* left_input_operator_desc, const operator_desc* right_input_operator_desc, sql_expression* join_expr, join_preserve_type ptype, uint32_t min_block_size)
 {
-	if(left_input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)) || right_input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
-		printf("input_operator_index out of range for block_nested_loop_join_operator_descriptor\n");
+		printf("input_operator_desc invalid for block_nested_loop_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1104,8 +1094,8 @@ operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc
 		return NULL;
 	}
 
-	const tuple_def* left_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index))->output_tuple_def;
-	const tuple_def* right_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index))->output_tuple_def;
+	const tuple_def* left_input_tuple_def = left_input_operator_desc->output_tuple_def;
+	const tuple_def* right_input_tuple_def = right_input_operator_desc->output_tuple_def;
 	if(left_input_tuple_def == NULL || right_input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for block_nested_loop_join_operator_descriptor\n");
@@ -1181,7 +1171,7 @@ operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_BLOCK_NESTED_LOOP_JOIN);
-	d->params.block_nested_loop_join = (block_nested_loop_join_operator_params){left_input_operator_index, right_input_operator_index, join_expr, ptype, min_block_size};
+	d->params.block_nested_loop_join = (block_nested_loop_join_operator_params){left_input_operator_desc->index, right_input_operator_desc->index, join_expr, ptype, min_block_size};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 	if(has_expr_eval_context)
@@ -1194,11 +1184,11 @@ operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc
 	return d;
 }
 
-operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc* qpd, uint64_t left_input_operator_index, const positional_accessor* left_key_element_ids, uint64_t right_input_operator_index, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, join_preserve_type ptype, uint32_t min_block_size)
+const operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc* qpd, const operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, const operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, join_preserve_type ptype, uint32_t min_block_size)
 {
-	if(left_input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)) || right_input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
-		printf("input_operator_index out of range for sort_merge_join_operator_descriptor\n");
+		printf("input_operator_desc invalid for sort_merge_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1214,8 +1204,8 @@ operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc* qpd, 
 		return NULL;
 	}
 
-	const tuple_def* left_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index))->output_tuple_def;
-	const tuple_def* right_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index))->output_tuple_def;
+	const tuple_def* left_input_tuple_def = left_input_operator_desc->output_tuple_def;
+	const tuple_def* right_input_tuple_def = right_input_operator_desc->output_tuple_def;
 	if(left_input_tuple_def == NULL || right_input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for sort_merge_join_operator_descriptor\n");
@@ -1275,18 +1265,18 @@ operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc* qpd, 
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SORT_MERGE_JOIN);
-	d->params.sort_merge_join = (sort_merge_join_operator_params){left_input_operator_index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), deep_clone_compare_directions(key_compare_direction, key_element_count), key_element_count, ptype, min_block_size};
+	d->params.sort_merge_join = (sort_merge_join_operator_params){left_input_operator_desc->index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_desc->index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), deep_clone_compare_directions(key_compare_direction, key_element_count), key_element_count, ptype, min_block_size};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
 	return d;
 }
 
-operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, uint64_t left_input_operator_index, const positional_accessor* left_key_element_ids, uint64_t right_input_operator_index, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
+const operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, const operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, const operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
 {
-	if(left_input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)) || right_input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
-		printf("input_operator_index out of range for hash_join_operator_descriptor\n");
+		printf("input_operator_desc invalid for hash_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1320,8 +1310,8 @@ operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, uint64
 		return NULL;
 	}
 
-	const tuple_def* left_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index))->output_tuple_def;
-	const tuple_def* right_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index))->output_tuple_def;
+	const tuple_def* left_input_tuple_def = left_input_operator_desc->output_tuple_def;
+	const tuple_def* right_input_tuple_def = right_input_operator_desc->output_tuple_def;
 	if(left_input_tuple_def == NULL || right_input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for hash_join_operator_descriptor\n");
@@ -1384,7 +1374,7 @@ operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, uint64
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_HASH_JOIN);
-	d->params.hash_join = (hash_join_operator_params){left_input_operator_index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), key_element_count, ptype, partitions_count, max_concurrent_jobs_count, max_concurrent_jobs_queue_size, min_pending_buffer_size};
+	d->params.hash_join = (hash_join_operator_params){left_input_operator_desc->index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_desc->index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), key_element_count, ptype, partitions_count, max_concurrent_jobs_count, max_concurrent_jobs_queue_size, min_pending_buffer_size};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
@@ -1395,11 +1385,11 @@ operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, uint64
 // semi / anti joins, output is the left input's tuple_def
 // ---------------------------------------------------------------------------------------------------
 
-operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan_desc* qpd, uint64_t left_input_operator_index, uint64_t right_input_operator_index, sql_expression* join_expr, semi_join_type stype, uint32_t min_block_size)
+const operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan_desc* qpd, const operator_desc* left_input_operator_desc, const operator_desc* right_input_operator_desc, sql_expression* join_expr, semi_join_type stype, uint32_t min_block_size)
 {
-	if(left_input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)) || right_input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
-		printf("input_operator_index out of range for block_nested_loop_semi_join_operator_descriptor\n");
+		printf("input_operator_desc invalid for block_nested_loop_semi_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1409,8 +1399,8 @@ operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan
 		return NULL;
 	}
 
-	const tuple_def* left_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index))->output_tuple_def;
-	const tuple_def* right_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index))->output_tuple_def;
+	const tuple_def* left_input_tuple_def = left_input_operator_desc->output_tuple_def;
+	const tuple_def* right_input_tuple_def = right_input_operator_desc->output_tuple_def;
 	if(left_input_tuple_def == NULL || right_input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for block_nested_loop_semi_join_operator_descriptor\n");
@@ -1443,7 +1433,7 @@ operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan
 		: (operator_resource_counter){.buffer_counter = has_reference_to_extended_type * 2, .job_counter = 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_BLOCK_NESTED_LOOP_SEMI_JOIN);
-	d->params.block_nested_loop_semi_join = (block_nested_loop_semi_join_operator_params){left_input_operator_index, right_input_operator_index, join_expr, stype, min_block_size};
+	d->params.block_nested_loop_semi_join = (block_nested_loop_semi_join_operator_params){left_input_operator_desc->index, right_input_operator_desc->index, join_expr, stype, min_block_size};
 	d->output_tuple_def = left_input_tuple_def;
 	d->resource_counter = result;
 	if(has_expr_eval_context)
@@ -1456,11 +1446,11 @@ operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan
 	return d;
 }
 
-operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* qpd, uint64_t left_input_operator_index, const positional_accessor* left_key_element_ids, uint64_t right_input_operator_index, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype, uint32_t min_block_size)
+const operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* qpd, const operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, const operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype, uint32_t min_block_size)
 {
-	if(left_input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)) || right_input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
-		printf("input_operator_index out of range for sort_merge_semi_join_operator_descriptor\n");
+		printf("input_operator_desc invalid for sort_merge_semi_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1476,8 +1466,8 @@ operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* 
 		return NULL;
 	}
 
-	const tuple_def* left_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index))->output_tuple_def;
-	const tuple_def* right_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index))->output_tuple_def;
+	const tuple_def* left_input_tuple_def = left_input_operator_desc->output_tuple_def;
+	const tuple_def* right_input_tuple_def = right_input_operator_desc->output_tuple_def;
 	if(left_input_tuple_def == NULL || right_input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for sort_merge_semi_join_operator_descriptor\n");
@@ -1496,18 +1486,18 @@ operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* 
 	operator_resource_counter result = {.buffer_counter = has_extended_type_info3(left_input_tuple_def, key_element_count, left_key_element_ids, PERSISTENT_EXT_SUB_TYPE) + has_extended_type_info3(right_input_tuple_def, key_element_count, right_key_element_ids, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SORT_MERGE_SEMI_JOIN);
-	d->params.sort_merge_semi_join = (sort_merge_semi_join_operator_params){left_input_operator_index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), deep_clone_compare_directions(key_compare_direction, key_element_count), key_element_count, stype, min_block_size};
+	d->params.sort_merge_semi_join = (sort_merge_semi_join_operator_params){left_input_operator_desc->index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_desc->index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), deep_clone_compare_directions(key_compare_direction, key_element_count), key_element_count, stype, min_block_size};
 	d->output_tuple_def = left_input_tuple_def;
 	d->resource_counter = result;
 
 	return d;
 }
 
-operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, uint64_t left_input_operator_index, const positional_accessor* left_key_element_ids, uint64_t right_input_operator_index, const positional_accessor* right_key_element_ids, uint32_t key_element_count, semi_join_type stype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
+const operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, const operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, const operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, semi_join_type stype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
 {
-	if(left_input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)) || right_input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
-		printf("input_operator_index out of range for hash_semi_join_operator_descriptor\n");
+		printf("input_operator_desc invalid for hash_semi_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1541,8 +1531,8 @@ operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, u
 		return NULL;
 	}
 
-	const tuple_def* left_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), left_input_operator_index))->output_tuple_def;
-	const tuple_def* right_input_tuple_def = ((operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), right_input_operator_index))->output_tuple_def;
+	const tuple_def* left_input_tuple_def = left_input_operator_desc->output_tuple_def;
+	const tuple_def* right_input_tuple_def = right_input_operator_desc->output_tuple_def;
 	if(left_input_tuple_def == NULL || right_input_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for hash_semi_join_operator_descriptor\n");
@@ -1564,7 +1554,7 @@ operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, u
 	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * (max(2 * right_side_buffers, left_side_buffers + right_side_buffers)), .job_counter = max_concurrent_jobs_count + 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_HASH_SEMI_JOIN);
-	d->params.hash_semi_join = (hash_semi_join_operator_params){left_input_operator_index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), key_element_count, stype, partitions_count, max_concurrent_jobs_count, max_concurrent_jobs_queue_size, min_pending_buffer_size};
+	d->params.hash_semi_join = (hash_semi_join_operator_params){left_input_operator_desc->index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_desc->index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), key_element_count, stype, partitions_count, max_concurrent_jobs_count, max_concurrent_jobs_queue_size, min_pending_buffer_size};
 	d->output_tuple_def = left_input_tuple_def;
 	d->resource_counter = result;
 
@@ -1631,11 +1621,11 @@ static tuple_def* build_table_operator_output_tuple_def(rhendb* rdb, const fetch
 	return output_tuple_def;
 }
 
-operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags)
+const operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, const positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for insertion_operator_descriptor\n");
+		printf("input_operator_desc invalid for insertion_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1657,7 +1647,6 @@ operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
@@ -1724,18 +1713,18 @@ operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, uint64
 	operator_resource_counter result = {.buffer_counter = 8, .job_counter = 1}; // 8 maximum buffers as we do not expect any btree in the system to exceed this height
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_INSERTION);
-	d->params.insertion = (insertion_operator_params){input_operator_index, deep_clone_positional_accessors(insertion_from_source_positional_accessors, insertion_accessors_count), ftabl, output_flags, global_heap_notifier, additional_flags};
+	d->params.insertion = (insertion_operator_params){input_operator_desc->index, deep_clone_positional_accessors(insertion_from_source_positional_accessors, insertion_accessors_count), ftabl, output_flags, global_heap_notifier, additional_flags};
 	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->tx->rdb, ftabl, output_flags, "inserted_tuple_context");
 	d->resource_counter = result;
 
 	return d;
 }
 
-operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags)
+const operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for deletion_operator_descriptor\n");
+		printf("input_operator_desc invalid for deletion_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1763,7 +1752,6 @@ operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	if(input_operator_desc->output_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for deletion_operator_descriptor\n");
@@ -1773,18 +1761,18 @@ operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, uint64_
 	operator_resource_counter result = {.buffer_counter = 1, .job_counter = 1, .thread_counter = 1}; // lock a page delete tuples and exit, so 1 buffer atmost
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_DELETION);
-	d->params.deletion = (deletion_operator_params){input_operator_index, deep_clone_positional_accessors(partition_id_from_source_positional_accessor, 1), deep_clone_positional_accessors(tuple_pointer_from_source_positional_accessor, 1), ftabl, deletion_batch_size, output_flags, additional_flags};
+	d->params.deletion = (deletion_operator_params){input_operator_desc->index, deep_clone_positional_accessors(partition_id_from_source_positional_accessor, 1), deep_clone_positional_accessors(tuple_pointer_from_source_positional_accessor, 1), ftabl, deletion_batch_size, output_flags, additional_flags};
 	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->tx->rdb, ftabl, output_flags, "deleted_tuple_context");
 	d->resource_counter = result;
 
 	return d;
 }
 
-operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, uint64_t input_operator_index, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags)
+const operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags)
 {
-	if(input_operator_index >= get_element_count_arraylist(&(qpd->operator_descriptors)))
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
-		printf("input_operator_index out of range for pointer_lookup_operator_descriptor\n");
+		printf("input_operator_desc invalid for pointer_lookup_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1806,7 +1794,6 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, u
 		return NULL;
 	}
 
-	operator_desc* input_operator_desc = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), input_operator_index);
 	if(input_operator_desc->output_tuple_def == NULL)
 	{
 		printf("input operator descriptor has no output_tuple_def for pointer_lookup_operator_descriptor\n");
@@ -1816,7 +1803,7 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, u
 	operator_resource_counter result = {.buffer_counter = 1, .job_counter = 1, .thread_counter = 1}; // read lock a page, read tuples and exit, so 1 buffer atmost
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_POINTER_LOOKUP);
-	d->params.pointer_lookup = (pointer_lookup_operator_params){input_operator_index, deep_clone_positional_accessors(partition_id_from_source_positional_accessor, 1), deep_clone_positional_accessors(tuple_pointer_from_source_positional_accessor, 1), ftabl, lookup_batch_size, output_flags, additional_flags};
+	d->params.pointer_lookup = (pointer_lookup_operator_params){input_operator_desc->index, deep_clone_positional_accessors(partition_id_from_source_positional_accessor, 1), deep_clone_positional_accessors(tuple_pointer_from_source_positional_accessor, 1), ftabl, lookup_batch_size, output_flags, additional_flags};
 	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->tx->rdb, ftabl, output_flags, "looked_up_tuple_context");
 	d->resource_counter = result;
 
