@@ -70,6 +70,12 @@ static void* next_tuple(operator* o, int* error_code)
 			break;
 		bytes_read += bytes_read_this_iteration;
 	}
+	if(bytes_read == 0)
+	{
+		free(curr_tuple);
+		o->state = NULL;
+		return NULL;
+	}
 	if(tuple_size != bytes_read)
 	{
 		free(curr_tuple);
@@ -81,7 +87,7 @@ static void* next_tuple(operator* o, int* error_code)
 	return curr_tuple;
 }
 
-void open_stream_input_operator(operator* o, stream* in_strm, const tuple_def* input_tuple_def)
+void open_stream_input_operator(operator* o)
 {
 	o->state = &GENERATE_DATA;
 	o->next_tuple = next_tuple;

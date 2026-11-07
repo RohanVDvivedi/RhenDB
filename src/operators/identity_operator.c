@@ -14,7 +14,7 @@ static void* next_tuple(operator* o, int* error_code)
 	return tuple;
 }
 
-void open_identity_operator(operator* o, operator* input_operator)
+void open_identity_operator(operator* o)
 {
 	o->state = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.identity.input_operator_index);
 	o->next_tuple = next_tuple;
