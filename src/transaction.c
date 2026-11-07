@@ -20,10 +20,6 @@ void initialize_transaction(transaction* tx, rhendb* rdb)
 	tx->rdb = rdb;
 	tx->snapshot = NULL;
 
-	pthread_mutex_init(&(tx->curr_queries_lock), NULL);
-	tx->is_curr_queries_freezed = 0;
-	initialize_linkedlist(&(tx->curr_queries), offsetof(query_plan, curr_queries_node));
-
 	{
 		int abort_error_dummy = 0;
 		init_hash_table_tuple_definitions(&(tx->inserted_tuple_pointers.httd), &(rdb->volatile_rage_engine.pam_p->pas), &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_tuple_def), key_element_positions_for_hashset_for_tuple_pointers, sizeof(key_element_positions_for_hashset_for_tuple_pointers)/ sizeof(positional_accessor), FNV_64_TUPLE_HASHER);
@@ -74,65 +70,18 @@ void initialize_transaction(transaction* tx, rhendb* rdb)
 	}
 }
 
-int register_query_plan(transaction* tx, query_plan* qp)
-{
-	int inserted = 0;
-
-	pthread_mutex_lock(&(tx->curr_queries_lock));
-
-	if(is_empty_linkedlist(&(tx->curr_queries)))
-		tx->is_curr_queries_freezed = 0;
-
-	if(!(tx->is_curr_queries_freezed)) // insertions can only be done if the current queries list is not freezed
-		if( (is_main_query_plan(qp) && is_empty_linkedlist(&(tx->curr_queries))) || // main query can only be a single one in this list and the first one to be inserted
-			(!is_main_query_plan(qp) && !is_empty_linkedlist(&(tx->curr_queries))) ) // there can be only sub_query insertions after that
-			inserted = insert_tail_in_linkedlist(&(tx->curr_queries), qp);
-
-	pthread_mutex_unlock(&(tx->curr_queries_lock));
-
-	return inserted;
-}
-
-void deregister_query_plan(transaction* tx, query_plan* qp)
-{
-	pthread_mutex_lock(&(tx->curr_queries_lock));
-
-	remove_from_linkedlist(&(tx->curr_queries), qp);
-
-	if(is_empty_linkedlist(&(tx->curr_queries))) // if all the queries have exited freezing is removed
-		tx->is_curr_queries_freezed = 0;
-
-	pthread_mutex_unlock(&(tx->curr_queries_lock));
-}
-
-void shutdown_all_query_plans(transaction* tx, dstring kill_reason)
-{
-	pthread_mutex_lock(&(tx->rdb->lock_manager_external_lock));
-
-	pthread_mutex_lock(&(tx->curr_queries_lock));
-
-	tx->is_curr_queries_freezed = 1; // freeze curr_queries list, until they all exit
-
-	for(query_plan* qp = (query_plan*) get_head_of_linkedlist(&(tx->curr_queries)); qp != NULL; qp = (query_plan*) get_next_of_in_linkedlist(&(tx->curr_queries), qp))
-		shutdown_query_plan_LOCK_TABLE_UNSAFE(qp, kill_reason);
-
-	pthread_mutex_unlock(&(tx->curr_queries_lock));
-
-	pthread_mutex_unlock(&(tx->rdb->lock_manager_external_lock));
-}
-
 void notify_deadlocked(void* context_p, void* transaction_vp)
 {
 	transaction* tx = transaction_vp;
 
-	pthread_mutex_lock(&(tx->curr_queries_lock));
+	pthread_cond_broadcast(&(tx->wait_on_lock_table_for_lock));
+}
 
-	tx->is_curr_queries_freezed = 1; // freeze curr_queries list, until they all exit
+void notify_unblocked(void* context_p, void* transaction_vp, void* task_vp)
+{
+	transaction* tx = transaction_vp;
 
-	for(query_plan* qp = (query_plan*) get_head_of_linkedlist(&(tx->curr_queries)); qp != NULL; qp = (query_plan*) get_next_of_in_linkedlist(&(tx->curr_queries), qp))
-		shutdown_query_plan_LOCK_TABLE_UNSAFE(qp, get_dstring_pointing_to_literal_cstring("DEADLOCK_DETECTED"));
-
-	pthread_mutex_unlock(&(tx->curr_queries_lock));
+	pthread_cond_broadcast(&(tx->wait_on_lock_table_for_lock));
 }
 
 void register_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr)
@@ -721,7 +670,7 @@ void deinitialize_transaction(transaction* tx)
 		deinitialize_rwlock(&(tx->inserted_tuple_pointers.hash_table_lock));
 	}
 
-	pthread_mutex_destroy(&(tx->curr_queries_lock));
+	pthread_cond_destroy(&(tx->wait_on_lock_table_for_lock));
 
 	tx->rdb = NULL;
 	tx->snapshot = NULL;
