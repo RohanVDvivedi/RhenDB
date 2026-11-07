@@ -80,9 +80,9 @@ void setup_row_rename_operator(operator* o, operator* input_operator, const char
 		exit(-1);
 	}
 
-	if(columns_count > input_tuple_def->type_info->element_count || columns_count == 0)
+	if(columns_count > input_tuple_def->type_info->element_count)
 	{
-		printf("can not have more or 0 renames than input tuple columns for row_rename_operator\n");
+		printf("can not have more renames than input tuple columns for row_rename_operator\n");
 		exit(-1);
 	}
 

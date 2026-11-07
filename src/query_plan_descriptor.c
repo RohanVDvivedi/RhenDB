@@ -395,9 +395,9 @@ const operator_desc* insert_row_rename_operator_descriptor(query_plan_desc* qpd,
 		return NULL;
 	}
 
-	if(columns_count == 0 || columns_count > input_tuple_def->type_info->element_count)
+	if(columns_count > input_tuple_def->type_info->element_count)
 	{
-		printf("can not have 0 or more renames than input tuple columns for row_rename_operator_descriptor\n");
+		printf("can not have more renames than input tuple columns for row_rename_operator_descriptor\n");
 		return NULL;
 	}
 
