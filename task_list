@@ -1,11 +1,7 @@
 PICKED TASKS
 
- * pass around tuples as pointers instead of interim_tuple_store plumbing, implemented volcano model, with passing tuple pointers
-  * any operator can have more than 1 source, but only 1 destination operator, pull based operator, child returns exacly  tuple or NULL upon completion
-   * complete pass through for limit/offset, identity, selection, sort(unless spilling), union, merge_sorted and semi/anti joins
-   * tuple constructions required only for joins(may spill), projection, aggregations(keyed)
-   * sources like scan output tuple for only a particular partition as is, and projection takes care of selecting columns and filtering before the union operator
-   * initial attempt everything will be single threaded
+ * single threaded volcano pipeline execution model, each operator will have exactly 1 consumer
+ * pass tuples around as pointers, that need to be freed by the receiving operator
 
 -----------------------------------------------------------------
 
