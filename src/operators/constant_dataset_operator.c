@@ -16,15 +16,11 @@ static void* next_tuple(operator* o, int* error_code)
 	op_state* this_state = o->state;
 
 	if(this_state->next_tuple_offset == o->desc->params.constant_dataset.constant_dataset_p->next_tuple_offset)
-	{
-		if(!is_empty_interim_tuple_region(&(this_state->current_region)))
-			unmap_for_interim_tuple_region(&(this_state->current_region));
 		return NULL;
-	}
 
 	mmap_for_reading_tuple(o->desc->params.constant_dataset.constant_dataset_p, &(this_state->current_region), this_state->next_tuple_offset, &(o->desc->params.constant_dataset.record_def->size_def), MIN_BYTES_TO_MMAP);
 
-	uint32_t tuple_size = get_tuple_size((const tuple_def*)(&(o->desc->params.constant_dataset.record_def)), this_state->current_region.tuple);
+	uint32_t tuple_size = get_tuple_size((const tuple_def*)(o->desc->params.constant_dataset.record_def), this_state->current_region.tuple);
 	void* tuple = malloc(tuple_size);
 	memcpy(tuple, this_state->current_region.tuple, tuple_size);
 
@@ -37,7 +33,8 @@ static void destroy_state(operator* o)
 {
 	op_state* this_state = o->state;
 
-	unmap_for_interim_tuple_region(&(this_state->current_region));
+	if(!is_empty_interim_tuple_region(&(this_state->current_region)))
+		unmap_for_interim_tuple_region(&(this_state->current_region));
 
 	free(this_state);
 }

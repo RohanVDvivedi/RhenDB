@@ -8,7 +8,7 @@
 fail_build_on(sizeof(uint32_t) > sizeof(cy_uint))
 
 // pointer to this byte means continue generation, and a NULL in the state means completed
-char GENERATE_DATA;
+static char GENERATE_DATA;
 
 static uint32_t read_tuple_prefix_from_stream(void* context_p, void* data, uint32_t data_size)
 {

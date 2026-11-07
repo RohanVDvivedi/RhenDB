@@ -3,7 +3,7 @@
 #include<rhendb/transaction.h>
 
 // pointer to this byte means continue generation, and a NULL in the state means completed
-char GENERATE_DATA;
+static char GENERATE_DATA;
 
 static void* next_tuple(operator* o, int* error_code)
 {
