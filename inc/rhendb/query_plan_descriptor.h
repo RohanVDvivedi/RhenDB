@@ -242,6 +242,15 @@ struct projection_operator_params
 	uint32_t projection_descriptions_count;
 };
 
+typedef struct row_rename_operator_params row_rename_operator_params;
+struct row_rename_operator_params
+{
+	uint64_t input_operator_index;
+	char* output_name;
+	char** column_names;
+	uint64_t columns_count;
+};
+
 typedef struct subquery_output_operator_params subquery_output_operator_params;
 struct subquery_output_operator_params
 {
@@ -300,7 +309,7 @@ struct pointer_lookup_operator_params
 typedef enum operator_descriptor_type operator_descriptor_type;
 enum operator_descriptor_type
 {
-	OP_CONSTANT_DATASET, OP_GENERATOR, OP_IDENTITY, OP_CONSUMER, OP_RESULT_MATCH, OP_UNION,
+	OP_CONSTANT_DATASET, OP_GENERATOR, OP_IDENTITY, OP_ROW_RENAME, OP_CONSUMER, OP_RESULT_MATCH, OP_UNION,
 	OP_SIMPLE_AGGREGATION, OP_SORT, OP_OFFSET_LIMIT, OP_MERGE_SORTED_INPUTS,
 	OP_STREAM_INPUT, OP_STREAM_OUTPUT, OP_SORTED_AGGREGATION, OP_HASH_AGGREGATION,
 	OP_BLOCK_NESTED_LOOP_JOIN, OP_SORT_MERGE_JOIN, OP_HASH_JOIN,
@@ -321,6 +330,7 @@ struct operator_desc
 		constant_dataset_operator_params              constant_dataset;
 		generator_operator_params                     generator;
 		identity_operator_params                      identity;
+		row_rename_operator_params                    row_rename;
 		consumer_operator_params                      consumer;
 		result_match_operator_params                  result_match;
 		union_operator_params                         union_op;
@@ -375,6 +385,7 @@ int does_query_plan_descriptor_contains_operator_descriptor(const query_plan_des
 const operator_desc* insert_constant_dataset_operator_descriptor(query_plan_desc* qpd, interim_tuple_store* constant_dataset_p, const tuple_def* record_def);
 const operator_desc* insert_generator_operator_descriptor(query_plan_desc* qpd, void* (*generator)(void* generator_context, const tuple_def* generator_tuple_def), void* generator_context, const tuple_def* generator_tuple_def);
 const operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc);
+const operator_desc* insert_row_rename_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, const char* output_name, const char** column_names, uint64_t columns_count);
 const operator_desc* insert_consumer_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context);
 const operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc_0, const operator_desc* input_operator_desc_1);
 const operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, const operator_desc** input_operator_descs, uint64_t input_operators_count);

@@ -184,6 +184,28 @@ static void free_projection_descriptions(projection_description* arr, uint32_t c
 	free(arr);
 }
 
+// deep clones an array of count strings (each entry may be NULL)
+static char** deep_clone_string_array(const char* const* src, uint64_t count)
+{
+	if(src == NULL || count == 0)
+		return NULL;
+
+	char** cloned = malloc(sizeof(char*) * count);
+	for(uint64_t i = 0; i < count; i++)
+		cloned[i] = deep_clone_string(src[i]);
+	return cloned;
+}
+
+static void free_string_array(char** arr, uint64_t count)
+{
+	if(arr == NULL)
+		return;
+
+	for(uint64_t i = 0; i < count; i++)
+		free(arr[i]);
+	free(arr);
+}
+
 // ---------------------------------------------------------------------------------------------------
 // leaves
 // ---------------------------------------------------------------------------------------------------
@@ -347,6 +369,58 @@ const operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, c
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_IDENTITY);
 	d->params.identity = (identity_operator_params){input_operator_desc->index};
 	d->output_tuple_def = input_tuple_def;
+	d->resource_counter = result;
+
+	return d;
+}
+
+const operator_desc* insert_row_rename_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, const char* output_name, const char** column_names, uint64_t columns_count)
+{
+	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
+	{
+		printf("input_operator_desc invalid for row_rename_operator_descriptor\n");
+		return NULL;
+	}
+
+	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
+	if(input_tuple_def == NULL)
+	{
+		printf("input operator descriptor has no output_tuple_def for row_rename_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_tuple_def->type_info->type != TUPLE)
+	{
+		printf("input must be a tuple for row_rename_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(columns_count == 0 || columns_count > input_tuple_def->type_info->element_count)
+	{
+		printf("can not have 0 or more renames than input tuple columns for row_rename_operator_descriptor\n");
+		return NULL;
+	}
+
+	operator_resource_counter result = {.job_counter = 1};
+
+	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(input_tuple_def->type_info->element_count));
+	for(uint32_t i = 0; i < input_tuple_def->type_info->element_count; i++)
+	{
+		if(i < columns_count && column_names[i] != NULL)
+			sprintf(output_dti->containees[i].field_name, column_names[i], i);
+		else
+			sprintf(output_dti->containees[i].field_name, input_tuple_def->type_info->containees[i].field_name, i);
+
+		output_dti->containees[i].al.type_info = input_tuple_def->type_info->containees[i].al.type_info;
+	}
+	initialize_tuple_data_type_info(output_dti, (output_name == NULL) ? input_tuple_def->type_info->type_name : output_name, 0, get_maximum_tuple_size(input_tuple_def), input_tuple_def->type_info->element_count);
+
+	tuple_def* output_tuple_def = malloc(sizeof(tuple_def));
+	initialize_tuple_def(output_tuple_def, output_dti);
+
+	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_ROW_RENAME);
+	d->params.row_rename = (row_rename_operator_params){input_operator_desc->index, deep_clone_string(output_name), deep_clone_string_array(column_names, columns_count), columns_count};
+	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
 	return d;
@@ -1857,6 +1931,9 @@ query_plan* create_query_plan(query_plan_desc* qpd, const sql_expr_eval_context*
 			case OP_IDENTITY :
 				setup_identity_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.identity.input_operator_index));
 				break;
+			case OP_ROW_RENAME :
+				setup_row_rename_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.row_rename.input_operator_index), d->params.row_rename.output_name, (const char**) d->params.row_rename.column_names, d->params.row_rename.columns_count);
+				break;
 			case OP_OFFSET_LIMIT :
 				setup_offset_limit_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.offset_limit.input_operator_index), d->params.offset_limit.offset_counter, d->params.offset_limit.limit_counter);
 				break;
@@ -1973,6 +2050,12 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 					if(d->params.projection.projection_descriptions[c].type == PROJECT_IDENTITY)
 						free((data_type_info*) output_tuple_def->type_info->containees[c].al.type_info);
 				}
+				free((data_type_info*) output_tuple_def->type_info);
+				free(output_tuple_def);
+				break;
+			}
+			case OP_ROW_RENAME :
+			{
 				free((data_type_info*) output_tuple_def->type_info);
 				free(output_tuple_def);
 				break;
@@ -2132,6 +2215,12 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 
 		if(d->type == OP_PROJECTION)
 			free(d->params.projection.output_name);
+
+		if(d->type == OP_ROW_RENAME)
+		{
+			free(d->params.row_rename.output_name);
+			free_string_array(d->params.row_rename.column_names, d->params.row_rename.columns_count);
+		}
 
 		// delete the expression evaluation context template, if this operator built one
 		if(d->expr_eval_context != NULL)
