@@ -1,6 +1,7 @@
 #ifndef FUNCTION_HASH_H
 #define FUNCTION_HASH_H
 
+#include<rhendb/rhendb.h>
 #include<rhendb/transaction.h>
 
 #include<tuplestore/datum.h>

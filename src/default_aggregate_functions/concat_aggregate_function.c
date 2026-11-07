@@ -1,6 +1,8 @@
 #include<rhendb/aggregate_functions.h>
 
+#include<rhendb/rhendb.h>
 #include<rhendb/transaction.h>
+
 #include<rhendb/util_materialization.h>
 #include<rhendb/util_transaction_ext_storer.h>
 

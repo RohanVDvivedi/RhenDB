@@ -1,5 +1,7 @@
 #include<rhendb/aggregate_functions.h>
 
+#include<rhendb/rhendb.h>
+
 #include<rhendb/function_compare.h>
 
 #include<tuplelargetypes/common_extended.h>

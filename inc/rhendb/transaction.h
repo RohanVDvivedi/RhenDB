@@ -1,8 +1,8 @@
 #ifndef TRANSACTION_H
 #define TRANSACTION_H
 
-#include<rhendb/rhendb.h>
 #include<rhendb/mvcc_snapshot.h>
+#include<rhendb/rage_engine.h>
 
 #include<lockking/rwlock.h>
 
@@ -10,6 +10,7 @@
 
 #include<tupleindexer/hash_table/hash_table.h>
 #include<tupleindexer/linked_page_list/linked_page_list.h>
+#include<tupleindexer/common/tuple_pointer.h>
 
 #include<tupleindexer/utils/heap_table_accumulative_notifier.h>
 
@@ -89,7 +90,7 @@ struct savepoint_log
 	data_type_info* savepoint_name_dti;
 };
 
-typedef struct query_plan query_plan;
+typedef struct rhendb rhendb;
 
 typedef struct transaction transaction;
 struct transaction

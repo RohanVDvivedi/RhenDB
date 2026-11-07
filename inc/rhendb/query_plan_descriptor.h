@@ -1,15 +1,28 @@
 #ifndef QUERY_PLAN_DESCRIPTOR_H
 #define QUERY_PLAN_DESCRIPTOR_H
 
-#include<rhendb/operators.h>
+#include<rhendb/aggregate_functions.h>
+#include<rhendb/tuples_down_counter.h>
+#include<rhendb/join_type.h>
+#include<rhendb/projection_type.h>
+#include<rhendb/table_operator_output_type.h>
+#include<rhendb/fetched_table.h>
+#include<rhendb/interim_tuple_store.h>
+
+#include<boompar/sync_pipe.h>
+
 #include<rhendb/operator_resource_counter.h>
 
 #include<rhendb/expression_evaluator.h>
 
 #include<rhendb/mvcc_snapshot.h>
+
+#include<sqltoast/sql_expression.h>
+
 #include<tuplestore/tuple_def.h>
 
 #include<cutlery/arraylist.h>
+#include<cutlery/stream.h>
 
 /*
 	QUERY PLAN DESCRIPTOR - a declarative, reconstructible factory for a query_plan.

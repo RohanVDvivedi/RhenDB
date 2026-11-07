@@ -8,8 +8,6 @@
 
 #include<cutlery/arraylist.h>
 
-#include<rhendb/query_plan_descriptor.h>
-
 typedef struct query_plan query_plan;
 
 typedef struct operator_descriptor operator_descriptor;
@@ -31,7 +29,7 @@ struct operator
 	void* state;
 
 	// the operator's main function that produces tuples until it dies or has nothing in it's input operators 
-	void* (*next_tuple)(operator* o);
+	void* (*next_tuple)(operator* o, int* error_code);
 
 	// destroy state of this operator
 	void (*destroy_state)(operator* o);
@@ -43,6 +41,8 @@ void release_lock_on_resource_from_operator(operator* o, uint32_t resource_type,
 
 // below is a simple flat free_resource function to be used with simple operators
 void OPERATOR_DESTROY_STATE_NO_OP_FUNCTION(operator* o);
+
+typedef struct query_plan_desc query_plan_desc;
 
 typedef struct query_plan query_plan;
 struct query_plan
@@ -58,7 +58,7 @@ struct query_plan
 query_plan* get_new_query_plan(const query_plan_desc* desc);
 
 // calls next on the last operator of the query_plan
-void* next_tuple_from_query_plan(query_plan* qp);
+void* next_tuple_from_query_plan(query_plan* qp, int* error_code);
 
 // calls destroy state on all and destroys the query_plan
 void destroy_query_plan(query_plan* qp);

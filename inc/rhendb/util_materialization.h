@@ -1,6 +1,7 @@
 #ifndef UTIL_MATERIALIZATION_H
 #define UTIL_MATERIALIZATION_H
 
+#include<rhendb/rhendb.h>
 #include<rhendb/transaction.h>
 
 #include<tuplelargetypes/text_extended.h>

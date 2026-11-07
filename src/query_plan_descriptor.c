@@ -6,6 +6,8 @@
 #include<rhendb/function_compare.h>
 #include<rhendb/function_hash.h>
 
+#include<rhendb/max_intermediate_tuple_size.h>
+
 #include<tuplestore/data_type_info.h>
 #include<tuplestore/data_type_info_defaults.h>
 #include<tuplestore/tuple.h>
@@ -29,7 +31,7 @@ static operator_desc* get_new_registered_operator_descriptor_for_query_plan_desc
 	d->output_tuple_def = NULL;
 	d->resource_counter = (operator_resource_counter){};
 	d->expr_eval_context = NULL;
-	d->consumers_count = 0;
+	d->consumers_count = 0; // every operator descripttor starts with no other operator consuming from it
 
 	if(is_full_arraylist(&(qpd->operator_descriptors)) && !expand_arraylist(&(qpd->operator_descriptors)))
 		exit(-1);
@@ -350,7 +352,7 @@ operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetch
 // single input, schema preserving
 // ---------------------------------------------------------------------------------------------------
 
-operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc)
+operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc)
 {
 	if(input_operator_desc->consumers_count > 0)
 	{
@@ -383,7 +385,7 @@ operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, const o
 	return d;
 }
 
-const operator_desc* insert_row_rename_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, const char* output_name, const char** column_names, uint64_t columns_count)
+operator_desc* insert_row_rename_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, const char* output_name, const char** column_names, uint64_t columns_count)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -435,7 +437,7 @@ const operator_desc* insert_row_rename_operator_descriptor(query_plan_desc* qpd,
 	return d;
 }
 
-const operator_desc* insert_offset_limit_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, tuples_down_counter offset_counter, tuples_down_counter limit_counter)
+operator_desc* insert_offset_limit_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, tuples_down_counter offset_counter, tuples_down_counter limit_counter)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -471,7 +473,7 @@ const operator_desc* insert_offset_limit_operator_descriptor(query_plan_desc* qp
 	return d;
 }
 
-const operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, sql_expression* expr)
+operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, sql_expression* expr)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -511,7 +513,7 @@ const operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, 
 	return d;
 }
 
-const operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down_counter result_counter, const operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t min_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
+operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down_counter result_counter, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint64_t min_run_size, uint32_t N_way_sort, uint32_t max_concurrent_jobs_count)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -576,7 +578,7 @@ const operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuple
 // projection
 // ---------------------------------------------------------------------------------------------------
 
-const operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, const char* output_name, projection_description* projection_descriptions, uint32_t projection_descriptions_count)
+operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, const char* output_name, projection_description* projection_descriptions, uint32_t projection_descriptions_count)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -683,7 +685,7 @@ const operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd,
 // aggregations
 // ---------------------------------------------------------------------------------------------------
 
-const operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
+operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -739,7 +741,7 @@ const operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_de
 	return d;
 }
 
-const operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
+operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qpd,  operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -823,7 +825,7 @@ const operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_de
 	return d;
 }
 
-const operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
+operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -935,7 +937,7 @@ const operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc
 // sinks (no output tuple_def)
 // ---------------------------------------------------------------------------------------------------
 
-const operator_desc* insert_consumer_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context)
+operator_desc* insert_consumer_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -959,7 +961,7 @@ const operator_desc* insert_consumer_operator_descriptor(query_plan_desc* qpd, c
 	return d;
 }
 
-const operator_desc* insert_stream_output_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, stream* out_strm)
+operator_desc* insert_stream_output_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, stream* out_strm)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -983,7 +985,7 @@ const operator_desc* insert_stream_output_operator_descriptor(query_plan_desc* q
 	return d;
 }
 
-const operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, sync_pipe* out_pipe)
+operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, sync_pipe* out_pipe)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -1011,7 +1013,7 @@ const operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc*
 // multiple inputs
 // ---------------------------------------------------------------------------------------------------
 
-const operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, const operator_desc** input_operator_descs, uint64_t input_operators_count)
+operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, operator_desc** input_operator_descs, uint64_t input_operators_count)
 {
 	if(input_operators_count == 0 || input_operator_descs == NULL)
 	{
@@ -1063,7 +1065,7 @@ const operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, cons
 	return d;
 }
 
-const operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* qpd, const operator_desc** input_operator_descs, uint64_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
+operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* qpd, operator_desc** input_operator_descs, uint64_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
 {
 	if(input_operators_count == 0 || input_operator_descs == NULL)
 	{
@@ -1121,7 +1123,7 @@ const operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_d
 	return d;
 }
 
-const operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc_0, const operator_desc* input_operator_desc_1)
+operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc_0, operator_desc* input_operator_desc_1)
 {
 	if(input_operator_desc_0 == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc_0) || input_operator_desc_1 == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc_1))
 	{
@@ -1157,7 +1159,7 @@ const operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qp
 // joins ([0] = left, [1] = right), output is the two columns "left" and "right"
 // ---------------------------------------------------------------------------------------------------
 
-const operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc* qpd, const operator_desc* left_input_operator_desc, const operator_desc* right_input_operator_desc, sql_expression* join_expr, join_preserve_type ptype, uint32_t min_block_size)
+operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, operator_desc* right_input_operator_desc, sql_expression* join_expr, join_preserve_type ptype, uint32_t min_block_size)
 {
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
@@ -1267,7 +1269,7 @@ const operator_desc* insert_block_nested_loop_join_operator_descriptor(query_pla
 	return d;
 }
 
-const operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc* qpd, const operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, const operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, join_preserve_type ptype, uint32_t min_block_size)
+operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, join_preserve_type ptype, uint32_t min_block_size)
 {
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
@@ -1355,7 +1357,7 @@ const operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc*
 	return d;
 }
 
-const operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, const operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, const operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
+operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
 {
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
@@ -1468,7 +1470,7 @@ const operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, 
 // semi / anti joins, output is the left input's tuple_def
 // ---------------------------------------------------------------------------------------------------
 
-const operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan_desc* qpd, const operator_desc* left_input_operator_desc, const operator_desc* right_input_operator_desc, sql_expression* join_expr, semi_join_type stype, uint32_t min_block_size)
+operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, operator_desc* right_input_operator_desc, sql_expression* join_expr, semi_join_type stype, uint32_t min_block_size)
 {
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
@@ -1529,7 +1531,7 @@ const operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(quer
 	return d;
 }
 
-const operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* qpd, const operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, const operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype, uint32_t min_block_size)
+operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype, uint32_t min_block_size)
 {
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
@@ -1576,7 +1578,7 @@ const operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_
 	return d;
 }
 
-const operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, const operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, const operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, semi_join_type stype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
+operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, semi_join_type stype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
 {
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
@@ -1650,7 +1652,7 @@ const operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* 
 
 // builds the flag-based (table_id / partition_id / tuple_pointer / heap_tuple) output context tuple_def, exactly
 // as the scan / insertion / deletion / pointer_lookup operators build it; all its columns are borrowed dtis
-static tuple_def* build_table_operator_output_tuple_def(rhendb* rdb, const fetched_table* ftabl, int output_flags, const char* context_name)
+tuple_def* build_table_operator_output_tuple_def(rhendb* rdb, const fetched_table* ftabl, int output_flags, const char* context_name)
 {
 	if(output_flags == 0)
 		return NULL;
@@ -1704,7 +1706,7 @@ static tuple_def* build_table_operator_output_tuple_def(rhendb* rdb, const fetch
 	return output_tuple_def;
 }
 
-const operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, const positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags)
+operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, const positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -1803,7 +1805,7 @@ const operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, 
 	return d;
 }
 
-const operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags)
+operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -1851,7 +1853,7 @@ const operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, c
 	return d;
 }
 
-const operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, const operator_desc* input_operator_desc, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags)
+operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -1891,145 +1893,6 @@ const operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* 
 	d->resource_counter = result;
 
 	return d;
-}
-
-// ---------------------------------------------------------------------------------------------------
-// main_query has this_sub_query_expr_eval_context == NULL
-// ---------------------------------------------------------------------------------------------------
-
-int is_main_query_plan_descriptor(const query_plan_desc* qpd)
-{
-	return qpd->this_sub_query_expr_eval_context == NULL;
-}
-
-// ---------------------------------------------------------------------------------------------------
-// create : build a real, executable query_plan from the descriptor
-// ---------------------------------------------------------------------------------------------------
-
-query_plan* create_query_plan(query_plan_desc* qpd, const sql_expr_eval_context* this_sub_query_expr_eval_context)
-{
-	uint64_t count = get_element_count_arraylist(&(qpd->operator_descriptors));
-
-	query_plan* qp = get_new_query_plan(qpd->curr_tx, this_sub_query_expr_eval_context, count);
-	if(qp == NULL)
-		return NULL;
-
-	// an operator built at descriptor index i is registered at position i in qp->operators (see
-	// get_new_registered_operator_for_query_plan), so an already-built input operator at descriptor index j < i
-	// is fetched as get_from_front_of_arraylist(&(qp->operators), j)
-	for(uint64_t i = 0; i < count; i++)
-	{
-		operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), i);
-		operator* o = get_new_registered_operator_for_query_plan(qp);
-
-		switch(d->type)
-		{
-			case OP_CONSTANT_DATASET :
-				setup_constant_dataset_operator(o, d->params.constant_dataset.constant_dataset_p, d->params.constant_dataset.record_def);
-				break;
-			case OP_GENERATOR :
-				setup_generator_operator(o, d->params.generator.generator, d->params.generator.generator_context, d->params.generator.generator_tuple_def);
-				break;
-			case OP_STREAM_INPUT :
-				setup_stream_input_operator(o, d->params.stream_input.in_strm, d->params.stream_input.input_tuple_def);
-				d->params.stream_input.in_strm = NULL; // consumed : must be set again by the user before the next create_query_plan()
-				break;
-			case OP_SCAN :
-				setup_scan_operator(o, qp, d->params.scan.ftabl, d->params.scan.max_concurrent_jobs_count, d->params.scan.output_flags, d->params.scan.additional_flags);
-				break;
-			case OP_IDENTITY :
-				setup_identity_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.identity.input_operator_index));
-				break;
-			case OP_ROW_RENAME :
-				setup_row_rename_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.row_rename.input_operator_index), d->params.row_rename.output_name, (const char**) d->params.row_rename.column_names, d->params.row_rename.columns_count);
-				break;
-			case OP_OFFSET_LIMIT :
-				setup_offset_limit_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.offset_limit.input_operator_index), d->params.offset_limit.offset_counter, d->params.offset_limit.limit_counter);
-				break;
-			case OP_SELECTION :
-				setup_selection_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.selection.input_operator_index), d->params.selection.expr);
-				break;
-			case OP_SORT :
-				setup_sort_operator(o, d->params.sort.result_counter, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.sort.input_operator_index), d->params.sort.key_element_count, d->params.sort.key_element_ids, d->params.sort.key_compare_direction, d->params.sort.min_run_size, d->params.sort.N_way_sort, d->params.sort.max_concurrent_jobs_count);
-				break;
-			case OP_PROJECTION :
-				setup_projection_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.projection.input_operator_index), d->params.projection.output_name, d->params.projection.projection_descriptions, d->params.projection.projection_descriptions_count);
-				break;
-			case OP_SIMPLE_AGGREGATION :
-				setup_simple_aggregation_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.simple_aggregation.input_operator_index), d->params.simple_aggregation.aggregate_functions_count, d->params.simple_aggregation.aggregate_functions, (positional_accessor const * const *) d->params.simple_aggregation.aggregate_input_element_ids);
-				break;
-			case OP_SORTED_AGGREGATION :
-				setup_sorted_aggregation_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.sorted_aggregation.input_operator_index), d->params.sorted_aggregation.key_element_count, d->params.sorted_aggregation.key_element_ids, d->params.sorted_aggregation.aggregate_functions_count, d->params.sorted_aggregation.aggregate_functions, (positional_accessor const * const *) d->params.sorted_aggregation.aggregate_input_element_ids);
-				break;
-			case OP_HASH_AGGREGATION :
-				setup_hash_aggregation_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.hash_aggregation.input_operator_index), d->params.hash_aggregation.key_element_count, d->params.hash_aggregation.key_element_ids, d->params.hash_aggregation.aggregate_functions_count, d->params.hash_aggregation.aggregate_functions, (positional_accessor const * const *) d->params.hash_aggregation.aggregate_input_element_ids, d->params.hash_aggregation.partitions_count, d->params.hash_aggregation.max_concurrent_jobs_count, d->params.hash_aggregation.max_concurrent_jobs_queue_size, d->params.hash_aggregation.min_build_tuple_buffer_size);
-				break;
-			case OP_CONSUMER :
-				setup_consumer_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.consumer.input_operator_index), d->params.consumer.consumer, d->params.consumer.consumer_context);
-				break;
-			case OP_STREAM_OUTPUT :
-				setup_stream_output_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.stream_output.input_operator_index), d->params.stream_output.out_strm);
-				d->params.stream_output.out_strm = NULL; // consumed : must be set again by the user before the next create_query_plan()
-				break;
-			case OP_SUBQUERY_OUTPUT :
-				setup_subquery_output_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.subquery_output.input_operator_index), d->params.subquery_output.out_pipe);
-				d->params.subquery_output.out_pipe = NULL; // consumed : must be set again by the user before the next create_query_plan()
-				break;
-			case OP_UNION :
-			{
-				operator** input_operators = malloc(sizeof(operator*) * d->params.union_op.input_operators_count);
-				for(uint64_t k = 0; k < d->params.union_op.input_operators_count; k++)
-					input_operators[k] = (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.union_op.input_operator_indices[k]);
-				setup_union_operator(o, input_operators, (uint32_t) d->params.union_op.input_operators_count);
-				free(input_operators);
-				break;
-			}
-			case OP_MERGE_SORTED_INPUTS :
-			{
-				operator** input_operators = malloc(sizeof(operator*) * d->params.merge_sorted_inputs.input_operators_count);
-				for(uint64_t k = 0; k < d->params.merge_sorted_inputs.input_operators_count; k++)
-					input_operators[k] = (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.merge_sorted_inputs.input_operator_indices[k]);
-				setup_merge_sorted_inputs_operator(o, input_operators, (uint32_t) d->params.merge_sorted_inputs.input_operators_count, d->params.merge_sorted_inputs.key_element_count, d->params.merge_sorted_inputs.key_element_ids, d->params.merge_sorted_inputs.key_compare_direction);
-				free(input_operators);
-				break;
-			}
-			case OP_RESULT_MATCH :
-			{
-				operator* input_operators[2] = {(operator*) get_from_front_of_arraylist(&(qp->operators), d->params.result_match.input_operator_indices[0]), (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.result_match.input_operator_indices[1])};
-				setup_result_match_operator(o, input_operators);
-				break;
-			}
-			case OP_BLOCK_NESTED_LOOP_JOIN :
-				setup_block_nested_loop_join_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.block_nested_loop_join.left_input_operator_index), (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.block_nested_loop_join.right_input_operator_index), d->params.block_nested_loop_join.join_expr, d->params.block_nested_loop_join.ptype, d->params.block_nested_loop_join.min_block_size);
-				break;
-			case OP_SORT_MERGE_JOIN :
-				setup_sort_merge_join_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.sort_merge_join.left_input_operator_index), d->params.sort_merge_join.left_key_element_ids, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.sort_merge_join.right_input_operator_index), d->params.sort_merge_join.right_key_element_ids, d->params.sort_merge_join.key_compare_direction, d->params.sort_merge_join.key_element_count, d->params.sort_merge_join.ptype, d->params.sort_merge_join.min_block_size);
-				break;
-			case OP_HASH_JOIN :
-				setup_hash_join_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.hash_join.left_input_operator_index), d->params.hash_join.left_key_element_ids, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.hash_join.right_input_operator_index), d->params.hash_join.right_key_element_ids, d->params.hash_join.key_element_count, d->params.hash_join.ptype, d->params.hash_join.partitions_count, d->params.hash_join.max_concurrent_jobs_count, d->params.hash_join.max_concurrent_jobs_queue_size, d->params.hash_join.min_pending_buffer_size);
-				break;
-			case OP_BLOCK_NESTED_LOOP_SEMI_JOIN :
-				setup_block_nested_loop_semi_join_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.block_nested_loop_semi_join.left_input_operator_index), (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.block_nested_loop_semi_join.right_input_operator_index), d->params.block_nested_loop_semi_join.join_expr, d->params.block_nested_loop_semi_join.stype, d->params.block_nested_loop_semi_join.min_block_size);
-				break;
-			case OP_SORT_MERGE_SEMI_JOIN :
-				setup_sort_merge_semi_join_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.sort_merge_semi_join.left_input_operator_index), d->params.sort_merge_semi_join.left_key_element_ids, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.sort_merge_semi_join.right_input_operator_index), d->params.sort_merge_semi_join.right_key_element_ids, d->params.sort_merge_semi_join.key_compare_direction, d->params.sort_merge_semi_join.key_element_count, d->params.sort_merge_semi_join.stype, d->params.sort_merge_semi_join.min_block_size);
-				break;
-			case OP_HASH_SEMI_JOIN :
-				setup_hash_semi_join_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.hash_semi_join.left_input_operator_index), d->params.hash_semi_join.left_key_element_ids, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.hash_semi_join.right_input_operator_index), d->params.hash_semi_join.right_key_element_ids, d->params.hash_semi_join.key_element_count, d->params.hash_semi_join.stype, d->params.hash_semi_join.partitions_count, d->params.hash_semi_join.max_concurrent_jobs_count, d->params.hash_semi_join.max_concurrent_jobs_queue_size, d->params.hash_semi_join.min_pending_buffer_size);
-				break;
-			case OP_INSERTION :
-				setup_insertion_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.insertion.input_operator_index), d->params.insertion.insertion_from_source_positional_accessors, d->params.insertion.ftabl, d->params.insertion.output_flags, d->params.insertion.global_heap_notifier, d->params.insertion.additional_flags);
-				break;
-			case OP_DELETION :
-				setup_deletion_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.deletion.input_operator_index), d->params.deletion.partition_id_from_source_positional_accessor, d->params.deletion.tuple_pointer_from_source_positional_accessor, d->params.deletion.ftabl, d->params.deletion.deletion_batch_size, d->params.deletion.output_flags, d->params.deletion.additional_flags);
-				break;
-			case OP_POINTER_LOOKUP :
-				setup_pointer_lookup_operator(o, (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.pointer_lookup.input_operator_index), d->params.pointer_lookup.partition_id_from_source_positional_accessor, d->params.pointer_lookup.tuple_pointer_from_source_positional_accessor, d->params.pointer_lookup.ftabl, d->params.pointer_lookup.lookup_batch_size, d->params.pointer_lookup.output_flags, d->params.pointer_lookup.additional_flags);
-				break;
-		}
-	}
-
-	return qp;
 }
 
 // ---------------------------------------------------------------------------------------------------

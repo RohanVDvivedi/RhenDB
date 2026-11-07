@@ -1,6 +1,7 @@
 #ifndef UTIL_TRANSACTION_EXT_STORER_H
 #define UTIL_TRANSACTION_EXT_STORER_H
 
+#include<rhendb/rhendb.h>
 #include<rhendb/transaction.h>
 
 #include<tuplelargetypes/text_extended.h>

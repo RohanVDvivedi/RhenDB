@@ -1,6 +1,8 @@
 #ifndef OPERATORS_H
 #define OPERATORS_H
 
+#include<rhendb/query_plan.h>
+
 /*
 	These functions are only meant to create the state and populate next_tuple() and destroy_state() callbacks in their operator struct
 */
@@ -51,6 +53,8 @@ void open_hash_semi_join_operator(operator* o);
 void open_selection_operator(operator* o);
 
 void open_projection_operator(operator* o);
+
+#include<boompar/sync_pipe.h>
 
 void open_subquery_output_operator(operator* o);
 void* get_tuple_from_subquery_pipe(sync_pipe* spipe, const tuple_def* tpl_d); // a return NULL implies query completed

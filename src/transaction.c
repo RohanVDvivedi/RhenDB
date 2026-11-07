@@ -1,5 +1,7 @@
 #include<rhendb/transaction.h>
 
+#include<rhendb/rhendb.h>
+
 #include<tuplelargetypes/common_extended.h>
 
 #define MAX_ENTRIES_IN_VOL_BLOBS_HTAN        56 // threshold should be something like 20 to 24 for fixing the accumulated entries

@@ -2,6 +2,7 @@
 #define RASH_TABLE_H
 
 #include<rhendb/rhendb.h>
+#include<rhendb/transaction.h>
 
 #include<tupleindexer/hash_table/hash_table.h>
 #include<tupleindexer/blob_store/blob_store.h>

@@ -3,7 +3,9 @@
 #include<tuplestore/tuple_def.h>
 #include<tuplestore/tuple.h>
 
+#include<rhendb/rhendb.h>
 #include<rhendb/transaction.h>
+
 #include<rhendb/util_materialization.h>
 #include<rhendb/util_transaction_ext_storer.h>
 

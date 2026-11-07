@@ -3313,9 +3313,11 @@ static void notify_removal_for_efunc_cache_entry(void* resource_p, const void* d
 	free(ece);
 }
 
-// sub-query support start
+// ============================================================================
+// SUB-QUERY SUPPORT
 
-#include<boompar/sync_pipe.h>
+#include<rhendb/query_plan.h>
+#include<rhendb/query_plan_descriptor.h>
 
 /*
 	since the returned type information does not live long enough for the row,
@@ -3329,31 +3331,17 @@ struct expression_sub_query
 {
 	query_plan* sub_query_plan;
 
-	sync_pipe* sub_query_output_pipe;
-
 	const tuple_def* sub_query_output_def;
 };
 
-// ============================================================================
-// SUB-QUERY SUPPORT
-
-#include<rhendb/query_plan.h>
-#include<rhendb/query_plan_descriptor.h>
-
-#define SUB_QUERY_OUTPUT_PIPE_CAPACITY 1024
-
 // last operator is always the sub_query_output and the one befoe that produces the input for the sub_query_output operator
-query_plan* build_query_plan_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, sync_pipe* out_pipe, const tuple_def** out_def, int* error_code)
+query_plan* build_query_plan_for_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, const tuple_def** out_def, int* error_code)
 {
 	query_plan_desc* qpd = dql->physical_plan;
 
-	operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 2);
-	(*out_def) = d->output_tuple_def;
+	(*out_def) = qpd->output_tuple_def;
 
-	d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 1);
-	d->params.subquery_output.out_pipe = out_pipe;
-
-	query_plan* qp = create_query_plan(qpd, ec_p);
+	query_plan* qp = get_new_query_plan(qpd);
 	if(qp == NULL)
 		(*error_code) = RHENDB_EE_FAILED_SUB_QUERY;
 	return qp;
@@ -3363,86 +3351,44 @@ const tuple_def* infer_output_def_for_sub_query(const sql_dql* dql, const sql_ex
 {
 	query_plan_desc* qpd = dql->physical_plan;
 
-	operator_desc* d = (operator_desc*) get_from_front_of_arraylist(&(qpd->operator_descriptors), get_element_count_arraylist(&(qpd->operator_descriptors)) - 2);
-	return d->output_tuple_def;
+	return qpd->output_tuple_def;
 }
 
 void* rhendb_get_sub_query(const sql_dql* dql, const sql_expr_eval_context* ec_p, int* error_code)
 {
-	rhendb_expr_eval_context* ctx = ec_p->context_p;
-
-	// a fresh sync_pipe, created and owned by us, that the sub-query plan writes its output rows into
-	sync_pipe* out_pipe = new_sync_pipe(SUB_QUERY_OUTPUT_PIPE_CAPACITY);
-	if(out_pipe == NULL)
-	{
-		(*error_code) = RHENDB_EE_OUT_OF_MEMORY;
-		return NULL;
-	}
-
 	// build the runnable plan around our pipe; it also hands back the output row's type
 	const tuple_def* output_def = NULL;
-	query_plan* qp = build_query_plan_for_sub_query(dql, ec_p, out_pipe, &output_def, error_code);
+	query_plan* qp = build_query_plan_for_sub_query(dql, ec_p, &output_def, error_code);
 	if(qp == NULL)
-	{
-		delete_sync_pipe(out_pipe);
 		return NULL;
-	}
-
-	if(!register_query_plan(ctx->tx, qp))
-	{
-		(*error_code) = RHENDB_EE_FAILED_SUB_QUERY;
-
-		shutdown_query_plan(qp, OPERATOR_SUCCESS_REASON);
-		wait_for_shutdown_of_query_plan(qp);
-		destroy_query_plan(qp, NULL);
-
-		close_sync_pipe(out_pipe);
-		delete_sync_pipe(out_pipe);
-		return NULL;
-	}
-
-	// start the pipeline so it begins producing tuples into out_pipe, concurrently with our reads
-	start_all_operators_for_query_plan(qp);
 
 	expression_sub_query* esq = malloc(sizeof(expression_sub_query));
 	if(esq == NULL)
 	{
 		(*error_code) = RHENDB_EE_OUT_OF_MEMORY;
-
-		// shutdown the query plan
-		shutdown_query_plan(qp, OPERATOR_SUCCESS_REASON);
-		wait_for_shutdown_of_query_plan(qp);
-
-		deregister_query_plan(ctx->tx, qp);
-		destroy_query_plan(qp, NULL);
-
-		// close and delete the sync pipe
-		close_sync_pipe(out_pipe);
-		delete_sync_pipe(out_pipe);
+		destroy_query_plan(qp);
 		return NULL;
 	}
 
 	esq->sub_query_plan = qp;
-	esq->sub_query_output_pipe = out_pipe;
 	esq->sub_query_output_def = output_def;
 	return esq;
 }
-
-// declaration for the helper to get the tuple from sub query
-void* get_tuple_from_subquery_pipe(sync_pipe* spipe, const tuple_def* tpl_d);
 
 void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, const sql_expr_eval_context* ec_p, int* error_code)
 {
 	expression_sub_query* esq = sub_query;
 
-	void* sub_query_tuple = get_tuple_from_subquery_pipe(esq->sub_query_output_pipe, esq->sub_query_output_def);
+	int error_code_for_sub_query = 0;
+	void* sub_query_tuple = next_tuple_from_query_plan(esq->sub_query_plan, &error_code_for_sub_query);
 	if(sub_query_tuple == NULL)
 	{
-		// the pipe closed with no (more) rows : the sub-query finished -- reap it and report its outcome
-		wait_for_shutdown_of_query_plan(esq->sub_query_plan);
-		if(esq->sub_query_plan->query_errored)
-			(*error_code) = RHENDB_EE_FAILED_SUB_QUERY;
 		(*end_of_results) = 1;
+		return NULL;
+	}
+	if(error_code_for_sub_query)
+	{
+		(*error_code) = RHENDB_EE_FAILED_SUB_QUERY;
 		return NULL;
 	}
 
@@ -3464,18 +3410,17 @@ void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, cons
 	expr_value* v = new_val(RHENDB_EXPR_INT, ec_p);
 	if(dti->type == TUPLE || dti->type == ARRAY)
 	{
-		/* keep extended text, blob, numeric and jsonb in tuple form so it is materialized only when needed */
 		v->type_info.type = expr_type_for_column(dti);
 		v->type_info.dti_p = (data_type_info*)dti;
 		v->value = d;
-		v->buffer_to_free = sub_query_tuple; // we are borrowing value
+		v->buffer_to_free = sub_query_tuple;
 	}
 	else if(dti->type == STRING || dti->type == BINARY)
 	{
 		v->type_info.type = expr_type_for_column(dti);
 		v->type_info.dti_p = NULL;
 		v->string_value = get_dstring_pointing_to(d.string_or_binary_value, d.string_or_binary_size);
-		v->buffer_to_free = sub_query_tuple; // we are borrowing value
+		v->buffer_to_free = sub_query_tuple;
 	}
 	else
 	{
@@ -3489,19 +3434,10 @@ void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, cons
 
 void rhendb_delete_sub_query(void* sub_query, const sql_expr_eval_context* ec_p)
 {
-	rhendb_expr_eval_context* ctx = ec_p->context_p;
-
 	expression_sub_query* esq = sub_query;
 
-	close_sync_pipe(esq->sub_query_output_pipe);
-
-	shutdown_query_plan(esq->sub_query_plan, OPERATOR_SUCCESS_REASON);
-	wait_for_shutdown_of_query_plan(esq->sub_query_plan);
-
-	deregister_query_plan(ctx->tx, esq->sub_query_plan);
-	destroy_query_plan(esq->sub_query_plan, NULL);
-
-	delete_sync_pipe(esq->sub_query_output_pipe);
+	if(esq->sub_query_plan != NULL)
+		destroy_query_plan(esq->sub_query_plan);
 
 	free(esq);
 }
