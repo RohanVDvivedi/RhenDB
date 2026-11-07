@@ -4,7 +4,6 @@
 #include<rhendb/transaction_table.h>
 #include<rhendb/lock_manager.h>
 #include<rhendb/catalog_manager.h>
-#include<rhendb/query_plan.h>
 
 #include<boompar/resource_usage_limiter.h>
 #include<boompar/executor.h>

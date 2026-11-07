@@ -1,12 +1,14 @@
 #ifndef QUERY_PLAN_H
 #define QUERY_PLAN_H
 
-#include<pthread.h>
+#include<rhendb/query_plan_descriptor.h>
 
 #include<tuplestore/tuple_def.h>
 #include<tuplestore/tuple.h>
 
 #include<cutlery/arraylist.h>
+
+#include<pthread.h>
 
 typedef struct query_plan query_plan;
 
