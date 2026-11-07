@@ -998,106 +998,6 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 }
 
 // ---------------------------------------------------------------------------------------------------
-// sinks (no output tuple_def)
-// ---------------------------------------------------------------------------------------------------
-
-operator_desc* insert_consumer_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context)
-{
-	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
-	{
-		printf("input_operator_desc invalid for consumer_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(input_operator_desc->consumers_count > 0)
-	{
-		printf("an input_operator_desc already has a consumer for consumer_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(input_operator_desc->output_tuple_def == NULL)
-	{
-		printf("input operator descriptor has no output_tuple_def for consumer_operator_descriptor\n");
-		return NULL;
-	}
-
-	operator_resource_counter result = {.job_counter = 1};
-
-	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_CONSUMER);
-	d->params.consumer = (consumer_operator_params){input_operator_desc->index, consumer, consumer_context};
-	d->output_tuple_def = NULL;
-	d->resource_counter = result;
-
-	input_operator_desc->consumers_count++;
-
-	return d;
-}
-
-operator_desc* insert_stream_output_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, stream* out_strm)
-{
-	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
-	{
-		printf("input_operator_desc invalid for stream_output_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(input_operator_desc->consumers_count > 0)
-	{
-		printf("an input_operator_desc already has a consumer for stream_output_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(input_operator_desc->output_tuple_def == NULL)
-	{
-		printf("input operator descriptor has no output_tuple_def for stream_output_operator_descriptor\n");
-		return NULL;
-	}
-
-	operator_resource_counter result = {.job_counter = 1};
-
-	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_STREAM_OUTPUT);
-	d->params.stream_output = (stream_output_operator_params){input_operator_desc->index, out_strm};
-	d->output_tuple_def = NULL;
-	d->resource_counter = result;
-
-	input_operator_desc->consumers_count++;
-
-	return d;
-}
-
-operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, sync_pipe* out_pipe)
-{
-	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
-	{
-		printf("input_operator_desc invalid for subquery_output_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(input_operator_desc->consumers_count > 0)
-	{
-		printf("an input_operator_desc already has a consumer for subquery_output_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(input_operator_desc->output_tuple_def == NULL)
-	{
-		printf("input operator descriptor has no output_tuple_def for subquery_output_operator_descriptor\n");
-		return NULL;
-	}
-
-	operator_resource_counter result = {.thread_counter = 1};
-
-	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SUBQUERY_OUTPUT);
-	d->params.subquery_output = (subquery_output_operator_params){input_operator_desc->index, out_pipe};
-	d->output_tuple_def = NULL;
-	d->resource_counter = result;
-
-	input_operator_desc->consumers_count++;
-
-	return d;
-}
-
-// ---------------------------------------------------------------------------------------------------
 // multiple inputs
 // ---------------------------------------------------------------------------------------------------
 
@@ -1231,47 +1131,6 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 
 	for(uint64_t i = 0; i < input_operators_count; i++)
 		input_operator_descs[i]->consumers_count++;
-
-	return d;
-}
-
-operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc_0, operator_desc* input_operator_desc_1)
-{
-	if(input_operator_desc_0 == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc_0) || input_operator_desc_1 == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc_1))
-	{
-		printf("input_operator_desc invalid for result_match_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(input_operator_desc_0->consumers_count > 0 || input_operator_desc_1->consumers_count > 0)
-	{
-		printf("an input_operator_desc already has a consumer for result_match_operator_descriptor\n");
-		return NULL;
-	}
-
-	const tuple_def* input_tuple_def_0 = input_operator_desc_0->output_tuple_def;
-	const tuple_def* input_tuple_def_1 = input_operator_desc_1->output_tuple_def;
-	if(input_tuple_def_0 == NULL || input_tuple_def_1 == NULL)
-	{
-		printf("input operator descriptor has no output_tuple_def for result_match_operator_descriptor\n");
-		return NULL;
-	}
-	if(!can_compare_datum_rhendb(input_tuple_def_0->type_info, input_tuple_def_1->type_info))
-	{
-		printf("input operator descriptor's for result_match_operator_descriptor are not comparable\n");
-		return NULL;
-	}
-
-	operator_resource_counter result = {.buffer_counter = has_extended_type_info2(input_tuple_def_0, SELF, PERSISTENT_EXT_SUB_TYPE) + has_extended_type_info2(input_tuple_def_1, SELF, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
-
-	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_RESULT_MATCH);
-	d->params.result_match.input_operator_indices[0] = input_operator_desc_0->index;
-	d->params.result_match.input_operator_indices[1] = input_operator_desc_1->index;
-	d->output_tuple_def = NULL; // does not output anything
-	d->resource_counter = result;
-
-	input_operator_desc_0->consumers_count++;
-	input_operator_desc_1->consumers_count++;
 
 	return d;
 }
@@ -1826,7 +1685,7 @@ operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, o
 // ---------------------------------------------------------------------------------------------------
 
 // builds the flag-based (table_id / partition_id / tuple_pointer / heap_tuple) output context tuple_def, exactly
-// as the scan / insertion / deletion / pointer_lookup operators build it; all its columns are borrowed dtis
+// as the scan / pointer_lookup operators build it; all its columns are borrowed dtis
 tuple_def* build_table_operator_output_tuple_def(rhendb* rdb, const fetched_table* ftabl, int output_flags, const char* context_name)
 {
 	if(output_flags == 0)
@@ -1879,169 +1738,6 @@ tuple_def* build_table_operator_output_tuple_def(rhendb* rdb, const fetched_tabl
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	return output_tuple_def;
-}
-
-operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, const positional_accessor* insertion_from_source_positional_accessors, const fetched_table* ftabl, int output_flags, heap_table_notifier* global_heap_notifier, int additional_flags)
-{
-	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
-	{
-		printf("input_operator_desc invalid for insertion_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(input_operator_desc->consumers_count > 0)
-	{
-		printf("an input_operator_desc already has a consumer for insertion_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(qpd->curr_tx->snapshot == NULL)
-	{
-		printf("must have writable snapshot for insertion_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(!qpd->curr_tx->snapshot->has_self_transaction_id)
-	{
-		printf("must have self_transaction_id for insertion_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(ftabl == NULL)
-	{
-		printf("ftabl can not be NULL for insertion_operator_descriptor\n");
-		return NULL;
-	}
-
-	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
-	if(input_tuple_def == NULL)
-	{
-		printf("input operator descriptor has no output_tuple_def for insertion_operator_descriptor\n");
-		return NULL;
-	}
-
-	// validate each source column's type against the destination partition column kind, exactly as setup_insertion_operator does
-	const tuple_def* partition_tuple_def = &(ftabl->table_partition_tuple_defs[ftabl->partitions_count - 1]);
-	for(uint32_t i = 0; i < partition_tuple_def->type_info->element_count - 1; i++)
-	{
-		const data_type_info* col_dti = get_type_info_for_element_from_tuple_def(partition_tuple_def, STATIC_POSITION(i + 1));
-		const data_type_info* inp_dti = get_type_info_for_element_from_tuple_def(input_tuple_def, insertion_from_source_positional_accessors[i]);
-		if(is_primitive_numeral_type_info(col_dti))
-		{
-			if(!is_primitive_numeral_type_info(inp_dti))
-			{
-				printf("incompatible type info for primitive_numeral column of table_partition for insertion_operator_descriptor\n");
-				return NULL;
-			}
-		}
-		else if(is_text_extended_type_info(col_dti))
-		{
-			if(!is_text_type_info(inp_dti))
-			{
-				printf("incompatible type info for text column of table_partition for insertion_operator_descriptor\n");
-				return NULL;
-			}
-		}
-		else if(is_blob_extended_type_info(col_dti))
-		{
-			if(!is_blob_type_info(inp_dti))
-			{
-				printf("incompatible type info for blob column of table_partition for insertion_operator_descriptor\n");
-				return NULL;
-			}
-		}
-		else if(is_numeric_extended_type_info(col_dti))
-		{
-			if(!is_numeric_type_info(inp_dti))
-			{
-				printf("incompatible type info for numeric column of table_partition for insertion_operator_descriptor\n");
-				return NULL;
-			}
-		}
-		else if(is_jsonb_extended_type_info(col_dti))
-		{
-			if(!is_jsonb_extended_type_info(inp_dti))
-			{
-				printf("incompatible type info for jsonb column of table_partition for insertion_operator_descriptor\n");
-				return NULL;
-			}
-		}
-		else
-		{
-			printf("unsupported type info in column of table_partition for insertion_operator_descriptor\n");
-			return NULL;
-		}
-	}
-
-	// one source accessor per insertable column of the latest partition (its 0-th column is not insert-provided)
-	uint32_t insertion_accessors_count = partition_tuple_def->type_info->element_count - 1;
-
-	operator_resource_counter result = {.buffer_counter = 8, .job_counter = 1}; // 8 maximum buffers as we do not expect any btree in the system to exceed this height
-
-	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_INSERTION);
-	d->params.insertion = (insertion_operator_params){input_operator_desc->index, deep_clone_positional_accessors(insertion_from_source_positional_accessors, insertion_accessors_count), ftabl, output_flags, global_heap_notifier, additional_flags};
-	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->curr_tx->rdb, ftabl, output_flags, "inserted_tuple_context");
-	d->resource_counter = result;
-
-	input_operator_desc->consumers_count++;
-
-	return d;
-}
-
-operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t deletion_batch_size, int output_flags, int additional_flags)
-{
-	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
-	{
-		printf("input_operator_desc invalid for deletion_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(input_operator_desc->consumers_count > 0)
-	{
-		printf("an input_operator_desc already has a consumer for deletion_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(qpd->curr_tx->snapshot == NULL)
-	{
-		printf("must have writable snapshot for deletion_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(!qpd->curr_tx->snapshot->has_self_transaction_id)
-	{
-		printf("must have self_transaction_id for deletion_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(ftabl == NULL)
-	{
-		printf("ftabl can not be NULL for deletion_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(deletion_batch_size == 0)
-	{
-		printf("must have a non-zero deletion_batch_size for deletion_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(input_operator_desc->output_tuple_def == NULL)
-	{
-		printf("input operator descriptor has no output_tuple_def for deletion_operator_descriptor\n");
-		return NULL;
-	}
-
-	operator_resource_counter result = {.buffer_counter = 1, .job_counter = 1, .thread_counter = 1}; // lock a page delete tuples and exit, so 1 buffer atmost
-
-	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_DELETION);
-	d->params.deletion = (deletion_operator_params){input_operator_desc->index, deep_clone_positional_accessors(partition_id_from_source_positional_accessor, 1), deep_clone_positional_accessors(tuple_pointer_from_source_positional_accessor, 1), ftabl, deletion_batch_size, output_flags, additional_flags};
-	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->curr_tx->rdb, ftabl, output_flags, "deleted_tuple_context");
-	d->resource_counter = result;
-
-	input_operator_desc->consumers_count++;
-
-	return d;
 }
 
 operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags)
@@ -2164,8 +1860,6 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 				break;
 			}
 			case OP_SCAN :
-			case OP_INSERTION :
-			case OP_DELETION :
 			case OP_POINTER_LOOKUP :
 			{
 				// the table op's output context tuple_def borrows every column dti, exactly like the scan op
@@ -2228,13 +1922,6 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 			case OP_HASH_SEMI_JOIN :
 				free_positional_accessors(d->params.hash_semi_join.left_key_element_ids, d->params.hash_semi_join.key_element_count);
 				free_positional_accessors(d->params.hash_semi_join.right_key_element_ids, d->params.hash_semi_join.key_element_count);
-				break;
-			case OP_INSERTION :
-				free_positional_accessors(d->params.insertion.insertion_from_source_positional_accessors, d->params.insertion.ftabl->table_partition_tuple_defs[d->params.insertion.ftabl->partitions_count - 1].type_info->element_count - 1);
-				break;
-			case OP_DELETION :
-				free_positional_accessors(d->params.deletion.partition_id_from_source_positional_accessor, 1);
-				free_positional_accessors(d->params.deletion.tuple_pointer_from_source_positional_accessor, 1);
 				break;
 			case OP_POINTER_LOOKUP :
 				free_positional_accessors(d->params.pointer_lookup.partition_id_from_source_positional_accessor, 1);

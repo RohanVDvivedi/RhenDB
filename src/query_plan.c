@@ -126,11 +126,9 @@ query_plan* get_new_query_plan(const query_plan_desc* desc)
 				break;
 			case OP_STREAM_INPUT :
 				open_stream_input_operator(o);
-				d->params.stream_input.in_strm = NULL; // consumed : must be set again by the user before the next create_query_plan()
+				d->params.stream_input.in_strm = NULL;
 				break;
-			case OP_SCAN :
-				open_scan_operator(o);
-				break;
+
 			case OP_IDENTITY :
 				open_identity_operator(o);
 				break;
@@ -140,67 +138,60 @@ query_plan* get_new_query_plan(const query_plan_desc* desc)
 			case OP_OFFSET_LIMIT :
 				open_offset_limit_operator(o);
 				break;
+
 			case OP_SELECTION :
 				open_selection_operator(o);
-				break;
-			case OP_SORT :
-				open_sort_operator(o);
 				break;
 			case OP_PROJECTION :
 				open_projection_operator(o);
 				break;
-			case OP_SIMPLE_AGGREGATION :
-				open_simple_aggregation_operator(o);
-				break;
-			case OP_SORTED_AGGREGATION :
-				open_sorted_aggregation_operator(o);
-				break;
-			case OP_HASH_AGGREGATION :
-				open_hash_aggregation_operator(o);
-				break;
-			case OP_CONSUMER :
-				open_consumer_operator(o);
-				break;
-			case OP_STREAM_OUTPUT :
-				open_stream_output_operator(o);
-				d->params.stream_output.out_strm = NULL; // consumed : must be set again by the user before the next create_query_plan()
-				break;
-			case OP_SUBQUERY_OUTPUT :
-				open_subquery_output_operator(o);
-				d->params.subquery_output.out_pipe = NULL; // consumed : must be set again by the user before the next create_query_plan()
-				break;
+
 			case OP_UNION :
 				open_union_operator(o);
 				break;
 			case OP_MERGE_SORTED_INPUTS :
 				open_merge_sorted_inputs_operator(o);
 				break;
-			case OP_RESULT_MATCH :
-				open_result_match_operator(o);
+
+			case OP_SIMPLE_AGGREGATION :
+				open_simple_aggregation_operator(o);
 				break;
+
+			case OP_SORT :
+				open_sort_operator(o);
+				break;
+
+			case OP_SORTED_AGGREGATION :
+				open_sorted_aggregation_operator(o);
+				break;
+			case OP_HASH_AGGREGATION :
+				open_hash_aggregation_operator(o);
+				break;
+
 			case OP_BLOCK_NESTED_LOOP_JOIN :
 				open_block_nested_loop_join_operator(o);
 				break;
+
 			case OP_SORT_MERGE_JOIN :
 				open_sort_merge_join_operator(o);
 				break;
 			case OP_HASH_JOIN :
 				open_hash_join_operator(o);
 				break;
+
 			case OP_BLOCK_NESTED_LOOP_SEMI_JOIN :
 				open_block_nested_loop_semi_join_operator(o);
 				break;
+
 			case OP_SORT_MERGE_SEMI_JOIN :
 				open_sort_merge_semi_join_operator(o);
 				break;
 			case OP_HASH_SEMI_JOIN :
 				open_hash_semi_join_operator(o);
 				break;
-			case OP_INSERTION :
-				open_insertion_operator(o);
-				break;
-			case OP_DELETION :
-				open_deletion_operator(o);
+
+			case OP_SCAN :
+				open_scan_operator(o);
 				break;
 			case OP_POINTER_LOOKUP :
 				open_pointer_lookup_operator(o);
