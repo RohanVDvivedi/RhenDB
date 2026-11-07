@@ -220,6 +220,9 @@ query_plan* get_new_query_plan(const query_plan_desc* desc)
 				open_pointer_lookup_operator(o);
 				break;
 		}
+
+		if(!push_back_to_arraylist(&(qp->operators), o))
+			exit(-1);
 	}
 
 	return qp;
