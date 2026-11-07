@@ -2,6 +2,7 @@
 #define OPERATORS_H
 
 #include<rhendb/query_plan.h>
+#include<rhendb/operator_error_codes.h>
 
 /*
 	These functions are only meant to create the state and populate next_tuple() and destroy_state() callbacks in their operator struct

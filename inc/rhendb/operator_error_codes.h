@@ -1,0 +1,6 @@
+#ifndef OPERATOR_ERROR_CODES_H
+#define OPERATOR_ERROR_CODES_H
+
+#define STREAM_ERROR_IN_OPERATOR 3
+
+#endif
