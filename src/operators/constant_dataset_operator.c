@@ -2,10 +2,6 @@
 
 #include<rhendb/interim_tuple_store.h>
 
-/*
-	source operator like the scans, but it iterates over an interim_tuple_store, tuple by tuple and then produces each tuple from it
-*/
-
 typedef struct op_state op_state;
 struct op_state
 {

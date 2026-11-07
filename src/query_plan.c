@@ -126,7 +126,6 @@ query_plan* get_new_query_plan(const query_plan_desc* desc)
 				break;
 			case OP_STREAM_INPUT :
 				open_stream_input_operator(o);
-				d->params.stream_input.in_strm = NULL;
 				break;
 
 			case OP_IDENTITY :
