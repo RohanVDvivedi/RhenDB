@@ -354,15 +354,15 @@ operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetch
 
 operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc)
 {
-	if(input_operator_desc->consumers_count > 0)
-	{
-		printf("input_operator_desc already has a consumer for identity_operator_descriptor\n");
-		return NULL;
-	}
-
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for identity_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for identity_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -390,6 +390,12 @@ operator_desc* insert_row_rename_operator_descriptor(query_plan_desc* qpd, opera
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for row_rename_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for row_rename_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -434,6 +440,8 @@ operator_desc* insert_row_rename_operator_descriptor(query_plan_desc* qpd, opera
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
+	input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -442,6 +450,12 @@ operator_desc* insert_offset_limit_operator_descriptor(query_plan_desc* qpd, ope
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for offset_limit_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for offset_limit_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -470,6 +484,8 @@ operator_desc* insert_offset_limit_operator_descriptor(query_plan_desc* qpd, ope
 	d->output_tuple_def = input_tuple_def;
 	d->resource_counter = result;
 
+	input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -478,6 +494,12 @@ operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, operat
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for selection_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for selection_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -510,6 +532,8 @@ operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, operat
 	d->expr_eval_context = malloc(sizeof(sql_expr_eval_context));
 	*(d->expr_eval_context) = ec;
 
+	input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -518,6 +542,12 @@ operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for sort_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for sort_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -571,6 +601,8 @@ operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down
 	d->output_tuple_def = record_def;
 	d->resource_counter = result;
 
+	input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -583,6 +615,12 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, opera
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for projection_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for projection_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -678,6 +716,8 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, opera
 	d->expr_eval_context = malloc(sizeof(sql_expr_eval_context));
 	*(d->expr_eval_context) = ec;
 
+	input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -690,6 +730,12 @@ operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qp
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for simple_aggregation_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for simple_aggregation_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -738,6 +784,8 @@ operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qp
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
+	input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -746,6 +794,12 @@ operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qp
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for sorted_aggregation_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for sorted_aggregation_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -822,6 +876,8 @@ operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qp
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
+	input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -830,6 +886,12 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for hash_aggregation_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for hash_aggregation_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -930,6 +992,8 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
+	input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -942,6 +1006,12 @@ operator_desc* insert_consumer_operator_descriptor(query_plan_desc* qpd, operato
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for consumer_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for consumer_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -958,6 +1028,8 @@ operator_desc* insert_consumer_operator_descriptor(query_plan_desc* qpd, operato
 	d->output_tuple_def = NULL;
 	d->resource_counter = result;
 
+	input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -966,6 +1038,12 @@ operator_desc* insert_stream_output_operator_descriptor(query_plan_desc* qpd, op
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for stream_output_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for stream_output_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -982,6 +1060,8 @@ operator_desc* insert_stream_output_operator_descriptor(query_plan_desc* qpd, op
 	d->output_tuple_def = NULL;
 	d->resource_counter = result;
 
+	input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -990,6 +1070,12 @@ operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc* qpd, 
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for subquery_output_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for subquery_output_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1005,6 +1091,8 @@ operator_desc* insert_subquery_output_operator_descriptor(query_plan_desc* qpd, 
 	d->params.subquery_output = (subquery_output_operator_params){input_operator_desc->index, out_pipe};
 	d->output_tuple_def = NULL;
 	d->resource_counter = result;
+
+	input_operator_desc->consumers_count++;
 
 	return d;
 }
@@ -1026,6 +1114,15 @@ operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, operator_d
 		if(input_operator_descs[i] == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_descs[i]))
 		{
 			printf("input_operator_desc invalid for union_operator_descriptor\n");
+			return NULL;
+		}
+	}
+
+	for(uint64_t i = 0; i < input_operators_count; i++)
+	{
+		if(input_operator_descs[i]->consumers_count > 0)
+		{
+			printf("an input_operator_desc already has a consumer for union_operator_descriptor\n");
 			return NULL;
 		}
 	}
@@ -1062,6 +1159,9 @@ operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, operator_d
 	d->output_tuple_def = input_tuple_def;
 	d->resource_counter = result;
 
+	for(uint64_t i = 0; i < input_operators_count; i++)
+		input_operator_descs[i]->consumers_count++;
+
 	return d;
 }
 
@@ -1078,6 +1178,15 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 		if(input_operator_descs[i] == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_descs[i]))
 		{
 			printf("input_operator_desc invalid for merge_sorted_inputs_operator_descriptor\n");
+			return NULL;
+		}
+	}
+
+	for(uint64_t i = 0; i < input_operators_count; i++)
+	{
+		if(input_operator_descs[i]->consumers_count > 0)
+		{
+			printf("an input_operator_desc already has a consumer for merge_sorted_inputs_operator_descriptor\n");
 			return NULL;
 		}
 	}
@@ -1120,6 +1229,9 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 	d->output_tuple_def = record_def;
 	d->resource_counter = result;
 
+	for(uint64_t i = 0; i < input_operators_count; i++)
+		input_operator_descs[i]->consumers_count++;
+
 	return d;
 }
 
@@ -1128,6 +1240,12 @@ operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, ope
 	if(input_operator_desc_0 == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc_0) || input_operator_desc_1 == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc_1))
 	{
 		printf("input_operator_desc invalid for result_match_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc_0->consumers_count > 0 || input_operator_desc_1->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for result_match_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1152,6 +1270,9 @@ operator_desc* insert_result_match_operator_descriptor(query_plan_desc* qpd, ope
 	d->output_tuple_def = NULL; // does not output anything
 	d->resource_counter = result;
 
+	input_operator_desc_0->consumers_count++;
+	input_operator_desc_1->consumers_count++;
+
 	return d;
 }
 
@@ -1164,6 +1285,12 @@ operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
 		printf("input_operator_desc invalid for block_nested_loop_join_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(left_input_operator_desc->consumers_count > 0 || right_input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for block_nested_loop_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1266,6 +1393,9 @@ operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc
 
 	}
 
+	left_input_operator_desc->consumers_count++;
+	right_input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -1274,6 +1404,12 @@ operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc* qpd, 
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
 		printf("input_operator_desc invalid for sort_merge_join_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(left_input_operator_desc->consumers_count > 0 || right_input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for sort_merge_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1354,6 +1490,9 @@ operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc* qpd, 
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
+	left_input_operator_desc->consumers_count++;
+	right_input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -1362,6 +1501,12 @@ operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operat
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
 		printf("input_operator_desc invalid for hash_join_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(left_input_operator_desc->consumers_count > 0 || right_input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for hash_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1463,6 +1608,9 @@ operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operat
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
+	left_input_operator_desc->consumers_count++;
+	right_input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -1475,6 +1623,12 @@ operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
 		printf("input_operator_desc invalid for block_nested_loop_semi_join_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(left_input_operator_desc->consumers_count > 0 || right_input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for block_nested_loop_semi_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1528,6 +1682,9 @@ operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan
 
 	}
 
+	left_input_operator_desc->consumers_count++;
+	right_input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -1536,6 +1693,12 @@ operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* 
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
 		printf("input_operator_desc invalid for sort_merge_semi_join_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(left_input_operator_desc->consumers_count > 0 || right_input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for sort_merge_semi_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1575,6 +1738,9 @@ operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* 
 	d->output_tuple_def = left_input_tuple_def;
 	d->resource_counter = result;
 
+	left_input_operator_desc->consumers_count++;
+	right_input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -1583,6 +1749,12 @@ operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, o
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
 		printf("input_operator_desc invalid for hash_semi_join_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(left_input_operator_desc->consumers_count > 0 || right_input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for hash_semi_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1642,6 +1814,9 @@ operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, o
 	d->params.hash_semi_join = (hash_semi_join_operator_params){left_input_operator_desc->index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_desc->index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), key_element_count, stype, partitions_count, max_concurrent_jobs_count, max_concurrent_jobs_queue_size, min_pending_buffer_size};
 	d->output_tuple_def = left_input_tuple_def;
 	d->resource_counter = result;
+
+	left_input_operator_desc->consumers_count++;
+	right_input_operator_desc->consumers_count++;
 
 	return d;
 }
@@ -1711,6 +1886,12 @@ operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, operat
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for insertion_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for insertion_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1802,6 +1983,8 @@ operator_desc* insert_insertion_operator_descriptor(query_plan_desc* qpd, operat
 	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->curr_tx->rdb, ftabl, output_flags, "inserted_tuple_context");
 	d->resource_counter = result;
 
+	input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -1810,6 +1993,12 @@ operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, operato
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for deletion_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for deletion_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1850,6 +2039,8 @@ operator_desc* insert_deletion_operator_descriptor(query_plan_desc* qpd, operato
 	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->curr_tx->rdb, ftabl, output_flags, "deleted_tuple_context");
 	d->resource_counter = result;
 
+	input_operator_desc->consumers_count++;
+
 	return d;
 }
 
@@ -1858,6 +2049,12 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, o
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
 		printf("input_operator_desc invalid for pointer_lookup_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(input_operator_desc->consumers_count > 0)
+	{
+		printf("an input_operator_desc already has a consumer for pointer_lookup_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1891,6 +2088,8 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, o
 	d->params.pointer_lookup = (pointer_lookup_operator_params){input_operator_desc->index, deep_clone_positional_accessors(partition_id_from_source_positional_accessor, 1), deep_clone_positional_accessors(tuple_pointer_from_source_positional_accessor, 1), ftabl, lookup_batch_size, output_flags, additional_flags};
 	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->curr_tx->rdb, ftabl, output_flags, "looked_up_tuple_context");
 	d->resource_counter = result;
+
+	input_operator_desc->consumers_count++;
 
 	return d;
 }
