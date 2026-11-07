@@ -5,9 +5,9 @@ static void* next_tuple(operator* o, int* error_code)
 	if(o->state == NULL)
 		return NULL;
 
-	operator* p = o->state;
+	operator* input_operator = o->state;
 
-	void* tuple = p->next_tuple(p, error_code);
+	void* tuple = input_operator->next_tuple(input_operator, error_code);
 	if(tuple == NULL)
 		o->state = NULL;
 
