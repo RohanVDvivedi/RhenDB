@@ -81,7 +81,7 @@ static void* next_tuple(operator* o, int* error_code)
 	return curr_tuple;
 }
 
-void setup_stream_input_operator(operator* o, stream* in_strm, const tuple_def* input_tuple_def)
+void open_stream_input_operator(operator* o, stream* in_strm, const tuple_def* input_tuple_def)
 {
 	o->state = &GENERATE_DATA;
 	o->next_tuple = next_tuple;
