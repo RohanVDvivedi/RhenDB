@@ -10,7 +10,7 @@
 
 typedef struct query_plan query_plan;
 
-typedef struct operator_descriptor operator_descriptor;
+typedef struct operator_desc operator_desc;
 
 typedef struct operator operator;
 struct operator
@@ -22,7 +22,7 @@ struct operator
 	uint64_t index;
 
 	// operator descriptor that this operator got created from
-	const operator_descriptor* desc;
+	const operator_desc* desc;
 
 	// pointer for the operator to store state
 	// this includes the spilling state for the sort, hash joins, keyed-aggregations
