@@ -39,9 +39,6 @@ struct operator
 int acquire_lock_on_resource_from_operator(operator* o, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size, uint32_t new_lock_mode, uint64_t timeout_in_microseconds);
 void release_lock_on_resource_from_operator(operator* o, uint32_t resource_type, uint8_t* resource_id, uint8_t resource_id_size);
 
-// below is a simple flat free_resource function to be used with simple operators
-void OPERATOR_DESTROY_STATE_NO_OP_FUNCTION(operator* o);
-
 typedef struct query_plan_desc query_plan_desc;
 
 typedef struct query_plan query_plan;

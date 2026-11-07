@@ -170,20 +170,14 @@ query_plan* get_new_query_plan(const query_plan_desc* desc)
 				d->params.subquery_output.out_pipe = NULL; // consumed : must be set again by the user before the next create_query_plan()
 				break;
 			case OP_UNION :
-			{
 				open_union_operator(o);
 				break;
-			}
 			case OP_MERGE_SORTED_INPUTS :
-			{
 				open_merge_sorted_inputs_operator(o);
 				break;
-			}
 			case OP_RESULT_MATCH :
-			{
 				open_result_match_operator(o);
 				break;
-			}
 			case OP_BLOCK_NESTED_LOOP_JOIN :
 				open_block_nested_loop_join_operator(o);
 				break;
@@ -232,7 +226,9 @@ void destroy_query_plan(query_plan* qp)
 	{
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
 
-		o->destroy_state(o);
+		if(o->destroy_state)
+			o->destroy_state(o);
+
 		free(o);
 	}
 
