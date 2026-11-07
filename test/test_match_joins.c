@@ -98,15 +98,7 @@ int main(int argc, char** argv)
 //---------------------------------
 		const operator_desc* input = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
 //---------------------------
-		const operator_desc* input_1 = insert_projection_operator_descriptor(qpd, input, "record2", (projection_description[]){
-			project_from("num", STATIC_POSITION(0)),
-			project_from("order", STATIC_POSITION(1)),
-			project_from("num_in_words", STATIC_POSITION(2)),
-			project_from("digits", STATIC_POSITION(3)),
-			project_from("value_in_string", STATIC_POSITION(4)),
-			project_from("some_numeric", STATIC_POSITION(5)),
-			project_from("some_float", STATIC_POSITION(6)),
-		}, 7);
+		const operator_desc* input_1 = insert_row_rename_operator_descriptor(qpd, input, "record2", NULL, 0);
 
 		const operator_desc* bnlj = insert_block_nested_loop_join_operator_descriptor(qpd, input, input_1, join_expr_sql->expr, PRESERVE_NONE, MIN_BLOCK_SIZE);
 //---------------------------------
