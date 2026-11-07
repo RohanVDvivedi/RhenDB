@@ -10,6 +10,9 @@ void setup_generator_operator(operator* o, void* (*generator)(void* generator_co
 
 void setup_identity_operator(operator* o, operator* input_operator);
 
+// takes in a tuple and renames it's type and column_names so later operators could find the right variable, OR as expected by the user
+void setup_row_rename_operator(operator* o, operator* input_operator, const char* output_name, const char** column_names, uint64_t columns_count);
+
 int print_consumer(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def);
 void setup_consumer_operator(operator* o, operator* input_operator, int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def), void* consumer_context);
 
