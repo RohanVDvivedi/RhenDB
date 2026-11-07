@@ -171,20 +171,12 @@ query_plan* get_new_query_plan(const query_plan_desc* desc)
 				break;
 			case OP_UNION :
 			{
-				operator** input_operators = malloc(sizeof(operator*) * d->params.union_op.input_operators_count);
-				for(uint64_t k = 0; k < d->params.union_op.input_operators_count; k++)
-					input_operators[k] = (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.union_op.input_operator_indices[k]);
 				open_union_operator(o);
-				free(input_operators);
 				break;
 			}
 			case OP_MERGE_SORTED_INPUTS :
 			{
-				operator** input_operators = malloc(sizeof(operator*) * d->params.merge_sorted_inputs.input_operators_count);
-				for(uint64_t k = 0; k < d->params.merge_sorted_inputs.input_operators_count; k++)
-					input_operators[k] = (operator*) get_from_front_of_arraylist(&(qp->operators), d->params.merge_sorted_inputs.input_operator_indices[k]);
 				open_merge_sorted_inputs_operator(o);
-				free(input_operators);
 				break;
 			}
 			case OP_RESULT_MATCH :
