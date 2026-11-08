@@ -12,44 +12,52 @@
 
 #include<stdlib.h>
 
-typedef struct input_values input_values;
-struct input_values
+typedef struct mergeable_tuple mergeable_tuple;
+struct mergeable_tuple
 {
-	// extracted from input_operator
-	const tuple_def* record_def;
-	uint32_t key_element_count;
-	const positional_accessor* key_element_ids;
-	const compare_direction* key_compare_direction;
+	operator* source;
 
-	pheap ready_input_iterators;
+	void* tuple;
+
+	datum* keys;
+
+	php_node embed_node;
+};
+
+typedef struct op_state op_state;
+struct op_state
+{
+	pheap input_tuples;
 
 	singlylist waiting_input_iterators;
 
 	const data_type_info** key_dtis;
+
+	// memory allocation holders
 	datum* keys;
+	mergeable_tuples* mtuples;
 };
 
-static int compare_consumption_iterators(const void* context_p, const void* cit1_vp, const void* cit2_vp)
+static int compare_mergeable_tuples(const void* context_p, const void* mt1_vp, const void* mt2_vp)
 {
 	const operator* o = context_p;
-	const input_values* inputs = o->inputs;
+	const op_state* this_state = o->state;
 
-	const consumption_iterator* cit1_p = cit1_vp;
-	const consumption_iterator* cit2_p = cit2_vp;
+	const mergeable_tuple* mt1 = mt1_vp;
+	const mergeable_tuple* mt2 = mt2_vp;
 
-	return compare_datums3_rhendb(cit1_p->embed_ptrs[1], cit2_p->embed_ptrs[1], inputs->key_dtis, inputs->key_compare_direction, inputs->key_element_count, o->self_query_plan->curr_tx);
+	return compare_datums3_rhendb(mt1->keys, mt2->keys, this_state->key_dtis, o->desc->params.merge_sorted_inputs.key_compare_direction, o->desc->params.merge_sorted_inputs.key_element_count, o->self_query_plan->curr_tx);
 }
 
-// we materialize, the keys in cit_p->embed_ptrs[1], using it as datum[] having inputs->key_element_count elements long
-static void revise_materialized_keys_in_consumption_iterator(operator* o, consumption_iterator* cit_p)
+static void revise_materialized_keys_in_mergeable_tuple(operator* o, mergeable_tuple* mt)
 {
-	input_values* inputs = o->inputs;
+	const op_state* this_state = o->state;
 
 	for(uint32_t j = 0; j < inputs->key_element_count; j++)
 	{
 		const data_type_info* dti_temp;
-		if(!get_value_from_element_from_tuple(&(((datum*)(cit_p->embed_ptrs[1]))[j]), &dti_temp, inputs->record_def, inputs->key_element_ids[j], cit_p->embed_ptrs[0]))
-			((datum*)(cit_p->embed_ptrs[1]))[j] = (*NULL_DATUM);
+		if(!get_value_from_element_from_tuple(mt1->keys[j], &dti_temp,  o->desc->output_tuple_def, o->desc->params.merge_sorted_inputs.key_element_ids[j], mt->tuple))
+			mt1->keys[j] = (*NULL_DATUM);
 	}
 }
 
@@ -149,19 +157,12 @@ static void execute(operator* o)
 	return ;
 }
 
-static void clean_up_resources(operator* o)
+static void destroy_state(operator* o)
 {
-	input_values* inputs = o->inputs;
-
-	remove_all_from_pheap(&(inputs->ready_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-
-	remove_all_from_singlylist(&(inputs->waiting_input_iterators), DELETE_ON_NOTIFY_FOR_CONSUMPTION_ITERATOR);
-
-	free(inputs->keys);
-	free(inputs->key_dtis);
+	
 }
 
-void setup_merge_sorted_inputs_operator(operator* o, operator** input_operators, uint32_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
+void open_merge_sorted_inputs_operator(operator* o)
 {
 	if(input_operators_count == 0)
 	{

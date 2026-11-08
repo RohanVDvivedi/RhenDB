@@ -1003,9 +1003,9 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 
 operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, operator_desc** input_operator_descs, uint64_t input_operators_count)
 {
-	if(input_operators_count == 0 || input_operator_descs == NULL)
+	if(input_operators_count < 2 || input_operator_descs == NULL)
 	{
-		printf("input_operators can not be empty for union_operator_descriptor\n");
+		printf("input_operators can not be less than 2 for union_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1067,9 +1067,9 @@ operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, operator_d
 
 operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* qpd, operator_desc** input_operator_descs, uint64_t input_operators_count, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction)
 {
-	if(input_operators_count == 0 || input_operator_descs == NULL)
+	if(input_operators_count < 2 || input_operator_descs == NULL)
 	{
-		printf("input_operators can not be empty for merge_sorted_inputs_operator_descriptor\n");
+		printf("input_operators can not be lesser than 2 for merge_sorted_inputs_operator_descriptor\n");
 		return NULL;
 	}
 
