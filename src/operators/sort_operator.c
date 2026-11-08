@@ -298,7 +298,6 @@ static void destroy_state(operator* o)
 	{
 		op_state* this_state = o->state;
 
-		// cascade destroy to the input operator
 		this_state->input_operator->destroy_state(this_state->input_operator);
 
 		if(this_state->unsorted_run != NULL)
@@ -316,6 +315,7 @@ static void destroy_state(operator* o)
 			delete_interim_tuple_store(this_state->output_run);
 
 		free(this_state->key_dtis);
+
 		free(this_state);
 	}
 	o->state = NULL;
@@ -341,9 +341,7 @@ void open_sort_operator(operator* o)
 
 	this_state->output_run = NULL;
 
-	// key_dtis must be allocated before it is populated (op_state came from an uninitialized malloc)
 	this_state->key_dtis = malloc(sizeof(data_type_info*) * o->desc->params.sort.key_element_count);
-
 	for(uint32_t j = 0; j < o->desc->params.sort.key_element_count; j++)
 		this_state->key_dtis[j] = get_type_info_for_element_from_tuple_def(o->desc->output_tuple_def, o->desc->params.sort.key_element_ids[j]);
 
