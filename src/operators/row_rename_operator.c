@@ -2,21 +2,33 @@
 
 static void* next_tuple(operator* o, int* error_code)
 {
+	// already dead
 	if(o->state == NULL)
 		return NULL;
 
-	operator* p = o->state;
+	operator* input_operator = o->state;
 
-	void* tuple = p->next_tuple(p, error_code);
+	void* tuple = input_operator->next_tuple(input_operator, error_code);
 	if(tuple == NULL)
-		o->state = NULL;
+		o->destroy_state(o);
 
 	return tuple;
+}
+
+static void destroy_state(operator* o)
+{
+	if(o->state != NULL)
+	{
+		operator* input_operator = o->state;
+
+		input_operator->destroy_state(input_operator);
+	}
+	o->state = NULL;
 }
 
 void open_row_rename_operator(operator* o)
 {
 	o->state = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.row_rename.input_operator_index);
 	o->next_tuple = next_tuple;
-	o->destroy_state = NULL;
+	o->destroy_state = destroy_state;
 }

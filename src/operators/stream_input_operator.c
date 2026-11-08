@@ -34,6 +34,7 @@ static uint32_t read_tuple_prefix_from_stream(void* context_p, void* data, uint3
 
 static void* next_tuple(operator* o, int* error_code)
 {
+	// already dead
 	if(o->state == NULL)
 		return NULL;
 
@@ -42,12 +43,12 @@ static void* next_tuple(operator* o, int* error_code)
 	{
 		if(o->desc->params.stream_input.in_strm->end_of_stream_received)
 		{
-			o->state = NULL;
+			o->destroy_state(o);
 			return NULL;
 		}
 		else
 		{
-			o->state = NULL;
+			o->destroy_state(o);
 			(*error_code) = STREAM_ERROR_IN_OPERATOR;
 			return NULL;
 		}
@@ -62,7 +63,7 @@ static void* next_tuple(operator* o, int* error_code)
 		if(strm_error)
 		{
 			free(curr_tuple);
-			o->state = NULL;
+			o->destroy_state(o);
 			(*error_code) = STREAM_ERROR_IN_OPERATOR;
 			return NULL;
 		}
@@ -73,13 +74,13 @@ static void* next_tuple(operator* o, int* error_code)
 	if(bytes_read == 0)
 	{
 		free(curr_tuple);
-		o->state = NULL;
+		o->destroy_state(o);
 		return NULL;
 	}
 	if(tuple_size != bytes_read)
 	{
 		free(curr_tuple);
-		o->state = NULL;
+		o->destroy_state(o);
 		(*error_code) = STREAM_ERROR_IN_OPERATOR;
 		return NULL;
 	}
@@ -87,9 +88,14 @@ static void* next_tuple(operator* o, int* error_code)
 	return curr_tuple;
 }
 
+static void destroy_state(operator* o)
+{
+	o->state = NULL;
+}
+
 void open_stream_input_operator(operator* o)
 {
 	o->state = &GENERATE_DATA;
 	o->next_tuple = next_tuple;
-	o->destroy_state = NULL;
+	o->destroy_state = destroy_state;
 }

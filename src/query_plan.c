@@ -79,15 +79,6 @@ void release_lock_on_resource_from_operator(operator* o, uint32_t resource_type,
 }
 */
 
-void OPERATOR_DESTROY_STATE_NO_OP_FUNCTION(operator* o)
-{
-	if(o->state)
-	{
-		free(o->state);
-		o->state = NULL;
-	}
-}
-
 #include<rhendb/operators.h>
 
 query_plan* get_new_query_plan(const query_plan_desc* desc)
@@ -216,8 +207,7 @@ void destroy_query_plan(query_plan* qp)
 	{
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
 
-		if(o->destroy_state)
-			o->destroy_state(o);
+		o->destroy_state(o);
 
 		free(o);
 	}

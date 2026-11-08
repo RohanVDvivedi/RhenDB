@@ -13,10 +13,17 @@ struct op_state
 
 static void* next_tuple(operator* o, int* error_code)
 {
+	// already dead
+	if(o->state == NULL)
+		return NULL;
+
 	op_state* this_state = o->state;
 
 	if(this_state->next_tuple_offset == o->desc->params.constant_dataset.constant_dataset_p->next_tuple_offset)
+	{
+		o->destroy_state(o);
 		return NULL;
+	}
 
 	mmap_for_reading_tuple(o->desc->params.constant_dataset.constant_dataset_p, &(this_state->current_region), this_state->next_tuple_offset, &(o->desc->params.constant_dataset.record_def->size_def), MIN_BYTES_TO_MMAP);
 
@@ -31,12 +38,16 @@ static void* next_tuple(operator* o, int* error_code)
 
 static void destroy_state(operator* o)
 {
-	op_state* this_state = o->state;
+	if(o->state != NULL)
+	{
+		op_state* this_state = o->state;
 
-	if(!is_empty_interim_tuple_region(&(this_state->current_region)))
-		unmap_for_interim_tuple_region(&(this_state->current_region));
+		if(!is_empty_interim_tuple_region(&(this_state->current_region)))
+			unmap_for_interim_tuple_region(&(this_state->current_region));
 
-	free(this_state);
+		free(this_state);
+	}
+	o->state = NULL;
 }
 
 void open_constant_dataset_operator(operator* o)

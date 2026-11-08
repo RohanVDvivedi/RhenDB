@@ -14,17 +14,18 @@ struct op_state
 
 static void* next_tuple(operator* o, int* error_code)
 {
-	op_state* this_state = o->state;
-
-	if(this_state->input_operator == NULL)
+	// already dead
+	if(o->state == NULL)
 		return NULL;
+
+	op_state* this_state = o->state;
 
 	while(can_decrement_tuples_down_counter(&(this_state->offset_counter)))
 	{
 		void* tuple = this_state->input_operator->next_tuple(this_state->input_operator, error_code);
 		if(tuple == NULL)
 		{
-			this_state->input_operator = NULL;
+			o->destroy_state(o);
 			return NULL;
 		}
 		free(tuple);
@@ -33,18 +34,29 @@ static void* next_tuple(operator* o, int* error_code)
 
 	if(!can_decrement_tuples_down_counter(&(this_state->limit_counter)))
 	{
-		this_state->input_operator = NULL;
+		o->destroy_state(o);
 		return NULL;
 	}
 
 	void* tuple = this_state->input_operator->next_tuple(this_state->input_operator, error_code);
 	if(tuple == NULL)
 	{
-		this_state->input_operator = NULL;
+		o->destroy_state(o);
 		return NULL;
 	}
 	decrement_tuples_down_counter(&(this_state->limit_counter));
 	return tuple;
+}
+
+static void destroy_state(operator* o)
+{
+	if(o->state != NULL)
+	{
+		op_state* this_state = o->state;
+
+		this_state->input_operator->destroy_state(this_state->input_operator);
+	}
+	o->state = NULL;
 }
 
 void open_offset_limit_operator(operator* o)
@@ -58,5 +70,5 @@ void open_offset_limit_operator(operator* o)
 	this_state->limit_counter = o->desc->params.offset_limit.limit_counter;
 
 	o->next_tuple = next_tuple;
-	o->destroy_state = OPERATOR_DESTROY_STATE_NO_OP_FUNCTION;
+	o->destroy_state = destroy_state;
 }
