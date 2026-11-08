@@ -1,7 +1,17 @@
 PICKED TASKS
 
- * single threaded volcano pipeline execution model, each operator will have exactly 1 consumer
- * pass tuples around as pointers, that need to be freed by the receiving operator
+ * volcano model
+
+   * simple agg
+
+   * sort
+   * sorted_agg/sort_merge_join/sort_merge_semi_join
+
+   * hash_agg/hash_join/hash_semi
+
+   * block_nested_loop_join/semi_join
+
+   * scan/point_lookup
 
 -----------------------------------------------------------------
 
