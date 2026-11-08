@@ -56,24 +56,50 @@ struct generator_operator_params
 	const tuple_def* generator_tuple_def;
 };
 
+typedef struct stream_input_operator_params stream_input_operator_params;
+struct stream_input_operator_params
+{
+	stream* in_strm;
+	const tuple_def* input_tuple_def;
+};
+
 typedef struct identity_operator_params identity_operator_params;
 struct identity_operator_params
 {
 	uint64_t input_operator_index;
 };
 
-typedef struct consumer_operator_params consumer_operator_params;
-struct consumer_operator_params
+typedef struct row_rename_operator_params row_rename_operator_params;
+struct row_rename_operator_params
 {
 	uint64_t input_operator_index;
-	int (*consumer)(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def);
-	void* consumer_context;
+	char* output_name;
+	char** column_names;
+	uint64_t columns_count;
 };
 
-typedef struct result_match_operator_params result_match_operator_params;
-struct result_match_operator_params
+typedef struct offset_limit_operator_params offset_limit_operator_params;
+struct offset_limit_operator_params
 {
-	uint64_t input_operator_indices[2];
+	uint64_t input_operator_index;
+	tuples_down_counter offset_counter;
+	tuples_down_counter limit_counter;
+};
+
+typedef struct selection_operator_params selection_operator_params;
+struct selection_operator_params
+{
+	uint64_t input_operator_index;
+	sql_expression* expr;
+};
+
+typedef struct projection_operator_params projection_operator_params;
+struct projection_operator_params
+{
+	uint64_t input_operator_index;
+	char* output_name;
+	projection_description* projection_descriptions; // borrowed
+	uint32_t projection_descriptions_count;
 };
 
 typedef struct union_operator_params union_operator_params;
@@ -81,6 +107,16 @@ struct union_operator_params
 {
 	uint64_t* input_operator_indices;
 	uint64_t input_operators_count;
+};
+
+typedef struct merge_sorted_inputs_operator_params merge_sorted_inputs_operator_params;
+struct merge_sorted_inputs_operator_params
+{
+	uint64_t* input_operator_indices;
+	uint64_t input_operators_count;
+	uint32_t key_element_count;
+	positional_accessor* key_element_ids;
+	compare_direction* key_compare_direction;
 };
 
 typedef struct simple_aggregation_operator_params simple_aggregation_operator_params;
@@ -103,38 +139,6 @@ struct sort_operator_params
 	uint64_t min_run_size;
 	uint32_t N_way_sort;
 	uint32_t max_concurrent_jobs_count;
-};
-
-typedef struct offset_limit_operator_params offset_limit_operator_params;
-struct offset_limit_operator_params
-{
-	uint64_t input_operator_index;
-	tuples_down_counter offset_counter;
-	tuples_down_counter limit_counter;
-};
-
-typedef struct merge_sorted_inputs_operator_params merge_sorted_inputs_operator_params;
-struct merge_sorted_inputs_operator_params
-{
-	uint64_t* input_operator_indices;
-	uint64_t input_operators_count;
-	uint32_t key_element_count;
-	positional_accessor* key_element_ids;
-	compare_direction* key_compare_direction;
-};
-
-typedef struct stream_input_operator_params stream_input_operator_params;
-struct stream_input_operator_params
-{
-	stream* in_strm;
-	const tuple_def* input_tuple_def;
-};
-
-typedef struct stream_output_operator_params stream_output_operator_params;
-struct stream_output_operator_params
-{
-	uint64_t input_operator_index;
-	stream* out_strm;
 };
 
 typedef struct sorted_aggregation_operator_params sorted_aggregation_operator_params;
@@ -237,61 +241,6 @@ struct hash_semi_join_operator_params
 	uint32_t max_concurrent_jobs_count;
 	uint32_t max_concurrent_jobs_queue_size;
 	uint32_t min_pending_buffer_size;
-};
-
-typedef struct selection_operator_params selection_operator_params;
-struct selection_operator_params
-{
-	uint64_t input_operator_index;
-	sql_expression* expr;
-};
-
-typedef struct projection_operator_params projection_operator_params;
-struct projection_operator_params
-{
-	uint64_t input_operator_index;
-	char* output_name;
-	projection_description* projection_descriptions; // borrowed
-	uint32_t projection_descriptions_count;
-};
-
-typedef struct row_rename_operator_params row_rename_operator_params;
-struct row_rename_operator_params
-{
-	uint64_t input_operator_index;
-	char* output_name;
-	char** column_names;
-	uint64_t columns_count;
-};
-
-typedef struct subquery_output_operator_params subquery_output_operator_params;
-struct subquery_output_operator_params
-{
-	uint64_t input_operator_index;
-	sync_pipe* out_pipe;
-};
-
-typedef struct insertion_operator_params insertion_operator_params;
-struct insertion_operator_params
-{
-	uint64_t input_operator_index;
-	positional_accessor* insertion_from_source_positional_accessors;
-	const fetched_table* ftabl;
-	int output_flags;
-	heap_table_notifier* global_heap_notifier;
-	int additional_flags;
-};
-
-typedef struct deletion_operator_params deletion_operator_params;
-struct deletion_operator_params
-{
-	uint64_t input_operator_index;
-	positional_accessor* partition_id_from_source_positional_accessor;
-	positional_accessor* tuple_pointer_from_source_positional_accessor;
-	const fetched_table* ftabl;
-	uint64_t deletion_batch_size;
-	int output_flags;
-	int additional_flags;
 };
 
 typedef struct scan_operator_params scan_operator_params;
