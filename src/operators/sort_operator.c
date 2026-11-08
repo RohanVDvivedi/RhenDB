@@ -177,6 +177,8 @@ static void* next_tuple(operator* o, int* error_code)
 
 	if(this_state->output_run == NULL)
 	{
+		uint32_t output_run_level = 0;
+
 		while(1)
 		{
 			// get next tuple until we get tuples from input_operator
@@ -204,6 +206,7 @@ static void* next_tuple(operator* o, int* error_code)
 			if(this_state->unsorted_run->next_tuple_offset >= o->desc->params.sort.min_run_size)
 			{
 				uint64_t level = sort_unsorted_run_and_produce_sorted_run(o);
+				output_run_level = level; // this could be the last and only run
 
 				// now run a merging loop and keep updating the level, until the level in context has more than or equal to the N_way_sort number of runs
 				while(this_state->sorted_runs_count[level] >= o->desc->params.sort.N_way_sort)
@@ -216,6 +219,7 @@ static void* next_tuple(operator* o, int* error_code)
 					this_state->sorted_runs_count[level] = 0;
 
 					level = merge_runs_into_run_job(o, &runs_to_merge);
+					output_run_level = level; // this could be the last and only run
 				}
 			}
 		}
@@ -231,7 +235,6 @@ static void* next_tuple(operator* o, int* error_code)
 			return NULL;
 		}
 
-		uint32_t output_run_level = 0;
 		while(this_state->total_sorted_runs_count > 1)
 		{
 			// now run a loop on all levels, and put then in linkedlist and ask to be merged
@@ -254,7 +257,7 @@ static void* next_tuple(operator* o, int* error_code)
 			}
 
 			// merge job re-inserts the single merged run and note it's level
-			output_run_level = merge_runs_into_run_job(o, &runs_to_merge);
+			output_run_level = merge_runs_into_run_job(o, &runs_to_merge); // this could be the last and only run
 		}
 
 		// and move last run into the output_run
