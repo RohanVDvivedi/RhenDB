@@ -5,6 +5,7 @@ PICKED TASKS
    * simple agg
 
    * sort
+
    * sorted_agg/sort_merge_join/sort_merge_semi_join
 
    * hash_agg/hash_join/hash_semi
