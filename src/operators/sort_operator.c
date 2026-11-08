@@ -182,27 +182,114 @@ static void* next_tuple(operator* o, int* error_code)
 			// get next tuple until we get tuples from input_operator
 			// if there is no more tuple break out of the loop
 			// on error, destroy state and exit
+			void* tuple = this_state->input_operator->next_tuple(this_state->input_operator, error_code);
+			if(tuple == NULL)
+			{
+				if(*error_code)
+				{
+					o->destroy_state(o);
+					return NULL;
+				}
+				else // input exhausted
+					break;
+			}
 
 			// insert it in unsorted_run
+			if(this_state->unsorted_run == NULL)
+				this_state->unsorted_run = get_new_interim_tuple_store(o->desc->params.sort.min_run_size);
+			append_tuple_to_interim_tuple_store2(this_state->unsorted_run, &(this_state->unsorted_run->embed_regions[0]), tuple, &(o->desc->output_tuple_def->size_def), o->desc->params.sort.min_run_size);
+			free(tuple);
 
-			// if the unsorted run exceeds make it sorted and record it level
+			// if the unsorted run exceeds make it sorted and record it's level
+			if(this_state->unsorted_run->next_tuple_offset >= o->desc->params.sort.min_run_size)
+			{
+				uint64_t level = sort_unsorted_run_and_produce_sorted_run(o);
 
-			// not run a merging loop and keep updating the level, until the level in context has more than or equal to the N_way_sort number of runs
+				// now run a merging loop and keep updating the level, until the level in context has more than or equal to the N_way_sort number of runs
+				while(this_state->sorted_runs_count[level] >= o->desc->params.sort.N_way_sort)
+				{
+					linkedlist runs_to_merge;
+					initialize_linkedlist(&runs_to_merge, offsetof(interim_tuple_store, embed_node_ll));
+					insert_all_at_head_in_linkedlist(&runs_to_merge, &(this_state->sorted_runs[level]));
+
+					this_state->total_sorted_runs_count -= this_state->sorted_runs_count[level];
+					this_state->sorted_runs_count[level] = 0;
+
+					level = merge_runs_into_run_job(o, &runs_to_merge);
+				}
+			}
 		}
 
-		// if no tuple was ever produced (this_state->total_sorted_runs_count == 0 and unsorted_run == NULL), destroy and exit
+		// sort the final partial run, if any tuples remain in it
+		if(this_state->unsorted_run != NULL)
+			sort_unsorted_run_and_produce_sorted_run(o);
 
+		// if no tuple was ever produced (this_state->total_sorted_runs_count == 0 and unsorted_run == NULL), destroy and exit
+		if(this_state->total_sorted_runs_count == 0)
+		{
+			o->destroy_state(o);
+			return NULL;
+		}
+
+		uint32_t output_run_level = 0;
 		while(this_state->total_sorted_runs_count > 1)
 		{
 			// now run a loop on all levels, and put then in linkedlist and ask to be merged
+			// gather at most N_way_sort runs (the keys buffer in a merge job is sized for N_way_sort runs)
+			linkedlist runs_to_merge;
+			initialize_linkedlist(&runs_to_merge, offsetof(interim_tuple_store, embed_node_ll));
+
+			uint64_t gathered = 0;
+			for(uint32_t level = 0; level < MAX_LEVELS && gathered < o->desc->params.sort.N_way_sort; level++)
+			{
+				while(gathered < o->desc->params.sort.N_way_sort && !is_empty_linkedlist(&(this_state->sorted_runs[level])))
+				{
+					interim_tuple_store* run = (interim_tuple_store*) get_head_of_linkedlist(&(this_state->sorted_runs[level]));
+					remove_head_from_linkedlist(&(this_state->sorted_runs[level]));
+					this_state->sorted_runs_count[level]--;
+					this_state->total_sorted_runs_count--;
+					insert_tail_in_linkedlist(&runs_to_merge, run);
+					gathered++;
+				}
+			}
+
+			// merge job re-inserts the single merged run and note it's level
+			output_run_level = merge_runs_into_run_job(o, &runs_to_merge);
 		}
 
-		// make sure you noted down the final run, and move it into the output_run
+		// and move last run into the output_run
+		this_state->output_run = (interim_tuple_store*) get_head_of_linkedlist(&(this_state->sorted_runs[output_run_level]));
+		remove_head_from_linkedlist(&(this_state->sorted_runs[output_run_level]));
+		this_state->sorted_runs_count[output_run_level]--;
+		this_state->total_sorted_runs_count--;
 
 		// store 0 into the output_run->embed_uints = 0, using it as next offset to produce the tuple
+		this_state->output_run->embed_uints[0] = 0;
+	}
+
+	if(this_state->output_run->embed_uints[0] >= this_state->output_run->next_tuple_offset)
+	{
+		// no more tuples in the output run
+		o->destroy_state(o);
+		return NULL;
 	}
 
 	// copy the return the next tuple in output_run and advance the offset
+	interim_tuple_region* read_region = &(this_state->output_run->embed_regions[0]);
+	if(!mmap_for_reading_tuple(this_state->output_run, read_region, this_state->output_run->embed_uints[0], &(o->desc->output_tuple_def->size_def), o->desc->params.sort.min_run_size))
+	{
+		// no more tuples in the output run
+		o->destroy_state(o);
+		return NULL;
+	}
+
+	uint32_t tuple_size = get_tuple_size(o->desc->output_tuple_def, read_region->tuple);
+	void* output_tuple = malloc(tuple_size);
+	memcpy(output_tuple, read_region->tuple, tuple_size);
+
+	this_state->output_run->embed_uints[0] = next_tuple_offset_for_interim_tuple_region(read_region);
+
+	return output_tuple;
 }
 
 static void destroy_state(operator* o)
@@ -210,6 +297,9 @@ static void destroy_state(operator* o)
 	if(o->state != NULL)
 	{
 		op_state* this_state = o->state;
+
+		// cascade destroy to the input operator
+		this_state->input_operator->destroy_state(this_state->input_operator);
 
 		if(this_state->unsorted_run != NULL)
 			delete_interim_tuple_store(this_state->unsorted_run);
@@ -226,7 +316,9 @@ static void destroy_state(operator* o)
 			delete_interim_tuple_store(this_state->output_run);
 
 		free(this_state->key_dtis);
+		free(this_state);
 	}
+	o->state = NULL;
 }
 
 void open_sort_operator(operator* o)
@@ -248,6 +340,9 @@ void open_sort_operator(operator* o)
 	this_state->total_sorted_runs_count = 0;
 
 	this_state->output_run = NULL;
+
+	// key_dtis must be allocated before it is populated (op_state came from an uninitialized malloc)
+	this_state->key_dtis = malloc(sizeof(data_type_info*) * o->desc->params.sort.key_element_count);
 
 	for(uint32_t j = 0; j < o->desc->params.sort.key_element_count; j++)
 		this_state->key_dtis[j] = get_type_info_for_element_from_tuple_def(o->desc->output_tuple_def, o->desc->params.sort.key_element_ids[j]);
