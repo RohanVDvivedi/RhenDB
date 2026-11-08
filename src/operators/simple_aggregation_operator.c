@@ -48,6 +48,7 @@ static void* next_tuple(operator* o, int* error_code)
 			// process_input for the udaf, if it fails kill the operator
 			if(!o->desc->params.simple_aggregation.aggregate_functions[i]->process_input(o->desc->params.simple_aggregation.aggregate_functions[i], &(states[i]), input_datums))
 			{
+				free(tuple);
 				for(uint32_t i = 0; i < o->desc->params.simple_aggregation.aggregate_functions_count; i++)
 					o->desc->params.simple_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.simple_aggregation.aggregate_functions[i], &(states[i]));
 				free(states);
