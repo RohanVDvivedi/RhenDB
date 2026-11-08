@@ -23,6 +23,8 @@ static void* next_tuple(operator* o, int* error_code)
 		{
 			if(*error_code)
 			{
+				for(uint32_t i = 0; i < o->desc->params.simple_aggregation.aggregate_functions_count; i++)
+					o->desc->params.simple_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.simple_aggregation.aggregate_functions[i], &(states[i]));
 				free(states);
 				free(input_datums);
 				o->destroy_state(o);
@@ -46,6 +48,8 @@ static void* next_tuple(operator* o, int* error_code)
 			// process_input for the udaf, if it fails kill the operator
 			if(!o->desc->params.simple_aggregation.aggregate_functions[i]->process_input(o->desc->params.simple_aggregation.aggregate_functions[i], &(states[i]), input_datums))
 			{
+				for(uint32_t i = 0; i < o->desc->params.simple_aggregation.aggregate_functions_count; i++)
+					o->desc->params.simple_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.simple_aggregation.aggregate_functions[i], &(states[i]));
 				free(states);
 				free(input_datums);
 				o->destroy_state(o);
@@ -66,6 +70,8 @@ static void* next_tuple(operator* o, int* error_code)
 		if(!o->desc->params.simple_aggregation.aggregate_functions[i]->produce_output(o->desc->params.simple_aggregation.aggregate_functions[i], &output_uval, &(states[i])))
 		{
 			free(output_tuple);
+			for(uint32_t i = 0; i < o->desc->params.simple_aggregation.aggregate_functions_count; i++)
+				o->desc->params.simple_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.simple_aggregation.aggregate_functions[i], &(states[i]));
 			free(states);
 			free(input_datums);
 			o->destroy_state(o);
@@ -76,6 +82,8 @@ static void* next_tuple(operator* o, int* error_code)
 		set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(i), output_tuple, &output_uval, UINT32_MAX);
 	}
 
+	for(uint32_t i = 0; i < o->desc->params.simple_aggregation.aggregate_functions_count; i++)
+		o->desc->params.simple_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.simple_aggregation.aggregate_functions[i], &(states[i]));
 	free(states);
 	free(input_datums);
 	o->destroy_state(o);
