@@ -60,8 +60,8 @@ static void destroy_state(operator* o)
 
 		while(this_state->curr_input_operator_index < o->desc->params.union_op.input_operators_count)
 		{
-			operator* o = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.union_op.input_operator_indices[this_state->curr_input_operator_index++]);
-			o->destroy_state(o);
+			operator* t = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.union_op.input_operator_indices[this_state->curr_input_operator_index++]);
+			t->destroy_state(t);
 		}
 
 		free(this_state);
@@ -69,7 +69,7 @@ static void destroy_state(operator* o)
 	o->state = NULL;
 }
 
-void setup_union_operator(operator* o, operator** input_operators, uint32_t input_operators_count)
+void open_union_operator(operator* o)
 {
 	o->state = malloc(sizeof(op_state));
 
