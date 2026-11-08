@@ -35,6 +35,7 @@ static void* next_tuple(operator* o, int* error_code)
 				free(tuple);
 				free(output_tuple);
 				o->destroy_state(o);
+				(*error_code) = EXPRESSION_ERRORED_IN_OPERATOR;
 				return NULL;
 			}
 			output_uval = temp_proj_uval.value;

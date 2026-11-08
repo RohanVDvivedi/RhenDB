@@ -55,6 +55,8 @@ static void destroy_state(operator* o)
 		op_state* this_state = o->state;
 
 		this_state->input_operator->destroy_state(this_state->input_operator);
+
+		free(this_state);
 	}
 	o->state = NULL;
 }
