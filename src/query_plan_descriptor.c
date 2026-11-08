@@ -228,6 +228,8 @@ operator_desc* insert_constant_dataset_operator_descriptor(query_plan_desc* qpd,
 	d->output_tuple_def = record_def;
 	d->resource_counter = result;
 
+	qpd->output_tuple_def = d->output_tuple_def;
+
 	return d;
 }
 
@@ -246,6 +248,8 @@ operator_desc* insert_generator_operator_descriptor(query_plan_desc* qpd, void* 
 	d->output_tuple_def = generator_tuple_def;
 	d->resource_counter = result;
 
+	qpd->output_tuple_def = d->output_tuple_def;
+
 	return d;
 }
 
@@ -263,6 +267,8 @@ operator_desc* insert_stream_input_operator_descriptor(query_plan_desc* qpd, str
 	d->params.stream_input = (stream_input_operator_params){in_strm, input_tuple_def};
 	d->output_tuple_def = input_tuple_def;
 	d->resource_counter = result;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }
@@ -345,6 +351,8 @@ operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetch
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
+	qpd->output_tuple_def = d->output_tuple_def;
+
 	return d;
 }
 
@@ -381,6 +389,8 @@ operator_desc* insert_identity_operator_descriptor(query_plan_desc* qpd, operato
 	d->resource_counter = result;
 
 	input_operator_desc->consumers_count++;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }
@@ -442,6 +452,8 @@ operator_desc* insert_row_rename_operator_descriptor(query_plan_desc* qpd, opera
 
 	input_operator_desc->consumers_count++;
 
+	qpd->output_tuple_def = d->output_tuple_def;
+
 	return d;
 }
 
@@ -485,6 +497,8 @@ operator_desc* insert_offset_limit_operator_descriptor(query_plan_desc* qpd, ope
 	d->resource_counter = result;
 
 	input_operator_desc->consumers_count++;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }
@@ -533,6 +547,8 @@ operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, operat
 	*(d->expr_eval_context) = ec;
 
 	input_operator_desc->consumers_count++;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }
@@ -590,6 +606,8 @@ operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down
 	d->resource_counter = result;
 
 	input_operator_desc->consumers_count++;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }
@@ -706,6 +724,8 @@ operator_desc* insert_projection_operator_descriptor(query_plan_desc* qpd, opera
 
 	input_operator_desc->consumers_count++;
 
+	qpd->output_tuple_def = d->output_tuple_def;
+
 	return d;
 }
 
@@ -773,6 +793,8 @@ operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qp
 	d->resource_counter = result;
 
 	input_operator_desc->consumers_count++;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }
@@ -865,6 +887,8 @@ operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qp
 	d->resource_counter = result;
 
 	input_operator_desc->consumers_count++;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }
@@ -982,6 +1006,8 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 
 	input_operator_desc->consumers_count++;
 
+	qpd->output_tuple_def = d->output_tuple_def;
+
 	return d;
 }
 
@@ -1049,6 +1075,8 @@ operator_desc* insert_union_operator_descriptor(query_plan_desc* qpd, operator_d
 
 	for(uint64_t i = 0; i < input_operators_count; i++)
 		input_operator_descs[i]->consumers_count++;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }
@@ -1119,6 +1147,8 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 
 	for(uint64_t i = 0; i < input_operators_count; i++)
 		input_operator_descs[i]->consumers_count++;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }
@@ -1243,6 +1273,8 @@ operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc
 	left_input_operator_desc->consumers_count++;
 	right_input_operator_desc->consumers_count++;
 
+	qpd->output_tuple_def = d->output_tuple_def;
+
 	return d;
 }
 
@@ -1339,6 +1371,8 @@ operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc* qpd, 
 
 	left_input_operator_desc->consumers_count++;
 	right_input_operator_desc->consumers_count++;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }
@@ -1458,6 +1492,8 @@ operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operat
 	left_input_operator_desc->consumers_count++;
 	right_input_operator_desc->consumers_count++;
 
+	qpd->output_tuple_def = d->output_tuple_def;
+
 	return d;
 }
 
@@ -1532,6 +1568,8 @@ operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan
 	left_input_operator_desc->consumers_count++;
 	right_input_operator_desc->consumers_count++;
 
+	qpd->output_tuple_def = d->output_tuple_def;
+
 	return d;
 }
 
@@ -1587,6 +1625,8 @@ operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* 
 
 	left_input_operator_desc->consumers_count++;
 	right_input_operator_desc->consumers_count++;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }
@@ -1664,6 +1704,8 @@ operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, o
 
 	left_input_operator_desc->consumers_count++;
 	right_input_operator_desc->consumers_count++;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }
@@ -1774,6 +1816,8 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, o
 	d->resource_counter = result;
 
 	input_operator_desc->consumers_count++;
+
+	qpd->output_tuple_def = d->output_tuple_def;
 
 	return d;
 }

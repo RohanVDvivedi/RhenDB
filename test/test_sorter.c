@@ -2,6 +2,7 @@
 
 #include<rhendb/transaction.h>
 #include<rhendb/query_plan_descriptor.h>
+#include<rhendb/query_plan.h>
 
 #include<test_dataset_tuple_def.h>
 
@@ -16,15 +17,12 @@
 
 #define USERS_COUNT 10
 
-#define PRINT_DATA 1
-
 // OFFSET_CLAUSE can not be infinity (UINT64_MAX), undef it if you want behaviour of it being 0
 #define OFFSET_CLAUSE  UINT64_C(55)
 // LIMIT_CLAUSE can not be 0, undef it if you want behaviour of it being infinity (UINT64_MAX)
 #define LIMIT_CLAUSE   UINT64_C(155)
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
-#define PARALLEL_SORTING_JOBS_COUNT    8
 #define N_WAY_SORT                     16
 
 #define RECORD_S_KEY_ELEMENT_COUNT 2
@@ -32,23 +30,11 @@
 positional_accessor KEY_POS[2] = {STATIC_POSITION(0), STATIC_POSITION(2)};
 compare_direction CMP_DIR[2] = {ASC, ASC};
 
-transaction tx;
-
-void intHandler(int dummy)
-{
-	printf("\nCaught Ctrl+C! shuting down query plan\n");
-	shutdown_all_query_plans(&tx, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
-}
-
 int main(int argc, char** argv)
 {
 	stream rs, ws;
 	initialize_stream_for_fd(&rs, 0);
 	initialize_stream_for_fd(&ws, 1);
-
-	stream out_file_stream;
-
-	signal(SIGINT, intHandler);
 
 	rhendb rdb;
 	initialize_rhendb(&rdb, "./test.db",
@@ -63,15 +49,12 @@ int main(int argc, char** argv)
 
 	initialize_tuple_defs();
 
+	transaction tx;
 	initialize_transaction(&tx, &rdb);
 
-	// make query
-
 	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
-
-	printf("Building pipeline :\n");
 	{
-		const operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
+		operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
 
 		tuples_down_counter sorter_result_counter = TUPLES_DOWN_COUNTER_INF;
 		#if defined(LIMIT_CLAUSE) && !defined(OFFSET_CLAUSE)
@@ -80,9 +63,8 @@ int main(int argc, char** argv)
 			sorter_result_counter = TUPLES_DOWN_COUNTER_FIN(OFFSET_CLAUSE + LIMIT_CLAUSE);
 		#endif
 
-		const operator_desc* sorted = insert_sort_operator_descriptor(qpd, sorter_result_counter, strm_in, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		operator_desc* sorted = insert_sort_operator_descriptor(qpd, sorter_result_counter, strm_in, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
 
-		const operator_desc* limited_sorted = sorted;
 		#if defined(OFFSET_CLAUSE) || defined(LIMIT_CLAUSE)
 			tuples_down_counter offset;
 			#ifdef OFFSET_CLAUSE
@@ -96,50 +78,23 @@ int main(int argc, char** argv)
 			#else
 				limit = TUPLES_DOWN_COUNTER_INF;
 			#endif
-			limited_sorted = insert_offset_limit_operator_descriptor(qpd, sorted, offset, limit);
+			insert_offset_limit_operator_descriptor(qpd, sorted, offset, limit);
 		#endif
-
-		#ifdef PRINT_DATA
-			insert_consumer_operator_descriptor(qpd, limited_sorted, PRINT_DATA ? print_consumer : NULL, NULL);
-		#endif
-
-		if(argc >= 2)
-		{
-			int out_fd = open(argv[1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-			initialize_stream_for_fd(&out_file_stream, out_fd);
-
-			insert_stream_output_operator_descriptor(qpd, limited_sorted, &out_file_stream);
-		}
 	}
-	printf("\n\n");
+	query_plan* qp = get_new_query_plan(qpd);
 
-	query_plan* qp = create_query_plan(qpd, NULL);
-	register_query_plan(&tx, qp);
-
-	printf("Pipeline built\n\n");
-
-	// make query completed
-
-	start_all_operators_for_query_plan(qp);
-
-	wait_for_shutdown_of_query_plan(qp);
-
-	deregister_query_plan(&tx, qp);
-	if(qp->query_errored)
+	while(1)
 	{
-		dstring kill_reasons = new_dstring("", 0);
-		destroy_query_plan(qp, &kill_reasons);
+		int error_code = 0;
+		void* tuple = next_tuple_from_query_plan(qp, &error_code);
+		if(tuple == NULL)
+			break;
+		uint32_t tuple_size = get_tuple_size(qp->desc->output_tuple_def, tuple);
+		print_tuple(tuple, qp->desc->output_tuple_def);
+		free(tuple);
+	}
 
-		printf("\n\nKILL REASONS : \n");
-		printf_dstring(&kill_reasons);
-		deinit_dstring(&kill_reasons);
-		printf("\n\nKILL REASONS END\n\n");
-	}
-	else
-	{
-		printf("QUERY SUCCESSFULL\n");
-		destroy_query_plan(qp, NULL);
-	}
+	destroy_query_plan(qp);
 
 	destroy_query_plan_descriptor(qpd);
 
