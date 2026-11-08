@@ -136,9 +136,8 @@ struct sort_operator_params
 	uint32_t key_element_count;
 	positional_accessor* key_element_ids;
 	compare_direction* key_compare_direction;
-
 	uint32_t N_way_sort;
-	uint64_t memory_allowance;
+	uint64_t min_run_size;
 };
 
 typedef struct sorted_aggregation_operator_params sorted_aggregation_operator_params;
@@ -397,7 +396,7 @@ operator_desc* insert_merge_sorted_inputs_operator_descriptor(query_plan_desc* q
 
 operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids);
 
-operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down_counter result_counter, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint32_t N_way_sort, uint64_t memory_allowance);
+operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down_counter result_counter, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint32_t N_way_sort, uint64_t min_run_size);
 
 operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids);
 operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size);

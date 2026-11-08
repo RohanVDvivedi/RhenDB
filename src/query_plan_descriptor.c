@@ -537,7 +537,7 @@ operator_desc* insert_selection_operator_descriptor(query_plan_desc* qpd, operat
 	return d;
 }
 
-operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down_counter result_counter, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint32_t N_way_sort, uint64_t memory_allowance)
+operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down_counter result_counter, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint32_t N_way_sort, uint64_t min_run_size)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -582,10 +582,10 @@ operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down
 		return NULL;
 	}
 
-	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE) * max_concurrent_jobs_count, .job_counter = max_concurrent_jobs_count + 1};
+	operator_resource_counter result = {.buffer_counter = 2 * has_extended_type_info3(record_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE)};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SORT);
-	d->params.sort = (sort_operator_params){result_counter, input_operator_desc->index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), deep_clone_compare_directions(key_compare_direction, key_element_count), N_way_sort, memory_allowance};
+	d->params.sort = (sort_operator_params){result_counter, input_operator_desc->index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), deep_clone_compare_directions(key_compare_direction, key_element_count), N_way_sort, min_run_size};
 	d->output_tuple_def = record_def;
 	d->resource_counter = result;
 
