@@ -206,7 +206,7 @@ static void* next_tuple(operator* o, int* error_code)
 			if(this_state->unsorted_run->next_tuple_offset >= o->desc->params.sort.min_run_size)
 			{
 				uint64_t level = sort_unsorted_run_and_produce_sorted_run(o);
-				output_run_level = level; // this could be the last and only run
+				output_run_level = level; // this could be the last and only run, so note down it's level
 
 				// now run a merging loop and keep updating the level, until the level in context has more than or equal to the N_way_sort number of runs
 				while(this_state->sorted_runs_count[level] >= o->desc->params.sort.N_way_sort)
@@ -219,14 +219,14 @@ static void* next_tuple(operator* o, int* error_code)
 					this_state->sorted_runs_count[level] = 0;
 
 					level = merge_runs_into_run_job(o, &runs_to_merge);
-					output_run_level = level; // this could be the last and only run
+					output_run_level = level; // this could be the last and only run, so note down it's level
 				}
 			}
 		}
 
 		// sort the final partial run, if any tuples remain in it
 		if(this_state->unsorted_run != NULL)
-			sort_unsorted_run_and_produce_sorted_run(o);
+			output_run_level = sort_unsorted_run_and_produce_sorted_run(o); // this could be the last and only run, so note down it's level
 
 		// if no tuple was ever produced (this_state->total_sorted_runs_count == 0 and unsorted_run == NULL), destroy and exit
 		if(this_state->total_sorted_runs_count == 0)
@@ -257,7 +257,7 @@ static void* next_tuple(operator* o, int* error_code)
 			}
 
 			// merge job re-inserts the single merged run and note it's level
-			output_run_level = merge_runs_into_run_job(o, &runs_to_merge); // this could be the last and only run
+			output_run_level = merge_runs_into_run_job(o, &runs_to_merge); // this could be the last and only run, so note down it's level
 		}
 
 		// and move last run into the output_run
