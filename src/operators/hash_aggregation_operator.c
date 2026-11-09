@@ -198,7 +198,6 @@ static void* next_tuple(operator* o, int* error_code)
 			o->destroy_state(o);
 			return NULL;
 		}
-		else
 	}
 
 	for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
