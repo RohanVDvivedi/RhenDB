@@ -135,7 +135,7 @@ static void* next_tuple(operator* o, int* error_code)
 			this_state->rtk = get_new_rash_table_key(this_state->left_tuple, this_state->left_input_operator->desc->output_tuple_def, o->desc->params.hash_join.left_key_element_ids, o->desc->params.hash_join.key_element_count, o->self_query_plan->desc->curr_tx);
 		}
 
-		// only comes here, if we have avalid left_tuple
+		// only comes here, if we have a valid left_tuple
 
 		if(!this_state->has_active_probe)
 		{
@@ -176,7 +176,7 @@ static void* next_tuple(operator* o, int* error_code)
 			}
 		}
 
-		// only comes here if we have an active probe
+		// only comes here if we have an active probe i.e. bri_p != NULL
 
 		// iterate over all tuples on the right and produce join results
 		{
