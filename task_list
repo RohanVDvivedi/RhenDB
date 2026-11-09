@@ -2,8 +2,6 @@ PICKED TASKS
 
  * volcano model
 
-   * hash_agg
-
    * sort_merge_join/sort_merge_semi_join
 
    * hash_join/hash_semi
