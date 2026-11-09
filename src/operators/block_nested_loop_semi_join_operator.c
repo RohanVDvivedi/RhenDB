@@ -138,11 +138,10 @@ static void* next_tuple(operator* o, int* error_code)
 						return left_tuple;
 					}
 					else                                        // LEFT_ANTI_JOIN : a matched left tuple is never produced
-					{
 						free(left_tuple);
-						this_state->curr_left_index++;
-					}
 				}
+
+				this_state->curr_left_index++;
 			}
 
 			this_state->curr_left_index = 0;
@@ -169,10 +168,9 @@ static void* next_tuple(operator* o, int* error_code)
 				return left_tuple;
 			}
 			else                                           // LEFT_SEMI_JOIN : a never matched left tuple is not produced
-			{
 				free(left_tuple);
-				this_state->curr_left_index++;
-			}
+
+			this_state->curr_left_index++;
 		}
 		remove_all_from_arraylist(&(this_state->batched_left_side_tuples));
 	}
