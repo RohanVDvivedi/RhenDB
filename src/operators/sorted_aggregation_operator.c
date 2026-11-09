@@ -144,6 +144,7 @@ static void* next_tuple(operator* o, int* error_code)
 		datum output_uval;
 		if(!o->desc->params.sorted_aggregation.aggregate_functions[i]->produce_output(o->desc->params.sorted_aggregation.aggregate_functions[i], &output_uval, &(states[i])))
 		{
+			free(output_tuple);
 			if(next_first_tuple != NULL)
 				free(next_first_tuple);
 			for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
