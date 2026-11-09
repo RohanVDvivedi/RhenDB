@@ -193,7 +193,7 @@ void open_sorted_aggregation_operator(operator* o)
 
 	op_state* this_state = o->state;
 
-	this_state->input_operator = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.offset_limit.input_operator_index);
+	this_state->input_operator = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.sorted_aggregation.input_operator_index);
 	this_state->first_tuple = NULL;
 	this_state->max_input_datums_count = 0;
 	for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
