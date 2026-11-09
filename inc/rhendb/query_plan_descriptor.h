@@ -231,10 +231,6 @@ struct hash_semi_join_operator_params
 	positional_accessor* right_key_element_ids;
 	uint32_t key_element_count;
 	semi_join_type stype;
-	uint32_t partitions_count;
-	uint32_t max_concurrent_jobs_count;
-	uint32_t max_concurrent_jobs_queue_size;
-	uint32_t min_pending_buffer_size;
 };
 
 typedef struct scan_operator_params scan_operator_params;
@@ -404,7 +400,7 @@ operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operat
 operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, operator_desc* right_input_operator_desc, sql_expression* join_expr, semi_join_type stype, uint32_t min_block_size);
 
 operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype);
-operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, semi_join_type stype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size);
+operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, semi_join_type stype);
 
 operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetched_table* ftabl, uint32_t max_concurrent_jobs_count, int output_flags, int additional_flags);
 operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags);
