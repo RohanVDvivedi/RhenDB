@@ -1537,7 +1537,7 @@ operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan
 	return d;
 }
 
-operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype, uint32_t min_block_size)
+operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, semi_join_type stype)
 {
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
@@ -1554,12 +1554,6 @@ operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* 
 	if(key_element_count == 0)
 	{
 		printf("key_element_count must not be 0 for sort_merge_semi_join_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(min_block_size == 0)
-	{
-		printf("min_block_size can not be 0 for sort_merge_semi_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1583,7 +1577,7 @@ operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* 
 	operator_resource_counter result = {.buffer_counter = has_extended_type_info3(left_input_tuple_def, key_element_count, left_key_element_ids, PERSISTENT_EXT_SUB_TYPE) + has_extended_type_info3(right_input_tuple_def, key_element_count, right_key_element_ids, PERSISTENT_EXT_SUB_TYPE), .job_counter = 1};
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SORT_MERGE_SEMI_JOIN);
-	d->params.sort_merge_semi_join = (sort_merge_semi_join_operator_params){left_input_operator_desc->index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_desc->index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), deep_clone_compare_directions(key_compare_direction, key_element_count), key_element_count, stype, min_block_size};
+	d->params.sort_merge_semi_join = (sort_merge_semi_join_operator_params){left_input_operator_desc->index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_desc->index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), deep_clone_compare_directions(key_compare_direction, key_element_count), key_element_count, stype};
 	d->output_tuple_def = left_input_tuple_def;
 	d->resource_counter = result;
 
