@@ -11,38 +11,28 @@
 #include<cutlery/bitmap.h>
 #include<cutlery/cutlery_stds.h>
 
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
-
 typedef struct op_state op_state;
 struct op_state
 {
-	// left_input_operator stays non-NULL for the whole life of this operator (until it dies),
-	// so we never cache the left tuple_def, we read it from left_input_operator->desc
-	operator* left_input_operator;
+	operator* left_input_operator; // non-NULL until it dies
 
-	// right_input_operator is non-NULL ONLY while we are collecting the right side (the build phase)
-	operator* right_input_operator;
+	operator* right_input_operator; // if non-NULL, collect all tuples from this operator, until it's tuples are exhausted
 
-	// all right side tuples, materialized once, and their tuple_def (right_input_operator is nulled after the build)
+	// all right side tuples
 	interim_tuple_store* right_side_tuples;
 	const tuple_def* right_tuple_def;
-	interim_tuple_region right_region; // read cursor into right_side_tuples, kept mapped across batches
 
-	// current batch of left side tuples, each an owned malloc'd tuple
+	// current batch of left side tuples
 	arraylist batched_left_side_tuples;
 
-	// next (right, left) pair to process; both always point at the NEXT tuple to process.
-	// double-loop is pending while both are not past their ends; an empty batch means the batch is done.
-	uint64_t next_right_offset;
-	cy_uint next_left_index;
+	// next (right, left) pair to process; both always point at the NEXT tuple to process
+	uint64_t curr_right_offset;
+	cy_uint curr_left_index;
 
-	// preserve-left: bitmap of which left tuples of the batch matched at least one right tuple (NULL otherwise)
+	// preserve-left : bit set for every left tuple of the batch that matched atleast one right tuple
 	char* left_tuple_matched_bitmap;
 };
 
-// builds the nested { left, right } output tuple, exactly like the hash_join operator
 static void* produce_join_result(operator* o, const void* left_tuple, const void* right_tuple)
 {
 	op_state* this_state = o->state;
@@ -78,10 +68,6 @@ static void* next_tuple(operator* o, int* error_code)
 
 	op_state* this_state = o->state;
 
-	const uint32_t min_block_size = o->desc->params.block_nested_loop_join.min_block_size;
-	const join_preserve_type ptype = o->desc->params.block_nested_loop_join.ptype;
-	sql_expression* join_expr = o->desc->params.block_nested_loop_join.join_expr;
-
 	// COLLECTION OF RIGHT SIDE TUPLES PHASE (inferred by right_input_operator != NULL)
 	if(this_state->right_input_operator != NULL)
 	{
@@ -100,14 +86,11 @@ static void* next_tuple(operator* o, int* error_code)
 				break;
 			}
 
-			append_tuple_to_interim_tuple_store2(this_state->right_side_tuples, &(this_state->right_side_tuples->embed_regions[0]), right_tuple, &(this_state->right_tuple_def->size_def), min_block_size);
+			append_tuple_to_interim_tuple_store2(this_state->right_side_tuples, &(this_state->right_side_tuples->embed_regions[0]), right_tuple, &(this_state->right_tuple_def->size_def), o->desc->params.block_nested_loop_join.min_block_size);
 
 			free(right_tuple);
 		}
-		unmap_all_embed_regions_in_interim_tuple_store(this_state->right_side_tuples);
 	}
-
-	const tuple_def* left_tuple_def = this_state->left_input_operator->desc->output_tuple_def;
 
 	// PROBE PHASE
 	while(1)
@@ -116,7 +99,7 @@ static void* next_tuple(operator* o, int* error_code)
 		if(get_element_count_arraylist(&(this_state->batched_left_side_tuples)) == 0)
 		{
 			uint64_t batch_bytes = 0;
-			while(batch_bytes < min_block_size)
+			while(batch_bytes < o->desc->params.block_nested_loop_join.min_block_size)
 			{
 				void* left_tuple = this_state->left_input_operator->next_tuple(this_state->left_input_operator, error_code);
 				if(left_tuple == NULL)
@@ -129,51 +112,45 @@ static void* next_tuple(operator* o, int* error_code)
 					break; // left side exhausted
 				}
 
-				if(is_full_arraylist(&(this_state->batched_left_side_tuples)))
-					expand_arraylist(&(this_state->batched_left_side_tuples));
+				if(is_full_arraylist(&(this_state->batched_left_side_tuples)) && !expand_arraylist(&(this_state->batched_left_side_tuples)))
+					exit(-1);
 				push_back_to_arraylist(&(this_state->batched_left_side_tuples), left_tuple);
-				batch_bytes += get_tuple_size(left_tuple_def, left_tuple);
+				batch_bytes += get_tuple_size(this_state->left_input_operator->desc->output_tuple_def, left_tuple);
 			}
 
-			// nothing pulled : the left side is exhausted, so the whole join is complete
+			// nothing pulled : the left side is exhausted, so we are complete
 			if(get_element_count_arraylist(&(this_state->batched_left_side_tuples)) == 0)
 			{
 				o->destroy_state(o);
 				return NULL;
 			}
 
-			this_state->next_right_offset = 0;
-			this_state->next_left_index = 0;
-			if(DOES_IT_PRESERVE_LEFT(ptype))
+			this_state->curr_right_offset = 0;
+			this_state->curr_left_index = 0;
+			if(DOES_IT_PRESERVE_LEFT(o->desc->params.block_nested_loop_join.ptype))
 			{
-				cy_uint cnt = get_element_count_arraylist(&(this_state->batched_left_side_tuples));
-				this_state->left_tuple_matched_bitmap = malloc(UINT_ALIGN_UP(cnt, 8) / 8);
-				memset(this_state->left_tuple_matched_bitmap, 0, UINT_ALIGN_UP(cnt, 8) / 8);
+				this_state->left_tuple_matched_bitmap = malloc(UINT_ALIGN_UP(get_element_count_arraylist(&(this_state->batched_left_side_tuples)), 8) / 8);
+				memory_set(this_state->left_tuple_matched_bitmap, 0, UINT_ALIGN_UP(get_element_count_arraylist(&(this_state->batched_left_side_tuples)), 8) / 8);
 			}
+			mmap_for_reading_tuple(this_state->right_side_tuples, &(this_state->right_side_tuples->embed_regions[0]), this_state->curr_right_offset, &(this_state->right_tuple_def->size_def), o->desc->params.block_nested_loop_join.min_block_size);
 		}
 
-		cy_uint cnt = get_element_count_arraylist(&(this_state->batched_left_side_tuples));
-
 		// DOUBLE LOOP : right tuples on the outside, left tuples on the inside
-		// (keeps the right side mapping stable while scanning the whole batch)
-		while(mmap_for_reading_tuple(this_state->right_side_tuples, &(this_state->right_region), this_state->next_right_offset, &(this_state->right_tuple_def->size_def), min_block_size))
+		while(this_state->curr_right_offset < this_state->right_side_tuples->next_tuple_offset)
 		{
-			void* right_tuple = this_state->right_region.tuple;
+			void* right_tuple = this_state->right_side_tuples->embed_regions[0].tuple;
 
-			while(this_state->next_left_index < cnt)
+			while(this_state->curr_left_index < get_element_count_arraylist(&(this_state->batched_left_side_tuples)))
 			{
-				cy_uint li = this_state->next_left_index;
-				this_state->next_left_index++;
-
-				void* left_tuple = (void*) get_from_arraylist(&(this_state->batched_left_side_tuples), li);
+				void* left_tuple = (void*) get_from_arraylist(&(this_state->batched_left_side_tuples), this_state->curr_left_index);
 
 				int join_match = 1;
-				if(join_expr != NULL)
+				if(o->desc->params.block_nested_loop_join.join_expr != NULL)
 				{
 					set_input_tuples_in_context_for_rhendb_v(o->desc->expr_eval_context, 2, left_tuple, right_tuple);
 
 					int expr_error_code = 0;
-					join_match = select_using_evaluate_sql_expr_for_rhendb(join_expr, o->desc->expr_eval_context, &expr_error_code);
+					join_match = select_using_evaluate_sql_expr_for_rhendb(o->desc->params.block_nested_loop_join.join_expr, o->desc->expr_eval_context, &expr_error_code);
 					if(expr_error_code)
 					{
 						(*error_code) = EXPRESSION_ERRORED_IN_OPERATOR;
@@ -185,40 +162,43 @@ static void* next_tuple(operator* o, int* error_code)
 				if(join_match)
 				{
 					if(this_state->left_tuple_matched_bitmap != NULL)
-						set_bit(this_state->left_tuple_matched_bitmap, li);
+						set_bit(this_state->left_tuple_matched_bitmap, this_state->curr_left_index);
 
+					this_state->curr_left_index++;
 					return produce_join_result(o, left_tuple, right_tuple);
 				}
+
+				this_state->curr_left_index++;
 			}
 
-			this_state->next_left_index = 0;
-			this_state->next_right_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->right_region));
+			this_state->curr_left_index = 0;
+			this_state->curr_right_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->right_side_tuples->embed_regions[0]));
+			if(!mmap_for_reading_tuple(this_state->right_side_tuples, &(this_state->right_side_tuples->embed_regions[0]), this_state->curr_right_offset, &(this_state->right_tuple_def->size_def), o->desc->params.block_nested_loop_join.min_block_size))
+				break;
 		}
 
-		// all right tuples consumed for this batch : emit the unmatched left tuples (preserve-left only)
+		// all right tuples consumed : emit the left tuples that never matched (preserve-left only)
 		if(this_state->left_tuple_matched_bitmap != NULL)
 		{
-			while(this_state->next_left_index < cnt)
+			while(this_state->curr_left_index < get_element_count_arraylist(&(this_state->batched_left_side_tuples)))
 			{
-				cy_uint li = this_state->next_left_index;
-				this_state->next_left_index++;
+				if(get_bit(this_state->left_tuple_matched_bitmap, this_state->curr_left_index) == 0) // this tuple never got picked
+				{
+					void* left_tuple = (void*) get_from_arraylist(&(this_state->batched_left_side_tuples), this_state->curr_left_index);
+					this_state->curr_left_index++;
+					return produce_join_result(o, left_tuple, NULL);
+				}
 
-				if(get_bit(this_state->left_tuple_matched_bitmap, li) == 0)
-					return produce_join_result(o, (void*) get_from_arraylist(&(this_state->batched_left_side_tuples), li), NULL);
+				this_state->curr_left_index++;
 			}
-		}
 
-		// batch iteration completed : free all left tuples, empty the batch, and loop to pull the next one.
-		// the right side mapping is deliberately kept (it is remapped to offset 0 by the next batch's double loop).
-		for(cy_uint i = 0; i < cnt; i++)
-			free((void*) get_from_arraylist(&(this_state->batched_left_side_tuples), i));
-		remove_all_from_arraylist(&(this_state->batched_left_side_tuples));
-
-		if(this_state->left_tuple_matched_bitmap != NULL)
-		{
 			free(this_state->left_tuple_matched_bitmap);
 			this_state->left_tuple_matched_bitmap = NULL;
 		}
+
+		for(cy_uint i = 0; i < get_element_count_arraylist(&(this_state->batched_left_side_tuples)); i++)
+			free((void*) get_from_arraylist(&(this_state->batched_left_side_tuples), i));
+		remove_all_from_arraylist(&(this_state->batched_left_side_tuples));
 	}
 }
 
@@ -228,26 +208,25 @@ static void destroy_state(operator* o)
 	{
 		op_state* this_state = o->state;
 
-		// left_input_operator is never nulled, destroy_state is idempotent so this is always safe
-		this_state->left_input_operator->destroy_state(this_state->left_input_operator);
+		if(this_state->left_input_operator != NULL)
+			this_state->left_input_operator->destroy_state(this_state->left_input_operator);
 
 		if(this_state->right_input_operator != NULL)
 			this_state->right_input_operator->destroy_state(this_state->right_input_operator);
 
-		cy_uint cnt = get_element_count_arraylist(&(this_state->batched_left_side_tuples));
-		for(cy_uint i = 0; i < cnt; i++)
+		for(cy_uint i = 0; i < get_element_count_arraylist(&(this_state->batched_left_side_tuples)); i++)
 		{
-			void* lt = (void*) get_from_arraylist(&(this_state->batched_left_side_tuples), i);
-			if(lt != NULL)
-				free(lt);
+			void* left_tuple = (void*) get_from_arraylist(&(this_state->batched_left_side_tuples), i);
+			if(left_tuple != NULL)
+				free(left_tuple);
 		}
 		deinitialize_arraylist(&(this_state->batched_left_side_tuples));
 
 		if(this_state->left_tuple_matched_bitmap != NULL)
 			free(this_state->left_tuple_matched_bitmap);
 
-		unmap_for_interim_tuple_region(&(this_state->right_region));
-		delete_interim_tuple_store(this_state->right_side_tuples);
+		if(this_state->right_side_tuples != NULL)
+			delete_interim_tuple_store(this_state->right_side_tuples);
 
 		free(this_state);
 	}
@@ -256,7 +235,6 @@ static void destroy_state(operator* o)
 
 void open_block_nested_loop_join_operator(operator* o)
 {
-	// a block nested loop join can not preserve the right side
 	if(DOES_IT_PRESERVE_RIGHT(o->desc->params.block_nested_loop_join.ptype))
 	{
 		printf("can not be preserve right for block_nested_loop_join_operator\n");
@@ -272,12 +250,11 @@ void open_block_nested_loop_join_operator(operator* o)
 
 	this_state->right_side_tuples = get_new_interim_tuple_store(o->desc->params.block_nested_loop_join.min_block_size);
 	this_state->right_tuple_def = this_state->right_input_operator->desc->output_tuple_def;
-	this_state->right_region = INIT_INTERIM_TUPLE_REGION;
 
-	initialize_arraylist(&(this_state->batched_left_side_tuples), 1024);
+	initialize_arraylist(&(this_state->batched_left_side_tuples), 16);
 
-	this_state->next_right_offset = 0;
-	this_state->next_left_index = 0;
+	this_state->curr_right_offset = 0;
+	this_state->curr_left_index = 0;
 
 	this_state->left_tuple_matched_bitmap = NULL;
 
