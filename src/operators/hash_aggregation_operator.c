@@ -171,17 +171,8 @@ static void* next_tuple(operator* o, int* error_code)
 			delete_binary_read_iterator(value_bri_p, NULL, &abort_error_dummy);
 		}
 
-		if(*error_code)
-		{
-			free(output_tuple);
-			for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
-				o->desc->params.hash_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.hash_aggregation.aggregate_functions[i], &(states[i]));
-			free(states);
-			free(input_datums);
-			o->destroy_state(o);
-			return NULL;
-		}
-		else
+		// produce output to be called and set the values, only if no error_code was encountered
+		if(!(*error_code))
 		{
 			for(uint32_t i = 0, j = o->desc->params.hash_aggregation.key_element_count; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++, j++)
 			{
@@ -196,6 +187,18 @@ static void* next_tuple(operator* o, int* error_code)
 				set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(j), output_tuple, &output_uval, UINT32_MAX);
 			}
 		}
+
+		if(*error_code)
+		{
+			free(output_tuple);
+			for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
+				o->desc->params.hash_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.hash_aggregation.aggregate_functions[i], &(states[i]));
+			free(states);
+			free(input_datums);
+			o->destroy_state(o);
+			return NULL;
+		}
+		else
 	}
 
 	for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
