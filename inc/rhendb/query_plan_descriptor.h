@@ -194,10 +194,6 @@ struct hash_join_operator_params
 	positional_accessor* right_key_element_ids;
 	uint32_t key_element_count;
 	join_preserve_type ptype;
-	uint32_t partitions_count;
-	uint32_t max_concurrent_jobs_count;
-	uint32_t max_concurrent_jobs_queue_size;
-	uint32_t min_pending_buffer_size;
 };
 
 typedef struct block_nested_loop_semi_join_operator_params block_nested_loop_semi_join_operator_params;
@@ -395,7 +391,7 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, operator_desc* right_input_operator_desc, sql_expression* join_expr, join_preserve_type ptype, uint32_t min_block_size);
 
 operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, const compare_direction* key_compare_direction, uint32_t key_element_count, join_preserve_type ptype, uint32_t min_block_size);
-operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size);
+operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype);
 
 operator_desc* insert_block_nested_loop_semi_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, operator_desc* right_input_operator_desc, sql_expression* join_expr, semi_join_type stype, uint32_t min_block_size);
 

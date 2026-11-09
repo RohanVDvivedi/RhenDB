@@ -1341,7 +1341,7 @@ operator_desc* insert_sort_merge_join_operator_descriptor(query_plan_desc* qpd, 
 	return d;
 }
 
-operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
+operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype)
 {
 	if(left_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, left_input_operator_desc) || right_input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, right_input_operator_desc))
 	{
@@ -1358,30 +1358,6 @@ operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operat
 	if(key_element_count == 0)
 	{
 		printf("key_element_count must not be 0 for hash_join_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(partitions_count == 0)
-	{
-		printf("partitions_count can not be 0 for hash_join_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(max_concurrent_jobs_count == 0)
-	{
-		printf("max_concurrent_jobs_count can not be 0 for hash_join_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(max_concurrent_jobs_queue_size == 0)
-	{
-		printf("max_concurrent_jobs_queue_size can not be 0 for hash_join_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(min_pending_buffer_size == 0)
-	{
-		printf("min_pending_buffer_size can not be 0 for hash_join_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -1405,7 +1381,7 @@ operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operat
 	uint64_t left_side_buffers = has_extended_type_info3(left_input_tuple_def, key_element_count, left_key_element_ids, PERSISTENT_EXT_SUB_TYPE);
 	uint64_t right_side_buffers = has_extended_type_info3(right_input_tuple_def, key_element_count, right_key_element_ids, PERSISTENT_EXT_SUB_TYPE);
 
-	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * (max(2 * right_side_buffers, left_side_buffers + right_side_buffers)), .job_counter = max_concurrent_jobs_count + 1};
+	operator_resource_counter result = {.buffer_counter = max(2 * right_side_buffers, left_side_buffers + right_side_buffers)};
 
 	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(2));
 	uint64_t max_output_tuple_size = 8;
@@ -1449,7 +1425,7 @@ operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operat
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_HASH_JOIN);
-	d->params.hash_join = (hash_join_operator_params){left_input_operator_desc->index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_desc->index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), key_element_count, ptype, partitions_count, max_concurrent_jobs_count, max_concurrent_jobs_queue_size, min_pending_buffer_size};
+	d->params.hash_join = (hash_join_operator_params){left_input_operator_desc->index, deep_clone_positional_accessors(left_key_element_ids, key_element_count), right_input_operator_desc->index, deep_clone_positional_accessors(right_key_element_ids, key_element_count), key_element_count, ptype};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 

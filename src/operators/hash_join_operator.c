@@ -289,7 +289,7 @@ static void destroy_state(operator* o)
 	o->state = NULL;
 }
 
-void setup_hash_join_operator(operator* o, operator* left_input_operator, const positional_accessor* left_key_element_ids, operator* right_input_operator, const positional_accessor* right_key_element_ids, uint32_t key_element_count, join_preserve_type ptype, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_pending_buffer_size)
+void open_hash_join_operator(operator* o)
 {
 	o->state = malloc(sizeof(op_state));
 
