@@ -169,6 +169,7 @@ static void* next_tuple(operator* o, int* error_code)
 	if(this_state->first_tuple == NULL) // if first_tuple becomes NULL, we have no more groups
 		o->destroy_state(o);
 
+	output_tuple = realloc(output_tuple, get_tuple_size(o->desc->output_tuple_def, output_tuple));
 	return output_tuple;
 }
 

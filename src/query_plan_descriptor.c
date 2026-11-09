@@ -819,12 +819,6 @@ operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qp
 		return NULL;
 	}
 
-	if(aggregate_functions_count == 0)
-	{
-		printf("aggregate_functions_count can not be 0 for sorted_aggregation_operator_descriptor\n");
-		return NULL;
-	}
-
 	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
@@ -893,7 +887,7 @@ operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qp
 	return d;
 }
 
-operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t partitions_count, uint32_t max_concurrent_jobs_count, uint32_t max_concurrent_jobs_queue_size, uint32_t min_build_tuple_buffer_size)
+operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -913,36 +907,6 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 		return NULL;
 	}
 
-	if(aggregate_functions_count == 0)
-	{
-		printf("aggregate_functions_count can not be 0 for hash_aggregation_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(partitions_count == 0)
-	{
-		printf("partitions_count can not be 0 for hash_aggregation_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(max_concurrent_jobs_count == 0)
-	{
-		printf("max_concurrent_jobs_count can not be 0 for hash_aggregation_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(max_concurrent_jobs_queue_size == 0)
-	{
-		printf("max_concurrent_jobs_queue_size can not be 0 for hash_aggregation_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(min_build_tuple_buffer_size == 0)
-	{
-		printf("min_build_tuple_buffer_size can not be 0 for hash_aggregation_operator_descriptor\n");
-		return NULL;
-	}
-
 	const tuple_def* input_tuple_def = input_operator_desc->output_tuple_def;
 	if(input_tuple_def == NULL)
 	{
@@ -956,7 +920,7 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 		return NULL;
 	}
 
-	operator_resource_counter result = {.buffer_counter = max_concurrent_jobs_count * max(2 * has_extended_type_info3(input_tuple_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE), get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions)), .job_counter = max_concurrent_jobs_count + 1};
+	operator_resource_counter result = {.buffer_counter = max(2 * has_extended_type_info3(input_tuple_def, key_element_count, key_element_ids, PERSISTENT_EXT_SUB_TYPE), get_max_buffers_count_for_all_aggregate_functions(aggregate_functions_count, (aggregate_function const * const *) aggregate_functions))};
 
 	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(key_element_count + aggregate_functions_count));
 	uint64_t max_output_tuple_size = 8;
@@ -1000,7 +964,7 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_HASH_AGGREGATION);
-	d->params.hash_aggregation = (hash_aggregation_operator_params){input_operator_desc->index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions), partitions_count, max_concurrent_jobs_count, max_concurrent_jobs_queue_size, min_build_tuple_buffer_size};
+	d->params.hash_aggregation = (hash_aggregation_operator_params){input_operator_desc->index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions)};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
