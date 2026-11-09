@@ -206,9 +206,12 @@ void destroy_query_plan(query_plan* qp)
 	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
 	{
 		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
-
 		o->destroy_state(o);
+	}
 
+	for(cy_uint i = 0; i < get_element_count_arraylist(&(qp->operators)); i++)
+	{
+		operator* o = (operator*) get_from_arraylist(&(qp->operators), i);
 		free(o);
 	}
 
