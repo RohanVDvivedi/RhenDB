@@ -87,6 +87,13 @@ static void* next_tuple(operator* o, int* error_code)
 		this_state->has_active_rti = 1;
 	}
 
+	// if no more entries in the build table, we are done
+	if(!exists_in_rash_table_iterator(&(this_state->rti)))
+	{
+		o->destroy_state(o);
+		return NULL;
+	}
+
 	// get memory for states and input_datums
 	void** states = calloc(sizeof(void*), o->desc->params.hash_aggregation.aggregate_functions_count);
 	datum* input_datums = malloc(sizeof(datum) * this_state->max_input_datums_count);
