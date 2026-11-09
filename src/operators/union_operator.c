@@ -2,12 +2,6 @@
 
 #include<cutlery/linkedlist.h>
 
-#include<stdlib.h>
-
-#define IS_READY 0
-#define IS_WAITING 1
-#define IS_DELETED 2
-
 typedef struct op_state op_state;
 struct op_state
 {
