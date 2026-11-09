@@ -2,10 +2,6 @@ PICKED TASKS
 
  * volcano model
 
-   * hash_join
-
-   * block_nested_loop_join/semi_join
-
    * sort_merge_join
 
    * scan/point_lookup
