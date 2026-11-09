@@ -25,6 +25,7 @@ struct op_state
 
 	// right side build table
 	rash_table_handle rth;
+	const tuple_def* rth_value_tuple_def; // same as right_input_iterator->desc->output_tuple_def
 };
 
 static void* produce_join_result(operator* o, const void* left_tuple, const void* right_tuple)
@@ -46,7 +47,7 @@ static void* produce_join_result(operator* o, const void* left_tuple, const void
 	{
 		const data_type_info* dti_temp;
 		datum right_datum;
-		get_value_from_element_from_tuple(&right_datum, &dti_temp, this_state->right_input_operator->desc->output_tuple_def, SELF, right_tuple);
+		get_value_from_element_from_tuple(&right_datum, &dti_temp, this_state->rth_value_tuple_def, SELF, right_tuple);
 		set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(1), output_tuple, &right_datum, UINT32_MAX);
 	}
 
@@ -185,7 +186,7 @@ static void* next_tuple(operator* o, int* error_code)
 
 			void* output_tuple = NULL;
 			int abort_error_dummy = 0;
-			consume_tuple_from_tuple_list(right_tuple, this_state->right_input_operator->desc->output_tuple_def, this_state->bri_p, NULL, &abort_error_dummy,
+			consume_tuple_from_tuple_list(right_tuple, this_state->rth_value_tuple_def, this_state->bri_p, NULL, &abort_error_dummy,
 			{
 				if(right_tuple != NULL)
 					output_tuple = produce_join_result(o, this_state->left_tuple, right_tuple);
@@ -194,6 +195,7 @@ static void* next_tuple(operator* o, int* error_code)
 			if(output_tuple == NULL)
 			{
 				delete_binary_read_iterator(this_state->bri_p, NULL, &abort_error_dummy);
+				this_state->bri_p = NULL;
 
 				delete_rash_table_iterator(&(this_state->rti));
 				this_state->has_active_probe = 0;
@@ -228,7 +230,7 @@ static void* next_tuple(operator* o, int* error_code)
 
 				int abort_error_dummy = 0;
 				void* output_tuple = NULL;
-				consume_tuple_from_tuple_list(right_tuple, this_state->right_input_operator->desc->output_tuple_def, this_state->bri_p, NULL, &abort_error_dummy,
+				consume_tuple_from_tuple_list(right_tuple, this_state->rth_value_tuple_def, this_state->bri_p, NULL, &abort_error_dummy,
 				{
 					if(right_tuple != NULL)
 						output_tuple = produce_join_result(o, NULL, right_tuple);
@@ -301,6 +303,7 @@ void open_hash_join_operator(operator* o)
 	this_state->has_active_probe = 0;
 	this_state->bri_p = NULL;
 	this_state->rth = get_new_rash_table(INIT_BUCKET_COUNT, this_state->right_input_operator->desc->output_tuple_def, o->desc->params.hash_join.right_key_element_ids, o->desc->params.hash_join.key_element_count, o->self_query_plan->desc->curr_tx, o->self_query_plan->desc->curr_tx->rdb);
+	this_state->rth_value_tuple_def = this_state->right_input_operator->desc->output_tuple_def;
 
 	o->next_tuple = next_tuple;
 	o->destroy_state = destroy_state;
