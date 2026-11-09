@@ -88,10 +88,13 @@ static void* next_tuple(operator* o, int* error_code)
 	}
 
 	// if no more entries in the build table, we are done
-	if(!exists_in_rash_table_iterator(&(this_state->rti)))
+	while(!exists_in_rash_table_iterator(&(this_state->rti)))
 	{
-		o->destroy_state(o);
-		return NULL;
+		if(!next_in_rash_table_iterator(&(this_state->rti))) // exit only if we can not go next
+		{
+			o->destroy_state(o);
+			return NULL;
+		}
 	}
 
 	// get memory for states and input_datums
@@ -195,15 +198,14 @@ static void* next_tuple(operator* o, int* error_code)
 		}
 	}
 
+	for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
+		o->desc->params.hash_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.hash_aggregation.aggregate_functions[i], &(states[i]));
+	free(states);
+	free(input_datums);
+
 	// iterate next in rti, and if we can not go next break out, this might just be the last entry
 	if(!next_in_rash_table_iterator(&(this_state->rti)))
-	{
-		for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
-			o->desc->params.hash_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.hash_aggregation.aggregate_functions[i], &(states[i]));
-		free(states);
-		free(input_datums);
 		o->destroy_state(o);
-	}
 
 	output_tuple = realloc(output_tuple, get_tuple_size(o->desc->output_tuple_def, output_tuple));
 	return output_tuple;
