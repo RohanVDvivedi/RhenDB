@@ -7,8 +7,6 @@
 
 #include<cutlery/pheap.h>
 
-#include<stdlib.h>
-
 typedef struct mergeable_tuple mergeable_tuple;
 struct mergeable_tuple
 {

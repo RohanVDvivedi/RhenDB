@@ -1,7 +1,5 @@
 #include<rhendb/query_plan.h>
 
-#include<rhendb/transaction.h>
-
 // pointer to this byte means continue generation, and a NULL in the state means completed
 static char GENERATE_DATA;
 
