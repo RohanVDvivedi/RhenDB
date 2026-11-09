@@ -118,7 +118,7 @@ static void* next_tuple(operator* o, int* error_code)
 		free(key_tuple);
 	}
 
-	// if it has any aggregate funtion, read all tuples and do the process_input and then produce_output, and set the output
+	// if it has any aggregate function, read all tuples and do the process_input and then produce_output, and set the output
 	if(o->desc->params.hash_aggregation.aggregate_functions_count > 0)
 	{
 		{
