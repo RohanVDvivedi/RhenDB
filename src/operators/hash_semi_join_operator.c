@@ -71,7 +71,7 @@ static void* next_tuple(operator* o, int* error_code)
 
 				// destroy rash table key
 				destroy_rash_table_key(&rtk);
-			}			
+			}
 
 			free(right_tuple);
 		}
