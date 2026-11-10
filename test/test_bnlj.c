@@ -21,7 +21,7 @@
 
 #define USERS_COUNT 10
 
-#define PRINT_DATA 1
+#define PRINT_DATA
 
 #define MIN_LEFT 20
 #define MAX_LEFT 3200
@@ -83,21 +83,12 @@ void* right_generator(void* generator_context, const tuple_def* generator_tuple_
 }
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
-#define PARALLEL_SORTING_JOBS_COUNT    8
 #define N_WAY_SORT                     16
 
 #define RECORD_S_KEY_ELEMENT_COUNT 2
 
 positional_accessor KEY_POS[2] = {STATIC_POSITION(0,0), STATIC_POSITION(1,0)};
 compare_direction CMP_DIR[2] = {ASC, ASC};
-
-transaction tx;
-
-void intHandler(int dummy)
-{
-	printf("\nCaught Ctrl+C! shuting down query plan\n");
-	shutdown_all_query_plans(&tx, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
-}
 
 int main(int argc, char** argv)
 {
@@ -119,8 +110,6 @@ int main(int argc, char** argv)
 	initialize_stream_for_fd(&rs, 0);
 	initialize_stream_for_fd(&ws, 1);
 
-	signal(SIGINT, intHandler);
-
 	rhendb rdb;
 	initialize_rhendb(&rdb, "./test.db",
 		5,
@@ -137,13 +126,13 @@ int main(int argc, char** argv)
 	initialize_tuple_defs();
 	initialize_tuple_defs2();
 
+	transaction tx;
 	initialize_transaction(&tx, &rdb);
 
 	// make query
 
 	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
-	printf("Building pipeline :\n");
 	{
 		const operator_desc* left = insert_generator_operator_descriptor(qpd, left_generator, NULL, &record_def);
 
@@ -155,35 +144,22 @@ int main(int argc, char** argv)
 
 		insert_consumer_operator_descriptor(qpd, sort, PRINT_DATA ? print_consumer : NULL, NULL);
 	}
-	printf("\n\n");
 
 	query_plan* qp = create_query_plan(qpd, NULL);
-	register_query_plan(&tx, qp);
 
-	printf("Pipeline built\n\n");
-
-	// make query completed
-
-	start_all_operators_for_query_plan(qp);
-
-	wait_for_shutdown_of_query_plan(qp);
-
-	deregister_query_plan(&tx, qp);
-	if(qp->query_errored)
+	while(1)
 	{
-		dstring kill_reasons = new_dstring("", 0);
-		destroy_query_plan(qp, &kill_reasons);
+		int error_code = 0;
+		void* tuple = next_tuple_from_query_plan(qp, &error_code);
+		if(tuple == NULL)
+			break;
+		#ifdef PRINT_DATA
+			print_tuple(tuple, qp->desc->output_tuple_def);
+		#endif
+		free(tuple);
+	}
 
-		printf("\n\nKILL REASONS : \n");
-		printf_dstring(&kill_reasons);
-		deinit_dstring(&kill_reasons);
-		printf("\n\nKILL REASONS END\n\n");
-	}
-	else
-	{
-		printf("QUERY SUCCESSFULL\n");
-		destroy_query_plan(qp, NULL);
-	}
+	destroy_query_plan(qp, NULL);
 
 	destroy_query_plan_descriptor(qpd);
 

@@ -17,6 +17,8 @@
 
 #define USERS_COUNT 10
 
+#define PRINT_DATA
+
 // OFFSET_CLAUSE can not be infinity (UINT64_MAX), undef it if you want behaviour of it being 0
 #define OFFSET_CLAUSE  UINT64_C(55)
 // LIMIT_CLAUSE can not be 0, undef it if you want behaviour of it being infinity (UINT64_MAX)
@@ -89,8 +91,9 @@ int main(int argc, char** argv)
 		void* tuple = next_tuple_from_query_plan(qp, &error_code);
 		if(tuple == NULL)
 			break;
-		uint32_t tuple_size = get_tuple_size(qp->desc->output_tuple_def, tuple);
-		print_tuple(tuple, qp->desc->output_tuple_def);
+		#ifdef PRINT_DATA
+			print_tuple(tuple, qp->desc->output_tuple_def);
+		#endif
 		free(tuple);
 	}
 
