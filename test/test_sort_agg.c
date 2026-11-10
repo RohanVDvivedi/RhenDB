@@ -2,6 +2,7 @@
 
 #include<rhendb/transaction.h>
 #include<rhendb/query_plan_descriptor.h>
+#include<rhendb/query_plan.h>
 
 #include<test_dataset_tuple_def.h>
 
@@ -16,8 +17,9 @@
 
 #define USERS_COUNT 10
 
+#define PRINT_DATA
+
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
-#define PARALLEL_SORTING_JOBS_COUNT    8
 #define N_WAY_SORT                     16
 
 #define RECORD_S_KEY_ELEMENT_COUNT 1
@@ -25,21 +27,11 @@
 positional_accessor KEY_POS[1] = {STATIC_POSITION(2)};
 compare_direction CMP_DIR[1] = {ASC};
 
-transaction tx;
-
-void intHandler(int dummy)
-{
-	printf("\nCaught Ctrl+C! shuting down query plan\n");
-	shutdown_all_query_plans(&tx, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
-}
-
 int main(int argc, char** argv)
 {
 	stream rs, ws;
 	initialize_stream_for_fd(&rs, 0);
 	initialize_stream_for_fd(&ws, 1);
-
-	signal(SIGINT, intHandler);
 
 	rhendb rdb;
 	initialize_rhendb(&rdb, "./test.db",
@@ -54,13 +46,8 @@ int main(int argc, char** argv)
 
 	initialize_tuple_defs();
 
+	transaction tx;
 	initialize_transaction(&tx, &rdb);
-
-	// make query
-
-	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
-
-	printf("Building pipeline :\n");
 
 	aggregate_function* const AGGREGATES[] = {
 		get_count_aggregate_function(record_def.type_info),
@@ -111,46 +98,33 @@ int main(int argc, char** argv)
 
 	positional_accessor FINAL_SORT_KEY[1] = {STATIC_POSITION(3)};
 
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
+
 	{
-		const operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
+		operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
 
-		const operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, strm_in, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, strm_in, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
 
-		const operator_desc* agg = insert_sorted_aggregation_operator_descriptor(qpd, sort, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS);
+		operator_desc* agg = insert_sorted_aggregation_operator_descriptor(qpd, sort, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS);
 
-		const operator_desc* sort_final = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, agg, 1, FINAL_SORT_KEY, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-
-		insert_consumer_operator_descriptor(qpd, sort_final, print_consumer, NULL);
+		operator_desc* sort_final = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, agg, 1, FINAL_SORT_KEY, CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
 	}
-	printf("\n\n");
 
-	query_plan* qp = create_query_plan(qpd, NULL);
-	register_query_plan(&tx, qp);
+	query_plan* qp = get_new_query_plan(qpd);
 
-	printf("Pipeline built\n\n");
-
-	// make query completed
-
-	start_all_operators_for_query_plan(qp);
-
-	wait_for_shutdown_of_query_plan(qp);
-
-	deregister_query_plan(&tx, qp);
-	if(qp->query_errored)
+	while(1)
 	{
-		dstring kill_reasons = new_dstring("", 0);
-		destroy_query_plan(qp, &kill_reasons);
+		int error_code = 0;
+		void* tuple = next_tuple_from_query_plan(qp, &error_code);
+		if(tuple == NULL)
+			break;
+		#ifdef PRINT_DATA
+			print_tuple(tuple, qp->desc->output_tuple_def);
+		#endif
+		free(tuple);
+	}
 
-		printf("\n\nKILL REASONS : \n");
-		printf_dstring(&kill_reasons);
-		deinit_dstring(&kill_reasons);
-		printf("\n\nKILL REASONS END\n\n");
-	}
-	else
-	{
-		printf("QUERY SUCCESSFULL\n");
-		destroy_query_plan(qp, NULL);
-	}
+	destroy_query_plan(qp);
 
 	destroy_query_plan_descriptor(qpd);
 
