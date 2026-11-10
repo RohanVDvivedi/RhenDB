@@ -22,7 +22,7 @@ struct op_state
 	void* left_staged_tuple;
 	void* right_staged_tuple;
 
-	// embed_regions[1] is the append cursor
+	// embed_regions[0] is the append cursor
 	interim_tuple_store* left_side_equal_tuples_batch;
 	interim_tuple_store* right_side_equal_tuples_batch;
 
