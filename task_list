@@ -2,7 +2,7 @@ PICKED TASKS
 
  * volcano model
 
-   * fix dops, sim_agg, union and match_joins test cases
+   * fix sim_agg, union and match_joins test cases
 
    * compare outputs of old-push model vs new volcano model test cases
 
