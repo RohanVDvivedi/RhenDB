@@ -1,7 +1,8 @@
 #include<rhendb/rhendb.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/operators.h>
+#include<rhendb/query_plan_descriptor.h>
+#include<rhendb/query_plan.h>
 
 #include<stdlib.h>
 #include<unistd.h>
@@ -9,9 +10,7 @@
 
 #define USERS_COUNT 10
 
-#define OPERATOR_BUFFERS_COUNT 3
-#define IDENTITY_OPERATORS_COUNT (OPERATOR_BUFFERS_COUNT-1)
-#define TOTAL_OPERATORS_COUNT (IDENTITY_OPERATORS_COUNT+2)
+#define IDENTITY_OPERATORS_COUNT 2
 
 data_type_info digits_type_info;
 data_type_info num_in_words_type_info;
@@ -162,18 +161,8 @@ void* generator(void* generator_context, const tuple_def* generator_tuple_def)
 	return generated;
 }
 
-transaction tx;
-
-void intHandler(int dummy)
-{
-	printf("\nCaught Ctrl+C! shuting down query plan\n");
-	shutdown_all_query_plans(&tx, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
-}
-
 int main()
 {
-	signal(SIGINT, intHandler);
-
 	rhendb rdb;
 	initialize_rhendb(&rdb, "./test.db",
 		5,
@@ -188,96 +177,35 @@ int main()
 	int generator_number = 0;
 	initialize_tuple_defs();
 
+	transaction tx;
 	initialize_transaction(&tx, &rdb);
 
-	query_plan* qp = get_new_query_plan(&tx, NULL, TOTAL_OPERATORS_COUNT);
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
-	// make operators
-
-	// testing for a sub query consumer
-	const tuple_def* spipe_def = NULL;
-	sync_pipe* spipe = new_sync_pipe(10);
-
-	printf("Building pipeline :\n");
 	{
-		operator* o = get_new_registered_operator_for_query_plan(qp);
-		setup_generator_operator(o, generator, &generator_number, &record_def);
-		printf("source operator %p\n", o);
-		operator* input = o;
-
-		operator* i1 = get_new_registered_operator_for_query_plan(qp);
-		setup_identity_operator(i1, input);
-		printf("i1 operator %p\n", i1);
-
-		o = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(o, i1, print_consumer, NULL);
-		printf("sink operator %p\n", o);
+		operator_desc* o = insert_generator_operator_descriptor(qpd, generator, &generator_number, &record_def);
 
 		for(int i = 0; i < IDENTITY_OPERATORS_COUNT; i++)
-		{
-			o = get_new_registered_operator_for_query_plan(qp);
-			setup_identity_operator(o, input);
-			printf("identity operator %p\n", o);
-			input = o;
-		}
-
-		operator* i2 = get_new_registered_operator_for_query_plan(qp);
-		setup_identity_operator(i2, input);
-		printf("i2 operator %p\n", i2);
-
-		operator* sq = i2;
-		spipe_def = sq->output_tuple_def;
-		operator* mq = get_new_registered_operator_for_query_plan(qp);
-		setup_subquery_output_operator(mq, sq, spipe);
-		printf("mq operator %p\n", mq);
-
-		o = get_new_registered_operator_for_query_plan(qp);
-		setup_consumer_operator(o, i2, print_consumer, NULL);
-		printf("sink operator %p\n", o);
-
-		/*
-			generator -> i1 -> print
-			   \-------> IDENTITY_OPERATORS_COUNT identities -> i2 -> sub_query_output
-			                                                     \--> print
-		*/
+			o = insert_identity_operator_descriptor(qpd, o);
 	}
-	printf("\n\n");
 
-	register_query_plan(&tx, qp);
-	// make operators completed
-
-	start_all_operators_for_query_plan(qp);
+	query_plan* qp = get_new_query_plan(qpd);
 
 	while(1)
 	{
-		void* spipe_tuple = get_tuple_from_subquery_pipe(spipe, spipe_def);
-		if(spipe_tuple == NULL)
+		int error_code = 0;
+		void* tuple = next_tuple_from_query_plan(qp, &error_code);
+		if(tuple == NULL)
 			break;
-		printf("printing from parent query : ");
-		print_tuple(spipe_tuple, spipe_def);
-		printf("\n");
-		free(spipe_tuple);
+		#ifdef PRINT_DATA
+			print_tuple(tuple, qp->desc->output_tuple_def);
+		#endif
+		free(tuple);
 	}
-	delete_sync_pipe(spipe);
 
-	wait_for_shutdown_of_query_plan(qp);
+	destroy_query_plan(qp);
 
-	deregister_query_plan(&tx, qp);
-	if(qp->query_errored)
-	{
-		dstring kill_reasons = new_dstring("", 0);
-		destroy_query_plan(qp, &kill_reasons);
-
-		printf("\n\nKILL REASONS : \n");
-		printf_dstring(&kill_reasons);
-		deinit_dstring(&kill_reasons);
-		printf("\n\nKILL REASONS END\n\n");
-	}
-	else
-	{
-		printf("QUERY SUCCESSFULL\n");
-		destroy_query_plan(qp, NULL);
-	}
+	destroy_query_plan_descriptor(qpd);
 
 	deinitialize_transaction(&tx);
 
