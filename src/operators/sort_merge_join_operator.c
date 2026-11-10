@@ -190,7 +190,10 @@ static void* next_tuple(operator* o, int* error_code)
 							break;
 						}
 						else
+						{
+							append_tuple_to_interim_tuple_store2(this_state->left_side_equal_tuples_batch, &(this_state->left_side_equal_tuples_batch->embed_regions[0]), left_tuple, &(this_state->left_tuple_def->size_def), o->desc->params.sort_merge_join.min_block_size);
 							free(left_tuple);
+						}
 					}
 
 					// loop right operator while it's tuple compare equal to the right_staged_tuple, or it gets exhausted
@@ -219,7 +222,10 @@ static void* next_tuple(operator* o, int* error_code)
 							break;
 						}
 						else
+						{
+							append_tuple_to_interim_tuple_store2(this_state->right_side_equal_tuples_batch, &(this_state->right_side_equal_tuples_batch->embed_regions[0]), right_tuple, &(this_state->right_tuple_def->size_def), o->desc->params.sort_merge_join.min_block_size);
 							free(right_tuple);
+						}
 					}
 
 					// runs are built now we iterate over them
