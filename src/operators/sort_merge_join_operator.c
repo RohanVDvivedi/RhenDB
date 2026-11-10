@@ -247,19 +247,19 @@ static void* next_tuple(operator* o, int* error_code)
 			{
 				while(this_state->curr_right_block_offset < get_total_bytes_in_interim_tuple_store(this_state->right_side_equal_tuples_batch))
 				{
-					while(contains_tuple_at_offset_in_interim_tuple_store(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), this_state->curr_left_offset, &(this_state->left_input_tuple_def->size_def)))
+					while(contains_tuple_at_offset_in_interim_tuple_store(this_state->left_side_equal_tuples_batch, &(this_state->left_side_equal_tuples_batch->embed_regions[0]), this_state->curr_left_offset, &(this_state->left_tuple_def->size_def)))
 					{
-						const void* left_tuple = inputs->left_side_equal_tuples_batch->embed_regions[0].tuple;
+						const void* left_tuple = this_state->left_side_equal_tuples_batch->embed_regions[0].tuple;
 
-						while(contains_tuple_at_offset_in_interim_tuple_store(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), this_state->curr_right_offset, &(this_state->right_input_tuple_def->size_def)))
+						while(contains_tuple_at_offset_in_interim_tuple_store(this_state->right_side_equal_tuples_batch, &(this_state->right_side_equal_tuples_batch->embed_regions[0]), this_state->curr_right_offset, &(this_state->right_tuple_def->size_def)))
 						{
-							const void* right_tuple = inputs->right_side_equal_tuples_batch->embed_regions[0].tuple;
+							const void* right_tuple = this_state->right_side_equal_tuples_batch->embed_regions[0].tuple;
 
 							void* output_tuple = produce_join_result(o, left_tuple, right_tuple);
 
 							// next tuple in right region, mmap only if it is contained
-							this_state->curr_right_offset = next_tuple_offset_for_interim_tuple_region(&(inputs->right_side_equal_tuples_batch->embed_regions[0]));
-							if(contains_tuple_at_offset_in_interim_tuple_store(inputs->right_side_equal_tuples_batch, &(inputs->right_side_equal_tuples_batch->embed_regions[0]), this_state->curr_right_offset, &(this_state->right_input_tuple_def->size_def)))
+							this_state->curr_right_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->right_side_equal_tuples_batch->embed_regions[0]));
+							if(contains_tuple_at_offset_in_interim_tuple_store(this_state->right_side_equal_tuples_batch, &(this_state->right_side_equal_tuples_batch->embed_regions[0]), this_state->curr_right_offset, &(this_state->right_tuple_def->size_def)))
 								mmap_for_reading_tuple(this_state->right_side_equal_tuples_batch, &(this_state->right_side_equal_tuples_batch->embed_regions[0]), this_state->curr_right_offset, &(this_state->right_tuple_def->size_def), o->desc->params.sort_merge_join.min_block_size);
 
 							return output_tuple;
@@ -272,8 +272,8 @@ static void* next_tuple(operator* o, int* error_code)
 						// above mmap is almost no-op, as it is in the same block
 
 						// next tuple in left region, mmap only if it is contained
-						this_state->curr_left_offset = next_tuple_offset_for_interim_tuple_region(&(inputs->left_side_equal_tuples_batch->embed_regions[0]));
-						if(contains_tuple_at_offset_in_interim_tuple_store(inputs->left_side_equal_tuples_batch, &(inputs->left_side_equal_tuples_batch->embed_regions[0]), this_state->curr_left_offset, &(this_state->left_input_tuple_def->size_def)))
+						this_state->curr_left_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->left_side_equal_tuples_batch->embed_regions[0]));
+						if(contains_tuple_at_offset_in_interim_tuple_store(this_state->left_side_equal_tuples_batch, &(this_state->left_side_equal_tuples_batch->embed_regions[0]), this_state->curr_left_offset, &(this_state->left_tuple_def->size_def)))
 							mmap_for_reading_tuple(this_state->left_side_equal_tuples_batch, &(this_state->left_side_equal_tuples_batch->embed_regions[0]), this_state->curr_left_offset, &(this_state->left_tuple_def->size_def), o->desc->params.sort_merge_join.min_block_size);
 					}
 
