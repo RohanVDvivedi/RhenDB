@@ -100,6 +100,10 @@ int main(int argc, char** argv)
 
 	query_plan* qp = get_new_query_plan(qpd);
 
+	stream out_file_stream;
+	int out_fd = open(argv[1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+	initialize_stream_for_fd(&out_file_stream, out_fd);
+
 	while(1)
 	{
 		int error_code = 0;
@@ -108,14 +112,16 @@ int main(int argc, char** argv)
 			break;
 		uint32_t tuple_size = get_tuple_size(qp->desc->output_tuple_def, tuple);
 		int stream_error = 0;
-		write_to_stream(&ws, tuple, tuple_size, &stream_error);
+		write_to_stream(&out_file_stream, tuple, tuple_size, &stream_error);
 		free(tuple);
 		if(stream_error)
 			break;
 	}
 
 	int stream_error = 0;
-	flush_all_from_stream(&ws, &stream_error);
+	flush_all_from_stream(&out_file_stream, &stream_error);
+	close_stream(&out_file_stream, &stream_error);
+	deinitialize_stream(&out_file_stream);
 
 	destroy_query_plan(qp);
 
