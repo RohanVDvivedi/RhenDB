@@ -55,6 +55,7 @@ int main(int argc, char** argv)
 	initialize_transaction(&tx, &rdb);
 
 	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
+
 	{
 		operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
 
@@ -83,6 +84,7 @@ int main(int argc, char** argv)
 			operator_desc* off_lim = insert_offset_limit_operator_descriptor(qpd, sorted, offset, limit);
 		#endif
 	}
+
 	query_plan* qp = get_new_query_plan(qpd);
 
 	while(1)

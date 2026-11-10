@@ -130,8 +130,6 @@ int main(int argc, char** argv)
 	transaction tx;
 	initialize_transaction(&tx, &rdb);
 
-	// make query
-
 	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
 	{
