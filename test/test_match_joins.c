@@ -2,6 +2,9 @@
 
 #include<rhendb/transaction.h>
 #include<rhendb/query_plan_descriptor.h>
+#include<rhendb/query_plan.h>
+
+#include<rhendb/function_compare.h>
 
 #include<sqltoast/sqltoast.h>
 #include<sqltoast/sql_expression_eval.h>
@@ -24,13 +27,7 @@
 #define USERS_COUNT 10
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
-#define PARALLEL_SORTING_JOBS_COUNT    8
 #define N_WAY_SORT                     16
-
-#define PARTITIONS_COUNT                      64
-#define PARALLEL_HASH_JOIN_JOBS_COUNT         6
-#define PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE    6
-#define MIN_BUFFER_SIZE                       (1 * 1024 * 1024)
 
 #define RECORD_S_KEY_ELEMENT_COUNT 1
 
@@ -38,14 +35,6 @@
 
 positional_accessor KEY_POS[1] = {STATIC_POSITION(2)};
 compare_direction CMP_DIR[1] = {ASC};
-
-transaction tx;
-
-void intHandler(int dummy)
-{
-	printf("\nCaught Ctrl+C! shuting down query plan\n");
-	shutdown_all_query_plans(&tx, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
-}
 
 int main(int argc, char** argv)
 {
@@ -67,8 +56,6 @@ int main(int argc, char** argv)
 	initialize_stream_for_fd(&rs, 0);
 	initialize_stream_for_fd(&ws, 1);
 
-	signal(SIGINT, intHandler);
-
 	rhendb rdb;
 	initialize_rhendb(&rdb, "./test.db",
 		5,
@@ -82,76 +69,148 @@ int main(int argc, char** argv)
 
 	initialize_tuple_defs();
 
+	transaction tx;
 	initialize_transaction(&tx, &rdb);
-
-	// make operators
 
 	positional_accessor O_KEY_POS[2] = {STATIC_POSITION(0,0), STATIC_POSITION(1,0)};
 	compare_direction O_CMP_DIR[2] = {ASC, ASC};
 
-	// make query
-
-	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
-
-	printf("Building pipeline :\n");
+	query_plan_desc* qpd1 = get_new_query_plan_descriptor(&tx, NULL);
+	stream s1_1, s1_2;
+	initialize_stream_for_fd(&s1_1, open(argv[1], O_RDONLY));
+	initialize_stream_for_fd(&s1_2, open(argv[1], O_RDONLY));
 	{
-//---------------------------------
-		const operator_desc* input = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
-//---------------------------
-		const operator_desc* input_1 = insert_row_rename_operator_descriptor(qpd, input, "record2", NULL, 0);
+		operator_desc* input_0 = insert_stream_input_operator_descriptor(qpd1, &s1_1, &record_def);
 
-		const operator_desc* bnlj = insert_block_nested_loop_join_operator_descriptor(qpd, input, input_1, join_expr_sql->expr, PRESERVE_NONE, MIN_BLOCK_SIZE);
-//---------------------------------
-		const operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, input, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		operator_desc* input_1 = insert_stream_input_operator_descriptor(qpd1, &s1_2, &record_def);
 
-		const operator_desc* sort_join = insert_sort_merge_join_operator_descriptor(qpd, sort, KEY_POS, sort, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, MIN_BLOCK_SIZE);
-//---------------------------------
-		const operator_desc* hash_join = insert_hash_join_operator_descriptor(qpd, input, KEY_POS, input, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, PARTITIONS_COUNT, PARALLEL_HASH_JOIN_JOBS_COUNT, PARALLEL_HASH_JOIN_JOBS_QUEUE_SIZE, MIN_BUFFER_SIZE);
-//---------------------------------
-		const operator_desc* bnlj_sorted = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, bnlj, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		operator_desc* input_1_ = insert_row_rename_operator_descriptor(qpd1, input_1, "record2", NULL, 0);
 
-		const operator_desc* sort_join_sorder = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, sort_join, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
+		operator_desc* bnlj = insert_block_nested_loop_join_operator_descriptor(qpd1, input_0, input_1_, join_expr_sql->expr, PRESERVE_NONE, MIN_BLOCK_SIZE);
 
-		const operator_desc* hash_join_sorted = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, hash_join, 2, O_KEY_POS, O_CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-//---------------------------------
-		insert_result_match_operator_descriptor(qpd, bnlj_sorted, sort_join_sorder);
-
-		insert_result_match_operator_descriptor(qpd, sort_join_sorder, hash_join_sorted);
-
-		insert_result_match_operator_descriptor(qpd, bnlj_sorted, hash_join_sorted);
-//---------------------------------
-	}
-	printf("\n\n");
-
-	query_plan* qp = create_query_plan(qpd, NULL);
-	register_query_plan(&tx, qp);
-
-	printf("Pipeline built\n\n");
-
-	// make query completed
-
-	start_all_operators_for_query_plan(qp);
-
-	wait_for_shutdown_of_query_plan(qp);
-
-	deregister_query_plan(&tx, qp);
-	if(qp->query_errored)
-	{
-		dstring kill_reasons = new_dstring("", 0);
-		destroy_query_plan(qp, &kill_reasons);
-
-		printf("\n\nKILL REASONS : \n");
-		printf_dstring(&kill_reasons);
-		deinit_dstring(&kill_reasons);
-		printf("\n\nKILL REASONS END\n\n");
-	}
-	else
-	{
-		printf("QUERY SUCCESSFULL\n");
-		destroy_query_plan(qp, NULL);
+		operator_desc* bnlj_sorted = insert_sort_operator_descriptor(qpd1, TUPLES_DOWN_COUNTER_INF, bnlj, 2, O_KEY_POS, O_CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
 	}
 
-	destroy_query_plan_descriptor(qpd);
+	query_plan_desc* qpd2 = get_new_query_plan_descriptor(&tx, NULL);
+	stream s2_1, s2_2;
+	initialize_stream_for_fd(&s2_1, open(argv[1], O_RDONLY));
+	initialize_stream_for_fd(&s2_2, open(argv[1], O_RDONLY));
+	{
+		operator_desc* input_0 = insert_stream_input_operator_descriptor(qpd2, &s2_1, &record_def);
+
+		operator_desc* input_1 = insert_stream_input_operator_descriptor(qpd2, &s2_2, &record_def);
+
+		operator_desc* sort_0 = insert_sort_operator_descriptor(qpd2, TUPLES_DOWN_COUNTER_INF, input_0, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
+
+		operator_desc* sort_1 = insert_sort_operator_descriptor(qpd2, TUPLES_DOWN_COUNTER_INF, input_1, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
+
+		operator_desc* sort_join = insert_sort_merge_join_operator_descriptor(qpd2, sort_0, KEY_POS, sort_1, KEY_POS, CMP_DIR, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, MIN_BLOCK_SIZE);
+
+		operator_desc* sort_join_sorder = insert_sort_operator_descriptor(qpd2, TUPLES_DOWN_COUNTER_INF, sort_join, 2, O_KEY_POS, O_CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
+	}
+
+	query_plan_desc* qpd3 = get_new_query_plan_descriptor(&tx, NULL);
+	stream s3_1, s3_2;
+	initialize_stream_for_fd(&s3_1, open(argv[1], O_RDONLY));
+	initialize_stream_for_fd(&s3_2, open(argv[1], O_RDONLY));
+	{
+		operator_desc* input_0 = insert_stream_input_operator_descriptor(qpd3, &s3_1, &record_def);
+
+		operator_desc* input_1 = insert_stream_input_operator_descriptor(qpd3, &s3_2, &record_def);
+
+		operator_desc* hash_join = insert_hash_join_operator_descriptor(qpd3, input_0, KEY_POS, input_1, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE);
+
+		operator_desc* hash_join_sorted = insert_sort_operator_descriptor(qpd3, TUPLES_DOWN_COUNTER_INF, hash_join, 2, O_KEY_POS, O_CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
+	}
+
+
+	query_plan* qp1 = get_new_query_plan(qpd1);
+	query_plan* qp2 = get_new_query_plan(qpd2);
+	query_plan* qp3 = get_new_query_plan(qpd3);
+
+	uint64_t matches_count = 0;
+	while(1)
+	{
+		int error_code1 = 0;
+		void* tuple1 = next_tuple_from_query_plan(qp1, &error_code1);
+
+		int error_code2 = 0;
+		void* tuple2 = next_tuple_from_query_plan(qp2, &error_code2);
+
+		int error_code3 = 0;
+		void* tuple3 = next_tuple_from_query_plan(qp3, &error_code3);
+
+		if(tuple1 == NULL && tuple2 == NULL && tuple3 == NULL)
+		{
+			printf("%"PRIu64" all matched\n", matches_count);
+			break;
+		}
+
+		if(tuple1 == NULL || tuple2 == NULL || tuple3 == NULL)
+		{
+			printf("only %"PRIu64" all matched\n", matches_count);
+
+			printf("tuple1 : ");
+			if(tuple1 != NULL)
+			{
+				print_tuple(tuple1, qp1->desc->output_tuple_def);
+				printf("\n");
+			}
+			else
+				printf("NULL\n");
+
+			printf("tuple2 : ");
+			if(tuple2 != NULL)
+			{
+				print_tuple(tuple2, qp2->desc->output_tuple_def);
+				printf("\n");
+			}
+			else
+				printf("NULL\n");
+
+			printf("tuple3 : ");
+			if(tuple3 != NULL)
+			{
+				print_tuple(tuple3, qp3->desc->output_tuple_def);
+				printf("\n");
+			}
+			else
+				printf("NULL\n");
+
+			if(tuple1 != NULL)
+				free(tuple1);
+			if(tuple2 != NULL)
+				free(tuple2);
+			if(tuple3 != NULL)
+				free(tuple3);
+
+			break;
+		}
+
+		if(0 == compare_tuples_rhendb(tuple1, qp1->desc->output_tuple_def, &SELF, tuple2, qp2->desc->output_tuple_def, &SELF, NULL, 1, &tx) &&
+			0 == compare_tuples_rhendb(tuple2, qp2->desc->output_tuple_def, &SELF, tuple3, qp3->desc->output_tuple_def, &SELF, NULL, 1, &tx))
+			matches_count++;
+		else
+		{
+			printf("only %"PRIu64" all matched\n", matches_count);
+			print_tuple(tuple1, qp1->desc->output_tuple_def);
+			print_tuple(tuple2, qp2->desc->output_tuple_def);
+			print_tuple(tuple3, qp3->desc->output_tuple_def);
+			break;
+		}
+
+		free(tuple1);
+		free(tuple2);
+		free(tuple3);
+	}
+
+	destroy_query_plan(qp1);
+	destroy_query_plan(qp2);
+	destroy_query_plan(qp3);
+
+	destroy_query_plan_descriptor(qpd1);
+	destroy_query_plan_descriptor(qpd2);
+	destroy_query_plan_descriptor(qpd3);
 
 	delete_sql(join_expr_sql);
 

@@ -151,6 +151,7 @@ int main(int argc, char** argv)
 			printf("only %"PRIu64" all matched\n", matches_count);
 			print_tuple(tuple1, qp1->desc->output_tuple_def);
 			print_tuple(tuple2, qp2->desc->output_tuple_def);
+			break;
 		}
 
 		free(tuple1);
