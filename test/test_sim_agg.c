@@ -2,6 +2,7 @@
 
 #include<rhendb/transaction.h>
 #include<rhendb/query_plan_descriptor.h>
+#include<rhendb/query_plan.h>
 
 #include<rhendb/util_materialization.h>
 
@@ -18,85 +19,13 @@
 
 #define USERS_COUNT 10
 
-transaction tx;
-
-void intHandler(int dummy)
-{
-	printf("\nCaught Ctrl+C! shuting down query plan\n");
-	shutdown_all_query_plans(&tx, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
-}
-
 query_plan* qp = NULL;
-
-int print_consumer_custom(void* consumer_context, const void* tuple, const tuple_def* input_tuple_def)
-{
-	const data_type_info* dti_temp;
-	datum uval;
-	{
-		if(!get_value_from_element_from_tuple(&uval, &dti_temp, input_tuple_def, STATIC_POSITION(21), tuple))
-			return 0;
-
-		int error_code = 0;
-		uint32_t length = 0;
-		uint32_t capacity = 0;
-		char* group_concat_data = materialize_tbj(uval, dti_temp, qp->curr_tx, &length, &capacity, 0, &error_code);
-
-		if(error_code)
-		{
-			printf("group_concate materialization error %d\n", error_code);
-			return 0;
-		}
-
-		printf("group concat = <%.*s>\n", length, group_concat_data);
-		if(capacity > 0)
-			free(group_concat_data);
-	}
-	{
-		if(!get_value_from_element_from_tuple(&uval, &dti_temp, input_tuple_def, STATIC_POSITION(15), tuple))
-			return 0;
-
-		int error_code = 0;
-		mpd_t sum_all = materialize_numeric(uval, dti_temp, qp->curr_tx, 0, &error_code);
-		if(error_code)
-		{
-			printf("sum all numeric materialization error %d\n", error_code);
-			return 0;
-		}
-
-		char *s = mpd_to_sci(&sum_all, 1);
-		printf("%s\n", s);
-		mpd_free(s);
-
-		mpd_del(&sum_all);
-	}
-	{
-		if(!get_value_from_element_from_tuple(&uval, &dti_temp, input_tuple_def, STATIC_POSITION(22), tuple))
-			return 0;
-
-		int error_code = 0;
-		jsonb_node* jsonb_agg_data = materialize_jsonb(uval, dti_temp, qp->curr_tx, &error_code);
-		if(error_code)
-		{
-			printf("jsonb_agg materialization error %d\n", error_code);
-			return 0;
-		}
-
-		printf("jsonb_agg : \n");
-		print_jsonb(jsonb_agg_data, 1);
-		printf("\n");
-
-		delete_jsonb_node(jsonb_agg_data);
-	}
-	return 1;
-}
 
 int main(int argc, char** argv)
 {
 	stream rs, ws;
 	initialize_stream_for_fd(&rs, 0);
 	initialize_stream_for_fd(&ws, 1);
-
-	signal(SIGINT, intHandler);
 
 	rhendb rdb;
 	initialize_rhendb(&rdb, "./test.db",
@@ -111,13 +40,8 @@ int main(int argc, char** argv)
 
 	initialize_tuple_defs();
 
+	transaction tx;
 	initialize_transaction(&tx, &rdb);
-
-	// make query
-
-	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
-
-	printf("Building pipeline :\n");
 
 	aggregate_function* const AGGREGATES[] = {
 		get_count_aggregate_function(record_def.type_info),
@@ -206,44 +130,87 @@ int main(int argc, char** argv)
 		aggregate_input_positions_0,
 	};
 
+	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
+
 	{
-		const operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
+		operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
 
-		const operator_desc* agg = insert_simple_aggregation_operator_descriptor(qpd, strm_in, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS);
-
-		insert_consumer_operator_descriptor(qpd, agg, print_consumer, NULL);
-
-		insert_consumer_operator_descriptor(qpd, agg, print_consumer_custom, NULL);
+		operator_desc* agg = insert_simple_aggregation_operator_descriptor(qpd, strm_in, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS);
 	}
-	printf("\n\n");
 
-	qp = create_query_plan(qpd, NULL);
-	register_query_plan(&tx, qp);
+	qp = get_new_query_plan(qpd);
 
-	printf("Pipeline built\n\n");
-
-	// make query completed
-
-	start_all_operators_for_query_plan(qp);
-
-	wait_for_shutdown_of_query_plan(qp);
-
-	deregister_query_plan(&tx, qp);
-	if(qp->query_errored)
+	while(1)
 	{
-		dstring kill_reasons = new_dstring("", 0);
-		destroy_query_plan(qp, &kill_reasons);
+		int error_code = 0;
+		void* tuple = next_tuple_from_query_plan(qp, &error_code);
+		if(tuple == NULL)
+			break;
 
-		printf("\n\nKILL REASONS : \n");
-		printf_dstring(&kill_reasons);
-		deinit_dstring(&kill_reasons);
-		printf("\n\nKILL REASONS END\n\n");
+		print_tuple(tuple, qp->desc->output_tuple_def);
+
+		const data_type_info* dti_temp;
+		datum uval;
+		{
+			if(!get_value_from_element_from_tuple(&uval, &dti_temp, qp->desc->output_tuple_def, STATIC_POSITION(21), tuple))
+				return 0;
+
+			int error_code = 0;
+			uint32_t length = 0;
+			uint32_t capacity = 0;
+			char* group_concat_data = materialize_tbj(uval, dti_temp, qp->desc->curr_tx, &length, &capacity, 0, &error_code);
+
+			if(error_code)
+			{
+				printf("group_concate materialization error %d\n", error_code);
+				return 0;
+			}
+
+			printf("group concat = <%.*s>\n\n", length, group_concat_data);
+			if(capacity > 0)
+				free(group_concat_data);
+		}
+		{
+			if(!get_value_from_element_from_tuple(&uval, &dti_temp, qp->desc->output_tuple_def, STATIC_POSITION(15), tuple))
+				return 0;
+
+			int error_code = 0;
+			mpd_t sum_all = materialize_numeric(uval, dti_temp, qp->desc->curr_tx, 0, &error_code);
+			if(error_code)
+			{
+				printf("sum all numeric materialization error %d\n", error_code);
+				return 0;
+			}
+
+			char *s = mpd_to_sci(&sum_all, 1);
+			printf("%s\n\n", s);
+			mpd_free(s);
+
+			mpd_del(&sum_all);
+		}
+		{
+			if(!get_value_from_element_from_tuple(&uval, &dti_temp, qp->desc->output_tuple_def, STATIC_POSITION(22), tuple))
+				return 0;
+
+			int error_code = 0;
+			jsonb_node* jsonb_agg_data = materialize_jsonb(uval, dti_temp, qp->desc->curr_tx, &error_code);
+			if(error_code)
+			{
+				printf("jsonb_agg materialization error %d\n", error_code);
+				return 0;
+			}
+
+			printf("jsonb_agg : \n\n");
+			print_jsonb(jsonb_agg_data, 1);
+			printf("\n");
+
+			delete_jsonb_node(jsonb_agg_data);
+		}
+
+		free(tuple);
 	}
-	else
-	{
-		printf("QUERY SUCCESSFULL\n");
-		destroy_query_plan(qp, NULL);
-	}
+
+	destroy_query_plan(qp);
 
 	destroy_query_plan_descriptor(qpd);
 
