@@ -2,6 +2,7 @@
 
 #include<rhendb/transaction.h>
 #include<rhendb/query_plan_descriptor.h>
+#include<rhendb/query_plan.h>
 
 #include<test_dataset_tuple_def.h>
 
@@ -19,8 +20,6 @@
 #define TESTCASE_SIZE 1000000
 
 #define RANDOMIZE_DATA
-
-#define PRINT_DATA 0
 
 uint32_t inputs[TESTCASE_SIZE];
 void generate_random_inputs()
@@ -61,23 +60,11 @@ void* sorted_generator(void* generator_context, const tuple_def* generator_tuple
 	return generated;
 }
 
-transaction tx;
-
-void intHandler(int dummy)
-{
-	printf("\nCaught Ctrl+C! shuting down query plan\n");
-	shutdown_all_query_plans(&tx, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
-}
-
 int main(int argc, char** argv)
 {
 	stream rs, ws;
 	initialize_stream_for_fd(&rs, 0);
 	initialize_stream_for_fd(&ws, 1);
-
-	stream out_file_stream;
-
-	signal(SIGINT, intHandler);
 
 	rhendb rdb;
 	initialize_rhendb(&rdb, "./test.db",
@@ -96,13 +83,11 @@ int main(int argc, char** argv)
 
 	initialize_tuple_defs();
 
+	transaction tx;
 	initialize_transaction(&tx, &rdb);
-
-	// make query
 
 	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
-	printf("Building pipeline :\n");
 	{
 		const operator_desc* gen = insert_generator_operator_descriptor(qpd,
 		#ifdef RANDOMIZE_DATA
@@ -111,47 +96,28 @@ int main(int argc, char** argv)
 			sorted_generator
 		#endif
 		, NULL, &record_def);
-
-		#ifdef PRINT_DATA
-			insert_consumer_operator_descriptor(qpd, gen, PRINT_DATA ? print_consumer : NULL, NULL);
-		#endif
-
-		if(argc >= 2)
-		{
-			int out_fd = open(argv[1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-			initialize_stream_for_fd(&out_file_stream, out_fd);
-
-			insert_stream_output_operator_descriptor(qpd, gen, &out_file_stream);
-		}
 	}
 
-	query_plan* qp = create_query_plan(qpd, NULL);
-	register_query_plan(&tx, qp);
+	query_plan* qp = get_new_query_plan(qpd);
 
-	printf("Pipeline built\n\n");
-
-	// make query completed
-
-	start_all_operators_for_query_plan(qp);
-
-	wait_for_shutdown_of_query_plan(qp);
-
-	deregister_query_plan(&tx, qp);
-	if(qp->query_errored)
+	while(1)
 	{
-		dstring kill_reasons = new_dstring("", 0);
-		destroy_query_plan(qp, &kill_reasons);
+		int error_code = 0;
+		void* tuple = next_tuple_from_query_plan(qp, &error_code);
+		if(tuple == NULL)
+			break;
+		uint32_t tuple_size = get_tuple_size(qp->desc->output_tuple_def, tuple);
+		int stream_error = 0;
+		write_to_stream(&ws, tuple, tuple_size, &stream_error);
+		free(tuple);
+		if(stream_error)
+			break;
+	}
 
-		printf("\n\nKILL REASONS : \n");
-		printf_dstring(&kill_reasons);
-		deinit_dstring(&kill_reasons);
-		printf("\n\nKILL REASONS END\n\n");
-	}
-	else
-	{
-		printf("QUERY SUCCESSFULL\n");
-		destroy_query_plan(qp, NULL);
-	}
+	int stream_error = 0;
+	flush_all_from_stream(&ws, &stream_error);
+
+	destroy_query_plan(qp);
 
 	destroy_query_plan_descriptor(qpd);
 
