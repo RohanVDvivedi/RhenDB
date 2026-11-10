@@ -10,6 +10,8 @@ PICKED TASKS
 
    * fix the unified test case
 
+   * check and see if a in_memory_tuple_hashset where each node is a integer-bitfield and a linkedlist of nodes to tuples, that accumulate upto a certain point, then see if this helps in speed up of hash operators
+
 -----------------------------------------------------------------
 
 * also cache materialized values by chunk_pointer and by what rage_engine pointer they live in
