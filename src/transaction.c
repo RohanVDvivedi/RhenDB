@@ -70,6 +70,8 @@ void initialize_transaction(transaction* tx, rhendb* rdb)
 		initialize_heap_table_accumulative_notifier(&(tx->temp_ext_stores[i].htan), MAX_ENTRIES_IN_VOL_BLOBS_HTAN);
 		initialize_rwlock(&(tx->temp_ext_stores[i].blob_store_lock), NULL);
 	}
+
+	pthread_cond_init_with_monotonic_clock(&(tx->wait_on_lock_table_for_lock));
 }
 
 void notify_deadlocked(void* context_p, void* transaction_vp)
