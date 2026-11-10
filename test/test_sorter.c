@@ -80,7 +80,7 @@ int main(int argc, char** argv)
 			#else
 				limit = TUPLES_DOWN_COUNTER_INF;
 			#endif
-			insert_offset_limit_operator_descriptor(qpd, sorted, offset, limit);
+			operator_desc* off_lim = insert_offset_limit_operator_descriptor(qpd, sorted, offset, limit);
 		#endif
 	}
 	query_plan* qp = get_new_query_plan(qpd);

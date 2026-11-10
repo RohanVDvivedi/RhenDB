@@ -2,6 +2,7 @@
 
 #include<rhendb/transaction.h>
 #include<rhendb/query_plan_descriptor.h>
+#include<rhendb/query_plan.h>
 
 #include<sqltoast/sqltoast.h>
 #include<sqltoast/sql_expression_eval.h>
@@ -134,18 +135,16 @@ int main(int argc, char** argv)
 	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
 	{
-		const operator_desc* left = insert_generator_operator_descriptor(qpd, left_generator, NULL, &record_def);
+		operator_desc* left = insert_generator_operator_descriptor(qpd, left_generator, NULL, &record_def);
 
-		const operator_desc* right = insert_generator_operator_descriptor(qpd, right_generator, NULL, &record_def2);
+		operator_desc* right = insert_generator_operator_descriptor(qpd, right_generator, NULL, &record_def2);
 
-		const operator_desc* join = insert_block_nested_loop_join_operator_descriptor(qpd, left, right, join_expr_sql->expr, PRESERVE_LEFT, MIN_BLOCK_SIZE);
+		operator_desc* join = insert_block_nested_loop_join_operator_descriptor(qpd, left, right, join_expr_sql->expr, PRESERVE_LEFT, MIN_BLOCK_SIZE);
 
-		const operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, join, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-
-		insert_consumer_operator_descriptor(qpd, sort, PRINT_DATA ? print_consumer : NULL, NULL);
+		operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, join, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
 	}
 
-	query_plan* qp = create_query_plan(qpd, NULL);
+	query_plan* qp = get_new_query_plan(qpd);
 
 	while(1)
 	{
@@ -159,7 +158,7 @@ int main(int argc, char** argv)
 		free(tuple);
 	}
 
-	destroy_query_plan(qp, NULL);
+	destroy_query_plan(qp);
 
 	destroy_query_plan_descriptor(qpd);
 
