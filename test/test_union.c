@@ -2,6 +2,9 @@
 
 #include<rhendb/transaction.h>
 #include<rhendb/query_plan_descriptor.h>
+#include<rhendb/query_plan.h>
+
+#include<rhendb/function_compare.h>
 
 #include<test_dataset_tuple_def.h>
 
@@ -20,15 +23,12 @@
 #define INPUT_OPERATORS_COUNT 30
 
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
-#define PARALLEL_SORTING_JOBS_COUNT    8
 #define N_WAY_SORT                     16
 
 #define RECORD_S_KEY_ELEMENT_COUNT 2
 
 positional_accessor KEY_POS[2] = {STATIC_POSITION(0), STATIC_POSITION(2)};
 compare_direction CMP_DIR[2] = {ASC, ASC};
-
-int generator_contexts[INPUT_OPERATORS_COUNT];
 
 #define BUFFER_SIZE 300
 
@@ -48,18 +48,8 @@ void* generator(void* generator_context, const tuple_def* generator_tuple_def)
 	return generated;
 }
 
-transaction tx;
-
-void intHandler(int dummy)
-{
-	printf("\nCaught Ctrl+C! shuting down query plan\n");
-	shutdown_all_query_plans(&tx, get_dstring_pointing_to_literal_cstring("CTRL+C pressed!!"));
-}
-
 int main(int argc, char** argv)
 {
-	signal(SIGINT, intHandler);
-
 	rhendb rdb;
 	initialize_rhendb(&rdb, "./test.db",
 		5,
@@ -73,59 +63,105 @@ int main(int argc, char** argv)
 
 	initialize_tuple_defs();
 
+	transaction tx;
 	initialize_transaction(&tx, &rdb);
 
 	// make query
 
-	query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
-
-	printf("Building pipeline :\n");
+	query_plan_desc* qpd1 = get_new_query_plan_descriptor(&tx, NULL);
+	int generator_contexts1[INPUT_OPERATORS_COUNT];
 	{
-		const operator_desc* sorted_inputs[INPUT_OPERATORS_COUNT];
+		operator_desc* sorted_inputs1[INPUT_OPERATORS_COUNT];
 		for(int i = 0; i < INPUT_OPERATORS_COUNT; i++)
 		{
-			generator_contexts[i] = i;
-			sorted_inputs[i] = insert_generator_operator_descriptor(qpd, generator, &(generator_contexts[i]), &record_def);
+			generator_contexts1[i] = i;
+			sorted_inputs1[i] = insert_generator_operator_descriptor(qpd1, generator, &(generator_contexts1[i]), &record_def);
 		}
 
-		const operator_desc* union_op = insert_union_operator_descriptor(qpd, sorted_inputs, INPUT_OPERATORS_COUNT);
+		operator_desc* union_op = insert_union_operator_descriptor(qpd1, sorted_inputs1, INPUT_OPERATORS_COUNT);
 
-		const operator_desc* sort_union_op = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, union_op, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, SMALLEST_RUN_SIZE, N_WAY_SORT, PARALLEL_SORTING_JOBS_COUNT);
-
-		const operator_desc* merge_sorted_op = insert_merge_sorted_inputs_operator_descriptor(qpd, sorted_inputs, INPUT_OPERATORS_COUNT, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR);
-
-		insert_result_match_operator_descriptor(qpd, sort_union_op, merge_sorted_op);
+		operator_desc* sort_union_op = insert_sort_operator_descriptor(qpd1, TUPLES_DOWN_COUNTER_INF, union_op, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
 	}
 
-	query_plan* qp = create_query_plan(qpd, NULL);
-	register_query_plan(&tx, qp);
-
-	printf("Pipeline built\n\n");
-
-	// make query completed
-
-	start_all_operators_for_query_plan(qp);
-
-	wait_for_shutdown_of_query_plan(qp);
-
-	deregister_query_plan(&tx, qp);
-	if(qp->query_errored)
+	query_plan_desc* qpd2 = get_new_query_plan_descriptor(&tx, NULL);
+	int generator_contexts2[INPUT_OPERATORS_COUNT];
 	{
-		dstring kill_reasons = new_dstring("", 0);
-		destroy_query_plan(qp, &kill_reasons);
+		operator_desc* sorted_inputs2[INPUT_OPERATORS_COUNT];
+		for(int i = 0; i < INPUT_OPERATORS_COUNT; i++)
+		{
+			generator_contexts2[i] = i;
+			sorted_inputs2[i] = insert_generator_operator_descriptor(qpd2, generator, &(generator_contexts2[i]), &record_def);
+		}
 
-		printf("\n\nKILL REASONS : \n");
-		printf_dstring(&kill_reasons);
-		deinit_dstring(&kill_reasons);
-		printf("\n\nKILL REASONS END\n\n");
+		operator_desc* merge_sorted_op = insert_merge_sorted_inputs_operator_descriptor(qpd2, sorted_inputs2, INPUT_OPERATORS_COUNT, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, CMP_DIR);
 	}
-	else
+
+	query_plan* qp1 = get_new_query_plan(qpd1);
+	query_plan* qp2 = get_new_query_plan(qpd2);
+
+	uint64_t matches_count = 0;
+	while(1)
 	{
-		printf("QUERY SUCCESSFULL\n");
-		destroy_query_plan(qp, NULL);
+		int error_code1 = 0;
+		void* tuple1 = next_tuple_from_query_plan(qp1, &error_code1);
+
+		int error_code2 = 0;
+		void* tuple2 = next_tuple_from_query_plan(qp2, &error_code2);
+
+		if(tuple1 == NULL && tuple2 == NULL)
+		{
+			printf("%"PRIu64" all matched\n", matches_count);
+			break;
+		}
+
+		if(tuple1 == NULL || tuple2 == NULL)
+		{
+			printf("only %"PRIu64" all matched\n", matches_count);
+
+			printf("tuple1 : ");
+			if(tuple1 != NULL)
+			{
+				print_tuple(tuple1, qp1->desc->output_tuple_def);
+				printf("\n");
+			}
+			else
+				printf("NULL\n");
+
+			printf("tuple2 : ");
+			if(tuple2 != NULL)
+			{
+				print_tuple(tuple2, qp2->desc->output_tuple_def);
+				printf("\n");
+			}
+			else
+				printf("NULL\n");
+
+			if(tuple1 != NULL)
+				free(tuple1);
+			if(tuple2 != NULL)
+				free(tuple2);
+
+			break;
+		}
+
+		if(0 == compare_tuples_rhendb(tuple1, qp1->desc->output_tuple_def, &SELF, tuple2, qp2->desc->output_tuple_def, &SELF, NULL, 1, &tx))
+			matches_count++;
+		else
+		{
+			printf("only %"PRIu64" all matched\n", matches_count);
+			print_tuple(tuple1, qp1->desc->output_tuple_def);
+			print_tuple(tuple2, qp2->desc->output_tuple_def);
+		}
+
+		free(tuple1);
+		free(tuple2);
 	}
 
-	destroy_query_plan_descriptor(qpd);
+	destroy_query_plan(qp1);
+	destroy_query_plan(qp2);
+
+	destroy_query_plan_descriptor(qpd1);
+	destroy_query_plan_descriptor(qpd2);
 
 	deinitialize_transaction(&tx);
 
