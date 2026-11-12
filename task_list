@@ -14,7 +14,6 @@ PICKED TASKS
      * to be used in hash join and hash semi join
 
    * sort operator
-     * implement int compare_tuples_down_counter_uint64(tuple_down_counter , uint64_t )
      * if the result counter in sorter is not 0, then put tuple in an max heap, insert and check if the count is > result counter, if so pop top
      * then check if the total bytes in tuples is too high if so write to unsorted run and sort it, and add it to the runs
 
