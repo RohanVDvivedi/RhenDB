@@ -268,6 +268,8 @@ int main()
 	// destroy cash table
 	destroy_cash_table(ct_p);
 
+	deinitialize_transaction(&tx);
+
 	deinitialize_tuple_defs();
 
 	deinitialize_rhendb(&rdb);

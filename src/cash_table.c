@@ -110,4 +110,5 @@ void destroy_cash_table(cash_table* ct_p)
 {
 	remove_all_from_hashmap(&(ct_p->value_set), &((const notifier_interface){.notify = destroy_cash_table_entry}));
 	deinitialize_hashmap(&(ct_p->value_set));
+	free(ct_p);
 }

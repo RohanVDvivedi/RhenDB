@@ -362,6 +362,8 @@ fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(&rth, 1);
 	printf("%lu/%lu\n", ((volatile_page_store*)(rdb.volatile_rage_engine.context))->active_page_count, ((volatile_page_store*)(rdb.volatile_rage_engine.context))->total_page_count);
 */
 
+	deinitialize_transaction(&tx);
+
 	deinitialize_tuple_defs();
 
 	deinitialize_rhendb(&rdb);
