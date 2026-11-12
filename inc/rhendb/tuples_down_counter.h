@@ -54,4 +54,13 @@ static inline int decrement_tuples_down_counter(tuples_down_counter* tdc_p)
 	return 0;
 }
 
+static inline int compare_tuples_down_counter(const tuples_down_counter* tdc_p, uint64_t count)
+{
+	if(is_inf_tuples_down_counter(tdc_p)) // inf - finite is always > 0
+		return 1;
+
+	// both are finite
+	return compare_numbers(tdc_p->counter, count);
+}
+
 #endif
