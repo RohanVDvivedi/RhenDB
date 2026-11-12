@@ -259,8 +259,6 @@ void find_and_print(rash_table_handle* rth_p, uint32_t v)
 	destroy_rash_table_key(&rtk);
 }
 
-//#include<volatilepagestore/volatile_page_store.h>
-
 int main()
 {
 	rhendb rdb;
