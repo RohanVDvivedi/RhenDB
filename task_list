@@ -1,8 +1,7 @@
 PICKED TASKS
 
  * volcano model
-   * test and review cash table
-     * cash_table to be integrated with hash join and hash semi join
+   * cash_table to be integrated with hash join and hash semi join
 
    * sort operator
      * if the result counter in sorter is not 0, then put tuple in an max heap, insert and check if the count is > result counter, if so pop top
