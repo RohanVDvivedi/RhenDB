@@ -282,7 +282,7 @@ int main()
 	initialize_transaction(&tx, &rdb);
 
 	// create rash table
-	rash_table_handle rth = get_new_rash_table(BUCKET_COUNT, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &tx, &rdb);
+	rash_table_handle rth = get_new_rash_table(BUCKET_COUNT, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &tx);
 
 	// print all
 	#ifdef DEBUG_PRINT
