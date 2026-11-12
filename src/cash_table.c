@@ -54,7 +54,29 @@ cash_table* get_new_cash_table(uint64_t bucket_count, const tuple_def* value_def
 
 cash_table_entry get_new_cash_table_value(const cash_table* ct_p, void* value);
 
-int insert_in_cash_table(cash_table* ct_p, const cash_table_entry* v);
+cash_table_entry* insert_in_cash_table(cash_table* ct_p, const cash_table_entry* v)
+{
+	if(v->is_key)
+		exit(-1);
+
+	uint64_t memory_additonal_usage = sizeof(cash_table_entry) + get_tuple_size(ct_p->value_def, v->value);
+
+	cash_table_entry* c = malloc(sizeof(cash_table_entry));
+	c->hash_value = v->hash_value;
+	c->is_key = 0;
+	c->state = 0;
+	c->value = v->value;
+	initialize_bstnode(&(c->embed_node));
+
+	insert_in_hashmap(&(ct_p->value_set), v);
+
+	if(get_bucket_count_hashmap(&(ct_p->value_set)) * 3 < get_element_count_hashmap(&(ct_p->value_set)))
+		expand_hashmap(&(ct_p->value_set), 1.5);
+
+	ct_p->memory_utilization += memory_additonal_usage;
+
+	return c;
+}
 
 cash_table_entry get_new_cash_table_key(const cash_table* ct_p, void* key_tuple, tuple_def* key_tuple_def, positional_accessor* key_element_ids);
 

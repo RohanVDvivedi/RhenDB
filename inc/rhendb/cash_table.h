@@ -61,8 +61,8 @@ cash_table_entry get_new_cash_table_value(const cash_table* ct_p, void* value);
 
 // below function mallocs internally, only allows user to preserve and not recompute hash_value
 // it will also do the calculations for maintaining the memory_utilization number, user must check this before/after insertions
-// it internally does int insert_in_hashmap(&(ct_p->value_set), malloc+memcpy+initialize_bstnode(v));
-int insert_in_cash_table(cash_table* ct_p, const cash_table_entry* v);
+// it internally does int insert_in_hashmap(&(ct_p->value_set), malloc+memcpy+make_state-0+initialize_bstnode(v));
+cash_table_entry* insert_in_cash_table(cash_table* ct_p, const cash_table_entry* v);
 
 // predominantly for starting lookups with a tuple with identical key, but a different tuple_def like a hash join probes
 cash_table_entry get_new_cash_table_key(const cash_table* ct_p, void* key_tuple, tuple_def* key_tuple_def, positional_accessor* key_element_ids);
