@@ -60,7 +60,7 @@ cash_table_entry get_new_cash_table_value(const cash_table* ct_p, void* value)
 		.state = 0,
 		.value = value,
 	};
-	initialize_bstnode(&(v.embed_node));
+	initialize_llnode(&(v.embed_node));
 	return v;
 }
 
@@ -76,9 +76,9 @@ cash_table_entry* insert_in_cash_table(cash_table* ct_p, const cash_table_entry*
 	c->is_key = 0;
 	c->state = 0;
 	c->value = v->value;
-	initialize_bstnode(&(c->embed_node));
+	initialize_llnode(&(c->embed_node));
 
-	insert_in_hashmap(&(ct_p->value_set), v);
+	insert_in_hashmap(&(ct_p->value_set), c);
 
 	if(get_bucket_count_hashmap(&(ct_p->value_set)) * 3 < get_element_count_hashmap(&(ct_p->value_set)))
 		expand_hashmap(&(ct_p->value_set), 1.5);

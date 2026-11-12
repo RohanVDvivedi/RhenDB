@@ -48,7 +48,7 @@ struct cash_table_entry
 
 			void* value;
 
-			bstnode embed_node;
+			llnode embed_node;
 		};
 	};
 };
