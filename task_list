@@ -1,6 +1,25 @@
 PICKED TASKS
 
  * volcano model
+   * cash_table a hashmap of {uint64_t hash_value; unsigned int is_key:1; union{struct{unsigned int bit_flags:8; void* value; bstnode embed_node;}, struct{void* key, const tuple_def* key_def, positional_accessor* key_elements_ids}}}
+     * compares first matches hash_value, and then the value/key tuple
+     * api :
+       * init function for cash table key or value
+       * init function for the cash table
+       * insert -? takes tuple and inserts it
+       * find -> returns pointer to the entry, to allow modifing the bit_flags
+       * find_all -> returns first entry, to iterate over all of them
+       * destroy, destroys all the entries and the hash table
+       * tracks total memory it uses
+     * to be used in hash join and hash semi join
+
+   * sort operator
+     * implement int compare_tuples_down_counter_uint64(tuple_down_counter , uint64_t )
+     * if the result counter in sorter is not 0, then put tuple in an max heap, insert and check if the count is > result counter, if so pop top
+     * then check if the total bytes in tuples is too high if so write to unsorted run and sort it, and add it to the runs
+
+   * try to get an estimate of the number of max bytes in state of every aggregation function and create a hash map, with approximately that many entries and store there state pointers for every entry, and keep on process_input there
+     * for spilling store the incomming tuples in the rash table
 
    * scan/point_lookup
 
