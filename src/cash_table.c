@@ -52,7 +52,17 @@ cash_table* get_new_cash_table(uint64_t bucket_count, const tuple_def* value_def
 	return ct_p;
 }
 
-cash_table_entry get_new_cash_table_value(const cash_table* ct_p, void* value);
+cash_table_entry get_new_cash_table_value(const cash_table* ct_p, void* value)
+{
+	cash_table_entry v = {
+		.hash_value = hash_tuple_rhendb(value, ct_p->value_def, ct_p->key_element_ids, FNV_64_TUPLE_HASHER, ct_p->key_element_count, ct_p->tx),
+		.is_key = 0,
+		.state = 0,
+		.value = value,
+	};
+	initialize_bstnode(&(v.embed_node));
+	return v;
+}
 
 cash_table_entry* insert_in_cash_table(cash_table* ct_p, const cash_table_entry* v)
 {
@@ -78,7 +88,16 @@ cash_table_entry* insert_in_cash_table(cash_table* ct_p, const cash_table_entry*
 	return c;
 }
 
-cash_table_entry get_new_cash_table_key(const cash_table* ct_p, void* key_tuple, tuple_def* key_tuple_def, positional_accessor* key_element_ids);
+cash_table_entry get_new_cash_table_key(const cash_table* ct_p, void* key_tuple, tuple_def* key_tuple_def, positional_accessor* key_element_ids)
+{
+	return (cash_table_entry){
+		.hash_value = hash_tuple_rhendb(key_tuple, key_tuple_def, key_element_ids, FNV_64_TUPLE_HASHER, ct_p->key_element_count, ct_p->tx),
+		.is_key = 1,
+		.key_tuple = key_tuple,
+		.key_tuple_def = key_tuple_def,
+		.key_element_ids = key_element_ids,
+	};
+}
 
 static void destroy_cash_table_entry(void* resource_p, const void* v_vp)
 {
