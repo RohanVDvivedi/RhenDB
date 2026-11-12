@@ -80,4 +80,15 @@ cash_table_entry* insert_in_cash_table(cash_table* ct_p, const cash_table_entry*
 
 cash_table_entry get_new_cash_table_key(const cash_table* ct_p, void* key_tuple, tuple_def* key_tuple_def, positional_accessor* key_element_ids);
 
-void destroy_cash_table(cash_table* ct_p);
+static void destroy_cash_table_entry(void* resource_p, const void* v_vp)
+{
+	cash_table_entry* v = (cash_table_entry*) v_vp;
+	free(v->value);
+	free(v);
+}
+
+void destroy_cash_table(cash_table* ct_p)
+{
+	remove_all_from_hashmap(&(ct_p->value_set), &((const notifier_interface){.notify = destroy_cash_table_entry}));
+	deinitialize_hashmap(&(ct_p->value_set));
+}
