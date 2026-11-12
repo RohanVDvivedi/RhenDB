@@ -302,7 +302,7 @@ void open_hash_join_operator(operator* o)
 	this_state->left_tuple = NULL;
 	this_state->has_active_probe = 0;
 	this_state->bri_p = NULL;
-	this_state->rth = get_new_rash_table(INIT_BUCKET_COUNT, this_state->right_input_operator->desc->output_tuple_def, o->desc->params.hash_join.right_key_element_ids, o->desc->params.hash_join.key_element_count, o->self_query_plan->desc->curr_tx, o->self_query_plan->desc->curr_tx->rdb);
+	this_state->rth = get_new_rash_table(INIT_BUCKET_COUNT, this_state->right_input_operator->desc->output_tuple_def, o->desc->params.hash_join.right_key_element_ids, o->desc->params.hash_join.key_element_count, o->self_query_plan->desc->curr_tx);
 	this_state->rth_value_tuple_def = this_state->right_input_operator->desc->output_tuple_def;
 
 	o->next_tuple = next_tuple;

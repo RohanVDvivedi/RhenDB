@@ -238,7 +238,7 @@ void open_hash_aggregation_operator(operator* o)
 	op_state* this_state = o->state;
 
 	this_state->input_operator = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.hash_aggregation.input_operator_index);
-	this_state->rth = get_new_rash_table(INIT_BUCKET_COUNT, this_state->input_operator->desc->output_tuple_def, o->desc->params.hash_aggregation.key_element_ids, o->desc->params.hash_aggregation.key_element_count, o->self_query_plan->desc->curr_tx, o->self_query_plan->desc->curr_tx->rdb);
+	this_state->rth = get_new_rash_table(INIT_BUCKET_COUNT, this_state->input_operator->desc->output_tuple_def, o->desc->params.hash_aggregation.key_element_ids, o->desc->params.hash_aggregation.key_element_count, o->self_query_plan->desc->curr_tx);
 	this_state->has_active_rti = 0;
 	this_state->max_input_datums_count = 0;
 	for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)

@@ -62,12 +62,10 @@ struct rash_table_handle
 
 	// to read contents of extended types, to hash and compare them
 	transaction* tx;
-
-	// this is where we use volatile_engine and httd for storing and maintaining rash table
-	rhendb* rdb;
+	// tx also hels us get rdb (by tx->rdb) this is where we get to use volatile_engine and httd for storing and maintaining rash table
 };
 
-rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, transaction* tx, rhendb* rdb);
+rash_table_handle get_new_rash_table(uint64_t initial_bucket_count, const tuple_def* key_def, const positional_accessor* key_element_ids, uint32_t key_element_count, transaction* tx);
 
 // returns number of pages being used per bucket
 // higher this number higher the actual time complexity

@@ -148,7 +148,7 @@ void open_hash_semi_join_operator(operator* o)
 
 	this_state->left_input_operator = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.hash_semi_join.left_input_operator_index);
 	this_state->right_input_operator = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.hash_semi_join.right_input_operator_index);
-	this_state->rth = get_new_rash_table(INIT_BUCKET_COUNT, this_state->right_input_operator->desc->output_tuple_def, o->desc->params.hash_semi_join.right_key_element_ids, o->desc->params.hash_semi_join.key_element_count, o->self_query_plan->desc->curr_tx, o->self_query_plan->desc->curr_tx->rdb);
+	this_state->rth = get_new_rash_table(INIT_BUCKET_COUNT, this_state->right_input_operator->desc->output_tuple_def, o->desc->params.hash_semi_join.right_key_element_ids, o->desc->params.hash_semi_join.key_element_count, o->self_query_plan->desc->curr_tx);
 
 	o->next_tuple = next_tuple;
 	o->destroy_state = destroy_state;
