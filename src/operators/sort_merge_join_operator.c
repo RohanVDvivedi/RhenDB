@@ -456,8 +456,8 @@ static void* next_tuple(operator* o, int* error_code)
 				// both the batches have been completely exhausted, so unmap and reset to new size
 				unmap_all_embed_regions_in_interim_tuple_store(this_state->left_side_equal_tuples_batch);
 				unmap_all_embed_regions_in_interim_tuple_store(this_state->right_side_equal_tuples_batch);
-				reinitialize_interim_tuple_store(this_state->left_side_equal_tuples_batch, o->desc->params.sort_merge_join.min_block_size);
-				reinitialize_interim_tuple_store(this_state->right_side_equal_tuples_batch, o->desc->params.sort_merge_join.min_block_size);
+				reinitialize_interim_tuple_store(this_state->left_side_equal_tuples_batch, UINT64_MAX); // UINT64_MAX, helps us save on ftruncate calls
+				reinitialize_interim_tuple_store(this_state->right_side_equal_tuples_batch, UINT64_MAX);
 			}
 
 			continue;
