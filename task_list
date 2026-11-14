@@ -7,6 +7,41 @@ PICKED TASKS
    * make the union have names like as_key and as_value
    * allow remove function too
 
+   * make interim tuple stores out of permanent files
+   * destroy temp directory in local directory and recreate it every time on boot
+   * make the file name same as tuple pointer, on delete close and unlink this file
+   * support closing the file and opening, and make file descriptor -1 when closed, and file name will be same as %p pf the pointer to this interim tuple store
+   * make sure heavy file users like sort use it, for runs that are not being merged yet, they close and open runs as required
+
+   * make prototype struct for the hash table
+      typedef enum rash_table_node_type rash_table_node_type;
+      enum rash_table_node_type
+      {
+        DISK_PARTITION,
+        IN_MEM_PARTITION,
+        PARTITIONED_NODE,
+      };
+      typedef struct rash_table rash_table;
+      struct rash_table_node
+      {
+        uint64_t level; // 0 for top most level, partitioning only increases it
+        rash_table_node_type type;
+        union
+        {
+          interim_tuple_store* disk_partition; // DISK_PARTITION
+          cash_table* in_mem_partition; // IN_MEM_PARTITION
+          rash_table_node* node;// PARTITIONED_NODE
+        }
+      };
+      need functions like
+      * int convert_to_in_mem_partition(rash_table_node* rtn_p); // only works on DISK_PARTITION
+      * int convert_to_disk_partition(rash_table_node* rtn_p); // only works on IN_MEM_PARTITION
+      * int partition_rash_table_node(rash_table_node* rtn_p); // only works on IN_MEM_PARTITION or DISK_PARTITION
+      * void* loop_tuple_iteration(rash_table_node* rtn_p); // only works on IN_MEM_PARTITION or DISK_PARTITION
+      * void* lookup_tuple_iteration(rash_table_node* rtn_p); // only works on IN_MEM_PARTITION only
+      * void* next_tuple(rash_table_node* rtn_p); // only works if the prior loop or lookup was called on that partition
+      * void insert_tuple(rash_table_node* rtn_p); // only works on IN_MEM_PARTITION or DISK_PARTITION
+
    * scan/point_lookup
 
    * fix the unified test case
