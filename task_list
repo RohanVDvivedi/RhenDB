@@ -1,14 +1,12 @@
 PICKED TASKS
 
  * volcano model
+   * cash table revamp
    * cash_table to be integrated with hash join and hash semi join
 
    * sort operator
      * if the result counter in sorter is not 0, then put tuple in an max heap, insert and check if the count is > result counter, if so pop top
      * then check if the total bytes in tuples is too high if so write to unsorted run and sort it, and add it to the runs
-
-   * try to get an estimate of the number of max bytes in state of every aggregation function and create a hash map, with approximately that many entries and store there state pointers for every entry, and keep on process_input there
-     * for spilling store the incomming tuples in the rash table
 
    * scan/point_lookup
 
