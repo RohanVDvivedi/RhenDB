@@ -239,7 +239,7 @@ int main()
 	initialize_transaction(&tx, &rdb);
 
 	// create cash table
-	cash_table* ct_p = get_new_cash_table(200000, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &tx);
+	cash_table* ct_p = get_new_cash_table(50000, &record_def, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, &tx);
 
 	// print all
 	#ifdef DEBUG_PRINT

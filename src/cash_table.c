@@ -79,8 +79,8 @@ int insert_in_cash_table(cash_table* ct_p, cash_table_entry* v)
 	if(!insert_in_hashmap(&(ct_p->value_set), v))
 		return 0;
 
-	if(get_bucket_count_hashmap(&(ct_p->value_set)) * 3 < get_element_count_hashmap(&(ct_p->value_set)))
-		expand_hashmap(&(ct_p->value_set), 1.5);
+	if(get_bucket_count_hashmap(&(ct_p->value_set)) * 1.2 < get_element_count_hashmap(&(ct_p->value_set)))
+		expand_hashmap(&(ct_p->value_set), 1.7);
 
 	ct_p->memory_utilization += memory_additonal_usage;
 
