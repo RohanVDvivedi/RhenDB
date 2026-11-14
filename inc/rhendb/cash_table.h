@@ -19,6 +19,9 @@ struct cash_table
 	const positional_accessor* key_element_ids;
 	uint32_t key_element_count;
 
+	// derived key_dtis, using the value_def, key_element_ids and key_element_count
+	const data_type_info** key_dtis;
+
 	// stores the tuples here as_value
 	hashmap value_set;
 
@@ -36,16 +39,17 @@ struct cash_table_entry
 	{
 		struct // if is_key == 1, used only for a find
 		{
-			void* key_tuple;
+			datum* keys;
 
-			const tuple_def* key_def;
-			const positional_accessor* key_element_ids; // key_element_count is taken from the cash_table
+			const data_type_info** key_dtis;
 		} as_key;
 		struct // used for inserts and iterated value
 		{
 			uint8_t state;
 
 			void* value;
+
+			datum* keys;
 
 			llnode embed_node;
 		} as_value;
