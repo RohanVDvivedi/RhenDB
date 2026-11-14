@@ -36,6 +36,12 @@ static void revise_key_datums_for_input_tuple(operator* o, datum* key_datums, co
 	revise_key_datums_from_tuple(key_datums, tuple, this_state->input_operator->desc->output_tuple_def, o->desc->params.sorted_aggregation.key_element_ids, o->desc->params.sorted_aggregation.key_element_count);
 }
 
+static void revise_aggregate_input_datums_for_input_tuple(operator* o, datum* input_datums, const void* tuple, uint32_t agg_func_index)
+{
+	op_state* this_state = o->state;
+	revise_key_datums_from_tuple(input_datums, tuple, this_state->input_operator->desc->output_tuple_def, o->desc->params.sorted_aggregation.aggregate_input_element_ids[agg_func_index], o->desc->params.sorted_aggregation.aggregate_functions[agg_func_index]->input_type_infos_count);
+}
+
 static void* next_tuple(operator* o, int* error_code)
 {
 	// already dead
