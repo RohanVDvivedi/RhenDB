@@ -16,6 +16,9 @@ struct op_state
 	void* right_tuple;
 	void* left_tuple;
 
+	datum* left_tuple_key_datums;
+	datum* right_tuple_key_datums;
+
 	// derieved information
 	const data_type_info** left_key_dtis;
 	const data_type_info** right_key_dtis;
@@ -72,6 +75,11 @@ static void* next_tuple(operator* o, int* error_code)
 					this_state->left_input_operator = NULL;
 				}
 			}
+			else
+			{
+				if(this_state->right_input_operator != NULL) // recompute datums only if we will need it
+					revise_key_datums_for_left_input_tuple(o, this_state->left_tuple_key_datums, this_state->left_tuple);
+			}
 		}
 
 		// fetch right side tuple if possible
@@ -90,6 +98,11 @@ static void* next_tuple(operator* o, int* error_code)
 					this_state->right_input_operator->destroy_state(this_state->right_input_operator);
 					this_state->right_input_operator = NULL;
 				}
+			}
+			else
+			{
+				if(this_state->left_input_operator != NULL) // recompute datums only if we will need it
+					revise_key_datums_for_right_input_tuple(o, this_state->right_tuple_key_datums, this_state->right_tuple);
 			}
 		}
 
@@ -122,8 +135,8 @@ static void* next_tuple(operator* o, int* error_code)
 			}
 			else
 			{
-				int cmp = compare_tuples_rhendb(this_state->left_tuple, this_state->left_tuple_def, o->desc->params.sort_merge_semi_join.left_key_element_ids,
-												this_state->right_tuple, this_state->right_tuple_def, o->desc->params.sort_merge_semi_join.right_key_element_ids,
+				int cmp = compare_datums4_rhendb(this_state->left_tuple_key_datums, this_state->left_key_dtis,
+												this_state->right_tuple_key_datums, this_state->right_key_dtis,
 												o->desc->params.sort_merge_semi_join.key_compare_direction, o->desc->params.sort_merge_semi_join.key_element_count, o->self_query_plan->desc->curr_tx);
 
 				if(cmp == -1)
@@ -175,15 +188,24 @@ static void destroy_state(operator* o)
 
 		if(this_state->left_input_operator != NULL)
 			this_state->left_input_operator->destroy_state(this_state->left_input_operator);
-		if(this_state->left_tuple != NULL)
-			free(this_state->left_tuple);
 
 		if(this_state->right_input_operator != NULL)
 			this_state->right_input_operator->destroy_state(this_state->right_input_operator);
+
+		if(this_state->left_tuple != NULL)
+			free(this_state->left_tuple);
+
 		if(this_state->right_tuple != NULL)
 			free(this_state->right_tuple);
 
+		if(this_state->left_tuple_key_datums != NULL)
+			free(this_state->left_tuple_key_datums);
+
+		if(this_state->right_tuple_key_datums != NULL)
+			free(this_state->right_tuple_key_datums);
+
 		free(this_state->left_key_dtis);
+
 		free(this_state->right_key_dtis);
 
 		free(this_state);
@@ -205,6 +227,9 @@ void open_sort_merge_semi_join_operator(operator* o)
 
 	this_state->left_tuple = NULL;
 	this_state->right_tuple = NULL;
+
+	this_state->left_tuple_key_datums = malloc(sizeof(datum) * o->desc->params.sort_merge_semi_join.key_element_count);
+	this_state->right_tuple_key_datums = malloc(sizeof(datum) * o->desc->params.sort_merge_semi_join.key_element_count);
 
 	this_state->left_key_dtis = malloc(sizeof(data_type_info*) * o->desc->params.sort_merge_semi_join.key_element_count);
 	for(uint32_t j = 0; j < o->desc->params.sort_merge_semi_join.key_element_count; j++)

@@ -31,4 +31,6 @@ int compare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* 
 
 int compare_datums3_rhendb(const datum* uvals1, const datum* uvals2, data_type_info const * const * dtis, const compare_direction* cmp_dir, uint32_t element_count, transaction* tx);
 
+int compare_datums4_rhendb(const datum* uvals1, data_type_info const * const * dtis1, const datum* uvals2, data_type_info const * const * dtis2, const compare_direction* cmp_dir, uint32_t element_count, transaction* tx);
+
 #endif

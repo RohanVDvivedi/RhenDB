@@ -60,8 +60,11 @@ static void* next_tuple(operator* o, int* error_code)
 			o->destroy_state(o);
 			return NULL;
 		}
-		this_state->first_tuple = tuple;
-		revise_key_datums_for_input_tuple(o, this_state->first_tuple_key_datums, this_state->first_tuple);
+		else
+		{
+			this_state->first_tuple = tuple;
+			revise_key_datums_for_input_tuple(o, this_state->first_tuple_key_datums, this_state->first_tuple);
+		}
 	}
 
 	// process the first tuple of this group, giving it to the input of the aggregate functions
@@ -96,7 +99,10 @@ static void* next_tuple(operator* o, int* error_code)
 			}
 			break;
 		}
-		revise_key_datums_for_input_tuple(o, this_state->subsequent_tuple_key_datums, tuple);
+		else
+		{
+			revise_key_datums_for_input_tuple(o, this_state->subsequent_tuple_key_datums, tuple);
+		}
 
 		int same_group = (0 == compare_datums3_rhendb(this_state->subsequent_tuple_key_datums, this_state->first_tuple_key_datums, this_state->key_dtis, NULL, o->desc->params.sorted_aggregation.key_element_count, o->self_query_plan->desc->curr_tx));
 

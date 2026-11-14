@@ -438,3 +438,18 @@ int compare_datums3_rhendb(const datum* uvals1, const datum* uvals2, data_type_i
 
 	return compare;
 }
+
+int compare_datums4_rhendb(const datum* uvals1, data_type_info const * const * dtis1, const datum* uvals2, data_type_info const * const * dtis2, const compare_direction* cmp_dir, uint32_t element_count, transaction* tx)
+{
+	int compare = 0;
+
+	for(uint32_t i = 0; ((i < element_count) && (compare == 0)); i++)
+	{
+		compare = compare_datum_rhendb(uvals1 + i, dtis1[i], uvals2 + i, dtis2[i], tx);
+
+		if(cmp_dir)
+			compare = compare * cmp_dir[i];
+	}
+
+	return compare;
+}

@@ -508,6 +508,7 @@ static void destroy_state(operator* o)
 
 		if(this_state->left_staged_tuple != NULL)
 			free(this_state->left_staged_tuple);
+
 		if(this_state->right_staged_tuple != NULL)
 			free(this_state->right_staged_tuple);
 
