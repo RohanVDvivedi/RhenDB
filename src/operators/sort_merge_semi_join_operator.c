@@ -12,6 +12,10 @@ struct op_state
 
 	operator* right_input_operator;
 	void* right_tuple;
+
+	// derieved information
+	const data_type_info** left_key_dtis;
+	const data_type_info** right_key_dtis;
 };
 
 static void* next_tuple(operator* o, int* error_code)
@@ -154,6 +158,9 @@ static void destroy_state(operator* o)
 		if(this_state->right_tuple != NULL)
 			free(this_state->right_tuple);
 
+		free(this_state->left_key_dtis);
+		free(this_state->right_key_dtis);
+
 		free(this_state);
 	}
 	o->state = NULL;
@@ -170,6 +177,14 @@ void open_sort_merge_semi_join_operator(operator* o)
 
 	this_state->right_input_operator = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.sort_merge_semi_join.right_input_operator_index);
 	this_state->right_tuple = NULL;
+
+	this_state->left_key_dtis = malloc(sizeof(data_type_info*) * o->desc->params.sort_merge_join.key_element_count);
+	for(uint32_t j = 0; j < o->desc->params.sort_merge_join.key_element_count; j++)
+		this_state->left_key_dtis[j] = get_type_info_for_element_from_tuple_def(this_state->left_input_operator->desc->output_tuple_def, o->desc->params.sort_merge_join.left_key_element_ids[j]);
+
+	this_state->right_key_dtis = malloc(sizeof(data_type_info*) * o->desc->params.sort_merge_join.key_element_count);
+	for(uint32_t j = 0; j < o->desc->params.sort_merge_join.key_element_count; j++)
+		this_state->right_key_dtis[j] = get_type_info_for_element_from_tuple_def(this_state->right_input_operator->desc->output_tuple_def, o->desc->params.sort_merge_join.right_key_element_ids[j]);
 
 	o->next_tuple = next_tuple;
 	o->destroy_state = destroy_state;

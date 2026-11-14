@@ -15,6 +15,9 @@ struct op_state
 	// maximum number of input_datums required by any aggregate function
 	// 0, if there are no aggregate functions to be evaluated
 	uint32_t max_input_datums_count;
+
+	// derieved information
+	const data_type_info** key_dtis;
 };
 
 static void* next_tuple(operator* o, int* error_code)
@@ -184,6 +187,8 @@ static void destroy_state(operator* o)
 		if(this_state->first_tuple != NULL)
 			free(this_state->first_tuple);
 
+		free(this_state->key_dtis);
+
 		free(this_state);
 	}
 	o->state = NULL;
@@ -200,6 +205,10 @@ void open_sorted_aggregation_operator(operator* o)
 	this_state->max_input_datums_count = 0;
 	for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
 		this_state->max_input_datums_count = max(this_state->max_input_datums_count, o->desc->params.sorted_aggregation.aggregate_functions[i]->input_type_infos_count);
+
+	this_state->key_dtis = malloc(sizeof(data_type_info*) * o->desc->params.sorted_aggregation.key_element_count);
+	for(uint32_t j = 0; j < o->desc->params.sorted_aggregation.key_element_count; j++)
+		this_state->key_dtis[j] = get_type_info_for_element_from_tuple_def(this_state->input_operator->desc->output_tuple_def, o->desc->params.sorted_aggregation.key_element_ids[j]);
 
 	o->next_tuple = next_tuple;
 	o->destroy_state = destroy_state;

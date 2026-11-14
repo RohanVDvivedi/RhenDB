@@ -49,6 +49,10 @@ struct op_state
 
 	uint64_t curr_left_offset;
 	uint64_t curr_right_offset;
+
+	// derieved information
+	const data_type_info** left_key_dtis;
+	const data_type_info** right_key_dtis;
 };
 
 static void* produce_join_result(operator* o, const void* left_tuple, const void* right_tuple)
@@ -498,6 +502,9 @@ static void destroy_state(operator* o)
 		if(this_state->right_side_equal_tuples_batch != NULL)
 			delete_interim_tuple_store(this_state->right_side_equal_tuples_batch);
 
+		free(this_state->left_key_dtis);
+		free(this_state->right_key_dtis);
+
 		free(this_state);
 	}
 	o->state = NULL;
@@ -537,6 +544,14 @@ void open_sort_merge_join_operator(operator* o)
 
 	this_state->curr_left_offset = 0;
 	this_state->curr_right_offset = 0;
+
+	this_state->left_key_dtis = malloc(sizeof(data_type_info*) * o->desc->params.sort_merge_join.key_element_count);
+	for(uint32_t j = 0; j < o->desc->params.sort_merge_join.key_element_count; j++)
+		this_state->left_key_dtis[j] = get_type_info_for_element_from_tuple_def(this_state->left_input_operator->desc->output_tuple_def, o->desc->params.sort_merge_join.left_key_element_ids[j]);
+
+	this_state->right_key_dtis = malloc(sizeof(data_type_info*) * o->desc->params.sort_merge_join.key_element_count);
+	for(uint32_t j = 0; j < o->desc->params.sort_merge_join.key_element_count; j++)
+		this_state->right_key_dtis[j] = get_type_info_for_element_from_tuple_def(this_state->right_input_operator->desc->output_tuple_def, o->desc->params.sort_merge_join.right_key_element_ids[j]);
 
 	o->next_tuple = next_tuple;
 	o->destroy_state = destroy_state;
