@@ -18,9 +18,11 @@ struct op_state
 	const tuple_def* left_tuple_def;
 	const tuple_def* right_tuple_def;
 
-	// the current buffered tuple from each side, owned by us (NULL => fetch the next one)
-	void* left_staged_tuple;
-	void* right_staged_tuple;
+	void* left_tuple;
+	void* right_tuple;
+
+	datum* left_tuple_key_datums;
+	datum* right_tuple_key_datums;
 
 	int stage;
 
@@ -34,6 +36,9 @@ struct op_state
 
 	arraylist left_side_equal_first_batch;
 	arraylist right_side_equal_first_batch;
+
+	datum* left_side_first_tuple_key_datums; // points to the key datums of left_side_equal_first_batch
+	datum* right_side_first_tuple_key_datums; // points to the key datums of right_side_equal_first_batch
 
 	// stage 0 -> loop left_side_equal_first_batch and right_side_equal_first_batch
 	// stage 1 -> loop left_side_equal_first_batch and right_side_equal_tuples_batch
@@ -117,10 +122,10 @@ static void* next_tuple(operator* o, int* error_code)
 		if(get_element_count_arraylist(&(this_state->left_side_equal_first_batch)) == 0) // nothing in the batches
 		{
 			// if left staged tuple is NULL and can be gotten, get it
-			if(this_state->left_input_operator != NULL && this_state->left_staged_tuple == NULL)
+			if(this_state->left_input_operator != NULL && this_state->left_tuple == NULL)
 			{
-				this_state->left_staged_tuple = this_state->left_input_operator->next_tuple(this_state->left_input_operator, error_code);
-				if(this_state->left_staged_tuple == NULL)
+				this_state->left_tuple = this_state->left_input_operator->next_tuple(this_state->left_input_operator, error_code);
+				if(this_state->left_tuple == NULL)
 				{
 					if(*error_code)
 					{
@@ -130,13 +135,18 @@ static void* next_tuple(operator* o, int* error_code)
 					this_state->left_input_operator->destroy_state(this_state->left_input_operator);
 					this_state->left_input_operator = NULL;
 				}
+				else
+				{
+					if(this_state->right_input_operator != NULL)
+						revise_key_datums_for_left_input_tuple(o, this_state->left_tuple_key_datums, this_state->left_tuple);
+				}
 			}
 
 			// if right staged tuple is NULL and can be gotten, get it
-			if(this_state->right_input_operator != NULL && this_state->right_staged_tuple == NULL)
+			if(this_state->right_input_operator != NULL && this_state->right_tuple == NULL)
 			{
-				this_state->right_staged_tuple = this_state->right_input_operator->next_tuple(this_state->right_input_operator, error_code);
-				if(this_state->right_staged_tuple == NULL)
+				this_state->right_tuple = this_state->right_input_operator->next_tuple(this_state->right_input_operator, error_code);
+				if(this_state->right_tuple == NULL)
 				{
 					if(*error_code)
 					{
@@ -146,10 +156,15 @@ static void* next_tuple(operator* o, int* error_code)
 					this_state->right_input_operator->destroy_state(this_state->right_input_operator);
 					this_state->right_input_operator = NULL;
 				}
+				else
+				{
+					if(this_state->left_input_operator != NULL)
+						revise_key_datums_for_right_input_tuple(o, this_state->right_tuple_key_datums, this_state->right_tuple);
+				}
 			}
 
 			// if both the operators have ended, exit
-			if(this_state->left_staged_tuple == NULL && this_state->right_staged_tuple == NULL) // if both are NULL we are done
+			if(this_state->left_tuple == NULL && this_state->right_tuple == NULL) // if both are NULL we are done
 			{
 				o->destroy_state(o);
 				return NULL;
@@ -158,14 +173,14 @@ static void* next_tuple(operator* o, int* error_code)
 			// else atleast 1 of the stages tuple is present
 			{
 				int consume_left = 0, consume_right = 0;
-				if(this_state->right_staged_tuple == NULL) // left is surely non-NULL, consume left
+				if(this_state->right_tuple == NULL) // left is surely non-NULL, consume left
 					consume_left = 1;
-				else if(this_state->left_staged_tuple == NULL) // right is surely non-NULL. consume right
+				else if(this_state->left_tuple == NULL) // right is surely non-NULL. consume right
 					consume_right = 1;
 				else // if both are present compare them
 				{
-					int cmp = compare_tuples_rhendb(this_state->left_staged_tuple, this_state->left_tuple_def, o->desc->params.sort_merge_join.left_key_element_ids,
-													this_state->right_staged_tuple, this_state->right_tuple_def, o->desc->params.sort_merge_join.right_key_element_ids,
+					int cmp = compare_datums4_rhendb(this_state->left_tuple_key_datums, this_state->left_key_dtis,
+													this_state->right_tuple_key_datums, this_state->right_key_dtis,
 													o->desc->params.sort_merge_join.key_compare_direction, o->desc->params.sort_merge_join.key_element_count, o->self_query_plan->desc->curr_tx);
 
 					// which ever is lesser has to be consumed, if both are equal consume both
@@ -184,9 +199,9 @@ static void* next_tuple(operator* o, int* error_code)
 				{
 					void* out = NULL;
 					if(DOES_IT_PRESERVE_LEFT(o->desc->params.sort_merge_join.ptype))
-						out = produce_join_result(o, this_state->left_staged_tuple, NULL);
-					free(this_state->left_staged_tuple);
-					this_state->left_staged_tuple = NULL;
+						out = produce_join_result(o, this_state->left_tuple, NULL);
+					free(this_state->left_tuple);
+					this_state->left_tuple = NULL;
 					if(out != NULL)
 						return out;
 					continue;
@@ -195,9 +210,9 @@ static void* next_tuple(operator* o, int* error_code)
 				{
 					void* out = NULL;
 					if(DOES_IT_PRESERVE_RIGHT(o->desc->params.sort_merge_join.ptype))
-						out = produce_join_result(o, NULL, this_state->right_staged_tuple);
-					free(this_state->right_staged_tuple);
-					this_state->right_staged_tuple = NULL;
+						out = produce_join_result(o, NULL, this_state->right_tuple);
+					free(this_state->right_tuple);
+					this_state->right_tuple = NULL;
 					if(out != NULL)
 						return out;
 					continue;
@@ -205,23 +220,32 @@ static void* next_tuple(operator* o, int* error_code)
 				else // consume both equal keys case
 				{
 					// insert staged tuples in the correct interim tuple stores, and make them NULL
-					this_state->left_first_batch_size = get_tuple_size(this_state->left_tuple_def, this_state->left_staged_tuple);
+					this_state->left_first_batch_size = get_tuple_size(this_state->left_tuple_def, this_state->left_tuple);
 					if(is_full_arraylist(&(this_state->left_side_equal_first_batch)) && !expand_arraylist(&(this_state->left_side_equal_first_batch)))
 						exit(-1);
-					push_back_to_arraylist(&(this_state->left_side_equal_first_batch), this_state->left_staged_tuple);
-					this_state->left_staged_tuple = NULL;
+					push_back_to_arraylist(&(this_state->left_side_equal_first_batch), this_state->left_tuple);
+					this_state->left_tuple = NULL;
+					{
+						void* temp = this_state->left_tuple_key_datums;
+						this_state->left_tuple_key_datums = this_state->left_side_first_tuple_key_datums;
+						this_state->left_side_first_tuple_key_datums = temp;
+					}
 
-					this_state->right_first_batch_size = get_tuple_size(this_state->right_tuple_def, this_state->right_staged_tuple);
+					this_state->right_first_batch_size = get_tuple_size(this_state->right_tuple_def, this_state->right_tuple);
 					if(is_full_arraylist(&(this_state->right_side_equal_first_batch)) && !expand_arraylist(&(this_state->right_side_equal_first_batch)))
 						exit(-1);
-					push_back_to_arraylist(&(this_state->right_side_equal_first_batch), this_state->right_staged_tuple);
-					this_state->right_staged_tuple = NULL;
+					push_back_to_arraylist(&(this_state->right_side_equal_first_batch), this_state->right_tuple);
+					this_state->right_tuple = NULL;
+					{
+						void* temp = this_state->right_tuple_key_datums;
+						this_state->right_tuple_key_datums = this_state->right_side_first_tuple_key_datums;
+						this_state->right_side_first_tuple_key_datums = temp;
+					}
 
-					// loop left operator while it's tuple compare equal to the left_staged_tuple, or it gets exhausted
 					while(1)
 					{
-						void* left_tuple = this_state->left_input_operator->next_tuple(this_state->left_input_operator, error_code);
-						if(left_tuple == NULL)
+						this_state->left_tuple = this_state->left_input_operator->next_tuple(this_state->left_input_operator, error_code);
+						if(this_state->left_tuple == NULL)
 						{
 							if(*error_code)
 							{
@@ -230,39 +254,41 @@ static void* next_tuple(operator* o, int* error_code)
 							}
 							this_state->left_input_operator->destroy_state(this_state->left_input_operator);
 							this_state->left_input_operator = NULL;
-							this_state->left_staged_tuple = NULL;
 							break;
 						}
-						if(0 != compare_tuples_rhendb(get_front_of_arraylist(&(this_state->left_side_equal_first_batch)), this_state->left_tuple_def, o->desc->params.sort_merge_join.left_key_element_ids,
-													left_tuple, this_state->left_tuple_def, o->desc->params.sort_merge_join.left_key_element_ids,
-													o->desc->params.sort_merge_join.key_compare_direction, o->desc->params.sort_merge_join.key_element_count, o->self_query_plan->desc->curr_tx))
+						else
 						{
-							// set this it is first of next group
-							this_state->left_staged_tuple = left_tuple;
+							revise_key_datums_for_left_input_tuple(o, this_state->left_tuple_key_datums, this_state->left_tuple);
+						}
+						if(0 != compare_datums3_rhendb(this_state->left_side_first_tuple_key_datums,
+														this_state->left_tuple_key_datums,
+														this_state->left_key_dtis,
+														o->desc->params.sort_merge_join.key_compare_direction, o->desc->params.sort_merge_join.key_element_count, o->self_query_plan->desc->curr_tx))
+						{
 							break;
 						}
 						else
 						{
 							if(this_state->left_first_batch_size <= o->desc->params.sort_merge_join.min_block_size)
 							{
-								this_state->left_first_batch_size += get_tuple_size(this_state->left_tuple_def, left_tuple);
+								this_state->left_first_batch_size += get_tuple_size(this_state->left_tuple_def, this_state->left_tuple);
 								if(is_full_arraylist(&(this_state->left_side_equal_first_batch)) && !expand_arraylist(&(this_state->left_side_equal_first_batch)))
 									exit(-1);
-								push_back_to_arraylist(&(this_state->left_side_equal_first_batch), left_tuple);
+								push_back_to_arraylist(&(this_state->left_side_equal_first_batch), this_state->left_tuple);
 							}
 							else
 							{
-								append_tuple_to_interim_tuple_store2(this_state->left_side_equal_tuples_batch, &(this_state->left_side_equal_tuples_batch->embed_regions[0]), left_tuple, &(this_state->left_tuple_def->size_def), o->desc->params.sort_merge_join.min_block_size);
-								free(left_tuple);
+								append_tuple_to_interim_tuple_store2(this_state->left_side_equal_tuples_batch, &(this_state->left_side_equal_tuples_batch->embed_regions[0]), this_state->left_tuple, &(this_state->left_tuple_def->size_def), o->desc->params.sort_merge_join.min_block_size);
+								free(this_state->left_tuple);
 							}
+							this_state->left_tuple = NULL;
 						}
 					}
 
-					// loop right operator while it's tuple compare equal to the right_staged_tuple, or it gets exhausted
 					while(1)
 					{
-						void* right_tuple = this_state->right_input_operator->next_tuple(this_state->right_input_operator, error_code);
-						if(right_tuple == NULL)
+						this_state->right_tuple = this_state->right_input_operator->next_tuple(this_state->right_input_operator, error_code);
+						if(this_state->right_tuple == NULL)
 						{
 							if(*error_code)
 							{
@@ -271,31 +297,34 @@ static void* next_tuple(operator* o, int* error_code)
 							}
 							this_state->right_input_operator->destroy_state(this_state->right_input_operator);
 							this_state->right_input_operator = NULL;
-							this_state->right_staged_tuple = NULL;
 							break;
 						}
-						if(0 != compare_tuples_rhendb(get_front_of_arraylist(&(this_state->right_side_equal_first_batch)), this_state->right_tuple_def, o->desc->params.sort_merge_join.right_key_element_ids,
-													right_tuple, this_state->right_tuple_def, o->desc->params.sort_merge_join.right_key_element_ids,
-													o->desc->params.sort_merge_join.key_compare_direction, o->desc->params.sort_merge_join.key_element_count, o->self_query_plan->desc->curr_tx))
+						else
 						{
-							// set this it is first of next group
-							this_state->right_staged_tuple = right_tuple;
+							revise_key_datums_for_right_input_tuple(o, this_state->right_tuple_key_datums, this_state->right_tuple);
+						}
+						if(0 != compare_datums3_rhendb(this_state->right_side_first_tuple_key_datums,
+														this_state->right_tuple_key_datums,
+														this_state->right_key_dtis,
+														o->desc->params.sort_merge_join.key_compare_direction, o->desc->params.sort_merge_join.key_element_count, o->self_query_plan->desc->curr_tx))
+						{
 							break;
 						}
 						else
 						{
 							if(this_state->right_first_batch_size <= o->desc->params.sort_merge_join.min_block_size)
 							{
-								this_state->right_first_batch_size += get_tuple_size(this_state->right_tuple_def, right_tuple);
+								this_state->right_first_batch_size += get_tuple_size(this_state->right_tuple_def, this_state->right_tuple);
 								if(is_full_arraylist(&(this_state->right_side_equal_first_batch)) && !expand_arraylist(&(this_state->right_side_equal_first_batch)))
 									exit(-1);
-								push_back_to_arraylist(&(this_state->right_side_equal_first_batch), right_tuple);
+								push_back_to_arraylist(&(this_state->right_side_equal_first_batch), this_state->right_tuple);
 							}
 							else
 							{
-								append_tuple_to_interim_tuple_store2(this_state->right_side_equal_tuples_batch, &(this_state->right_side_equal_tuples_batch->embed_regions[0]), right_tuple, &(this_state->right_tuple_def->size_def), o->desc->params.sort_merge_join.min_block_size);
-								free(right_tuple);
+								append_tuple_to_interim_tuple_store2(this_state->right_side_equal_tuples_batch, &(this_state->right_side_equal_tuples_batch->embed_regions[0]), this_state->right_tuple, &(this_state->right_tuple_def->size_def), o->desc->params.sort_merge_join.min_block_size);
+								free(this_state->right_tuple);
 							}
+							this_state->right_tuple = NULL;
 						}
 					}
 
@@ -506,11 +535,17 @@ static void destroy_state(operator* o)
 		if(this_state->right_input_operator != NULL)
 			this_state->right_input_operator->destroy_state(this_state->right_input_operator);
 
-		if(this_state->left_staged_tuple != NULL)
-			free(this_state->left_staged_tuple);
+		if(this_state->left_tuple != NULL)
+			free(this_state->left_tuple);
 
-		if(this_state->right_staged_tuple != NULL)
-			free(this_state->right_staged_tuple);
+		if(this_state->right_tuple != NULL)
+			free(this_state->right_tuple);
+
+		if(this_state->left_tuple_key_datums != NULL)
+			free(this_state->left_tuple_key_datums);
+
+		if(this_state->right_tuple_key_datums != NULL)
+			free(this_state->right_tuple_key_datums);
 
 		for(cy_uint i = 0; i < get_element_count_arraylist(&(this_state->left_side_equal_first_batch)); i++)
 			free((void*) get_from_arraylist(&(this_state->left_side_equal_first_batch), i));
@@ -520,8 +555,15 @@ static void destroy_state(operator* o)
 			free((void*) get_from_arraylist(&(this_state->right_side_equal_first_batch), i));
 		deinitialize_arraylist(&(this_state->right_side_equal_first_batch));
 
+		if(this_state->left_side_first_tuple_key_datums != NULL)
+			free(this_state->left_side_first_tuple_key_datums);
+
+		if(this_state->right_side_first_tuple_key_datums != NULL)
+			free(this_state->right_side_first_tuple_key_datums);
+
 		if(this_state->left_side_equal_tuples_batch != NULL)
 			delete_interim_tuple_store(this_state->left_side_equal_tuples_batch);
+
 		if(this_state->right_side_equal_tuples_batch != NULL)
 			delete_interim_tuple_store(this_state->right_side_equal_tuples_batch);
 
@@ -545,8 +587,11 @@ void open_sort_merge_join_operator(operator* o)
 	this_state->left_tuple_def = this_state->left_input_operator->desc->output_tuple_def;
 	this_state->right_tuple_def = this_state->right_input_operator->desc->output_tuple_def;
 
-	this_state->left_staged_tuple = NULL;
-	this_state->right_staged_tuple = NULL;
+	this_state->left_tuple = NULL;
+	this_state->right_tuple = NULL;
+
+	this_state->left_tuple_key_datums = malloc(o->desc->params.sort_merge_join.key_element_count * sizeof(datum));
+	this_state->right_tuple_key_datums = malloc(o->desc->params.sort_merge_join.key_element_count * sizeof(datum));
 
 	this_state->stage = 0;
 
@@ -558,6 +603,9 @@ void open_sort_merge_join_operator(operator* o)
 
 	initialize_arraylist(&(this_state->left_side_equal_first_batch), 10);
 	initialize_arraylist(&(this_state->right_side_equal_first_batch), 10);
+
+	this_state->left_side_first_tuple_key_datums = malloc(o->desc->params.sort_merge_join.key_element_count * sizeof(datum));
+	this_state->right_side_first_tuple_key_datums = malloc(o->desc->params.sort_merge_join.key_element_count * sizeof(datum));
 
 	this_state->left_side_equal_tuples_batch = get_new_interim_tuple_store(o->desc->params.sort_merge_join.min_block_size);
 	this_state->right_side_equal_tuples_batch = get_new_interim_tuple_store(o->desc->params.sort_merge_join.min_block_size);
