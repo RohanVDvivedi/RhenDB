@@ -379,6 +379,26 @@ int compare_tuples_rhendb(const void* tup1, const tuple_def* tpl_d1, const posit
 	return compare;
 }
 
+int compare_tuple_with_datum_rhendb(const void* tup1, const tuple_def* tpl_d1, const positional_accessor* element_ids1, const datum* uvals2, data_type_info const * const * dtis2, const compare_direction* cmp_dir, uint32_t element_count, transaction* tx)
+{
+	int compare = 0;
+
+	for(uint32_t i = 0; ((i < element_count) && (compare == 0)); i++)
+	{
+		const data_type_info* dti1;
+		datum uval1;
+		if(!get_value_from_element_from_tuple(&uval1, &dti1, tpl_d1, (element_ids1 != NULL) ? element_ids1[i] : STATIC_POSITION(i), tup1))
+			uval1 = (*NULL_DATUM);
+
+		compare = compare_datum_rhendb(&uval1, dti1, &(uvals2[i]), dtis2[i], tx);
+
+		if(cmp_dir)
+			compare = compare * cmp_dir[i];
+	}
+
+	return compare;
+}
+
 int compare_tuples2_rhendb(const void* tup1, const void* tup2, const tuple_def* tpl_d, const positional_accessor* element_ids, const compare_direction* cmp_dir, uint32_t element_count, transaction* tx)
 {
 	int compare = 0;
