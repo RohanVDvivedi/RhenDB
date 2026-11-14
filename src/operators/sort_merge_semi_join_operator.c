@@ -74,11 +74,11 @@ static void* next_tuple(operator* o, int* error_code)
 					this_state->left_input_operator->destroy_state(this_state->left_input_operator);
 					this_state->left_input_operator = NULL;
 				}
-			}
-			else
-			{
-				if(this_state->right_input_operator != NULL) // recompute datums only if we will need it
-					revise_key_datums_for_left_input_tuple(o, this_state->left_tuple_key_datums, this_state->left_tuple);
+				else
+				{
+					if(this_state->right_input_operator != NULL) // recompute datums only if we will need it
+						revise_key_datums_for_left_input_tuple(o, this_state->left_tuple_key_datums, this_state->left_tuple);
+				}
 			}
 		}
 
@@ -98,11 +98,10 @@ static void* next_tuple(operator* o, int* error_code)
 					this_state->right_input_operator->destroy_state(this_state->right_input_operator);
 					this_state->right_input_operator = NULL;
 				}
-			}
-			else
-			{
-				if(this_state->left_input_operator != NULL) // recompute datums only if we will need it
-					revise_key_datums_for_right_input_tuple(o, this_state->right_tuple_key_datums, this_state->right_tuple);
+				{
+					if(this_state->left_input_operator != NULL) // recompute datums only if we will need it
+						revise_key_datums_for_right_input_tuple(o, this_state->right_tuple_key_datums, this_state->right_tuple);
+				}
 			}
 		}
 
