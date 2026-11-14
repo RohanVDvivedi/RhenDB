@@ -73,8 +73,6 @@ cash_table_entry get_new_cash_table_key(const cash_table* ct_p, void* key_tuple,
 #define find_all_in_cash_table(ct_p)         ((cash_table_entry*)(get_first_of_in_hashmap(&(ct_p->value_set), FIRST_OF_HASHMAP)))
 #define next_all_in_cash_table(ct_p, v)      ((cash_table_entry*)(get_next_of_in_hashmap(&(ct_p->value_set), v, ANY_IN_HASHMAP)))
 
-void destroy_cash_table_entry(cash_table_entry* e);
-
 void destroy_cash_table(cash_table* ct_p);
 
 #endif
