@@ -1,8 +1,11 @@
 PICKED TASKS
 
  * volcano model
-   * cash table revamp
-   * cash_table to be integrated with hash join and hash semi join
+   * cash table revamp, make key function return by value and, the value function return by pointer, readily insertable
+   * make changes to destroy function accordingly
+   * make as_key store key by datum and key_dti, similar to as_value store only void* value and datum* keys, we will also need key_dtis in cash_table
+   * make the union have names like as_key and as_value
+   * allow remove function too
 
    * sort operator
      * if the result counter in sorter is not 0, then put tuple in an max heap, insert and check if the count is > result counter, if so pop top
