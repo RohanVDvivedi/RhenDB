@@ -69,12 +69,7 @@ static void* next_tuple(operator* o, int* error_code)
 	for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
 	{
 		// generate input params to the i-th udaf
-		for(uint32_t j = 0; j < o->desc->params.sorted_aggregation.aggregate_functions[i]->input_type_infos_count; j++)
-		{
-			const data_type_info* dti_temp;
-			if(!get_value_from_element_from_tuple(&(input_datums[j]), &dti_temp, this_state->input_operator->desc->output_tuple_def, o->desc->params.sorted_aggregation.aggregate_input_element_ids[i][j], this_state->first_tuple))
-				input_datums[j] = (*NULL_DATUM);
-		}
+		revise_aggregate_input_datums_for_input_tuple(o, input_datums, this_state->first_tuple, i);
 
 		// process_input for the udaf, if it fails kill the operator
 		if(!o->desc->params.sorted_aggregation.aggregate_functions[i]->process_input(o->desc->params.sorted_aggregation.aggregate_functions[i], &(states[i]), input_datums))
@@ -114,12 +109,7 @@ static void* next_tuple(operator* o, int* error_code)
 			for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
 			{
 				// generate input params to the i-th udaf
-				for(uint32_t j = 0; j < o->desc->params.sorted_aggregation.aggregate_functions[i]->input_type_infos_count; j++)
-				{
-					const data_type_info* dti_temp;
-					if(!get_value_from_element_from_tuple(&(input_datums[j]), &dti_temp, this_state->input_operator->desc->output_tuple_def, o->desc->params.sorted_aggregation.aggregate_input_element_ids[i][j], tuple))
-						input_datums[j] = (*NULL_DATUM);
-				}
+				revise_aggregate_input_datums_for_input_tuple(o, input_datums, tuple, i);
 
 				// process_input for the udaf, if it fails kill the operator
 				if(!o->desc->params.sorted_aggregation.aggregate_functions[i]->process_input(o->desc->params.sorted_aggregation.aggregate_functions[i], &(states[i]), input_datums))
