@@ -40,7 +40,7 @@ cash_table* get_new_cash_table(uint64_t bucket_count, const tuple_def* value_def
 		.value_def = value_def,
 		.key_element_ids = key_element_ids,
 		.key_element_count = key_element_count,
-		.key_dtis = malloc(sizeof(data_type_info*)),
+		.key_dtis = malloc(sizeof(data_type_info*) * key_element_count),
 		.tx = tx,
 	};
 
@@ -68,7 +68,7 @@ cash_table_entry* get_new_cash_table_value(const cash_table* ct_p, void* value)
 	for(uint32_t j = 0; j < ct_p->key_element_count; j++)
 	{
 		const data_type_info* dti_temp;
-		if(!get_value_from_element_from_tuple(&(v->as_value.keys[j]), &dti_temp, ct_p->value_def, ct_p->key_element_ids[j], ct_p->value_def))
+		if(!get_value_from_element_from_tuple(&(v->as_value.keys[j]), &dti_temp, ct_p->value_def, ct_p->key_element_ids[j], value))
 			v->as_value.keys[j] = (*NULL_DATUM);
 	}
 
@@ -125,7 +125,7 @@ cash_table_entry get_new_cash_table_key(const cash_table* ct_p, void* key_tuple,
 		.is_key = 1,
 		.as_key = {
 			.keys = malloc(sizeof(datum) * ct_p->key_element_count),
-			.key_dtis = malloc(sizeof(data_type_info) * ct_p->key_element_count),
+			.key_dtis = malloc(sizeof(data_type_info*) * ct_p->key_element_count),
 		}
 	};
 

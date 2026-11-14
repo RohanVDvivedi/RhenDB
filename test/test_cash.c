@@ -172,7 +172,7 @@ void find_and_print(const cash_table* ct_p, uint32_t v)
 	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	cash_table_entry e = get_new_cash_table_key(ct_p, record, ct_p->value_def, ct_p->key_element_ids);
+	cash_table_entry e = get_new_cash_table_key(ct_p, record, &record_def, KEY_POS);
 
 	printf("%"PRIu32"\n", v);
 	for(cash_table_entry* it = find_equals_in_cash_table(ct_p, &e); it != NULL; it = next_equals_in_cash_table(ct_p, it))
@@ -181,6 +181,8 @@ void find_and_print(const cash_table* ct_p, uint32_t v)
 		print_tuple(it->as_value.value, &record_def);
 	}
 	printf("\n");
+
+	destroy_cash_table_entry(&e);
 }
 
 void print_cash_table(const cash_table* ct_p)
