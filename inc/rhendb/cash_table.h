@@ -13,16 +13,15 @@ struct cash_table
 {
 	uint64_t memory_utilization;
 
-	const tuple_def* value_tuple_def;
-	// key elements to hash/compare on in the value_tuple_def
-	const positional_accessor* key_element_ids;
+	const tuple_def* value_def;
 
-	// number of elements in key_element_ids
+	// keys for the tuple of value_def
+	const positional_accessor* key_element_ids;
 	uint32_t key_element_count;
 
+	// stores the tuples here as_value
 	hashmap value_set;
 
-	// to hash/compare extended data in the keys of the value tuples
 	transaction* tx;
 };
 
@@ -39,9 +38,9 @@ struct cash_table_entry
 		{
 			void* key_tuple;
 
-			const tuple_def* key_tuple_def;
-			const positional_accessor* key_element_ids; // key_element_count taken from the cash_table
-		};
+			const tuple_def* key_def;
+			const positional_accessor* key_element_ids; // key_element_count is taken from the cash_table
+		} as_key;
 		struct // used for inserts and iterated value
 		{
 			uint8_t state;
@@ -49,21 +48,20 @@ struct cash_table_entry
 			void* value;
 
 			llnode embed_node;
-		};
+		} as_value;
 	};
 };
 
-cash_table* get_new_cash_table(uint64_t bucket_count, const tuple_def* value_tuple_def, const positional_accessor* key_element_ids, uint32_t key_element_count, transaction* tx);
+cash_table* get_new_cash_table(uint64_t bucket_count, const tuple_def* value_def, const positional_accessor* key_element_ids, uint32_t key_element_count, transaction* tx);
 
-cash_table_entry get_new_cash_table_value(const cash_table* ct_p, void* value);
+// value tuple gets owned by cash_table_entry after this call
+cash_table_entry* get_new_cash_table_value(const cash_table* ct_p, void* value);
 
-// below function mallocs internally, only allows user to preserve and not recompute hash_value
-// it will also do the calculations for maintaining the memory_utilization number, user must check this before/after insertions
-// it internally does int insert_in_hashmap(&(ct_p->value_set), malloc+memcpy+make_state-0+initialize_bstnode(v));
-cash_table_entry* insert_in_cash_table(cash_table* ct_p, const cash_table_entry* v);
+int insert_in_cash_table(cash_table* ct_p, cash_table_entry* v);
+int remove_from_cash_table(cash_table* ct_p, cash_table_entry* v);
 
-// predominantly for starting lookups with a tuple with identical key, but a different tuple_def like a hash join probes
-cash_table_entry get_new_cash_table_key(const cash_table* ct_p, void* key_tuple, const tuple_def* key_tuple_def, const positional_accessor* key_element_ids);
+// key_tuple is still not owned by this returned cash_table_entry
+cash_table_entry get_new_cash_table_key(const cash_table* ct_p, void* key_tuple, const tuple_def* key_def, const positional_accessor* key_element_ids);
 
 #define find_equals_in_cash_table(ct_p, k)   ((cash_table_entry*)(find_equals_in_hashmap(&(ct_p->value_set), k)))
 #define next_equals_in_cash_table(ct_p, v)   ((cash_table_entry*)(get_next_of_in_hashmap(&(ct_p->value_set), v, ANY_THAT_EQUALS)))
