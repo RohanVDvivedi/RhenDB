@@ -20,6 +20,22 @@ struct op_state
 	const data_type_info** key_dtis;
 };
 
+static void revise_key_datums_from_tuple(datum* key_datums, const void* tuple, const tuple_def* tpl_d, const positional_accessor* key_element_ids, uint32_t key_element_count)
+{
+	for(uint32_t i = 0; i < key_element_count; i++)
+	{
+		const data_type_info* dti_temp;
+		if(!get_value_from_element_from_tuple(&(key_datums[i]), &dti_temp, tpl_d, key_element_ids[i], tuple))
+			key_datums[i] = (*NULL_DATUM);
+	}
+}
+
+static void revise_key_datums_for_input_tuple(operator* o, datum* key_datums, const void* tuple)
+{
+	op_state* this_state = o->state;
+	revise_key_datums_from_tuple(key_datums, tuple, this_state->input_operator->desc->output_tuple_def, o->desc->params.sorted_aggregation.key_element_ids, o->desc->params.sorted_aggregation.key_element_count);
+}
+
 static void* next_tuple(operator* o, int* error_code)
 {
 	// already dead

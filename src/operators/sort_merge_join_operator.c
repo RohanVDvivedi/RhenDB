@@ -55,6 +55,28 @@ struct op_state
 	const data_type_info** right_key_dtis;
 };
 
+static void revise_key_datums_from_tuple(datum* key_datums, const void* tuple, const tuple_def* tpl_d, const positional_accessor* key_element_ids, uint32_t key_element_count)
+{
+	for(uint32_t i = 0; i < key_element_count; i++)
+	{
+		const data_type_info* dti_temp;
+		if(!get_value_from_element_from_tuple(&(key_datums[i]), &dti_temp, tpl_d, key_element_ids[i], tuple))
+			key_datums[i] = (*NULL_DATUM);
+	}
+}
+
+static void revise_key_datums_for_left_input_tuple(operator* o, datum* key_datums, const void* tuple)
+{
+	op_state* this_state = o->state;
+	revise_key_datums_from_tuple(key_datums, tuple, this_state->left_tuple_def, o->desc->params.sort_merge_join.left_key_element_ids, o->desc->params.sort_merge_join.key_element_count);
+}
+
+static void revise_key_datums_for_right_input_tuple(operator* o, datum* key_datums, const void* tuple)
+{
+	op_state* this_state = o->state;
+	revise_key_datums_from_tuple(key_datums, tuple, this_state->right_tuple_def, o->desc->params.sort_merge_join.right_key_element_ids, o->desc->params.sort_merge_join.key_element_count);
+}
+
 static void* produce_join_result(operator* o, const void* left_tuple, const void* right_tuple)
 {
 	op_state* this_state = o->state;

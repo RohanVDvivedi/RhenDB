@@ -8,15 +8,40 @@ typedef struct op_state op_state;
 struct op_state
 {
 	operator* left_input_operator;
-	void* left_tuple;
-
 	operator* right_input_operator;
+
+	const tuple_def* left_tuple_def;
+	const tuple_def* right_tuple_def;
+
 	void* right_tuple;
+	void* left_tuple;
 
 	// derieved information
 	const data_type_info** left_key_dtis;
 	const data_type_info** right_key_dtis;
 };
+
+static void revise_key_datums_from_tuple(datum* key_datums, const void* tuple, const tuple_def* tpl_d, const positional_accessor* key_element_ids, uint32_t key_element_count)
+{
+	for(uint32_t i = 0; i < key_element_count; i++)
+	{
+		const data_type_info* dti_temp;
+		if(!get_value_from_element_from_tuple(&(key_datums[i]), &dti_temp, tpl_d, key_element_ids[i], tuple))
+			key_datums[i] = (*NULL_DATUM);
+	}
+}
+
+static void revise_key_datums_for_left_input_tuple(operator* o, datum* key_datums, const void* tuple)
+{
+	op_state* this_state = o->state;
+	revise_key_datums_from_tuple(key_datums, tuple, this_state->left_tuple_def, o->desc->params.sort_merge_semi_join.left_key_element_ids, o->desc->params.sort_merge_semi_join.key_element_count);
+}
+
+static void revise_key_datums_for_right_input_tuple(operator* o, datum* key_datums, const void* tuple)
+{
+	op_state* this_state = o->state;
+	revise_key_datums_from_tuple(key_datums, tuple, this_state->right_tuple_def, o->desc->params.sort_merge_semi_join.right_key_element_ids, o->desc->params.sort_merge_semi_join.key_element_count);
+}
 
 static void* next_tuple(operator* o, int* error_code)
 {
@@ -97,8 +122,8 @@ static void* next_tuple(operator* o, int* error_code)
 			}
 			else
 			{
-				int cmp = compare_tuples_rhendb(this_state->left_tuple, this_state->left_input_operator->desc->output_tuple_def, o->desc->params.sort_merge_semi_join.left_key_element_ids,
-												this_state->right_tuple, this_state->right_input_operator->desc->output_tuple_def, o->desc->params.sort_merge_semi_join.right_key_element_ids,
+				int cmp = compare_tuples_rhendb(this_state->left_tuple, this_state->left_tuple_def, o->desc->params.sort_merge_semi_join.left_key_element_ids,
+												this_state->right_tuple, this_state->right_tuple_def, o->desc->params.sort_merge_semi_join.right_key_element_ids,
 												o->desc->params.sort_merge_semi_join.key_compare_direction, o->desc->params.sort_merge_semi_join.key_element_count, o->self_query_plan->desc->curr_tx);
 
 				if(cmp == -1)
@@ -173,9 +198,12 @@ void open_sort_merge_semi_join_operator(operator* o)
 	op_state* this_state = o->state;
 
 	this_state->left_input_operator = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.sort_merge_semi_join.left_input_operator_index);
-	this_state->left_tuple = NULL;
-
 	this_state->right_input_operator = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.sort_merge_semi_join.right_input_operator_index);
+
+	this_state->left_tuple_def = this_state->left_input_operator->desc->output_tuple_def;
+	this_state->right_tuple_def = this_state->right_input_operator->desc->output_tuple_def;
+
+	this_state->left_tuple = NULL;
 	this_state->right_tuple = NULL;
 
 	this_state->left_key_dtis = malloc(sizeof(data_type_info*) * o->desc->params.sort_merge_semi_join.key_element_count);
