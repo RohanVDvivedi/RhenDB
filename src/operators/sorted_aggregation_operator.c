@@ -98,7 +98,7 @@ static void* next_tuple(operator* o, int* error_code)
 		}
 		revise_key_datums_for_input_tuple(o, this_state->subsequent_tuple_key_datums, tuple);
 
-		int same_group = (0 == compare_tuples_rhendb(tuple, this_state->input_operator->desc->output_tuple_def, o->desc->params.sorted_aggregation.key_element_ids, this_state->first_tuple, this_state->input_operator->desc->output_tuple_def, o->desc->params.sorted_aggregation.key_element_ids, NULL, o->desc->params.sorted_aggregation.key_element_count, o->self_query_plan->desc->curr_tx));
+		int same_group = (0 == compare_datums3_rhendb(this_state->subsequent_tuple_key_datums, this_state->first_tuple_key_datums, this_state->key_dtis, NULL, o->desc->params.sorted_aggregation.key_element_count, o->self_query_plan->desc->curr_tx));
 
 		if(same_group) // process the tuple if it falls in the same group
 		{
