@@ -11,7 +11,9 @@ PICKED TASKS
    * destroy temp directory in local directory and recreate it every time on boot
    * make the file name same as tuple pointer, on delete close and unlink this file
    * support closing the file and opening, and make file descriptor -1 when closed, and file name will be same as %p pf the pointer to this interim tuple store
+     * open is no-op if the file is already open and close is a no-op if the file is already closed
    * make sure heavy file users like sort use it, for runs that are not being merged yet, they close and open runs as required
+   * before you start doing hash operators, you only need this open/clode done in sort operator
 
    * make prototype struct for the hash table
       typedef enum rash_table_node_type rash_table_node_type;
