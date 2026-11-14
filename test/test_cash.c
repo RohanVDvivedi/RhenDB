@@ -167,6 +167,29 @@ void insert_ct(cash_table* ct_p, uint32_t v)
 	insert_in_cash_table(ct_p, e);
 }
 
+int remove_ct(cash_table* ct_p, uint32_t v)
+{
+	char record[300];
+	construct_record(record, v, 0, "Rohan Dvivedi");
+
+	cash_table_entry e = get_new_cash_table_key(ct_p, record, ct_p->value_def, ct_p->key_element_ids);
+
+	int removed = 0;
+	cash_table_entry* it = find_equals_in_cash_table(ct_p, &e);
+
+	while(it != NULL)
+	{
+		cash_table_entry* it_next = next_equals_in_cash_table(ct_p, it);
+		removed += remove_from_cash_table(ct_p, it);
+		destroy_cash_table_entry(it);
+		it = it_next;
+	}
+
+	destroy_cash_table_entry(&e);
+
+	return removed;
+}
+
 void find_and_print(const cash_table* ct_p, uint32_t v)
 {
 	char record[300];
@@ -249,6 +272,13 @@ int main()
 	for(uint32_t i = 0; i < FINDERS_SIZE; i++)
 		find_and_print(ct_p, find_these[i]);
 
+	// remove all
+	printf("REMOVES STARTED for all even\n");
+	uint32_t removes_success = 0;
+	for(uint32_t i = 0; i < TESTCASE_SIZE; i+=2)
+		removes_success += remove_ct(ct_p, i);
+	printf("REMOVES ENDED (%u)\n", removes_success);
+
 	// find some of them
 	for(uint32_t i = 0; i < FINDERS_SIZE; i++)
 		find_and_print(ct_p, find_these[i]);
@@ -257,6 +287,13 @@ int main()
 	#ifdef DEBUG_PRINT
 		print_cash_table(ct_p, print_value);
 	#endif
+
+	// remove all
+	printf("REMOVES STARTED for all odd also\n");
+	removes_success = 0;
+	for(uint32_t i = 1; i < TESTCASE_SIZE; i+=2)
+		removes_success += remove_ct(ct_p, i);
+	printf("REMOVES ENDED (%u)\n", removes_success);
 
 	// find some of them
 	for(uint32_t i = 0; i < FINDERS_SIZE; i++)

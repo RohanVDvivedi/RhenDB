@@ -70,7 +70,7 @@ int insert_in_cash_table(cash_table* ct_p, cash_table_entry* v)
 {
 	if(v->is_key)
 	{
-		printf("attempting to insert a key tuple in cash_table\n");
+		printf("attempting to insert a key-type entry in cash_table\n");
 		exit(-1);
 	}
 
@@ -83,6 +83,24 @@ int insert_in_cash_table(cash_table* ct_p, cash_table_entry* v)
 		expand_hashmap(&(ct_p->value_set), 1.5);
 
 	ct_p->memory_utilization += memory_additonal_usage;
+
+	return 1;
+}
+
+int remove_from_cash_table(cash_table* ct_p, cash_table_entry* v)
+{
+	if(v->is_key)
+	{
+		printf("attempting to remove a key-type entry from cash_table\n");
+		exit(-1);
+	}
+
+	uint64_t memory_additonal_usage = sizeof(cash_table_entry) + get_tuple_size(ct_p->value_def, v->as_value.value);
+
+	if(!remove_from_hashmap(&(ct_p->value_set), v))
+		return 0;
+
+	ct_p->memory_utilization -= memory_additonal_usage;
 
 	return 1;
 }
