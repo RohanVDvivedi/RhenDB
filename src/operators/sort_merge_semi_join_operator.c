@@ -98,6 +98,7 @@ static void* next_tuple(operator* o, int* error_code)
 					this_state->right_input_operator->destroy_state(this_state->right_input_operator);
 					this_state->right_input_operator = NULL;
 				}
+				else
 				{
 					if(this_state->left_input_operator != NULL) // recompute datums only if we will need it
 						revise_key_datums_for_right_input_tuple(o, this_state->right_tuple_key_datums, this_state->right_tuple);
