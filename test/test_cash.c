@@ -162,9 +162,9 @@ void insert_ct(cash_table* ct_p, uint32_t v)
 	char* record = malloc(300);
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	cash_table_entry e = get_new_cash_table_value(ct_p, record);
+	cash_table_entry* e = get_new_cash_table_value(ct_p, record);
 
-	insert_in_cash_table(ct_p, &e);
+	insert_in_cash_table(ct_p, e);
 }
 
 void find_and_print(const cash_table* ct_p, uint32_t v)
@@ -172,13 +172,13 @@ void find_and_print(const cash_table* ct_p, uint32_t v)
 	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	cash_table_entry e = get_new_cash_table_key(ct_p, record, ct_p->value_tuple_def, ct_p->key_element_ids);
+	cash_table_entry e = get_new_cash_table_key(ct_p, record, ct_p->value_def, ct_p->key_element_ids);
 
 	printf("%"PRIu32"\n", v);
 	for(cash_table_entry* it = find_equals_in_cash_table(ct_p, &e); it != NULL; it = next_equals_in_cash_table(ct_p, it))
 	{
 		printf("\t");
-		print_tuple(it->value, &record_def);
+		print_tuple(it->as_value.value, &record_def);
 	}
 	printf("\n");
 }
@@ -188,7 +188,7 @@ void print_cash_table(const cash_table* ct_p)
 	for(cash_table_entry* it = find_all_in_cash_table(ct_p); it != NULL; it = next_all_in_cash_table(ct_p, it))
 	{
 		printf("\t");
-		print_tuple(it->value, &record_def);
+		print_tuple(it->as_value.value, &record_def);
 	}
 	printf("\n");
 }
