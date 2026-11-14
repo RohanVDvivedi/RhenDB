@@ -181,6 +181,8 @@ void find_and_print(const cash_table* ct_p, uint32_t v)
 		print_tuple(it->as_value.value, &record_def);
 	}
 	printf("\n");
+
+	destroy_cash_table_entry(&e);
 }
 
 void print_cash_table(const cash_table* ct_p)
