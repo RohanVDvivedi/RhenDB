@@ -7,10 +7,6 @@ PICKED TASKS
    * make the union have names like as_key and as_value
    * allow remove function too
 
-   * sort operator
-     * if the result counter in sorter is not 0, then put tuple in an max heap, insert and check if the count is > result counter, if so pop top
-     * then check if the total bytes in tuples is too high if so write to unsorted run and sort it, and add it to the runs
-
    * scan/point_lookup
 
    * fix the unified test case
