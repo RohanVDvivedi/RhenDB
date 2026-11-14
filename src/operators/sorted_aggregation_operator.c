@@ -12,9 +12,11 @@ struct op_state
 
 	void* first_tuple;
 
-	// maximum number of input_datums required by any aggregate function
-	// 0, if there are no aggregate functions to be evaluated
-	uint32_t max_input_datums_count;
+	datum* first_tuple_key_datums;
+	datum* subsequent_tuple_key_datums;
+
+	void** states;
+	datum* input_datums; // enough datums to accomodate max inputs from any aggregate function 
 
 	// derieved information
 	const data_type_info** key_dtis;
@@ -59,25 +61,20 @@ static void* next_tuple(operator* o, int* error_code)
 			return NULL;
 		}
 		this_state->first_tuple = tuple;
+		revise_key_datums_for_input_tuple(o, this_state->first_tuple_key_datums, this_state->first_tuple);
 	}
-
-	// now we have the first tuple, get memory for states and input_datums
-	void** states = calloc(sizeof(void*), o->desc->params.sorted_aggregation.aggregate_functions_count);
-	datum* input_datums = malloc(sizeof(datum) * this_state->max_input_datums_count);
 
 	// process the first tuple of this group, giving it to the input of the aggregate functions
 	for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
 	{
 		// generate input params to the i-th udaf
-		revise_aggregate_input_datums_for_input_tuple(o, input_datums, this_state->first_tuple, i);
+		revise_aggregate_input_datums_for_input_tuple(o, this_state->input_datums, this_state->first_tuple, i);
 
 		// process_input for the udaf, if it fails kill the operator
-		if(!o->desc->params.sorted_aggregation.aggregate_functions[i]->process_input(o->desc->params.sorted_aggregation.aggregate_functions[i], &(states[i]), input_datums))
+		if(!o->desc->params.sorted_aggregation.aggregate_functions[i]->process_input(o->desc->params.sorted_aggregation.aggregate_functions[i], &(this_state->states[i]), this_state->input_datums))
 		{
 			for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
-				o->desc->params.sorted_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.sorted_aggregation.aggregate_functions[i], &(states[i]));
-			free(states);
-			free(input_datums);
+				o->desc->params.sorted_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.sorted_aggregation.aggregate_functions[i], &(this_state->states[i]));
 			o->destroy_state(o);
 			(*error_code) = AGGREGATION_ERROR_IN_OPERATOR;
 			return NULL;
@@ -93,14 +90,13 @@ static void* next_tuple(operator* o, int* error_code)
 			if(*error_code)
 			{
 				for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
-					o->desc->params.sorted_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.sorted_aggregation.aggregate_functions[i], &(states[i]));
-				free(states);
-				free(input_datums);
+					o->desc->params.sorted_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.sorted_aggregation.aggregate_functions[i], &(this_state->states[i]));
 				o->destroy_state(o);
 				return NULL;
 			}
 			break;
 		}
+		revise_key_datums_for_input_tuple(o, this_state->subsequent_tuple_key_datums, tuple);
 
 		int same_group = (0 == compare_tuples_rhendb(tuple, this_state->input_operator->desc->output_tuple_def, o->desc->params.sorted_aggregation.key_element_ids, this_state->first_tuple, this_state->input_operator->desc->output_tuple_def, o->desc->params.sorted_aggregation.key_element_ids, NULL, o->desc->params.sorted_aggregation.key_element_count, o->self_query_plan->desc->curr_tx));
 
@@ -109,16 +105,14 @@ static void* next_tuple(operator* o, int* error_code)
 			for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
 			{
 				// generate input params to the i-th udaf
-				revise_aggregate_input_datums_for_input_tuple(o, input_datums, tuple, i);
+				revise_aggregate_input_datums_for_input_tuple(o, this_state->input_datums, tuple, i);
 
 				// process_input for the udaf, if it fails kill the operator
-				if(!o->desc->params.sorted_aggregation.aggregate_functions[i]->process_input(o->desc->params.sorted_aggregation.aggregate_functions[i], &(states[i]), input_datums))
+				if(!o->desc->params.sorted_aggregation.aggregate_functions[i]->process_input(o->desc->params.sorted_aggregation.aggregate_functions[i], &(this_state->states[i]), this_state->input_datums))
 				{
 					free(tuple);
 					for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
-						o->desc->params.sorted_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.sorted_aggregation.aggregate_functions[i], &(states[i]));
-					free(states);
-					free(input_datums);
+						o->desc->params.sorted_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.sorted_aggregation.aggregate_functions[i], &(this_state->states[i]));
 					o->destroy_state(o);
 					(*error_code) = AGGREGATION_ERROR_IN_OPERATOR;
 					return NULL;
@@ -134,9 +128,6 @@ static void* next_tuple(operator* o, int* error_code)
 			break;
 		}
 	}
-
-	// we will not need input datums any more
-	free(input_datums);
 
 	// produce output and set the next_first tuple
 
@@ -157,14 +148,13 @@ static void* next_tuple(operator* o, int* error_code)
 	{
 		// produce the output_uval the output of the i-th aggregate function
 		datum output_uval;
-		if(!o->desc->params.sorted_aggregation.aggregate_functions[i]->produce_output(o->desc->params.sorted_aggregation.aggregate_functions[i], &output_uval, &(states[i])))
+		if(!o->desc->params.sorted_aggregation.aggregate_functions[i]->produce_output(o->desc->params.sorted_aggregation.aggregate_functions[i], &output_uval, &(this_state->states[i])))
 		{
 			free(output_tuple);
 			if(next_first_tuple != NULL)
 				free(next_first_tuple);
 			for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
-				o->desc->params.sorted_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.sorted_aggregation.aggregate_functions[i], &(states[i]));
-			free(states);
+				o->desc->params.sorted_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.sorted_aggregation.aggregate_functions[i], &(this_state->states[i]));
 			o->destroy_state(o);
 			(*error_code) = AGGREGATION_ERROR_IN_OPERATOR;
 			return NULL;
@@ -173,14 +163,18 @@ static void* next_tuple(operator* o, int* error_code)
 		set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(j), output_tuple, &output_uval, UINT32_MAX);
 	}
 
-	// destroy states, we do not need them noe
+	// destroy states, we do not need them now
 	for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
-		o->desc->params.sorted_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.sorted_aggregation.aggregate_functions[i], &(states[i]));
-	free(states);
+		o->desc->params.sorted_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.sorted_aggregation.aggregate_functions[i], &(this_state->states[i]));
 
 	// reset the first_tuple to it's next value
 	free(this_state->first_tuple);
 	this_state->first_tuple = next_first_tuple;
+	{
+		void* temp = this_state->first_tuple_key_datums;
+		this_state->first_tuple_key_datums = this_state->subsequent_tuple_key_datums;
+		this_state->subsequent_tuple_key_datums = temp;
+	}
 	if(this_state->first_tuple == NULL) // if first_tuple becomes NULL, we have no more groups
 		o->destroy_state(o);
 
@@ -199,6 +193,18 @@ static void destroy_state(operator* o)
 		if(this_state->first_tuple != NULL)
 			free(this_state->first_tuple);
 
+		if(this_state->first_tuple_key_datums != NULL)
+			free(this_state->first_tuple_key_datums);
+
+		if(this_state->subsequent_tuple_key_datums != NULL)
+			free(this_state->subsequent_tuple_key_datums);
+
+		if(this_state->states != NULL)
+			free(this_state->states);
+
+		if(this_state->input_datums != NULL)
+			free(this_state->input_datums);
+
 		free(this_state->key_dtis);
 
 		free(this_state);
@@ -214,9 +220,16 @@ void open_sorted_aggregation_operator(operator* o)
 
 	this_state->input_operator = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.sorted_aggregation.input_operator_index);
 	this_state->first_tuple = NULL;
-	this_state->max_input_datums_count = 0;
+
+	this_state->first_tuple_key_datums = malloc(o->desc->params.sorted_aggregation.key_element_count * sizeof(datum));
+	this_state->subsequent_tuple_key_datums = malloc(o->desc->params.sorted_aggregation.key_element_count * sizeof(datum));
+
+	uint32_t max_input_datums_count = 0;
 	for(uint32_t i = 0; i < o->desc->params.sorted_aggregation.aggregate_functions_count; i++)
-		this_state->max_input_datums_count = max(this_state->max_input_datums_count, o->desc->params.sorted_aggregation.aggregate_functions[i]->input_type_infos_count);
+		max_input_datums_count = max(max_input_datums_count, o->desc->params.sorted_aggregation.aggregate_functions[i]->input_type_infos_count);
+
+	this_state->states = calloc(sizeof(void*), o->desc->params.sorted_aggregation.aggregate_functions_count);
+	this_state->input_datums = malloc(sizeof(datum) * max_input_datums_count);
 
 	this_state->key_dtis = malloc(sizeof(data_type_info*) * o->desc->params.sorted_aggregation.key_element_count);
 	for(uint32_t j = 0; j < o->desc->params.sorted_aggregation.key_element_count; j++)
