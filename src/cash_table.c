@@ -60,7 +60,9 @@ static cash_table_entry* get_new_cash_table_value_(const cash_table* ct_p, void*
 	v->hash_value = optional_pre_computed_hash_value;
 	v->is_key = 0;
 
-	v->as_value.state = 0;
+	v->as_value.state_u = 0;
+	v->as_value.state_p = NULL;
+
 	v->as_value.is_value_owned = is_value_owned;
 	v->as_value.value = value;
 	v->as_value.keys = malloc(sizeof(datum) * ct_p->key_element_count);

@@ -45,7 +45,9 @@ struct cash_table_entry
 		} as_key;
 		struct // used for inserts and iterated value
 		{
-			uint8_t state;
+			// 2 state values
+			uint64_t state_u; // possibly to store bit_fields for right/full-outer join
+			void* state_p; // possibly to store pointer array to states for hash aggregation
 
 			int is_value_owned;
 			void* value;
