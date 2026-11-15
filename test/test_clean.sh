@@ -1,1 +1,1 @@
-rm -rf *.db*
+rm -rf *.db* interim

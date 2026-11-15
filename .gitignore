@@ -4,6 +4,7 @@
 *.db
 *.db_logs
 *.db_hints
+interim
 *.DS_Store
 *.vu
 
