@@ -2,34 +2,26 @@ PICKED TASKS
 
  * volcano model
 
-   * make prototype struct for the hash table
-      typedef enum rash_table_node_type rash_table_node_type;
-      enum rash_table_node_type
-      {
-        DISK_PARTITION,
-        IN_MEM_PARTITION,
-        PARTITIONED_NODE,
-      };
-      typedef struct rash_table rash_table;
-      struct rash_table_node
-      {
-        uint64_t level; // 0 for top most level, partitioning only increases it
-        rash_table_node_type type;
-        union
-        {
-          interim_tuple_store* disk_partition; // DISK_PARTITION
-          cash_table* in_mem_partition; // IN_MEM_PARTITION
-          rash_table_node* node;// PARTITIONED_NODE
-        }
-      };
-      need functions like
-      * int convert_to_in_mem_partition(rash_table_node* rtn_p); // only works on DISK_PARTITION
-      * int convert_to_disk_partition(rash_table_node* rtn_p); // only works on IN_MEM_PARTITION
-      * int partition_rash_table_node(rash_table_node* rtn_p); // only works on IN_MEM_PARTITION or DISK_PARTITION
-      * void* loop_tuple_iteration(rash_table_node* rtn_p); // only works on IN_MEM_PARTITION or DISK_PARTITION
-      * void* lookup_tuple_iteration(rash_table_node* rtn_p); // only works on IN_MEM_PARTITION only
-      * void* next_tuple(rash_table_node* rtn_p); // only works if the prior loop or lookup was called on that partition
-      * void insert_tuple(rash_table_node* rtn_p); // only works on IN_MEM_PARTITION or DISK_PARTITION
+   * #define BITS_FOR_PARTITIONS 2 // can not be 0
+   * #define PARTITIONS_PER_COLLECTION (1 << BITS_FOR_PARTITIONS)
+   * grash_table{grash_table_node* root; tuple_def* value_def; key_element_ids; key_element_count;}
+   grash_table_node{
+    uint64_t level; // [0, 64) -> 0 for the root node in all cases, and increments by BITS_FOR_PARTITIONS, for every collection
+    grash_table_node_type type; // PARTITION or COLLECTION
+    union{
+      interim_tuple_store* partion;
+      grash_table_node* partitions[PARTITIONS_PER_COLLECTION]; // (hash_value >> level) % PARTITIONS_PER_COLLECTION to find the child it will go into
+    };
+   }
+   * every time a partition is partitioned to make it into a collection, its level remains the same but the children get level = parent_level + BITS_FOR_PARTITIONS
+   * no partitioning if the this->level >= 64
+   * each partiton stores hash_value as a tuple followed by value tuple itself
+   * grash_table* get_new_grash_table()
+   * void delete_grash_table(grash_table*)
+   * int partition_grash_table_node(grash_table*, grash_table_node* );
+   * int insert_in_grash_table_node(grash_table* , void* , uint64_t optional_pre_computed_hash_value = 0); // recursively traverses
+   * cash_table* index_grash_table_partition(grash_table_node* ) // only works for partiton type nodes
+   * void close_all_partitions_for_grash_table_nodes() // called when the build phase is completed
 
    * scan/point_lookup
 
