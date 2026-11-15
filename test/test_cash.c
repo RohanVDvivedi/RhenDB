@@ -157,12 +157,15 @@ void construct_record(void* buffer, uint64_t num, int order, char* value)
 		set_element_in_tuple(&record_def, STATIC_POSITION(4), buffer, &(datum){.string_value = value, .string_size = strlen(value)}, UINT32_MAX);
 }
 
+int is_valid_k = 0;
+cash_table_entry k;
+
 void insert_ct(cash_table* ct_p, uint32_t v)
 {
-	char* record = malloc(300);
+	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	cash_table_entry* e = get_new_cash_table_value(ct_p, record);
+	cash_table_entry* e = get_new_cash_table_value_clone(ct_p, record, 0);
 
 	insert_in_cash_table(ct_p, e);
 }
@@ -172,10 +175,16 @@ int remove_ct(cash_table* ct_p, uint32_t v)
 	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	cash_table_entry e = get_new_cash_table_key(ct_p, record, ct_p->value_def, ct_p->key_element_ids);
+	if(is_valid_k)
+		reset_cash_table_key(&k, ct_p, record, ct_p->value_def, ct_p->key_element_ids, 0);
+	else
+	{
+		k = get_new_cash_table_key(ct_p, record, ct_p->value_def, ct_p->key_element_ids, 0);
+		is_valid_k = 1;
+	}
 
 	int removed = 0;
-	cash_table_entry* it = find_equals_in_cash_table(ct_p, &e);
+	cash_table_entry* it = find_equals_in_cash_table(ct_p, &k);
 
 	while(it != NULL)
 	{
@@ -185,8 +194,6 @@ int remove_ct(cash_table* ct_p, uint32_t v)
 		it = it_next;
 	}
 
-	destroy_cash_table_entry(&e);
-
 	return removed;
 }
 
@@ -195,17 +202,21 @@ void find_and_print(const cash_table* ct_p, uint32_t v)
 	char record[300];
 	construct_record(record, v, 0, "Rohan Dvivedi");
 
-	cash_table_entry e = get_new_cash_table_key(ct_p, record, ct_p->value_def, ct_p->key_element_ids);
+	if(is_valid_k)
+		reset_cash_table_key(&k, ct_p, record, ct_p->value_def, ct_p->key_element_ids, 0);
+	else
+	{
+		k = get_new_cash_table_key(ct_p, record, ct_p->value_def, ct_p->key_element_ids, 0);
+		is_valid_k = 1;
+	}
 
 	printf("%"PRIu32"\n", v);
-	for(cash_table_entry* it = find_equals_in_cash_table(ct_p, &e); it != NULL; it = next_equals_in_cash_table(ct_p, it))
+	for(cash_table_entry* it = find_equals_in_cash_table(ct_p, &k); it != NULL; it = next_equals_in_cash_table(ct_p, it))
 	{
 		printf("\t");
 		print_tuple(it->as_value.value, &record_def);
 	}
 	printf("\n");
-
-	destroy_cash_table_entry(&e);
 }
 
 void print_cash_table(const cash_table* ct_p)
@@ -303,6 +314,9 @@ int main()
 	#ifdef DEBUG_PRINT
 		print_cash_table(ct_p, print_value);
 	#endif
+
+	if(is_valid_k)
+		destroy_cash_table_entry(&k);
 
 	// destroy cash table
 	destroy_cash_table(ct_p);
