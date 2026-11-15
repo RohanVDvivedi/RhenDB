@@ -120,12 +120,15 @@ void delete_interim_tuple_store(interim_tuple_store* its_p)
 	unmap_all_embed_regions_in_interim_tuple_store(its_p);
 
 	// close the file
-	if(close(its_p->fd) == -1)
+	if(its_p->fd != -1)
 	{
-		printf("FAILED to close a file for deleting the interim_tuple_store\n");
-		exit(-1);
+		if(close(its_p->fd) == -1)
+		{
+			printf("FAILED to close a file for deleting the interim_tuple_store\n");
+			exit(-1);
+		}
+		its_p->fd = -1;
 	}
-	its_p->fd = -1;
 
 	// delete the file
 	char file_path[100];
