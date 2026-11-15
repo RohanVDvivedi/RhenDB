@@ -7,6 +7,9 @@
 
 #include<rhendb/rash_table.h>
 
+#include<rhendb/temp_file_dir_path.h>
+#include<rhendb/dir_clean_up.h>
+
 #include<unistd.h>
 
 #define TX_TABLE_ROOT_PAGE_ID_KEY "AAA-tx_table_root_page_id"
@@ -274,6 +277,8 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 	rdb->union_jsonb_type_info->is_static = 1;
 	initialize_tuple_data_type_info(rdb->union_jsonb_type_info, JSONB_TYPE_PREFIX "_" UNION_TYPE_SUFFIX, 0, max(rdb->volatile_rage_engine.jsonb_extended_type_info->max_size, rdb->persistent_acid_rage_engine.jsonb_extended_type_info->max_size) + 24, 2);
 	finalize_type_info(rdb->union_jsonb_type_info);
+
+	ensure_clean_dir(INTERIM_TUPLE_STORE_DIR_PATH, 775);
 }
 
 int is_unified_type_info(const data_type_info* dti_p)
