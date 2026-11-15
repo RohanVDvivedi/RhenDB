@@ -319,18 +319,25 @@ static void destroy_state(operator* o)
 		this_state->input_operator->destroy_state(this_state->input_operator);
 
 		if(this_state->unsorted_run != NULL)
+		{
+			open_file_for_interim_tuple_store(this_state->unsorted_run);
 			delete_interim_tuple_store(this_state->unsorted_run);
+		}
 
 		for(int i = 0; i < MAX_LEVELS; i++)
 			while(!is_empty_linkedlist(&(this_state->sorted_runs[i])))
 			{
 				interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_linkedlist(&(this_state->sorted_runs[i]));
 				remove_head_from_linkedlist(&(this_state->sorted_runs[i]));
+				open_file_for_interim_tuple_store(its_p);
 				delete_interim_tuple_store(its_p);
 			}
 
 		if(this_state->output_run != NULL)
+		{
+			open_file_for_interim_tuple_store(this_state->output_run);
 			delete_interim_tuple_store(this_state->output_run);
+		}
 
 		free(this_state->key_dtis);
 
