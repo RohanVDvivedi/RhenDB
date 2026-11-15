@@ -217,6 +217,9 @@ int mmap_for_reading_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 	uint32_t tuple_size = get_tuple_size_for_interim_tuple_store(its_p, itr_p, tuple_offset_start, tpl_sz_d);
 	uint64_t tuple_offset_end = tuple_offset_start + tuple_size;
 
+	// validate min_bytes_to_mmap
+	min_bytes_to_mmap = min(UINT64_MAX - tuple_offset_start, min_bytes_to_mmap);
+
 	// tuple_offset_end <= its_p->next_tuple_offset, is a must
 	if(tuple_offset_end > its_p->next_tuple_offset)
 		return 0;
@@ -261,6 +264,9 @@ int mmap_for_writing_tuple(interim_tuple_store* its_p, interim_tuple_region* itr
 	uint64_t tuple_offset_start = its_p->next_tuple_offset;
 	uint32_t tuple_size = required_size;
 	uint64_t tuple_offset_end = tuple_offset_start + tuple_size;
+
+	// validate min_bytes_to_mmap
+	min_bytes_to_mmap = min(UINT64_MAX - tuple_offset_start, min_bytes_to_mmap);
 
 	// if the memory region is already contained then return true directly, pointing the interim_tuple_region to the right tuple
 	if(contains_for_interim_tuple_region(itr_p, tuple_offset_start, tuple_offset_end))
