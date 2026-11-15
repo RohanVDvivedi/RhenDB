@@ -35,12 +35,18 @@ static uint32_t sort_unsorted_run_and_produce_sorted_run(operator* o)
 
 	tuples_down_counter result_counter = o->desc->params.sort.result_counter;
 
+	// unsorted_run is always kept in open state, so we do this as a convention
+	open_file_for_interim_tuple_store(this_state->unsorted_run);
+
 	interim_tuple_store* ots_p = sort_interim_tuples(this_state->unsorted_run, result_counter, o->desc->output_tuple_def, o->desc->params.sort.key_element_ids, o->desc->params.sort.key_compare_direction, o->desc->params.sort.key_element_count, o->self_query_plan->desc->curr_tx);
 
 	delete_interim_tuple_store(this_state->unsorted_run);
 	this_state->unsorted_run = NULL;
 
 	uint32_t level = log2((double)get_total_bytes_in_interim_tuple_store(ots_p));
+
+	// this new run won't be in use for long, so close it's file
+	close_file_for_interim_tuple_store(ots_p);
 
 	insert_tail_in_linkedlist(&(this_state->sorted_runs[level]), ots_p);
 	this_state->sorted_runs_count[level]++;
@@ -95,6 +101,9 @@ static uint64_t merge_runs_into_run_job(operator* o, linkedlist* input_runs)
 	{
 		interim_tuple_store* its_p = (interim_tuple_store*) get_head_of_linkedlist(input_runs);
 		remove_head_from_linkedlist(input_runs);
+
+		// we need the run open for merging it, sorter makes sure to open and close runs to reduce file descriptor ulimit usage
+		open_file_for_interim_tuple_store(its_p);
 
 		if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), 0, &(o->desc->output_tuple_def->size_def), o->desc->params.sort.min_run_size))
 			delete_interim_tuple_store(its_p);
@@ -159,6 +168,9 @@ static uint64_t merge_runs_into_run_job(operator* o, linkedlist* input_runs)
 	unmap_all_embed_regions_in_interim_tuple_store(output_its_p);
 
 	uint32_t level = log2(get_total_bytes_in_interim_tuple_store(output_its_p));
+
+	// this new run won't be in use for long, so close it's file
+	close_file_for_interim_tuple_store(output_its_p);
 
 	insert_tail_in_linkedlist(&(this_state->sorted_runs[level]), output_its_p);
 	this_state->sorted_runs_count[level]++;
@@ -265,6 +277,9 @@ static void* next_tuple(operator* o, int* error_code)
 		remove_head_from_linkedlist(&(this_state->sorted_runs[output_run_level]));
 		this_state->sorted_runs_count[output_run_level]--;
 		this_state->total_sorted_runs_count--;
+
+		// we need the output_run open for producing output tuples from it, sorter makes sure to open and close runs to reduce file descriptor ulimit usage
+		open_file_for_interim_tuple_store(this_state->output_run);
 
 		// store 0 into the output_run->embed_uints = 0, using it as next offset to produce the tuple
 		this_state->output_run->embed_uints[0] = 0;
