@@ -278,7 +278,7 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 	initialize_tuple_data_type_info(rdb->union_jsonb_type_info, JSONB_TYPE_PREFIX "_" UNION_TYPE_SUFFIX, 0, max(rdb->volatile_rage_engine.jsonb_extended_type_info->max_size, rdb->persistent_acid_rage_engine.jsonb_extended_type_info->max_size) + 24, 2);
 	finalize_type_info(rdb->union_jsonb_type_info);
 
-	ensure_clean_dir(INTERIM_TUPLE_STORE_DIR_PATH, 775);
+	ensure_clean_dir(INTERIM_TUPLE_STORE_DIR_PATH, 0775);
 }
 
 int is_unified_type_info(const data_type_info* dti_p)
