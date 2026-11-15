@@ -79,6 +79,20 @@ struct interim_tuple_store
 // please be sure that initial_total_size will be rounded to the next page_size available
 interim_tuple_store* get_new_interim_tuple_store(uint64_t initial_total_size);
 
+// following 3 functions can be called to reduce the number of open file descriptors at any time
+
+// no-op if already open
+// interim_tuple_store's file must be in open state while calling any of it's functions
+void open_file_for_interim_tuple_store(interim_tuple_store* its_p);
+int is_open_for_interim_tuple_store(interim_tuple_store* its_p);
+
+// no-op if already closed
+// you are allowed to close the file while none of it's regions are mmaped and the interim_tuple_store is not in use
+// closing reduces the number of active file descriptors at any point in time
+void close_file_for_interim_tuple_store(interim_tuple_store* its_p);
+
+// for any function below this comment the interim_tuple_store in context must be in open state
+
 // make the next_tuple_offset and tuple_count = 0,
 // and them ftruncated to a new initial_total_size
 void reinitialize_interim_tuple_store(interim_tuple_store* its_p, uint64_t initial_total_size);

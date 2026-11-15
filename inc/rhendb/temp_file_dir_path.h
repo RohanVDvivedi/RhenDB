@@ -1,7 +1,7 @@
 #ifndef TEMP_FILE_DIR_PATH_H
 #define TEMP_FILE_DIR_PATH_H
 
-#define INTERIM_TUPLE_STORE_DIR_PATH "."
+#define INTERIM_TUPLE_STORE_DIR_PATH "./interim"
 #define VOLATILE_PAGE_STORE_DIR_PATH "."
 
 #endif

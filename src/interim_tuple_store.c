@@ -28,10 +28,12 @@ interim_tuple_store* get_new_interim_tuple_store(uint64_t initial_total_size)
 
 	its_p->tuples_count = 0;
 
-	its_p->fd = open64(INTERIM_TUPLE_STORE_DIR_PATH, O_TMPFILE | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
+	char file_path[100];
+	sprintf(file_path, "%s/%p", INTERIM_TUPLE_STORE_DIR_PATH, its_p);
+	its_p->fd = open64(file_path, O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR); // create with read/write mode
 	if(its_p->fd == -1)
 	{
-		printf("FAILED to open a file for interim_tuple_store\n");
+		printf("FAILED to open a file for creating interim_tuple_store\n");
 		exit(-1);
 	}
 
@@ -56,6 +58,35 @@ interim_tuple_store* get_new_interim_tuple_store(uint64_t initial_total_size)
 		extend_interim_tuple_store(its_p, initial_total_size);
 
 	return its_p;
+}
+
+void open_file_for_interim_tuple_store(interim_tuple_store* its_p)
+{
+	if(its_p->fd == -1)
+	{
+		char file_path[100];
+		sprintf(file_path, "%s/%p", INTERIM_TUPLE_STORE_DIR_PATH, its_p);
+		its_p->fd = open64(file_path, O_RDWR, S_IRUSR | S_IWUSR); // open with read/write mode
+		if(its_p->fd == -1)
+		{
+			printf("FAILED to open a file for interim_tuple_store\n");
+			exit(-1);
+		}
+	}
+}
+
+int is_open_for_interim_tuple_store(interim_tuple_store* its_p)
+{
+	return its_p->fd != -1; // if fd is valid, the file is open
+}
+
+void close_file_for_interim_tuple_store(interim_tuple_store* its_p)
+{
+	if(its_p->fd != -1)
+	{
+		if(close(its_p->fd) == 0) // only if the close call succeeds we reset the fd to -1
+			its_p->fd = -1;
+	}
 }
 
 void reinitialize_interim_tuple_store(interim_tuple_store* its_p, uint64_t initial_total_size)
@@ -85,8 +116,26 @@ void unmap_all_embed_regions_in_interim_tuple_store(interim_tuple_store* its_p)
 
 void delete_interim_tuple_store(interim_tuple_store* its_p)
 {
+	// unmap all regions
 	unmap_all_embed_regions_in_interim_tuple_store(its_p);
-	close(its_p->fd);
+
+	// close the file
+	if(close(its_p->fd) == -1)
+	{
+		printf("FAILED to close a file for deleting the interim_tuple_store\n");
+		exit(-1);
+	}
+	its_p->fd = -1;
+
+	// delete the file
+	char file_path[100];
+	sprintf(file_path, "%s/%p", INTERIM_TUPLE_STORE_DIR_PATH, its_p);
+	if(unlink(file_path) == -1)
+	{
+		printf("FAILED to delete/unlink a file for deleting the interim_tuple_store\n");
+		exit(-1);
+	}
+
 	free(its_p);
 }
 
