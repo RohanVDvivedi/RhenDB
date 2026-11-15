@@ -28,7 +28,7 @@ static int compare_cash_table_entry(const void* context_p, const void* v1_vp, co
 static cy_uint hash_cash_table_entry(const void* v_vp)
 {
 	const cash_table_entry* v = v_vp;
-	return v->hash_value;
+	return hash_randomizer(v->hash_value); // cash_table randimizes the original value of the hash, to mitigate power of 2 bucket sizes over identical radix grash_table partitioning at lower levels (from the root side being 0)
 }
 
 cash_table* get_new_cash_table(uint64_t bucket_count, const tuple_def* value_def, const positional_accessor* key_element_ids, uint32_t key_element_count, transaction* tx)
