@@ -111,7 +111,9 @@ int insert_in_cash_table(cash_table* ct_p, cash_table_entry* v)
 		exit(-1);
 	}
 
-	uint64_t memory_additonal_usage = sizeof(cash_table_entry) + get_tuple_size(ct_p->value_def, v->as_value.value);
+	uint64_t memory_additonal_usage = sizeof(cash_table_entry) + (sizeof(datum) * ct_p->key_element_count);
+	if(v->as_value.is_value_owned)
+		memory_additonal_usage += get_tuple_size(ct_p->value_def, v->as_value.value);
 
 	if(!insert_in_hashmap(&(ct_p->value_set), v))
 		return 0;
@@ -132,7 +134,9 @@ int remove_from_cash_table(cash_table* ct_p, cash_table_entry* v)
 		exit(-1);
 	}
 
-	uint64_t memory_additonal_usage = sizeof(cash_table_entry) + get_tuple_size(ct_p->value_def, v->as_value.value);
+	uint64_t memory_additonal_usage = sizeof(cash_table_entry) + (sizeof(datum) * ct_p->key_element_count);
+	if(v->as_value.is_value_owned)
+		memory_additonal_usage += get_tuple_size(ct_p->value_def, v->as_value.value);
 
 	if(!remove_from_hashmap(&(ct_p->value_set), v))
 		return 0;
