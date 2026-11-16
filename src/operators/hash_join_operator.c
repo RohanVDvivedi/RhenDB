@@ -121,7 +121,7 @@ static void* next_tuple(operator* o, int* error_code)
 	// in_memory probe phase
 	if(this_state->right_cash != NULL)
 	{
-		while(this_state->left_input_operator != NULL || this_state->left_tuple != NULL)
+		while(this_state->left_input_operator != NULL)
 		{
 			if(this_state->left_tuple == NULL)
 			{
@@ -180,6 +180,8 @@ static void* next_tuple(operator* o, int* error_code)
 			{
 				free(this_state->left_tuple);
 				this_state->left_tuple = NULL;
+
+				continue;
 			}
 		}
 
@@ -191,7 +193,7 @@ static void* next_tuple(operator* o, int* error_code)
 			}
 			else
 			{
-				this_state->right_it = next_equals_in_cash_table(this_state->right_cash, this_state->right_it);
+				this_state->right_it = next_all_in_cash_table(this_state->right_cash, this_state->right_it);
 			}
 
 			while(this_state->right_it != NULL)
@@ -199,7 +201,7 @@ static void* next_tuple(operator* o, int* error_code)
 				if(this_state->right_it->as_value.state_u == 0) // this right tuple was never picked
 					return produce_join_result(o, NULL, this_state->right_it->as_value.value);
 				else
-					this_state->right_it = next_equals_in_cash_table(this_state->right_cash, this_state->right_it);
+					this_state->right_it = next_all_in_cash_table(this_state->right_cash, this_state->right_it);
 			}
 		}
 
