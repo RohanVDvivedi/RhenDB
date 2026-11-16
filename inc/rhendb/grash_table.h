@@ -59,7 +59,8 @@ void insert_to_grash_table(grash_table* gt_p, void* value, uint64_t optional_pre
 int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p);
 
 // makes index only for type == PARTITION
-cash_table* index_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p);
+// if distinct_keys_only is set, only distinct keys will be inserted
+cash_table* index_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p, int distinct_keys_only);
 
 // recursive functions
 void unmap_all_partition_mmaped_regions(grash_table_node* gtn_p);

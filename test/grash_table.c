@@ -187,7 +187,77 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p)
 	return 1;
 }
 
-cash_table* index_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p);
+cash_table* index_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p, int distinct_keys_only)
+{
+	if(gt_p->type == COLLECTION)
+		return NULL;
+
+	cash_table* ct_p = get_new_cash_table(10 + (gtn_p->partition->total_tuples_count / 5), gt_p->value_def, gt_p->key_element_ids, gt_p->key_element_count, gt_p->tx);
+
+	open_file_for_interim_tuple_store(gtn_p->partition);
+
+	mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), 0, &(gt_p->hash_def.size_def), get_total_bytes_in_interim_tuple_store(gtn_p->partition));
+
+	int is_valid_k = 0;
+	cash_table_entry k;
+
+	uint64_t offset = 0;
+	while(offset <= get_total_bytes_in_interim_tuple_store(gtn_p->partition))
+	{
+		// get hash value
+		mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), offset, &(gt_p->hash_def.size_def), gt_p->min_bytes_to_mmap);
+		uint64_t hash_value = 0;
+		{
+			const data_type_info* dti_temp = NULL;
+			datum uval;
+			get_value_from_element_from_tuple(&uval, &dti_temp, &(gt_p->hash_def), SELF, gtn_p->partition->embed_regions[0].tuple)
+			hash_value = uval->uint_value;
+		}
+		offset = next_tuple_offset_for_interim_tuple_region(&(gtn_p->partition->embed_regions[0]));
+
+		// get value tuple
+		mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), offset, &(gt_p->hash_def.size_def), gt_p->min_bytes_to_mmap);
+		void* value = gtn_p->partition->embed_regions[0].tuple;
+
+		interim_tuple_store** part = &(partitions[child_partition_in_collection(hash_value, gtn_p->level)]);
+
+		if((*part) == NULL)
+			(*part) = get_new_interim_tuple_store(gt_p->min_bytes_to_mmap);
+
+		// add then both to the index
+		if(distinct_keys_only)
+		{
+			if(is_valid_k)
+			{
+				k = get_new_cash_table_key(ct_p, value, gt_p->value_def, gt_p->key_element_ids, hash_value);
+				is_valid_k = 1;
+			}
+			else
+				reset_cash_table_key(&k, ct_p, value, gt_p->value_def, gt_p->key_element_ids, hash_value);
+
+			if(find_equals_in_cash_table(ct_p, &k) == NULL) // only insert if not found
+			{
+				cash_table_entry* e = get_new_cash_table_value_borrow(ct_p, value, hash_value);
+				insert_in_cash_table(ct_p, e);
+			}
+		}
+		else
+		{
+			cash_table_entry* e = get_new_cash_table_value_borrow(ct_p, value, hash_value);
+			insert_in_cash_table(ct_p, e);
+		}
+
+		offset = next_tuple_offset_for_interim_tuple_region(&(gtn_p->partition->embed_regions[0]));
+	}
+
+	if(is_valid_k)
+	{
+		destroy_cash_table_entry(&k);
+		is_valid_k = 0;
+	}
+
+	return ct_p;
+}
 
 void unmap_all_partition_mmaped_regions(grash_table_node* gtn_p)
 {
