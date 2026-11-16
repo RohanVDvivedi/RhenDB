@@ -18,7 +18,7 @@
 
 #define USERS_COUNT 10
 
-#define PRINT_DATA 1
+#define PRINT_DATA
 
 #define MIN_LEFT 6
 #define JUMP_LEFT 2
