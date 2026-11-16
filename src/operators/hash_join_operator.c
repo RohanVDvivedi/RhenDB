@@ -1,6 +1,7 @@
 #include<rhendb/query_plan.h>
 
-#include<rhendb/rash_table.h>
+#include<rhendb/cash_table.h>
+#include<rhendb/grash_table.h>
 
 #include<rhendb/join_type.h>
 
@@ -10,22 +11,26 @@
 typedef struct op_state op_state;
 struct op_state
 {
-	operator* right_input_operator; // if non-NULL, we are in build phase
+	operator* right_input_operator;
+	operator* left_input_operator;
 
-	operator* left_input_operator; //  if non-NULL, we are in probe phase part1 (emit matched and left side un-match tuples)
+	const tuple_def* left_tuple_def;
+	const tuple_def* right_tuple_def;
 
-	void* left_tuple; // preserve left side tuple to match with the rest of the right tuples
-	rash_table_key rtk; // as alive as left_tuple
+	// in_memory state
 
-	// if both the above operators are NULL, we are in probe phase part2 (emit right side un-match tuples)
-	int has_active_probe; // valid only in the probe phase part1 and part2
-	rash_table_iterator rti;
+	cash_table* right_cash;
+	void* left_tuple;
 
-	binary_read_iterator* bri_p; // must be alive only if it has an active probe
+	// spilling state
 
-	// right side build table
-	rash_table_handle rth;
-	const tuple_def* rth_value_tuple_def; // same as right_input_iterator->desc->output_tuple_def
+	grash_table* right_grash;
+	grash_table* left_grash;
+
+	cash_table* right_grash_index;
+
+	grash_table_node* right_curr_node;
+	grash_table_node* left_curr_node;
 };
 
 static void* produce_join_result(operator* o, const void* left_tuple, const void* right_tuple)
@@ -39,7 +44,7 @@ static void* produce_join_result(operator* o, const void* left_tuple, const void
 	{
 		const data_type_info* dti_temp;
 		datum left_datum;
-		get_value_from_element_from_tuple(&left_datum, &dti_temp, this_state->left_input_operator->desc->output_tuple_def, SELF, left_tuple);
+		get_value_from_element_from_tuple(&left_datum, &dti_temp, this_state->left_tuple_def, SELF, left_tuple);
 		set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(0), output_tuple, &left_datum, UINT32_MAX);
 	}
 
@@ -47,7 +52,7 @@ static void* produce_join_result(operator* o, const void* left_tuple, const void
 	{
 		const data_type_info* dti_temp;
 		datum right_datum;
-		get_value_from_element_from_tuple(&right_datum, &dti_temp, this_state->rth_value_tuple_def, SELF, right_tuple);
+		get_value_from_element_from_tuple(&right_datum, &dti_temp, this_state->right_tuple_def, SELF, right_tuple);
 		set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(1), output_tuple, &right_datum, UINT32_MAX);
 	}
 

@@ -31,6 +31,9 @@ struct grash_table_node
 
 		grash_table_node* partitions[PARTITIONS_PER_COLLECTION];
 	};
+
+	grash_table_node* parent;
+	uint32_t index_in_parent;
 };
 
 typedef struct grash_table grash_table;

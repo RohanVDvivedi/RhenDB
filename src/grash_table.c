@@ -18,6 +18,8 @@ grash_table* get_new_grash_table(const tuple_def* value_def, const positional_ac
 	gt_p->root->level = 0;
 	for(uint32_t i = 0; i < PARTITIONS_PER_COLLECTION; i++)
 		gt_p->root->partitions[i] = NULL;
+	gt_p->root->parent = NULL;
+	gt_p->root->index_in_parent = 0;
 
 	gt_p->min_bytes_to_mmap = min_bytes_to_mmap;
 
@@ -94,6 +96,8 @@ void insert_to_grash_table(grash_table* gt_p, void* value, uint64_t optional_pre
 					(*next_gtn_p)->type = PARTITION;
 					(*next_gtn_p)->level = gtn_p->level + BITS_PER_COLLECTION;
 					(*next_gtn_p)->partition = get_new_interim_tuple_store(gt_p->min_bytes_to_mmap);
+					(*next_gtn_p)->parent = gtn_p;
+					(*next_gtn_p)->index_in_parent = child_partition_in_collection(hash_value, gtn_p->level);
 				}
 				gtn_p = (*next_gtn_p);
 				break;
@@ -181,6 +185,8 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p)
 		gtn_p->partitions[i]->type = PARTITION;
 		gtn_p->partitions[i]->level = gtn_p->level + BITS_PER_COLLECTION;
 		gtn_p->partitions[i]->partition = partitions[i];
+		gtn_p->partitions[i]->parent = gtn_p;
+		gtn_p->partitions[i]->index_in_parent = i;
 	}
 
 	return 1;
