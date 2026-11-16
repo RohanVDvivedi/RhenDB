@@ -275,7 +275,7 @@ static void* next_tuple(operator* o, int* error_code)
 		next_child_node = 0;
 
 		this_state->left_curr_node = this_state->left_grash->root;
-		this_state->right_curr_node = this_state->left_grash->root;
+		this_state->right_curr_node = this_state->right_grash->root;
 	}
 
 	while(1)

@@ -62,7 +62,7 @@ void delete_grash_table(grash_table* gt_p);
 
 void insert_to_grash_table(grash_table* gt_p, void* value, uint64_t optional_pre_computed_hash_value);
 
-// partition works only if type == COLLECTION
+// partition works only if type == PARTITION
 int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p, int force_partition);
 
 // makes index only for type == PARTITION
