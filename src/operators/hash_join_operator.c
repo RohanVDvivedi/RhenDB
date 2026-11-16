@@ -305,12 +305,6 @@ static void* next_tuple(operator* o, int* error_code)
 					}
 					else
 					{
-						if(this_state->right_curr_node->partitions[next_child_node] == NULL || this_state->left_curr_node->partitions[next_child_node] == NULL)
-						{
-							next_child_node++;
-							continue;
-						}
-
 						this_state->right_curr_node = this_state->right_curr_node->partitions[next_child_node];
 						this_state->left_curr_node = this_state->left_curr_node->partitions[next_child_node];
 
@@ -326,17 +320,17 @@ static void* next_tuple(operator* o, int* error_code)
 					if(!partition_grash_table_node(this_state->right_grash, this_state->right_curr_node, 0))
 						break;
 
+					// partitioning was success, close the resources
+					unmap_all_partition_mmaped_regions(this_state->right_curr_node);
+					close_all_partition_files(this_state->right_curr_node);
+
 					partition_grash_table_node(this_state->left_grash, this_state->left_curr_node, 1);
 
-					next_child_node = 0;
-
-					// partitioning was a success it could have openned a lot of files so close them all
-
+					// partitioning has to be a success, close the resources
 					unmap_all_partition_mmaped_regions(this_state->left_curr_node);
 					close_all_partition_files(this_state->left_curr_node);
 
-					unmap_all_partition_mmaped_regions(this_state->right_curr_node);
-					close_all_partition_files(this_state->right_curr_node);
+					next_child_node = 0;
 
 					continue;
 				}
