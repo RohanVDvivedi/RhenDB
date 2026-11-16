@@ -117,6 +117,10 @@ static void* next_tuple(operator* o, int* error_code)
 						// initialize probe side partition also
 						this_state->left_grash = get_new_grash_table(this_state->left_tuple_def, o->desc->params.hash_join.left_key_element_ids, o->desc->params.hash_join.key_element_count, o->desc->params.hash_join.min_part_size, o->self_query_plan->desc->curr_tx);
 
+						// insertions to the left will be done later, so close those files for now
+						unmap_all_partition_mmaped_regions(this_state->left_grash->root);
+						close_all_partition_files(this_state->left_grash->root);
+
 						for(const cash_table_entry* e = find_all_in_cash_table(this_state->right_cash); e != NULL; e = next_all_in_cash_table(this_state->right_cash, e))
 							insert_to_grash_table(this_state->right_grash, e->as_value.value, e->hash_value);
 
