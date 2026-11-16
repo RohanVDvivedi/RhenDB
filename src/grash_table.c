@@ -252,7 +252,7 @@ cash_table* index_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p, i
 
 	if(is_valid_k)
 	{
-		destroy_cash_table_entry(&k);
+		delete_cash_table_entry(&k);
 		is_valid_k = 0;
 	}
 

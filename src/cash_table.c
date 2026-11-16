@@ -187,7 +187,7 @@ void reset_cash_table_key(cash_table_entry* k, const cash_table* ct_p, void* key
 	}
 }
 
-void destroy_cash_table_entry(cash_table_entry* e)
+void delete_cash_table_entry(cash_table_entry* e)
 {
 	if(e->is_key)
 	{
@@ -203,15 +203,15 @@ void destroy_cash_table_entry(cash_table_entry* e)
 	}
 }
 
-static void destroy_cash_table_entry_internal(void* resource_p, const void* v_vp)
+static void delete_cash_table_entry_internal(void* resource_p, const void* v_vp)
 {
 	cash_table_entry* v = (cash_table_entry*) v_vp;
-	destroy_cash_table_entry(v);
+	delete_cash_table_entry(v);
 }
 
-void destroy_cash_table(cash_table* ct_p)
+void delete_cash_table(cash_table* ct_p)
 {
-	remove_all_from_hashmap(&(ct_p->value_set), &((const notifier_interface){.notify = destroy_cash_table_entry_internal}));
+	remove_all_from_hashmap(&(ct_p->value_set), &((const notifier_interface){.notify = delete_cash_table_entry_internal}));
 	deinitialize_hashmap(&(ct_p->value_set));
 	free(ct_p->key_dtis);
 	free(ct_p);
