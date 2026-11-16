@@ -31,6 +31,8 @@
 
 #define RECORD_S_KEY_ELEMENT_COUNT 1
 
+#define MIN_PART_SIZE (100 * 1024 * 1024)
+
 #define MIN_BLOCK_SIZE (1024 * 1024)
 
 positional_accessor KEY_POS[1] = {STATIC_POSITION(2)};
@@ -118,7 +120,7 @@ int main(int argc, char** argv)
 
 		operator_desc* input_1 = insert_stream_input_operator_descriptor(qpd3, &s3_2, &record_def);
 
-		operator_desc* hash_join = insert_hash_join_operator_descriptor(qpd3, input_0, KEY_POS, input_1, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE);
+		operator_desc* hash_join = insert_hash_join_operator_descriptor(qpd3, input_0, KEY_POS, input_1, KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, PRESERVE_NONE, MIN_PART_SIZE);
 
 		operator_desc* hash_join_sorted = insert_sort_operator_descriptor(qpd3, TUPLES_DOWN_COUNTER_INF, hash_join, 2, O_KEY_POS, O_CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
 	}

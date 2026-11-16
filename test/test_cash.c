@@ -190,7 +190,7 @@ int remove_ct(cash_table* ct_p, uint32_t v)
 	{
 		cash_table_entry* it_next = next_equals_in_cash_table(ct_p, it);
 		removed += remove_from_cash_table(ct_p, it);
-		destroy_cash_table_entry(it);
+		delete_cash_table_entry(it);
 		it = it_next;
 	}
 
@@ -316,10 +316,10 @@ int main()
 	#endif
 
 	if(is_valid_k)
-		destroy_cash_table_entry(&k);
+		delete_cash_table_entry(&k);
 
 	// destroy cash table
-	destroy_cash_table(ct_p);
+	delete_cash_table(ct_p);
 
 	deinitialize_transaction(&tx);
 
