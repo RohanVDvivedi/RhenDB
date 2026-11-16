@@ -193,7 +193,7 @@ cash_table* index_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p, i
 	if(gtn_p->type == COLLECTION)
 		return NULL;
 
-	cash_table* ct_p = get_new_cash_table(10 + (gtn_p->partition->tuples_count / 5), gt_p->value_def, gt_p->key_element_ids, gt_p->key_element_count, gt_p->tx);
+	cash_table* ct_p = get_new_cash_table(10 + ((gtn_p->partition->tuples_count / 2) * 0.8), gt_p->value_def, gt_p->key_element_ids, gt_p->key_element_count, gt_p->tx);
 
 	open_file_for_interim_tuple_store(gtn_p->partition);
 
