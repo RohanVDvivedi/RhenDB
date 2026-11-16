@@ -30,6 +30,13 @@ struct op_state
 	grash_table_node* right_curr_node; // current node being probed
 	grash_table_node* left_curr_node; // current node from which keys are selected to be probed
 
+	unsigned int curr_nodes_processed:1; // suggests if right_curr_node and left_curr_node should be advanced
+
+	uint64_t left_curr_node_offset;
+	uint64_t right_curr_node_offset;
+
+	void* left_tuple_curr_node;
+
 	// probe key
 
 	unsigned int is_valid_left_probe_key:1;
@@ -87,6 +94,12 @@ static void* next_tuple(operator* o, int* error_code)
 				}
 				this_state->right_input_operator->destroy_state(this_state->right_input_operator);
 				this_state->right_input_operator = NULL;
+
+				if(this_state->right_grash != NULL)
+				{
+					unmap_all_partition_mmaped_regions(this_state->right_grash->root);
+					close_all_partition_files(this_state->right_grash->root);
+				}
 				break;
 			}
 
@@ -231,6 +244,12 @@ static void* next_tuple(operator* o, int* error_code)
 				}
 				this_state->left_input_operator->destroy_state(this_state->left_input_operator);
 				this_state->left_input_operator = NULL;
+
+				if(this_state->left_grash != NULL)
+				{
+					unmap_all_partition_mmaped_regions(this_state->left_grash->root);
+					close_all_partition_files(this_state->left_grash->root);
+				}
 				break;
 			}
 
@@ -246,6 +265,195 @@ static void* next_tuple(operator* o, int* error_code)
 	// now we need to recurse on both right and left side partitons
 	// every time right side (the build side) is too big, then partition it, and do it similarly on the left side
 	// once they are not partitionable, then index right side and probe left side tuples from it processing inputs
+
+	uint64_t next_child_node = 0;
+
+	if(this_state->right_curr_node == NULL)
+	{
+		this_state->curr_nodes_processed = 0;
+
+		next_child_node = 0;
+
+		this_state->left_curr_node = this_state->left_grash->root;
+		this_state->right_curr_node = this_state->left_grash->root;
+	}
+
+	while(1)
+	{
+		// if the current nodes have been processed advance to the next node
+		if(this_state->curr_nodes_processed)
+		{
+			// remove this particular partition from the current one to be iterated
+			if(this_state->right_curr_node->type == PARTITION)
+			{
+				next_child_node = this_state->right_curr_node->index_in_parent + 1;
+
+				this_state->right_curr_node = this_state->right_curr_node->parent;
+				this_state->left_curr_node = this_state->left_curr_node->parent;
+			}
+
+			while(this_state->right_curr_node != NULL)
+			{
+				if(this_state->right_curr_node->type == COLLECTION)
+				{
+					if(next_child_node == PARTITIONS_PER_COLLECTION)
+					{
+						next_child_node = this_state->right_curr_node->index_in_parent + 1;
+
+						this_state->right_curr_node = this_state->right_curr_node->parent;
+						this_state->left_curr_node = this_state->left_curr_node->parent;
+					}
+					else
+					{
+						if(this_state->right_curr_node->partitions[next_child_node] == NULL || this_state->left_curr_node->partitions[next_child_node] == NULL)
+						{
+							next_child_node++;
+							continue;
+						}
+
+						this_state->right_curr_node = this_state->right_curr_node->partitions[next_child_node];
+						this_state->left_curr_node = this_state->left_curr_node->partitions[next_child_node];
+
+						next_child_node = 0;
+					}
+				}
+				else // this is a partition on both sides
+				{
+					// partition on build side is small enough, we are done
+					if(get_total_bytes_in_interim_tuple_store(this_state->right_curr_node->partition) < o->desc->params.hash_join.min_part_size)
+						break;
+
+					if(!partition_grash_table_node(this_state->right_grash, this_state->right_curr_node, 0))
+						break;
+
+					partition_grash_table_node(this_state->left_grash, this_state->left_curr_node, 1);
+
+					next_child_node = 0;
+
+					// partitioning was a success it could have openned a lot of files so close them all
+
+					unmap_all_partition_mmaped_regions(this_state->left_curr_node);
+					close_all_partition_files(this_state->left_curr_node);
+
+					unmap_all_partition_mmaped_regions(this_state->right_curr_node);
+					close_all_partition_files(this_state->right_curr_node);
+
+					continue;
+				}
+			}
+
+			// both NULL is a terminal state, any 1 being NULL is an error case
+			if(this_state->right_curr_node == NULL || this_state->left_curr_node == NULL)
+			{
+				o->destroy_state(o);
+				return NULL;
+			}
+
+			this_state->curr_nodes_processed = 0;
+		}
+
+		// process both the this_state->right_curr_node and this_state->left_curr_node
+		if(this_state->right_grash_index == NULL)
+		{
+			this_state->right_grash_index = index_grash_table_node(this_state->right_grash, this_state->right_curr_node, 0);
+
+			this_state->left_curr_node_offset = 0;
+			mmap_for_reading_tuple(this_state->left_curr_node->partition, &(this_state->left_curr_node->partition->embed_regions[0]), this_state->left_curr_node_offset, &(this_state->left_tuple_def->size_def), o->desc->params.hash_join.min_part_size);
+		}
+
+		while(this_state->left_curr_node_offset < this_state->left_curr_node->partition->next_tuple_offset)
+		{
+			if(this_state->right_it == NULL)
+			{
+				mmap_for_reading_tuple(this_state->left_curr_node->partition, &(this_state->left_curr_node->partition->embed_regions[0]), this_state->left_curr_node_offset, &(this_state->left_grash->hash_def.size_def), o->desc->params.hash_join.min_part_size);
+				uint64_t hash_value = 0;
+				{
+					const data_type_info* dti_temp = NULL;
+					datum uval;
+					get_value_from_element_from_tuple(&uval, &dti_temp, &(this_state->left_grash->hash_def), SELF, this_state->left_curr_node->partition->embed_regions[0].tuple);
+					hash_value = uval.uint_value;
+				}
+				this_state->left_curr_node_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->left_curr_node->partition->embed_regions[0]));
+
+				mmap_for_reading_tuple(this_state->left_curr_node->partition, &(this_state->left_curr_node->partition->embed_regions[0]), this_state->left_curr_node_offset, &(this_state->left_tuple_def->size_def), o->desc->params.hash_join.min_part_size);
+				this_state->left_tuple_curr_node = this_state->left_curr_node->partition->embed_regions[0].tuple;
+				this_state->left_curr_node_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->left_curr_node->partition->embed_regions[0]));
+
+				if(this_state->is_valid_left_probe_key)
+					reset_cash_table_key(&(this_state->left_probe_key), this_state->right_grash_index, this_state->left_tuple_curr_node, this_state->left_tuple_def, o->desc->params.hash_join.left_key_element_ids, hash_value);
+				else
+				{
+					this_state->left_probe_key = get_new_cash_table_key(this_state->right_grash_index, this_state->left_tuple_curr_node, this_state->left_tuple_def, o->desc->params.hash_join.left_key_element_ids, hash_value);
+					this_state->is_valid_left_probe_key = 1;
+				}
+
+				this_state->right_it = find_equals_in_cash_table(this_state->right_grash_index, &(this_state->left_probe_key));
+
+				if(this_state->right_it == NULL)
+				{
+					void* output_tuple = NULL;
+					if(DOES_IT_PRESERVE_LEFT(o->desc->params.hash_join.ptype))
+						output_tuple = produce_join_result(o, this_state->left_tuple_curr_node, NULL);
+
+					this_state->left_tuple_curr_node = NULL;
+
+					if(output_tuple)
+						return output_tuple;
+
+					continue;
+				}
+			}
+			else
+			{
+				this_state->right_it = next_equals_in_cash_table(this_state->right_grash_index, this_state->right_it);
+			}
+
+			// only comes here, if we have a valid left_tuple and the right_it matching
+			if(this_state->right_it != NULL)
+			{
+				this_state->right_it->as_value.state_u = 1;
+
+				return produce_join_result(o, this_state->left_tuple_curr_node, this_state->right_it->as_value.value);
+			}
+			else // we are done with this particular left side tuple
+			{
+				this_state->left_tuple_curr_node = NULL;
+
+				continue;
+			}
+		}
+
+		if(DOES_IT_PRESERVE_RIGHT(o->desc->params.hash_join.ptype))
+		{
+			if(this_state->right_it == NULL)
+			{
+				this_state->right_it = find_all_in_cash_table(this_state->right_grash_index);
+			}
+			else
+			{
+				this_state->right_it = next_all_in_cash_table(this_state->right_grash_index, this_state->right_it);
+			}
+
+			while(this_state->right_it != NULL)
+			{
+				if(this_state->right_it->as_value.state_u == 0) // this right tuple was never picked
+					return produce_join_result(o, NULL, this_state->right_it->as_value.value);
+				else
+					this_state->right_it = next_all_in_cash_table(this_state->right_grash_index, this_state->right_it);
+			}
+		}
+
+		delete_cash_table(this_state->right_grash_index);
+		this_state->right_grash_index = NULL;
+
+		unmap_all_partition_mmaped_regions(this_state->right_curr_node);
+		close_all_partition_files(this_state->right_curr_node);
+
+		unmap_all_partition_mmaped_regions(this_state->left_curr_node);
+		close_all_partition_files(this_state->left_curr_node);
+
+		this_state->curr_nodes_processed = 1;
+	}
 
 	o->destroy_state(o);
 	return NULL;
@@ -309,6 +517,13 @@ void open_hash_join_operator(operator* o)
 
 	this_state->right_curr_node = NULL;
 	this_state->left_curr_node = NULL;
+
+	this_state->curr_nodes_processed = 0;
+
+	this_state->left_curr_node_offset = 0;
+	this_state->right_curr_node_offset = 0;
+
+	this_state->left_tuple_curr_node = NULL;
 
 	this_state->is_valid_left_probe_key = 0;
 
