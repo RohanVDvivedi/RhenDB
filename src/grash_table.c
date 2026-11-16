@@ -68,7 +68,7 @@ void insert_to_grash_table(grash_table* gt_p, void* value, uint64_t optional_pre
 {
 	uint64_t hash_value = optional_pre_computed_hash_value;
 	if(hash_value == 0)
-		hash_tuple_rhendb(value, gt_p->value_def, gt_p->key_element_ids, FNV_64_TUPLE_HASHER, gt_p->key_element_count, gt_p->tx);
+		hash_value = hash_tuple_rhendb(value, gt_p->value_def, gt_p->key_element_ids, FNV_64_TUPLE_HASHER, gt_p->key_element_count, gt_p->tx);
 	char hash_tuple_buffer[20];
 	build_hash_tuple(gt_p, hash_tuple_buffer, hash_value);
 
@@ -87,7 +87,7 @@ void insert_to_grash_table(grash_table* gt_p, void* value, uint64_t optional_pre
 			case COLLECTION :
 			{
 				grash_table_node** next_gtn_p = &(gtn_p->partitions[child_partition_in_collection(hash_value, gtn_p->level)]);
-				if(next_gtn_p == NULL) // if the next_gtn_p is NULL, create one for this new tuple
+				if((*next_gtn_p) == NULL) // if the next_gtn_p is NULL, create one for this new tuple
 				{
 					gtn_p->partitions[child_partition_in_collection(hash_value, gtn_p->level)] = malloc(sizeof(grash_table_node));
 
@@ -121,7 +121,7 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p)
 	open_file_for_interim_tuple_store(gtn_p->partition);
 
 	uint64_t offset = 0;
-	while(offset <= get_total_bytes_in_interim_tuple_store(gtn_p->partition))
+	while(offset < get_total_bytes_in_interim_tuple_store(gtn_p->partition))
 	{
 		// get hash value
 		mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), offset, &(gt_p->hash_def.size_def), gt_p->min_bytes_to_mmap);
@@ -203,7 +203,7 @@ cash_table* index_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p, i
 	cash_table_entry k;
 
 	uint64_t offset = 0;
-	while(offset <= get_total_bytes_in_interim_tuple_store(gtn_p->partition))
+	while(offset < get_total_bytes_in_interim_tuple_store(gtn_p->partition))
 	{
 		// get hash value
 		mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), offset, &(gt_p->hash_def.size_def), gt_p->min_bytes_to_mmap);
@@ -224,12 +224,12 @@ cash_table* index_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p, i
 		if(distinct_keys_only)
 		{
 			if(is_valid_k)
+				reset_cash_table_key(&k, ct_p, value, gt_p->value_def, gt_p->key_element_ids, hash_value);
+			else
 			{
 				k = get_new_cash_table_key(ct_p, value, gt_p->value_def, gt_p->key_element_ids, hash_value);
 				is_valid_k = 1;
 			}
-			else
-				reset_cash_table_key(&k, ct_p, value, gt_p->value_def, gt_p->key_element_ids, hash_value);
 
 			if(find_equals_in_cash_table(ct_p, &k) == NULL) // only insert if not found
 			{
