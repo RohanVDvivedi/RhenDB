@@ -89,8 +89,6 @@ void insert_to_grash_table(grash_table* gt_p, void* value, uint64_t optional_pre
 				grash_table_node** next_gtn_p = &(gtn_p->partitions[child_partition_in_collection(hash_value, gtn_p->level)]);
 				if((*next_gtn_p) == NULL) // if the next_gtn_p is NULL, create one for this new tuple
 				{
-					gtn_p->partitions[child_partition_in_collection(hash_value, gtn_p->level)] = malloc(sizeof(grash_table_node));
-
 					(*next_gtn_p) = malloc(sizeof(grash_table_node));
 
 					(*next_gtn_p)->type = PARTITION;
@@ -137,7 +135,7 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p)
 		offset = next_tuple_offset_for_interim_tuple_region(&(gtn_p->partition->embed_regions[0]));
 
 		// get value tuple
-		mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), offset, &(gt_p->hash_def.size_def), gt_p->min_bytes_to_mmap);
+		mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), offset, &(gt_p->value_def->size_def), gt_p->min_bytes_to_mmap);
 		void* value = gtn_p->partition->embed_regions[0].tuple;
 
 		interim_tuple_store** part = &(partitions[child_partition_in_collection(hash_value, gtn_p->level)]);
@@ -217,7 +215,7 @@ cash_table* index_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p, i
 		offset = next_tuple_offset_for_interim_tuple_region(&(gtn_p->partition->embed_regions[0]));
 
 		// get value tuple
-		mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), offset, &(gt_p->hash_def.size_def), gt_p->min_bytes_to_mmap);
+		mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), offset, &(gt_p->value_def->size_def), gt_p->min_bytes_to_mmap);
 		void* value = gtn_p->partition->embed_regions[0].tuple;
 
 		// add then both to the index
