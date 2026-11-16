@@ -3,6 +3,8 @@
 
 #include<rhendb/grash_table.h>
 
+#include<rhendb/interim_tuple_store.h>
+
 #define BITS_PER_COLLECTION 3 // must be greater than 0
 
 #define PARTITIONS_PER_COLLECTION (1ULL << BITS_PER_COLLECTION)
@@ -38,10 +40,16 @@ struct grash_table
 
 	uint32_t key_element_count;
 
+	tuple_def hash_def;
+
 	grash_table_node* root;
+
+	uint32_t min_bytes_to_mmap;
+
+	transaction* tx;
 };
 
-grash_table* get_new_grash_table(const tuple_def* value_def, const positional_accessor* key_element_ids, uint32_t key_element_count);
+grash_table* get_new_grash_table(const tuple_def* value_def, const positional_accessor* key_element_ids, uint32_t key_element_count, uint32_t min_bytes_to_mmap, transaction* tx);
 
 void delete_grash_table(grash_table* gt_p);
 
