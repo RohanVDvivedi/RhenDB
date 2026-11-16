@@ -84,7 +84,18 @@ void insert_to_grash_table(grash_table* gt_p, void* value, uint64_t optional_pre
 			}
 			case COLLECTION :
 			{
-				gtn_p = gtn_p->partitions[child_partition_in_collection(hash_value, gtn_p->level)];
+				grash_table_node** next_gtn_p = &(gtn_p->partitions[child_partition_in_collection(hash_value, gtn_p->level)]);
+				if(next_gtn_p == NULL) // if the next_gtn_p is NULL, create one for this new tuple
+				{
+					gtn_p->partitions[child_partition_in_collection(hash_value, gtn_p->level)] = malloc(sizeof(grash_table_node));
+
+					(*next_gtn_p) = malloc(sizeof(grash_table_node));
+
+					(*next_gtn_p)->type = PARTITION;
+					(*next_gtn_p)->level = gtn_p->level + BITS_PER_COLLECTION;
+					(*next_gtn_p)->partition = get_new_interim_tuple_store(gt_p->min_bytes_to_mmap);
+				}
+				gtn_p = (*next_gtn_p);
 				break;
 			}
 		}
@@ -142,6 +153,12 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p)
 
 	for(uint32_t i = 0; i < PARTITIONS_PER_COLLECTION; i++)
 	{
+		if(partitions[i] == NULL)
+		{
+			gtn_p->partitions[i] = NULL;
+			continue;
+		}
+
 		gtn_p->partitions[i] = malloc(sizeof(grash_table_node));
 
 		gtn_p->partitions[i].type = PARTITION;
