@@ -27,8 +27,8 @@ struct op_state
 
 	cash_table* right_grash_index;
 
-	grash_table_node* right_curr_node;
-	grash_table_node* left_curr_node;
+	grash_table_node* right_curr_node; // current node being probed
+	grash_table_node* left_curr_node; // current node from which keys are selected to be probed
 
 	// probe key
 
@@ -100,6 +100,9 @@ static void* next_tuple(operator* o, int* error_code)
 					if(o->desc->params.hash_join.min_part_size < this_state->right_cash->memory_utilization)
 					{
 						this_state->right_grash = get_new_grash_table(this_state->right_tuple_def, o->desc->params.hash_join.right_key_element_ids, o->desc->params.hash_join.key_element_count, o->desc->params.hash_join.min_part_size, o->self_query_plan->desc->curr_tx);
+
+						// initialize probe side partition also
+						this_state->left_grash = get_new_grash_table(this_state->left_tuple_def, o->desc->params.hash_join.left_key_element_ids, o->desc->params.hash_join.key_element_count, o->desc->params.hash_join.min_part_size, o->self_query_plan->desc->curr_tx);
 
 						for(const cash_table_entry* e = find_all_in_cash_table(this_state->right_cash); e != NULL; e = next_all_in_cash_table(this_state->right_cash, e))
 							insert_to_grash_table(this_state->right_grash, e->as_value.value, e->hash_value);
@@ -211,7 +214,38 @@ static void* next_tuple(operator* o, int* error_code)
 	}
 
 	// build side spilled to right_grash, spill left side too
-	// TODO
+
+	// we will need to partition the probe side just like the build side because we just spilled
+	if(this_state->left_input_operator != NULL)
+	{
+		while(1)
+		{
+			// get left side tuple for building the probe partitions
+			void* left_tuple = this_state->left_input_operator->next_tuple(this_state->left_input_operator, error_code);
+			if(left_tuple == NULL)
+			{
+				if(*error_code)
+				{
+					o->destroy_state(o);
+					return NULL;
+				}
+				this_state->left_input_operator->destroy_state(this_state->left_input_operator);
+				this_state->left_input_operator = NULL;
+				break;
+			}
+
+			// build partition
+			{
+				insert_to_grash_table(this_state->left_grash, left_tuple, 0);
+
+				free(left_tuple);
+			}
+		}
+	}
+
+	// now we need to recurse on both right and left side partitons
+	// every time right side (the build side) is too big, then partition it, and do it similarly on the left side
+	// once they are not partitionable, then index right side and probe left side tuples from it processing inputs
 
 	o->destroy_state(o);
 	return NULL;
