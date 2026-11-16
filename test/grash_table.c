@@ -77,8 +77,9 @@ void insert_to_grash_table(grash_table* gt_p, void* value, uint64_t optional_pre
 		{
 			case PARTITION :
 			{
+				open_file_for_interim_tuple_store(gtn_p->partition);
 				append_tuple_to_interim_tuple_store2(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), hash_tuple_buffer, &(gt_p->hash_def.size_def), gt_p->min_bytes_to_mmap); // first append the value value, then the tuple itself
-				append_tuple_to_interim_tuple_store2(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), value, &(gt_p->value_def->size_def), gt_p->min_bytes_to_mmap)
+				append_tuple_to_interim_tuple_store2(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), value, &(gt_p->value_def->size_def), gt_p->min_bytes_to_mmap);
 				return;
 			}
 			case COLLECTION :
@@ -90,7 +91,66 @@ void insert_to_grash_table(grash_table* gt_p, void* value, uint64_t optional_pre
 	}
 }
 
-int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p);
+int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p)
+{
+	if(gtn_p->type == COLLECTION)
+		return 0;
+
+	if(gtn_p->level >= 64)
+		return 0;
+
+	interim_tuple_store* partitions[PARTITIONS_PER_COLLECTION] = {0};
+
+	open_file_for_interim_tuple_store(gtn_p->partition);
+
+	uint64_t offset = 0;
+	while(offset <= get_total_bytes_in_interim_tuple_store(gtn_p->partition))
+	{
+		// get hash value
+		mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), offset, &(gt_p->hash_def.size_def), gt_p->min_bytes_to_mmap);
+		char hash_tuple_buffer[20];
+		memory_move(hash_tuple_buffer, gtn_p->partition->embed_regions[0].tuple, get_tuple_size(&(gt_p->hash_def), gtn_p->partition->embed_regions[0].tuple));
+		uint64_t hash_value = 0;
+		{
+			const data_type_info* dti_temp = NULL;
+			datum uval;
+			get_value_from_element_from_tuple(&uval, &dti_temp, &(gt_p->hash_def), SELF, hash_tuple_buffer)
+			hash_value = uval->uint_value;
+		}
+		offset = next_tuple_offset_for_interim_tuple_region(&(gtn_p->partition->embed_regions[0]));
+
+		// get value tuple
+		mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), offset, &(gt_p->hash_def.size_def), gt_p->min_bytes_to_mmap);
+		void* value = gtn_p->partition->embed_regions[0].tuple;
+
+		interim_tuple_store** part = &(partitions[child_partition_in_collection(hash_value, gtn_p->level)]);
+
+		if((*part) == NULL)
+			(*part) = get_new_interim_tuple_store(gt_p->min_bytes_to_mmap);
+
+		// append both the hash value and value tuple to this partition
+
+		append_tuple_to_interim_tuple_store2((*part), &((*part)->embed_regions[0]), hash_tuple_buffer, &(gt_p->hash_def.size_def), gt_p->min_bytes_to_mmap); // first append the value value, then the tuple itself
+		append_tuple_to_interim_tuple_store2((*part), &((*part)->embed_regions[0]), value, &(gt_p->value_def->size_def), gt_p->min_bytes_to_mmap);
+
+		offset = next_tuple_offset_for_interim_tuple_region(&(gtn_p->partition->embed_regions[0]));
+	}
+
+	delete_interim_tuple_store(gtn_p->partition);
+
+	gtn_p->type = COLLECTION;
+
+	for(uint32_t i = 0; i < PARTITIONS_PER_COLLECTION; i++)
+	{
+		gtn_p->partitions[i] = malloc(sizeof(grash_table_node));
+
+		gtn_p->partitions[i].type = PARTITION;
+		gtn_p->partitions[i].level = gtn_p->level + BITS_PER_COLLECTION;
+		gtn_p->partitions[i].partition = partitions[i];
+	}
+
+	return 1;
+}
 
 cash_table* index_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p);
 
