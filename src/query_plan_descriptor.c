@@ -1363,7 +1363,7 @@ operator_desc* insert_hash_join_operator_descriptor(query_plan_desc* qpd, operat
 
 	if(min_part_size == 0)
 	{
-		printf("min_run_size can not be 0 for hash_join_operator_descriptor\n");
+		printf("min_part_size can not be 0 for hash_join_operator_descriptor\n");
 		return NULL;
 	}
 
