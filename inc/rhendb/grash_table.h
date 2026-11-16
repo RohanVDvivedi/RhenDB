@@ -1,7 +1,9 @@
 #ifndef GRASH_TABLE_H
 #define GRASH_TABLE_H
 
-#include<rhendb/grash_table.h>
+#include<rhendb/transaction.h>
+
+#include<rhendb/cash_table.h>
 
 #include<rhendb/interim_tuple_store.h>
 

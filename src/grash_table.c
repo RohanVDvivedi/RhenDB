@@ -43,7 +43,7 @@ static void delete_grash_table_node(grash_table_node* gtn_p)
 		case COLLECTION :
 		{
 			for(uint32_t i = 0; i < PARTITIONS_PER_COLLECTION; i++)
-				delete_grash_table_node(gtn_p->partitions[i])
+				delete_grash_table_node(gtn_p->partitions[i]);
 			free(gtn_p);
 			break;
 		}
@@ -52,7 +52,7 @@ static void delete_grash_table_node(grash_table_node* gtn_p)
 
 void delete_grash_table(grash_table* gt_p)
 {
-	delete_grash_table_node(gt_p->root)
+	delete_grash_table_node(gt_p->root);
 	free(gt_p);
 }
 
@@ -113,7 +113,7 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p)
 		return 0;
 
 	// tuples count in the partition must be atleast 2 (1 hash value + 1 value tuple), else fail partitioning
-	if((gtn_p->partition->total_tuples_count / 2) < 2)
+	if((gtn_p->partition->tuples_count / 2) < 2)
 		return 0;
 
 	interim_tuple_store* partitions[PARTITIONS_PER_COLLECTION] = {0};
@@ -131,8 +131,8 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p)
 		{
 			const data_type_info* dti_temp = NULL;
 			datum uval;
-			get_value_from_element_from_tuple(&uval, &dti_temp, &(gt_p->hash_def), SELF, hash_tuple_buffer)
-			hash_value = uval->uint_value;
+			get_value_from_element_from_tuple(&uval, &dti_temp, &(gt_p->hash_def), SELF, hash_tuple_buffer);
+			hash_value = uval.uint_value;
 		}
 		offset = next_tuple_offset_for_interim_tuple_region(&(gtn_p->partition->embed_regions[0]));
 
@@ -180,9 +180,9 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p)
 
 		gtn_p->partitions[i] = malloc(sizeof(grash_table_node));
 
-		gtn_p->partitions[i].type = PARTITION;
-		gtn_p->partitions[i].level = gtn_p->level + BITS_PER_COLLECTION;
-		gtn_p->partitions[i].partition = partitions[i];
+		gtn_p->partitions[i]->type = PARTITION;
+		gtn_p->partitions[i]->level = gtn_p->level + BITS_PER_COLLECTION;
+		gtn_p->partitions[i]->partition = partitions[i];
 	}
 
 	return 1;
@@ -190,10 +190,10 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p)
 
 cash_table* index_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p, int distinct_keys_only)
 {
-	if(gt_p->type == COLLECTION)
+	if(gtn_p->type == COLLECTION)
 		return NULL;
 
-	cash_table* ct_p = get_new_cash_table(10 + (gtn_p->partition->total_tuples_count / 5), gt_p->value_def, gt_p->key_element_ids, gt_p->key_element_count, gt_p->tx);
+	cash_table* ct_p = get_new_cash_table(10 + (gtn_p->partition->tuples_count / 5), gt_p->value_def, gt_p->key_element_ids, gt_p->key_element_count, gt_p->tx);
 
 	open_file_for_interim_tuple_store(gtn_p->partition);
 
@@ -211,19 +211,14 @@ cash_table* index_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p, i
 		{
 			const data_type_info* dti_temp = NULL;
 			datum uval;
-			get_value_from_element_from_tuple(&uval, &dti_temp, &(gt_p->hash_def), SELF, gtn_p->partition->embed_regions[0].tuple)
-			hash_value = uval->uint_value;
+			get_value_from_element_from_tuple(&uval, &dti_temp, &(gt_p->hash_def), SELF, gtn_p->partition->embed_regions[0].tuple);
+			hash_value = uval.uint_value;
 		}
 		offset = next_tuple_offset_for_interim_tuple_region(&(gtn_p->partition->embed_regions[0]));
 
 		// get value tuple
 		mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), offset, &(gt_p->hash_def.size_def), gt_p->min_bytes_to_mmap);
 		void* value = gtn_p->partition->embed_regions[0].tuple;
-
-		interim_tuple_store** part = &(partitions[child_partition_in_collection(hash_value, gtn_p->level)]);
-
-		if((*part) == NULL)
-			(*part) = get_new_interim_tuple_store(gt_p->min_bytes_to_mmap);
 
 		// add then both to the index
 		if(distinct_keys_only)
@@ -275,7 +270,7 @@ void unmap_all_partition_mmaped_regions(grash_table_node* gtn_p)
 		case COLLECTION :
 		{
 			for(uint32_t i = 0; i < PARTITIONS_PER_COLLECTION; i++)
-				unmap_all_partition_mmaped_regions(gtn_p->partitions[i])
+				unmap_all_partition_mmaped_regions(gtn_p->partitions[i]);
 			break;
 		}
 	}
@@ -296,7 +291,7 @@ void close_all_partition_files(grash_table_node* gtn_p)
 		case COLLECTION :
 		{
 			for(uint32_t i = 0; i < PARTITIONS_PER_COLLECTION; i++)
-				close_all_partition_files(gtn_p->partitions[i])
+				close_all_partition_files(gtn_p->partitions[i]);
 			break;
 		}
 	}
