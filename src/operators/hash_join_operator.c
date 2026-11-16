@@ -270,7 +270,7 @@ static void* next_tuple(operator* o, int* error_code)
 
 	if(this_state->right_curr_node == NULL)
 	{
-		this_state->curr_nodes_processed = 0;
+		this_state->curr_nodes_processed = 1;
 
 		next_child_node = 0;
 
@@ -357,15 +357,16 @@ static void* next_tuple(operator* o, int* error_code)
 		{
 			this_state->right_grash_index = index_grash_table_node(this_state->right_grash, this_state->right_curr_node, 0);
 
+			open_file_for_interim_tuple_store(this_state->left_curr_node->partition);
+
 			this_state->left_curr_node_offset = 0;
-			mmap_for_reading_tuple(this_state->left_curr_node->partition, &(this_state->left_curr_node->partition->embed_regions[0]), this_state->left_curr_node_offset, &(this_state->left_tuple_def->size_def), o->desc->params.hash_join.min_part_size);
+			mmap_for_reading_tuple(this_state->left_curr_node->partition, &(this_state->left_curr_node->partition->embed_regions[0]), this_state->left_curr_node_offset, &(this_state->left_grash->hash_def.size_def), o->desc->params.hash_join.min_part_size);
 		}
 
 		while(this_state->left_curr_node_offset < this_state->left_curr_node->partition->next_tuple_offset)
 		{
 			if(this_state->right_it == NULL)
 			{
-				mmap_for_reading_tuple(this_state->left_curr_node->partition, &(this_state->left_curr_node->partition->embed_regions[0]), this_state->left_curr_node_offset, &(this_state->left_grash->hash_def.size_def), o->desc->params.hash_join.min_part_size);
 				uint64_t hash_value = 0;
 				{
 					const data_type_info* dti_temp = NULL;
@@ -373,11 +374,10 @@ static void* next_tuple(operator* o, int* error_code)
 					get_value_from_element_from_tuple(&uval, &dti_temp, &(this_state->left_grash->hash_def), SELF, this_state->left_curr_node->partition->embed_regions[0].tuple);
 					hash_value = uval.uint_value;
 				}
-				this_state->left_curr_node_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->left_curr_node->partition->embed_regions[0]));
 
+				this_state->left_curr_node_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->left_curr_node->partition->embed_regions[0]));
 				mmap_for_reading_tuple(this_state->left_curr_node->partition, &(this_state->left_curr_node->partition->embed_regions[0]), this_state->left_curr_node_offset, &(this_state->left_tuple_def->size_def), o->desc->params.hash_join.min_part_size);
 				this_state->left_tuple_curr_node = this_state->left_curr_node->partition->embed_regions[0].tuple;
-				this_state->left_curr_node_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->left_curr_node->partition->embed_regions[0]));
 
 				if(this_state->is_valid_left_probe_key)
 					reset_cash_table_key(&(this_state->left_probe_key), this_state->right_grash_index, this_state->left_tuple_curr_node, this_state->left_tuple_def, o->desc->params.hash_join.left_key_element_ids, hash_value);
@@ -395,6 +395,7 @@ static void* next_tuple(operator* o, int* error_code)
 					if(DOES_IT_PRESERVE_LEFT(o->desc->params.hash_join.ptype))
 						output_tuple = produce_join_result(o, this_state->left_tuple_curr_node, NULL);
 
+					this_state->left_curr_node_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->left_curr_node->partition->embed_regions[0]));
 					this_state->left_tuple_curr_node = NULL;
 
 					if(output_tuple)
@@ -417,6 +418,7 @@ static void* next_tuple(operator* o, int* error_code)
 			}
 			else // we are done with this particular left side tuple
 			{
+				this_state->left_curr_node_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->left_curr_node->partition->embed_regions[0]));
 				this_state->left_tuple_curr_node = NULL;
 
 				continue;
