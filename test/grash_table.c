@@ -34,6 +34,7 @@ static void delete_grash_table_node(grash_table_node* gtn_p)
 	{
 		case PARTITION :
 		{
+			open_file_for_interim_tuple_store(gtn_p->partition);
 			delete_interim_tuple_store(gtn_p->partition);
 			free(gtn_p);
 			break;
@@ -110,6 +111,10 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p)
 	if(gtn_p->level >= 64)
 		return 0;
 
+	// tuples count in the partition must be atleast 2 (1 hash value + 1 value tuple), else fail partitioning
+	if((gtn_p->partition->total_tuples_count / 2) < 2)
+		return 0;
+
 	interim_tuple_store* partitions[PARTITIONS_PER_COLLECTION] = {0};
 
 	open_file_for_interim_tuple_store(gtn_p->partition);
@@ -145,6 +150,19 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p)
 		append_tuple_to_interim_tuple_store2((*part), &((*part)->embed_regions[0]), value, &(gt_p->value_def->size_def), gt_p->min_bytes_to_mmap);
 
 		offset = next_tuple_offset_for_interim_tuple_region(&(gtn_p->partition->embed_regions[0]));
+	}
+
+	uint32_t total_valid_partitions = 0;
+	for(uint32_t i = 0; i < PARTITIONS_PER_COLLECTION; i++)
+		total_valid_partitions += (partitions[i] != NULL);
+	if(total_valid_partitions <= 1) // if we failed partitioning because of skew, do not modify the gtn_p, discard the partitions
+	{
+		for(uint32_t i = 0; i < PARTITIONS_PER_COLLECTION; i++)
+			if(partitions[i] != NULL)
+				delete_interim_tuple_store(partitions[i]);
+		unmap_all_embed_regions_in_interim_tuple_store(gtn_p->partition);
+		close_file_for_interim_tuple_store(gtn_p->partition);
+		return 0;
 	}
 
 	delete_interim_tuple_store(gtn_p->partition);
