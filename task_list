@@ -2,26 +2,8 @@ PICKED TASKS
 
  * volcano model
 
-   * #define BITS_FOR_PARTITIONS 2 // can not be 0
-   * #define PARTITIONS_PER_COLLECTION (1 << BITS_FOR_PARTITIONS)
-   * grash_table{grash_table_node* root; tuple_def* value_def; key_element_ids; key_element_count;}
-   grash_table_node{
-    uint64_t level; // [0, 64) -> 0 for the root node in all cases, and increments by BITS_FOR_PARTITIONS, for every collection
-    grash_table_node_type type; // PARTITION or COLLECTION
-    union{
-      interim_tuple_store* partion;
-      grash_table_node* partitions[PARTITIONS_PER_COLLECTION]; // (hash_value >> level) % PARTITIONS_PER_COLLECTION to find the child it will go into
-    };
-   }
-   * every time a partition is partitioned to make it into a collection, its level remains the same but the children get level = parent_level + BITS_FOR_PARTITIONS
-   * no partitioning if the this->level >= 64
-   * each partiton stores hash_value as a tuple followed by value tuple itself
-   * grash_table* get_new_grash_table()
-   * void delete_grash_table(grash_table*)
-   * int partition_grash_table_node(grash_table*, grash_table_node* );
-   * int insert_in_grash_table_node(grash_table* , void* , uint64_t optional_pre_computed_hash_value = 0); // recursively traverses
-   * cash_table* index_grash_table_partition(grash_table_node* ) // only works for partiton type nodes
-   * void close_all_partitions_for_grash_table_nodes() // called when the build phase is completed
+   * integrate cash_table and grash_table to make grash_join, grash_semi_join, and grash_aggregation
+     * if the grash table partition is too big use sort based variants
 
    * scan/point_lookup
 
