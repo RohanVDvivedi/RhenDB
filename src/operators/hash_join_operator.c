@@ -396,6 +396,7 @@ static void* next_tuple(operator* o, int* error_code)
 						output_tuple = produce_join_result(o, this_state->left_tuple_curr_node, NULL);
 
 					this_state->left_curr_node_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->left_curr_node->partition->embed_regions[0]));
+					mmap_for_reading_tuple(this_state->left_curr_node->partition, &(this_state->left_curr_node->partition->embed_regions[0]), this_state->left_curr_node_offset, &(this_state->left_grash->hash_def.size_def), o->desc->params.hash_join.min_part_size);
 					this_state->left_tuple_curr_node = NULL;
 
 					if(output_tuple)
@@ -419,6 +420,7 @@ static void* next_tuple(operator* o, int* error_code)
 			else // we are done with this particular left side tuple
 			{
 				this_state->left_curr_node_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->left_curr_node->partition->embed_regions[0]));
+				mmap_for_reading_tuple(this_state->left_curr_node->partition, &(this_state->left_curr_node->partition->embed_regions[0]), this_state->left_curr_node_offset, &(this_state->left_grash->hash_def.size_def), o->desc->params.hash_join.min_part_size);
 				this_state->left_tuple_curr_node = NULL;
 
 				continue;
