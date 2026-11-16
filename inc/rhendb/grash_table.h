@@ -49,8 +49,9 @@ struct grash_table
 	transaction* tx;
 };
 
+// it returns a grash_table with root being a collection with no tuples in it
+// we could return a root that is a simple PARTITION but this would be of no use
 grash_table* get_new_grash_table(const tuple_def* value_def, const positional_accessor* key_element_ids, uint32_t key_element_count, uint32_t min_bytes_to_mmap, transaction* tx);
-grash_table* get_new_grash_table_partitioned(const tuple_def* value_def, const positional_accessor* key_element_ids, uint32_t key_element_count, uint32_t min_bytes_to_mmap, transaction* tx);
 
 void delete_grash_table(grash_table* gt_p);
 

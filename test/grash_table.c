@@ -14,29 +14,6 @@ grash_table* get_new_grash_table(const tuple_def* value_def, const positional_ac
 
 	gt_p->root = malloc(sizeof(grash_table_node));
 
-	gt_p->root->type = PARTITION;
-	gt_p->root->level = 0;
-	gt_p->root->partition = get_new_interim_tuple_store(min_bytes_to_mmap);
-
-	gt_p->min_bytes_to_mmap = min_bytes_to_mmap;
-
-	gt_p->tx = tx;
-
-	return gt_p;
-}
-
-grash_table* get_new_grash_table_partitioned(const tuple_def* value_def, const positional_accessor* key_element_ids, uint32_t key_element_count, uint32_t min_bytes_to_mmap, transaction* tx)
-{
-	grash_table* gt_p = malloc(sizeof(grash_table));
-
-	gt_p->value_def = value_def;
-	gt_p->key_element_ids = key_element_ids;
-	gt_p->key_element_count = key_element_count;
-
-	initialize_tuple_def(&(gt_p->hash_def), UINT_NON_NULLABLE[8]);
-
-	gt_p->root = malloc(sizeof(grash_table_node));
-
 	gt_p->root->type = COLLECTION;
 	gt_p->root->level = 0;
 	for(uint32_t i = 0; i < PARTITIONS_PER_COLLECTION; i++)
