@@ -2,8 +2,7 @@ PICKED TASKS
 
  * volcano model
 
-   * integrate cash_table and grash_table to make grash_join, grash_semi_join, and grash_aggregation
-     * if the grash table partition is too big use sort based variants
+   * integrate cash_table and grash_table to make hash_aggregation
 
    * scan/point_lookup
 
