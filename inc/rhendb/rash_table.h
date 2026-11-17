@@ -139,6 +139,10 @@ int remove_from_rash_table_iterator(rash_table_iterator* rti_p);
 binary_read_iterator* read_value_in_rash_table_iterator(const rash_table_iterator* rti_p);
 
 binary_write_iterator* open_for_writing_value_in_rash_table_iterator(rash_table_iterator* rti_p);
+
+// after every single append to the binary_write_iterator by the above function, you must call fix_all_incorrect_unused_space_entries_in_blob_store_of_rash_table(force_fix_invalid_entries = 0), to clean up stale free_space tree entries
+// the close_and_write_value_in_hash_table_iterator() calls it anyway for the last insert
+
 void close_and_write_value_in_hash_table_iterator(rash_table_iterator* rti_p, binary_write_iterator* bwi_p);
 
 int next_in_rash_table_iterator(rash_table_iterator* rti_p);
