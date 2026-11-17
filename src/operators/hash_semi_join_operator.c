@@ -324,21 +324,28 @@ static void* next_tuple(operator* o, int* error_code)
 			if(left_key_exists_in_right)
 			{
 				if(DOES_PRODUCE_MATCHED_LEFT_TUPLES(o->desc->params.hash_semi_join.stype))
-					output_tuple = left_tuple;
+				{
+					uint32_t left_tuple_size = get_tuple_size(this_state->left_tuple_def, left_tuple);
+					void* output_tuple = malloc(left_tuple_size);
+					memory_move(output_tuple, left_tuple, left_tuple_size);
+				}
 			}
 			else
 			{
 				if(DOES_PRODUCE_UN_MATCHED_LEFT_TUPLES(o->desc->params.hash_semi_join.stype))
-					output_tuple = left_tuple;
+				{
+					uint32_t left_tuple_size = get_tuple_size(this_state->left_tuple_def, left_tuple);
+					void* output_tuple = malloc(left_tuple_size);
+					memory_move(output_tuple, left_tuple, left_tuple_size);
+				}
 			}
 
+			this_state->left_curr_node_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->left_curr_node->partition->embed_regions[0]));
+			mmap_for_reading_tuple(this_state->left_curr_node->partition, &(this_state->left_curr_node->partition->embed_regions[0]), this_state->left_curr_node_offset, &(this_state->left_grash->hash_def.size_def), o->desc->params.hash_semi_join.min_part_size);
+			left_tuple = NULL;
+
 			if(output_tuple != NULL) // if output_tuple is set, clone it and return it
-			{
-				uint32_t left_tuple_size = get_tuple_size(this_state->left_tuple_def, left_tuple);
-				void* output_tuple_clone = malloc(left_tuple_size);
-				memory_move(output_tuple_clone, output_tuple, left_tuple_size);
-				return output_tuple_clone;
-			}
+				return output_tuple;
 		}
 
 		delete_cash_table(this_state->right_grash_index);
