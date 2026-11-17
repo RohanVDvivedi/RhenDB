@@ -326,7 +326,7 @@ static void* next_tuple(operator* o, int* error_code)
 				if(DOES_PRODUCE_MATCHED_LEFT_TUPLES(o->desc->params.hash_semi_join.stype))
 				{
 					uint32_t left_tuple_size = get_tuple_size(this_state->left_tuple_def, left_tuple);
-					void* output_tuple = malloc(left_tuple_size);
+					output_tuple = malloc(left_tuple_size);
 					memory_move(output_tuple, left_tuple, left_tuple_size);
 				}
 			}
@@ -335,7 +335,7 @@ static void* next_tuple(operator* o, int* error_code)
 				if(DOES_PRODUCE_UN_MATCHED_LEFT_TUPLES(o->desc->params.hash_semi_join.stype))
 				{
 					uint32_t left_tuple_size = get_tuple_size(this_state->left_tuple_def, left_tuple);
-					void* output_tuple = malloc(left_tuple_size);
+					output_tuple = malloc(left_tuple_size);
 					memory_move(output_tuple, left_tuple, left_tuple_size);
 				}
 			}
