@@ -88,6 +88,8 @@ void* right_generator(void* generator_context, const tuple_def* generator_tuple_
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
 #define N_WAY_SORT                     16
 
+#define MIN_PART_SIZE (1024 * 1024)
+
 #define RECORD_S_KEY_ELEMENT_COUNT 1
 
 positional_accessor LEFT_KEY_POS[1] = {STATIC_POSITION(0)};
@@ -130,7 +132,7 @@ int main(int argc, char** argv)
 
 		operator_desc* right = insert_generator_operator_descriptor(qpd, right_generator, NULL, &record_def2);
 
-		operator_desc* join = insert_hash_semi_join_operator_descriptor(qpd, left, LEFT_KEY_POS, right, RIGHT_KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, LEFT_SEMI_JOIN);
+		operator_desc* join = insert_hash_semi_join_operator_descriptor(qpd, left, LEFT_KEY_POS, right, RIGHT_KEY_POS, RECORD_S_KEY_ELEMENT_COUNT, LEFT_SEMI_JOIN, MIN_PART_SIZE);
 
 		operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, join, RECORD_S_KEY_ELEMENT_COUNT, LEFT_KEY_POS, FINAL_CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
 	}
