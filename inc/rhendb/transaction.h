@@ -33,24 +33,6 @@ struct temporary_extension_store
 	rwlock blob_store_lock;
 };
 
-// every tuple inserted (even update is a delete followed by insert) must have it's tuple_pointer inserted in this hashset
-// this allows the source operators like table scans and index scans know which tuples to not return from the scan
-// this enables scanning and then updating the tuple (effectively an insert), and now the scans can skip this particular tuple_pointer and avoid double processing it
-// every insert or update (delete then insert), must register it's inserted tuple pointer in this hashset
-
-typedef struct hashset_for_tuple_pointers hashset_for_tuple_pointers;
-struct hashset_for_tuple_pointers
-{
-	hash_table_handle root_handle;
-
-	uint64_t entries_count;
-
-	// record_def is simply the tuple_pointer_tuple_def and it itself is the key
-	hash_table_tuple_defs httd;
-
-	rwlock hash_table_lock;
-};
-
 // this is the number of temporary extension stores that any 1 particular transaction will maintain
 #define TEMPORARY_EXTENSION_STORE_COUNT 64
 
@@ -101,9 +83,6 @@ struct transaction
 	// mvcc snapshot, for isolation level
 	mvcc_snapshot* snapshot;
 
-	// every inserted tuple pointer must be registered here, so the source operator scans can skip it
-	hashset_for_tuple_pointers inserted_tuple_pointers;
-
 	// every insert/delete is inserted here to allow undoing upon rollback to savepoint
 	savepoint_log savepoint_logs;
 
@@ -116,14 +95,9 @@ struct transaction
 
 // additional_flags for the insertion operator and scan operator, they toggle the additional book keeping
 // that the operator is expected to perform, over and above the insert itself
-#define RESCAN_PROTECTION_ENABLED   1
-// used when the same query scans and inserts OR updates to the same table, only insertion or only scan on the same table does not need it
-// when passed insertion operator inserts inserted tuple pointers to inserted_tuple_pointers, and the same query scans checks if it needs to skip them
 #define SAVEPOINT_LOGGING_ENABLED   2
 // used when there is a savepoint defined prior to this call
 // when passed every insertion and deletion is logged in the savepoint_log as (takble_id, partition_id, tuple_pointer), so that it can be rolled back, by null-ing the xmin or xmax
-
-#define IS_RESCAN_PROTECTION_ENABLED(flags)  ((flags) & RESCAN_PROTECTION_ENABLED)
 
 #define IS_SAVEPOINT_LOGGING_ENABLED(flags)  ((flags) & SAVEPOINT_LOGGING_ENABLED)
 
@@ -133,16 +107,6 @@ void initialize_transaction(transaction* tx, rhendb* rdb);
 
 void notify_deadlocked(void* context_p, void* transaction_vp);
 void notify_unblocked(void* context_p, void* transaction, void* task);
-
-// registers that there was an insert at the given tuple_pointer for the current query
-void register_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr);
-
-// checks if a given tuple_pointer was inserted for the current query, so that the source scan operators can skip it
-int was_registered_as_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr);
-
-// deletes the old inserted_tuple_pointers and creates new hash_table for it
-// this needs to be called after the current query is completed, so that this very same inserted tuple pointer are visible to the next query in the same transaction
-void reset_inserted_tuple_pointers(transaction* tx);
 
 // this function allows only type = INSERTION_SAVEPOINT_LOG or DELETION_SAVEPOINT_LOG
 void log_to_savepoint_log(transaction* tx, savepoint_log_type type, uint64_t table_id, uint64_t partition_id, tuple_pointer tptr);

@@ -7,12 +7,6 @@
 #define MAX_ENTRIES_IN_VOL_BLOBS_HTAN        56 // threshold should be something like 20 to 24 for fixing the accumulated entries
 #define TEMP_EXT_BLOB_STORE_FIX_THRESHOLD    25
 
-// we already know that tuple_pointer has only 2 fixed sized unsigned integral attributes
-positional_accessor key_element_positions_for_hashset_for_tuple_pointers[2] = {
-	STATIC_POSITION(0),
-	STATIC_POSITION(1),
-};
-
 positional_accessor key_element_positions_for_hashset_for_savepoint_names[1] = {
 	SELF,
 };
@@ -21,13 +15,6 @@ void initialize_transaction(transaction* tx, rhendb* rdb)
 {
 	tx->rdb = rdb;
 	tx->snapshot = NULL;
-
-	{
-		int abort_error_dummy = 0;
-		init_hash_table_tuple_definitions(&(tx->inserted_tuple_pointers.httd), &(rdb->volatile_rage_engine.pam_p->pas), &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_tuple_def), key_element_positions_for_hashset_for_tuple_pointers, sizeof(key_element_positions_for_hashset_for_tuple_pointers)/ sizeof(positional_accessor), FNV_64_TUPLE_HASHER);
-		tx->inserted_tuple_pointers.root_handle = get_new_hash_table(64, &(tx->inserted_tuple_pointers.httd), rdb->volatile_rage_engine.pam_p, rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
-		initialize_rwlock(&(tx->inserted_tuple_pointers.hash_table_lock), NULL);
-	}
 
 	{
 		int abort_error_dummy = 0;
@@ -86,81 +73,6 @@ void notify_unblocked(void* context_p, void* transaction_vp, void* task_vp)
 	transaction* tx = transaction_vp;
 
 	pthread_cond_broadcast(&(tx->wait_on_lock_table_for_lock));
-}
-
-void register_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr)
-{
-	char tptr_tpl[20];
-	set_tuple_pointer(tptr_tpl, tptr, &(tx->rdb->persistent_acid_rage_engine.pam_p->pas)); // tuple_pointer belongs to the persistent_acid_rage_engine so this is the way to serialize it
-
-	int abort_error_dummy = 0;
-
-	write_lock(&(tx->inserted_tuple_pointers.hash_table_lock), BLOCKING);
-
-	// perform the insert and increment entry_count
-	{
-		hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->inserted_tuple_pointers.root_handle), (bucket_range){0,0}, tptr_tpl, &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
-
-		insert_in_hash_table_iterator(hti_p, tptr_tpl, NULL, &abort_error_dummy);
-		tx->inserted_tuple_pointers.entries_count++;
-
-		hash_table_vaccum_params htvp;
-		delete_hash_table_iterator(hti_p, &htvp, NULL, &abort_error_dummy);
-	}
-
-	// expand if required, we do not want to lookup more than a single page, 70% page fill works better for speed and efficient memory utilization, hence the 0.7
-	if( ((double)(tx->inserted_tuple_pointers.entries_count) * 12.0)
-		/ ((double)(tx->inserted_tuple_pointers.root_handle.bucket_count))
-		/ ((double)(tx->rdb->volatile_rage_engine.pam_p->pas.page_size))     > 0.7)
-		expand_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
-
-	write_unlock(&(tx->inserted_tuple_pointers.hash_table_lock));
-}
-
-int was_registered_as_inserted_tuple_pointer(transaction* tx, tuple_pointer tptr)
-{
-	char tptr_tpl[20];
-	set_tuple_pointer(tptr_tpl, tptr, &(tx->rdb->persistent_acid_rage_engine.pam_p->pas)); // tuple_pointer belongs to the persistent_acid_rage_engine so this is the way to serialize it
-
-	int abort_error_dummy = 0;
-
-	int was_registered = 0;
-
-	read_lock(&(tx->inserted_tuple_pointers.hash_table_lock), READ_PREFERRING, BLOCKING);
-
-	hash_table_iterator* hti_p = get_new_hash_table_iterator(&(tx->inserted_tuple_pointers.root_handle), (bucket_range){0,0}, tptr_tpl, &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, NULL, NULL, &abort_error_dummy);
-
-	if(!is_curr_bucket_empty_for_hash_table_iterator(hti_p))
-	{
-		while(1)
-		{
-			if(get_tuple_hash_table_iterator(hti_p) != NULL) // we found this exact tptr
-			{
-				was_registered = 1;
-				break;
-			}
-
-			if(!next_hash_table_iterator(hti_p, GO_NEXT_TUPLE_IN_SAME_BUCKET, NULL, &abort_error_dummy)) // if we can not go to the next one in the same bucket, we are done searching
-				break;
-		}
-	}
-
-	hash_table_vaccum_params htvp;
-	delete_hash_table_iterator(hti_p, &htvp, NULL, &abort_error_dummy);
-
-	read_unlock(&(tx->inserted_tuple_pointers.hash_table_lock));
-
-	return was_registered;
-}
-
-void reset_inserted_tuple_pointers(transaction* tx)
-{
-	int abort_error_dummy = 0;
-
-	destroy_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
-
-	tx->inserted_tuple_pointers.root_handle = get_new_hash_table(64, &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, tx->rdb->volatile_rage_engine.pmm_p, NULL, &abort_error_dummy);
-	tx->inserted_tuple_pointers.entries_count = 0;
 }
 
 void log_to_savepoint_log(transaction* tx, savepoint_log_type type, uint64_t table_id, uint64_t partition_id, tuple_pointer tptr)
@@ -665,13 +577,6 @@ void deinitialize_transaction(transaction* tx)
 		free(tx->savepoint_logs.savepoint_name_dti);
 		free(tx->savepoint_logs.savepoint_name_def);
 		pthread_mutex_destroy(&(tx->savepoint_logs.savepoint_lock));
-	}
-
-	{
-		int abort_error_dummy = 0;
-		destroy_hash_table(&(tx->inserted_tuple_pointers.root_handle), &(tx->inserted_tuple_pointers.httd), tx->rdb->volatile_rage_engine.pam_p, NULL, &abort_error_dummy);
-		deinit_hash_table_tuple_definitions(&(tx->inserted_tuple_pointers.httd));
-		deinitialize_rwlock(&(tx->inserted_tuple_pointers.hash_table_lock));
 	}
 
 	pthread_cond_destroy(&(tx->wait_on_lock_table_for_lock));
