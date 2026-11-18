@@ -167,6 +167,10 @@ static void* next_tuple(operator* o, int* error_code)
 			return output_tuple;
 		}
 
+		// we never spilled
+		if(this_state->grash == NULL)
+			break;
+
 		// if we just processed a partition fron grash, then unmap it's region and close it's file
 		if(this_state->curr_node != NULL)
 		{

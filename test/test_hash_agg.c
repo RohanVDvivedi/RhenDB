@@ -22,6 +22,8 @@
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
 #define N_WAY_SORT                     16
 
+#define MIN_PART_SIZE (256 * 1024 * 1024)
+
 #define RECORD_S_KEY_ELEMENT_COUNT 1
 
 positional_accessor KEY_POS[1] = {STATIC_POSITION(2)};
@@ -103,7 +105,7 @@ int main(int argc, char** argv)
 	{
 		operator_desc* strm_in = insert_stream_input_operator_descriptor(qpd, &rs, &record_def);
 
-		operator_desc* agg = insert_hash_aggregation_operator_descriptor(qpd, strm_in, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS);
+		operator_desc* agg = insert_hash_aggregation_operator_descriptor(qpd, strm_in, RECORD_S_KEY_ELEMENT_COUNT, KEY_POS, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, MIN_PART_SIZE);
 
 		operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, agg, 1, FINAL_SORT_KEY, CMP_DIR, N_WAY_SORT, SMALLEST_RUN_SIZE);
 	}
