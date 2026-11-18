@@ -22,7 +22,7 @@
 #define SMALLEST_RUN_SIZE              (1 * 1024 * 1024)
 #define N_WAY_SORT                     16
 
-#define MIN_PART_SIZE (256 * 1024 * 1024)
+#define MIN_PART_SIZE (1024 * 1024)
 
 #define RECORD_S_KEY_ELEMENT_COUNT 1
 
