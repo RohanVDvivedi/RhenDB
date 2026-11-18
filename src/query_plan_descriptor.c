@@ -287,13 +287,7 @@ operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetch
 		return NULL;
 	}
 
-	if(max_concurrent_jobs_count == 0)
-	{
-		printf("max_concurrent_jobs_count can not be 0 for scan_operator_descriptor\n");
-		return NULL;
-	}
-
-	operator_resource_counter result = {.buffer_counter = 2 * max_concurrent_jobs_count, .job_counter = max_concurrent_jobs_count, .thread_counter = max_concurrent_jobs_count};
+	operator_resource_counter result = {.buffer_counter = 2, .thread_counter = 1};
 
 	tuple_def* output_tuple_def = NULL;
 
@@ -347,7 +341,7 @@ operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetch
 	}
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SCAN);
-	d->params.scan = (scan_operator_params){ftabl, max_concurrent_jobs_count, output_flags, additional_flags};
+	d->params.scan = (scan_operator_params){ftabl, output_flags, additional_flags};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 
