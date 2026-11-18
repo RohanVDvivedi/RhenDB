@@ -175,6 +175,7 @@ static void* next_tuple(operator* o, int* error_code)
 			free(e->as_value.state_p);
 			delete_cash_table_entry(e);
 
+			output_tuple = realloc(output_tuple, get_tuple_size(o->desc->output_tuple_def, output_tuple));
 			return output_tuple;
 		}
 
