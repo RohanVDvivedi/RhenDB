@@ -18,6 +18,8 @@ struct op_state
 
 	grash_table_node* curr_node;
 
+	cash_table_entry* curr_entry;
+
 	datum* input_datums; // enough datums to accomodate max inputs from any aggregate function 
 };
 
@@ -124,13 +126,19 @@ static void* next_tuple(operator* o, int* error_code)
 				}
 			}
 		}
+
+		// start iteration
+		this_state->curr_entry = find_all_in_cash_table(this_state->cash);
 	}
 
 	while(1)
 	{
-		cash_table_entry* e = find_all_in_cash_table(this_state->cash);
-		if(e != NULL)
+		if(this_state->curr_entry != NULL)
 		{
+			// preserve curr_entry and go next 
+			cash_table_entry* e = this_state->curr_entry;
+			this_state->curr_entry = next_all_in_cash_table(this_state->cash, this_state->curr_entry);
+
 			// create output tuple
 			void* output_tuple = malloc(get_maximum_tuple_size(o->desc->output_tuple_def));
 			init_tuple(o->desc->output_tuple_def, output_tuple);
@@ -315,6 +323,9 @@ static void* next_tuple(operator* o, int* error_code)
 				}
 			}
 		}
+
+		// start iteration
+		this_state->curr_entry = find_all_in_cash_table(this_state->cash);
 	}
 
 	o->destroy_state(o);
@@ -366,6 +377,8 @@ void open_hash_aggregation_operator(operator* o)
 	this_state->grash = NULL;
 
 	this_state->curr_node = NULL;
+
+	this_state->curr_entry = NULL;
 
 	uint32_t max_input_datums_count = 0;
 	for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
