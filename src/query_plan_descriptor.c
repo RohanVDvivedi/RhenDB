@@ -887,7 +887,7 @@ operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qp
 	return d;
 }
 
-operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids)
+operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t min_part_size)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
 	{
@@ -904,6 +904,12 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 	if(key_element_count == 0)
 	{
 		printf("key_element_count must not be 0 for hash_aggregation_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(min_part_size == 0)
+	{
+		printf("min_part_size can not be 0 for hash_agregation_operator_descriptor\n");
 		return NULL;
 	}
 
@@ -964,7 +970,7 @@ operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd,
 	initialize_tuple_def(output_tuple_def, output_dti);
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_HASH_AGGREGATION);
-	d->params.hash_aggregation = (hash_aggregation_operator_params){input_operator_desc->index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions)};
+	d->params.hash_aggregation = (hash_aggregation_operator_params){input_operator_desc->index, key_element_count, deep_clone_positional_accessors(key_element_ids, key_element_count), aggregate_functions_count, shallow_clone_aggregate_functions(aggregate_functions, aggregate_functions_count), deep_clone_aggregate_input_element_ids(aggregate_input_element_ids, aggregate_functions_count, aggregate_functions), min_part_size};
 	d->output_tuple_def = output_tuple_def;
 	d->resource_counter = result;
 

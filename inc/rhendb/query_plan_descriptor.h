@@ -160,6 +160,7 @@ struct hash_aggregation_operator_params
 	uint32_t aggregate_functions_count;
 	aggregate_function** aggregate_functions;
 	positional_accessor** aggregate_input_element_ids;
+	uint32_t min_part_size;
 };
 
 typedef struct block_nested_loop_join_operator_params block_nested_loop_join_operator_params;
@@ -388,7 +389,7 @@ operator_desc* insert_simple_aggregation_operator_descriptor(query_plan_desc* qp
 operator_desc* insert_sort_operator_descriptor(query_plan_desc* qpd, tuples_down_counter result_counter, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, const compare_direction* key_compare_direction, uint32_t N_way_sort, uint64_t min_run_size);
 
 operator_desc* insert_sorted_aggregation_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids);
-operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids);
+operator_desc* insert_hash_aggregation_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, uint32_t key_element_count, const positional_accessor* key_element_ids, uint32_t aggregate_functions_count, aggregate_function* const * aggregate_functions, const positional_accessor** aggregate_input_element_ids, uint32_t min_part_size);
 
 operator_desc* insert_block_nested_loop_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, operator_desc* right_input_operator_desc, sql_expression* join_expr, join_preserve_type ptype, uint32_t min_block_size);
 

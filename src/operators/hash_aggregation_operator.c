@@ -1,27 +1,35 @@
 #include<rhendb/query_plan.h>
 #include<rhendb/operator_error_codes.h>
 
-#include<rhendb/rash_table.h>
+#include<rhendb/cash_table.h>
+#include<rhendb/grash_table.h>
 
 #include<rhendb/aggregate_functions.h>
-
-#define INIT_BUCKET_COUNT 64
-#define MAX_LOAD_FACTOR 1.3
 
 typedef struct op_state op_state;
 struct op_state
 {
 	operator* input_operator;
 
-	rash_table_handle rth;
+	const tuple_def* input_tuple_def;
 
-	int has_active_rti; // valid only if the build step is completed
-	rash_table_iterator rti;
+	cash_table* cash;
+	grash_table* grash;
 
-	// maximum number of input_datums required by any aggregate function
-	// 0, if there are no aggregate functions to be evaluated
-	uint32_t max_input_datums_count;
+	grash_table_node* curr_node;
+
+	datum* input_datums; // enough datums to accomodate max inputs from any aggregate function 
 };
+
+static void revise_key_datums_from_tuple(datum* key_datums, const void* tuple, const tuple_def* tpl_d, const positional_accessor* key_element_ids, uint32_t key_element_count)
+{
+	for(uint32_t i = 0; i < key_element_count; i++)
+	{
+		const data_type_info* dti_temp;
+		if(!get_value_from_element_from_tuple(&(key_datums[i]), &dti_temp, tpl_d, key_element_ids[i], tuple))
+			key_datums[i] = (*NULL_DATUM);
+	}
+}
 
 static void* next_tuple(operator* o, int* error_code)
 {
@@ -31,7 +39,7 @@ static void* next_tuple(operator* o, int* error_code)
 
 	op_state* this_state = o->state;
 
-	if(!this_state->has_active_rti)
+	if(this_state->input_operator != NULL) // consuming inputs is still pending
 	{
 		while(1)
 		{
@@ -43,174 +51,264 @@ static void* next_tuple(operator* o, int* error_code)
 					o->destroy_state(o);
 					return NULL;
 				}
+				this_state->input_operator->destroy_state(this_state->input_operator);
+				this_state->input_operator = NULL;
+
+				if(this_state->grash != NULL) // insertions are done so close the files
+				{
+					unmap_all_partition_mmaped_regions(this_state->grash->root);
+					close_all_partition_files(this_state->grash->root);
+				}
 				break;
 			}
 
-			// insert into the rth, if the aggregate_functions count == 0, no need to insert the value, just insert the key
+			cash_table_entry* e = get_new_cash_table_value_own(this_state->cash, tuple, 0);
+
+			// find an equals entry
+			cash_table_entry* f = find_equals_in_cash_table(this_state->cash, &e);
+
+			// if cash has this entry process_input it
+			if(f != NULL)
 			{
-				// create rash table key
-				rash_table_key rtk = get_new_rash_table_key(tuple, this_state->input_operator->desc->output_tuple_def, o->desc->params.hash_aggregation.key_element_ids, o->desc->params.hash_aggregation.key_element_count, o->self_query_plan->desc->curr_tx);
-
-				// open rash table iterator for insertion/appending
-				rash_table_iterator rti = find_equals_in_rash_table(&(this_state->rth), &rtk, 0);
-
-				// open write iterator on this key
-				binary_write_iterator* bwi_p = open_for_writing_value_in_rash_table_iterator(&rti);
-
-				// store the value in the rash_table, only if we need any inputs for the aggregation
-				if(this_state->max_input_datums_count > 0)
+				// process the aggregate function calls for this tuple
+				for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
 				{
-					// perform append into this iterator storing in the complete tuple
-					int abort_error_dummy = 0;
-					append_to_binary_write_iterator(bwi_p, tuple, get_tuple_size(this_state->input_operator->desc->output_tuple_def, tuple), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(&(this_state->rth.htan)), NULL, &abort_error_dummy);
-				}
+					// generate input params to the i-th udaf in input_datums
+					revise_key_datums_from_tuple(this_state->input_datums, tuple, this_state->input_tuple_def, o->desc->params.hash_aggregation.aggregate_input_element_ids[i], o->desc->params.hash_aggregation.aggregate_functions[i]->input_type_infos_count);
 
-				// close the bwi_p
-				close_and_write_value_in_hash_table_iterator(&rti, bwi_p);
-
-				// delete the insertion iterator
-				delete_rash_table_iterator(&rti);
-
-				// if the load factor went too high then expand the bucket_count for the partition
-				if(get_load_factor_for_rash_table(&(this_state->rth)) > MAX_LOAD_FACTOR)
-					expand_rash_table(&(this_state->rth));
-
-				// destroy rash table key
-				destroy_rash_table_key(&rtk);
-			}
-
-			free(tuple);
-		}
-
-		// create a rti to iterate over all the entries
-		this_state->rti = find_all_in_rash_table(&(this_state->rth), 1);
-		this_state->has_active_rti = 1;
-	}
-
-	// if no more entries in the build table, we are done
-	while(!exists_in_rash_table_iterator(&(this_state->rti)))
-	{
-		if(!next_in_rash_table_iterator(&(this_state->rti))) // exit only if we can not go next
-		{
-			o->destroy_state(o);
-			return NULL;
-		}
-	}
-
-	// get memory for states and input_datums
-	void** states = calloc(sizeof(void*), o->desc->params.hash_aggregation.aggregate_functions_count);
-	datum* input_datums = malloc(sizeof(datum) * this_state->max_input_datums_count);
-
-	// allocate for the output_tuple
-	void* output_tuple = malloc(get_maximum_tuple_size(o->desc->output_tuple_def));
-	init_tuple(o->desc->output_tuple_def, output_tuple);
-
-	// iterate over the current entry in rti, set the key
-	{
-		// read key of this entry
-		void* key_tuple = read_key_in_rash_table_iterator(&(this_state->rti));
-
-		for(uint32_t i = 0; i < o->desc->params.hash_aggregation.key_element_count; i++)
-		{
-			const data_type_info* dti_temp;
-			datum key_val;
-			if(get_value_from_element_from_tuple(&key_val, &dti_temp, &(this_state->rth.key_tuple_def), STATIC_POSITION(i), key_tuple))
-				set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(i), output_tuple, &key_val, UINT32_MAX);
-		}
-
-		free(key_tuple);
-	}
-
-	// if it has any aggregate function, read all tuples and do the process_input and then produce_output, and set the output
-	if(o->desc->params.hash_aggregation.aggregate_functions_count > 0)
-	{
-		{
-			// open an iterator to read values of this entry
-			binary_read_iterator* value_bri_p = read_value_in_rash_table_iterator(&(this_state->rti));
-
-			int abort_error_dummy = 0;
-			while(!(*error_code))
-			{
-				int finish = 0;
-				consume_tuple_from_tuple_list(tuple, this_state->input_operator->desc->output_tuple_def, value_bri_p, NULL, &abort_error_dummy,
-				{
-					if(tuple != NULL)
+					// process_input for the udaf, if it fails kill the operator
+					if(!o->desc->params.hash_aggregation.aggregate_functions[i]->process_input(o->desc->params.hash_aggregation.aggregate_functions[i], &(((void**)(f->as_value.state_p))[i]), this_state->input_datums))
 					{
-						// process the aggregate function calls for this tuple
-						for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
-						{
-							// generate input params to the i-th udaf
-							for(uint32_t j = 0; j < o->desc->params.hash_aggregation.aggregate_functions[i]->input_type_infos_count; j++)
-							{
-								const data_type_info* dti_temp;
-								if(!get_value_from_element_from_tuple(&(input_datums[j]), &dti_temp, this_state->input_operator->desc->output_tuple_def, o->desc->params.hash_aggregation.aggregate_input_element_ids[i][j], tuple))
-									input_datums[j] = (*NULL_DATUM);
-							}
+						delete_cash_table_entry(e);
+						o->destroy_state(o);
+						(*error_code) = AGGREGATION_ERROR_IN_OPERATOR;
+						return NULL;
+					}
+				}
+			}
+			else
+			{
+				if(this_state->grash == NULL) // if grash was not initialized, i.e. spilling not started insert into cash
+				{
+					// make it a new state_p and insert it
+					e->as_value.state_p = calloc(sizeof(void*), o->desc->params.hash_aggregation.aggregate_functions_count);
+					insert_in_cash_table(this_state->cash, e);
 
-							// process_input for the udaf, if it fails kill the operator
-							if(!o->desc->params.hash_aggregation.aggregate_functions[i]->process_input(o->desc->params.hash_aggregation.aggregate_functions[i], &(states[i]), input_datums))
-							{
-								(*error_code) = AGGREGATION_ERROR_IN_OPERATOR;
-								finish = 1;
-								goto FAILED_EXIT;
-							}
+					// process the aggregate function calls for this tuple
+					for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
+					{
+						// generate input params to the i-th udaf in input_datums
+						revise_key_datums_from_tuple(this_state->input_datums, tuple, this_state->input_tuple_def, o->desc->params.hash_aggregation.aggregate_input_element_ids[i], o->desc->params.hash_aggregation.aggregate_functions[i]->input_type_infos_count);
+
+						// process_input for the udaf, if it fails kill the operator
+						if(!o->desc->params.hash_aggregation.aggregate_functions[i]->process_input(o->desc->params.hash_aggregation.aggregate_functions[i], &(((void**)(e->as_value.state_p))[i]), this_state->input_datums))
+						{
+							o->destroy_state(o);
+							(*error_code) = AGGREGATION_ERROR_IN_OPERATOR;
+							return NULL;
 						}
 					}
-					else
-					{
-						finish = 1;
-					}
 
-					FAILED_EXIT:;
-				});
-				if(finish)
-					break;
+					// see if there is enough tuples to start spilling
+					if(o->desc->params.hash_aggregation.min_part_size < this_state->cash->memory_utilization)
+						this_state->grash = get_new_grash_table(this_state->input_tuple_def, o->desc->params.hash_aggregation.key_element_ids, o->desc->params.hash_aggregation.key_element_count, o->desc->params.hash_aggregation.min_part_size, o->self_query_plan->desc->curr_tx);
+				}
+				else
+				{
+					insert_to_grash_table(this_state->grash, tuple, e->hash_value);
+
+					delete_cash_table_entry(e);
+				}
+			}
+		}
+	}
+
+	while(1)
+	{
+		cash_table_entry* e = find_all_in_cash_table(this_state->cash);
+		if(e != NULL)
+		{
+			// create output tuple
+			void* output_tuple = malloc(get_maximum_tuple_size(o->desc->output_tuple_def));
+			init_tuple(o->desc->output_tuple_def, output_tuple);
+
+			// set keys in output_tuple
+			for(uint32_t i = 0; i < o->desc->params.hash_aggregation.key_element_count; i++)
+			{
+				const data_type_info* dti_temp;
+				datum key_val;
+				if(get_value_from_element_from_tuple(&key_val, &dti_temp, this_state->input_tuple_def, o->desc->params.hash_aggregation.key_element_ids[i], e->as_value.value))
+					set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(i), output_tuple, &key_val, UINT32_MAX);
 			}
 
-			// after read all tuples close the read iterator in value
-			delete_binary_read_iterator(value_bri_p, NULL, &abort_error_dummy);
-		}
-
-		// produce output to be called and set the values, only if no error_code was encountered
-		if(!(*error_code))
-		{
+			// set aggregation results in output_tuple
 			for(uint32_t i = 0, j = o->desc->params.hash_aggregation.key_element_count; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++, j++)
 			{
 				// produce the output_uval the output of the i-th aggregate function
 				datum output_uval;
-				if(!o->desc->params.hash_aggregation.aggregate_functions[i]->produce_output(o->desc->params.hash_aggregation.aggregate_functions[i], &output_uval, &(states[i])))
+				if(!o->desc->params.hash_aggregation.aggregate_functions[i]->produce_output(o->desc->params.hash_aggregation.aggregate_functions[i], &output_uval, &(((void**)(e->as_value.state_p))[i])))
 				{
+					free(output_tuple);
+					o->destroy_state(o);
 					(*error_code) = AGGREGATION_ERROR_IN_OPERATOR;
-					break;
+					return NULL;
 				}
 
 				set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(j), output_tuple, &output_uval, UINT32_MAX);
 			}
+
+			// destroy the corresponding cash_table entry we just processed
+			remove_from_cash_table(this_state->cash, e);
+			for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
+				o->desc->params.hash_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.hash_aggregation.aggregate_functions[i], &(((void**)(e->as_value.state_p))[i]));
+			free(e->as_value.state_p);
+			delete_cash_table_entry(e);
+
+			return output_tuple;
 		}
 
-		if(*error_code)
+		// if we just processed a partition fron grash, then unmap it's region and close it's file
+		if(this_state->curr_node != NULL)
 		{
-			free(output_tuple);
-			for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
-				o->desc->params.hash_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.hash_aggregation.aggregate_functions[i], &(states[i]));
-			free(states);
-			free(input_datums);
-			o->destroy_state(o);
-			return NULL;
+			unmap_all_partition_mmaped_regions(this_state->curr_node);
+			close_all_partition_files(this_state->curr_node);
+		}
+
+		// we come here only if cash is empty, we now need to populate it using the grash partition
+
+		// find the next grash partition to process and store it in curr_node
+		{
+			uint64_t next_child_node = 0;
+
+			if(this_state->curr_node == NULL) // we are just init-ing
+			{
+				next_child_node = 0;
+
+				this_state->curr_node = this_state->grash->root;
+			}
+			else if(this_state->curr_node->type == PARTITION) // we are pointing to some active partition that was already indexed previously
+			{
+				next_child_node = this_state->curr_node->index_in_parent + 1;
+
+				this_state->curr_node = this_state->curr_node->parent;
+			}
+
+			while(this_state->curr_node != NULL)
+			{
+				if(this_state->curr_node->type == COLLECTION)
+				{
+					if(next_child_node == PARTITIONS_PER_COLLECTION)
+					{
+						next_child_node = this_state->curr_node->index_in_parent + 1;
+
+						this_state->curr_node = this_state->curr_node->parent;
+					}
+					else
+					{
+						this_state->curr_node = this_state->curr_node->partitions[next_child_node];
+
+						next_child_node = 0;
+					}
+				}
+				else // this is a partition on both sides
+				{
+					// partition is small enough, we are done
+					if(get_total_bytes_in_interim_tuple_store(this_state->curr_node->partition) < o->desc->params.hash_aggregation.min_part_size)
+						break;
+
+					if(!partition_grash_table_node(this_state->grash, this_state->curr_node, 0))
+						break;
+
+					// partitioning was success, close the resources
+					unmap_all_partition_mmaped_regions(this_state->curr_node);
+					close_all_partition_files(this_state->curr_node);
+
+					next_child_node = 0;
+
+					continue;
+				}
+			}
+		}
+
+		// no grash node to iterate on next
+		if(this_state->curr_node == NULL)
+			break;
+
+		// process the curr_node, and populate cash from it
+
+		// open the file
+		open_file_for_interim_tuple_store(this_state->curr_node->partition);
+
+		uint64_t offset = 0;
+		mmap_for_reading_tuple(this_state->curr_node->partition, &(this_state->curr_node->partition->embed_regions[0]), offset, &(this_state->grash->hash_def.size_def), get_total_bytes_in_interim_tuple_store(this_state->curr_node->partition));
+
+		while(offset < this_state->curr_node->partition->next_tuple_offset)
+		{
+			mmap_for_reading_tuple(this_state->curr_node->partition, &(this_state->curr_node->partition->embed_regions[0]), offset, &(this_state->grash->hash_def.size_def), get_total_bytes_in_interim_tuple_store(this_state->curr_node->partition));
+			uint64_t hash_value = 0;
+			{
+				const data_type_info* dti_temp = NULL;
+				datum uval;
+				get_value_from_element_from_tuple(&uval, &dti_temp, &(this_state->grash->hash_def), SELF, this_state->curr_node->partition->embed_regions[0].tuple);
+				hash_value = uval.uint_value;
+			}
+			offset = next_tuple_offset_for_interim_tuple_region(&(this_state->curr_node->partition->embed_regions[0]));
+
+			mmap_for_reading_tuple(this_state->curr_node->partition, &(this_state->curr_node->partition->embed_regions[0]), offset, &(this_state->input_tuple_def->size_def), get_total_bytes_in_interim_tuple_store(this_state->curr_node->partition));
+			void* tuple = this_state->curr_node->partition->embed_regions[0].tuple;
+			offset = next_tuple_offset_for_interim_tuple_region(&(this_state->curr_node->partition->embed_regions[0]));
+
+			// insert this tuple or process_input on the partition
+			cash_table_entry* e = get_new_cash_table_value_own(this_state->cash, tuple, hash_value);
+
+			// find an equals entry
+			cash_table_entry* f = find_equals_in_cash_table(this_state->cash, &e);
+
+			// if cash has this entry process_input it
+			if(f != NULL)
+			{
+				// process the aggregate function calls for this tuple
+				for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
+				{
+					// generate input params to the i-th udaf in input_datums
+					revise_key_datums_from_tuple(this_state->input_datums, tuple, this_state->input_tuple_def, o->desc->params.hash_aggregation.aggregate_input_element_ids[i], o->desc->params.hash_aggregation.aggregate_functions[i]->input_type_infos_count);
+
+					// process_input for the udaf, if it fails kill the operator
+					if(!o->desc->params.hash_aggregation.aggregate_functions[i]->process_input(o->desc->params.hash_aggregation.aggregate_functions[i], &(((void**)(f->as_value.state_p))[i]), this_state->input_datums))
+					{
+						delete_cash_table_entry(e);
+						o->destroy_state(o);
+						(*error_code) = AGGREGATION_ERROR_IN_OPERATOR;
+						return NULL;
+					}
+				}
+			}
+			else
+			{
+				// make it a new state_p and insert it
+				e->as_value.state_p = calloc(sizeof(void*), o->desc->params.hash_aggregation.aggregate_functions_count);
+				insert_in_cash_table(this_state->cash, e);
+
+				// process the aggregate function calls for this tuple
+				for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
+				{
+					// generate input params to the i-th udaf in input_datums
+					revise_key_datums_from_tuple(this_state->input_datums, tuple, this_state->input_tuple_def, o->desc->params.hash_aggregation.aggregate_input_element_ids[i], o->desc->params.hash_aggregation.aggregate_functions[i]->input_type_infos_count);
+
+					// process_input for the udaf, if it fails kill the operator
+					if(!o->desc->params.hash_aggregation.aggregate_functions[i]->process_input(o->desc->params.hash_aggregation.aggregate_functions[i], &(((void**)(e->as_value.state_p))[i]), this_state->input_datums))
+					{
+						o->destroy_state(o);
+						(*error_code) = AGGREGATION_ERROR_IN_OPERATOR;
+						return NULL;
+					}
+				}
+			}
 		}
 	}
 
-	for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
-		o->desc->params.hash_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.hash_aggregation.aggregate_functions[i], &(states[i]));
-	free(states);
-	free(input_datums);
-
-	// iterate next in rti, and if we can not go next break out, this might just be the last entry
-	if(!next_in_rash_table_iterator(&(this_state->rti)))
-		o->destroy_state(o);
-
-	output_tuple = realloc(output_tuple, get_tuple_size(o->desc->output_tuple_def, output_tuple));
-	return output_tuple;
+	o->destroy_state(o);
+	return NULL;
 }
 
 static void destroy_state(operator* o)
@@ -219,12 +317,25 @@ static void destroy_state(operator* o)
 	{
 		op_state* this_state = o->state;
 
-		this_state->input_operator->destroy_state(this_state->input_operator);
+		if(this_state->input_operator != NULL)
+			this_state->input_operator->destroy_state(this_state->input_operator);
 
-		destroy_rash_table(&(this_state->rth));
+		if(this_state->cash != NULL)
+		{
+			for(cash_table_entry* e = find_all_in_cash_table(this_state->cash); e != NULL; e = next_all_in_cash_table(this_state->cash, e))
+			{
+				for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
+					o->desc->params.hash_aggregation.aggregate_functions[i]->destroy_state(o->desc->params.hash_aggregation.aggregate_functions[i], &(((void**)(e->as_value.state_p))[i]));
+				free(e->as_value.state_p);
+			}
+			delete_cash_table(this_state->cash);
+		}
 
-		if(this_state->has_active_rti)
-			delete_rash_table_iterator(&(this_state->rti));
+		if(this_state->grash != NULL)
+			delete_grash_table(this_state->grash);
+
+		if(this_state->input_datums != NULL)
+			free(&(this_state->input_datums));
 
 		free(this_state);
 	}
@@ -238,11 +349,18 @@ void open_hash_aggregation_operator(operator* o)
 	op_state* this_state = o->state;
 
 	this_state->input_operator = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.hash_aggregation.input_operator_index);
-	this_state->rth = get_new_rash_table(INIT_BUCKET_COUNT, this_state->input_operator->desc->output_tuple_def, o->desc->params.hash_aggregation.key_element_ids, o->desc->params.hash_aggregation.key_element_count, o->self_query_plan->desc->curr_tx);
-	this_state->has_active_rti = 0;
-	this_state->max_input_datums_count = 0;
+
+	this_state->input_tuple_def = this_state->input_operator->desc->output_tuple_def;
+
+	this_state->cash = get_new_cash_table(100, this_state->input_tuple_def, o->desc->params.hash_aggregation.key_element_ids, o->desc->params.hash_aggregation.key_element_count, o->self_query_plan->desc->curr_tx);
+	this_state->grash = NULL;
+
+	this_state->curr_node = NULL;
+
+	uint32_t max_input_datums_count = 0;
 	for(uint32_t i = 0; i < o->desc->params.hash_aggregation.aggregate_functions_count; i++)
-		this_state->max_input_datums_count = max(this_state->max_input_datums_count, o->desc->params.hash_aggregation.aggregate_functions[i]->input_type_infos_count);
+		max_input_datums_count = max(max_input_datums_count, o->desc->params.hash_aggregation.aggregate_functions[i]->input_type_infos_count);
+	this_state->input_datums = malloc(sizeof(datum) * max_input_datums_count);
 
 	o->next_tuple = next_tuple;
 	o->destroy_state = destroy_state;
