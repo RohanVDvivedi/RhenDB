@@ -226,7 +226,7 @@ uint64_t dml_delete(
 	(*dml_error) = DML_SUCCESS;
 	uint64_t deleted_count = 0;
 
-	if(tx->snapshot == NULL || !tx->snapshot->has_self_transaction_id)
+	if(tx->snapshot == NULL || !(tx->snapshot->has_self_transaction_id))
 	{
 		(*dml_error) = DML_DELETE_FAILED;
 		return 0;
