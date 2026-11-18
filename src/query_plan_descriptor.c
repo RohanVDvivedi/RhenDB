@@ -273,7 +273,7 @@ operator_desc* insert_stream_input_operator_descriptor(query_plan_desc* qpd, str
 	return d;
 }
 
-operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetched_table* ftabl, uint32_t max_concurrent_jobs_count, int output_flags, int additional_flags)
+operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetched_table* ftabl, int output_flags, int additional_flags)
 {
 	if(ftabl == NULL)
 	{
@@ -284,6 +284,12 @@ operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetch
 	if(qpd->curr_tx->snapshot == NULL)
 	{
 		printf("must have a snapshot for scan_operator_descriptor\n");
+		return NULL;
+	}
+
+	if(output_flags == 0)
+	{
+		printf("must have non-zero output_flags for scan_operator_descriptor\n");
 		return NULL;
 	}
 
