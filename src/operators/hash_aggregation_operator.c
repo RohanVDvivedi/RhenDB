@@ -65,7 +65,7 @@ static void* next_tuple(operator* o, int* error_code)
 			cash_table_entry* e = get_new_cash_table_value_own(this_state->cash, tuple, 0);
 
 			// find an equals entry
-			cash_table_entry* f = find_equals_in_cash_table(this_state->cash, &e);
+			cash_table_entry* f = find_equals_in_cash_table(this_state->cash, e);
 
 			// if cash has this entry process_input it
 			if(f != NULL)
@@ -85,13 +85,16 @@ static void* next_tuple(operator* o, int* error_code)
 						return NULL;
 					}
 				}
+
+				// entry owns tuple, both get deleted, state was never inited
+				delete_cash_table_entry(e);
 			}
 			else
 			{
 				if(this_state->grash == NULL) // if grash was not initialized, i.e. spilling not started insert into cash
 				{
 					// make it a new state_p and insert it
-					e->as_value.state_p = calloc(sizeof(void*), o->desc->params.hash_aggregation.aggregate_functions_count);
+					e->as_value.state_p = calloc(o->desc->params.hash_aggregation.aggregate_functions_count, sizeof(void*));
 					insert_in_cash_table(this_state->cash, e);
 
 					// process the aggregate function calls for this tuple
@@ -263,10 +266,10 @@ static void* next_tuple(operator* o, int* error_code)
 			offset = next_tuple_offset_for_interim_tuple_region(&(this_state->curr_node->partition->embed_regions[0]));
 
 			// insert this tuple or process_input on the partition
-			cash_table_entry* e = get_new_cash_table_value_own(this_state->cash, tuple, hash_value);
+			cash_table_entry* e = get_new_cash_table_value_borrow(this_state->cash, tuple, hash_value);
 
 			// find an equals entry
-			cash_table_entry* f = find_equals_in_cash_table(this_state->cash, &e);
+			cash_table_entry* f = find_equals_in_cash_table(this_state->cash, e);
 
 			// if cash has this entry process_input it
 			if(f != NULL)
@@ -286,11 +289,14 @@ static void* next_tuple(operator* o, int* error_code)
 						return NULL;
 					}
 				}
+
+				// entry owns tuple, both get deleted, state was never inited
+				delete_cash_table_entry(e);
 			}
 			else
 			{
 				// make it a new state_p and insert it
-				e->as_value.state_p = calloc(sizeof(void*), o->desc->params.hash_aggregation.aggregate_functions_count);
+				e->as_value.state_p = calloc(o->desc->params.hash_aggregation.aggregate_functions_count, sizeof(void*));
 				insert_in_cash_table(this_state->cash, e);
 
 				// process the aggregate function calls for this tuple
@@ -339,7 +345,7 @@ static void destroy_state(operator* o)
 			delete_grash_table(this_state->grash);
 
 		if(this_state->input_datums != NULL)
-			free(&(this_state->input_datums));
+			free(this_state->input_datums);
 
 		free(this_state);
 	}
