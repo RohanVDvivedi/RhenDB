@@ -2,8 +2,6 @@ PICKED TASKS
 
  * volcano model
 
-   * integrate cash_table and grash_table to make hash_aggregation
-
    * scan/point_lookup
 
    * fix the unified test case
