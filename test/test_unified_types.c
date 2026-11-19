@@ -122,7 +122,7 @@ int main()
 
 	positional_accessor input_positions[3] = {STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2)};
 	int dml_error = 0;
-	uint64_t inserts_done = dml_insert(NULL, its_p, &record_def, input_positions, ftbl, &tx, 0, 0, &dml_error);
+	uint64_t inserts_done = dml_insert(NULL, its_p, &record_def, input_positions, ftbl, &tx, 0, SAVEPOINT_LOGGING_ENABLED, &dml_error);
 	printf("inserts_done = %"PRIu64", dml_error = %d\n", inserts_done, dml_error);
 
 	delete_interim_tuple_store(its_p);
