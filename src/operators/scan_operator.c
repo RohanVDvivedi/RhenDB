@@ -4,7 +4,6 @@
 
 #include<rhendb/mvcc_header.h>
 
-#include<rhendb/table_operator_output_type.h>
 #include<rhendb/fetched_table.h>
 
 #include<tupleindexer/heap_page/heap_page.h>
@@ -39,43 +38,7 @@ static void* build_output_tuple(operator* o, rage_engine* engine, tuple_pointer 
 {
 	op_state* this_state = o->state;
 
-	const fetched_table* ftabl = o->desc->params.scan.ftabl;
-
-	void* output_tuple = malloc(get_maximum_tuple_size(o->desc->output_tuple_def));
-	init_tuple(o->desc->output_tuple_def, output_tuple);
-
-	uint32_t attr_index = 0;
-
-	if(MUST_OUTPUT_TABLE_ID(o->desc->params.scan.output_flags))
-	{
-		set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.uint_value = ftabl->table_info.id}), UINT32_MAX);
-		attr_index++;
-	}
-
-	if(MUST_OUTPUT_PARTITION_ID(o->desc->params.scan.output_flags))
-	{
-		set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.uint_value = ftabl->table_partitions_info[this_state->partition_index].partition_id}), UINT32_MAX);
-		attr_index++;
-	}
-
-	if(MUST_OUTPUT_TUPLE_POINTER_ID(o->desc->params.scan.output_flags))
-	{
-		char tptr_tpl[sizeof(tuple_pointer)];
-		set_tuple_pointer(tptr_tpl, tptr, &(engine->pam_p->pas));
-		set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.tuple_value = tptr_tpl}), UINT32_MAX);
-		attr_index++;
-	}
-
-	if(MUST_OUTPUT_HEAP_TUPLE(o->desc->params.scan.output_flags))
-	{
-		void* final_readers_heap_record = project_to_final_readers_tuple_def(ftabl, heap_record, this_state->partition_index);
-		set_element_in_tuple(o->desc->output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.tuple_value = final_readers_heap_record}), UINT32_MAX);
-		free(final_readers_heap_record);
-		attr_index++;
-	}
-
-	output_tuple = realloc(output_tuple, get_tuple_size(o->desc->output_tuple_def, output_tuple));
-	return output_tuple;
+	return project_to_scan_dml_output_tuple_def(o->self_query_plan->desc->curr_tx->rdb, o->desc->output_tuple_def, o->desc->params.scan.ftabl, this_state->partition_index, tptr, heap_record, o->desc->params.scan.output_flags);
 }
 
 static void* next_tuple(operator* o, int* error_code)

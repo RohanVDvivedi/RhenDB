@@ -1,7 +1,7 @@
 #include<rhendb/dml.h>
 
 #include<rhendb/mvcc_header.h>
-#include<rhendb/table_operator_output_type.h>
+#include<rhendb/scan_dml_output_type.h>
 
 #include<tupleindexer/heap_page/heap_page.h>
 #include<tupleindexer/heap_table/heap_table.h>
@@ -255,45 +255,12 @@ static void build_heap_record_with_prefix_bytes(const tuple_def* partition_tuple
 
 // builds the flag-driven output row (table_id, partition_id, tuple_pointer, heap tuple -- the same shape the
 // scan and pointer_lookup operators produce) for a just-inserted tuple and appends it to ots_p
-static void append_output_tuple(const tuple_def* output_tuple_def, int output_flags, const fetched_table* ftabl, transaction* tx, const rhendb_table_partition* insertion_table_partition, const void* heap_record_with_extensions, tuple_pointer tptr, interim_tuple_store* ots_p)
+static void append_output_tuple(transaction* tx, const tuple_def* output_tuple_def, const fetched_table* ftabl, tuple_pointer tptr, const void* heap_record_with_extensions, int output_flags, interim_tuple_store* ots_p)
 {
-	rage_engine* engine = &(tx->rdb->persistent_acid_rage_engine);
+	void* output_tuple = project_to_scan_dml_output_tuple_def(tx->rdb, output_tuple_def, ftabl, ftabl->partitions_count-1, tptr, heap_record_with_extensions, output_flags);
 
-	void* output_tuple = malloc(get_maximum_tuple_size(output_tuple_def));
-	init_tuple(output_tuple_def, output_tuple);
-
-	uint32_t attr_index = 0;
-
-	if(MUST_OUTPUT_TABLE_ID(output_flags))
-	{
-		set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.uint_value = insertion_table_partition->table_id}), UINT32_MAX);
-		attr_index++;
-	}
-
-	if(MUST_OUTPUT_PARTITION_ID(output_flags))
-	{
-		set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.uint_value = insertion_table_partition->partition_id}), UINT32_MAX);
-		attr_index++;
-	}
-
-	if(MUST_OUTPUT_TUPLE_POINTER_ID(output_flags))
-	{
-		char tptr_tpl[sizeof(tuple_pointer)];
-		set_tuple_pointer(tptr_tpl, tptr, &(engine->pam_p->pas));
-		set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.tuple_value = tptr_tpl}), UINT32_MAX);
-		attr_index++;
-	}
-
-	if(MUST_OUTPUT_HEAP_TUPLE(output_flags))
-	{
-		void* final_readers_heap_record = project_to_final_readers_tuple_def(ftabl, heap_record_with_extensions, ftabl->partitions_count - 1);
-		set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.tuple_value = final_readers_heap_record}), UINT32_MAX);
-		free(final_readers_heap_record);
-		attr_index++;
-	}
-
-	output_tuple = realloc(output_tuple, get_tuple_size(output_tuple_def, output_tuple));
 	append_tuple_to_interim_tuple_store2(ots_p, &(ots_p->embed_regions[0]), output_tuple, &(output_tuple_def->size_def), INTERIM_STORE_MMAP_BATCH);
+
 	free(output_tuple);
 }
 
@@ -331,44 +298,7 @@ uint64_t dml_insert(
 	// the output row shape, built once; NULL when nothing is produced
 	tuple_def* output_tuple_def = NULL;
 	if(do_output)
-	{
-		output_tuple_def = malloc(sizeof(tuple_def));
-		data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(10));
-		uint32_t element_count = 0;
-		uint64_t max_size = 8;
-
-		if(MUST_OUTPUT_TABLE_ID(output_flags))
-		{
-			strncpy(output_dti->containees[element_count].field_name, "table_id", 64);
-			output_dti->containees[element_count].al.type_info = UINT_NON_NULLABLE[8];
-			max_size += 8;
-			element_count++;
-		}
-		if(MUST_OUTPUT_PARTITION_ID(output_flags))
-		{
-			strncpy(output_dti->containees[element_count].field_name, "partition_id", 64);
-			output_dti->containees[element_count].al.type_info = UINT_NON_NULLABLE[8];
-			max_size += 8;
-			element_count++;
-		}
-		if(MUST_OUTPUT_TUPLE_POINTER_ID(output_flags))
-		{
-			strncpy(output_dti->containees[element_count].field_name, "tuple_pointer", 64);
-			output_dti->containees[element_count].al.type_info = &(engine->pam_p->pas.tuple_pointer_type_info);
-			max_size += sizeof(tuple_pointer);
-			element_count++;
-		}
-		if(MUST_OUTPUT_HEAP_TUPLE(output_flags))
-		{
-			strncpy(output_dti->containees[element_count].field_name, ftabl->table_info.name, 64);
-			output_dti->containees[element_count].al.type_info = ftabl->final_readers_tuple_def.type_info;
-			max_size += 8 + get_maximum_tuple_size(&(ftabl->final_readers_tuple_def));
-			element_count++;
-		}
-
-		initialize_tuple_data_type_info(output_dti, "inserted_tuple_context", 0, max_size, element_count);
-		initialize_tuple_def(output_tuple_def, output_dti);
-	}
+		output_tuple_def = get_scan_dml_output_tuple_def(tx->rdb, ftabl, output_flags);
 
 	// one insertion case per partition attribute
 	column_kind* column_kinds = malloc(partition_tuple_def->type_info->element_count * sizeof(column_kind));
@@ -658,7 +588,7 @@ uint64_t dml_insert(
 		inserted_count++;
 
 		if(do_output)
-			append_output_tuple(output_tuple_def, output_flags, ftabl, tx, insertion_table_partition, heap_record_with_extensions, tptr, ots_p);
+			append_output_tuple(tx, output_tuple_def, ftabl, tptr, heap_record_with_extensions, output_flags, ots_p);
 
 		read_offset = next_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0]));
 	}
@@ -685,10 +615,7 @@ uint64_t dml_insert(
 		deinit_extended_column_data(&(ext_col_data[k]));
 	free(ext_col_data);
 	if(output_tuple_def != NULL)
-	{
-		free((void*)(output_tuple_def->type_info));
-		free(output_tuple_def);
-	}
+		destroy_scan_dml_output_tuple_def(output_tuple_def);
 
 	unmap_all_embed_regions_in_interim_tuple_store(its_p);
 	if(do_output)

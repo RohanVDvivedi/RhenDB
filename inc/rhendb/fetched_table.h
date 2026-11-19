@@ -36,4 +36,11 @@ void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void*
 
 void destroy_fetched_table(fetched_table* ftabl);
 
+#include<rhendb/scan_dml_output_type.h>
+
+// these 3 functions take care of the output of the scan and dml function
+tuple_def* get_scan_dml_output_tuple_def(rhendb* rdb, const fetched_table* ftabl, int output_flags);
+void* project_to_scan_dml_output_tuple_def(rhendb* rdb, const tuple_def* output_tuple_def, const fetched_table* ftabl, uint64_t partition_index_in_info, tuple_pointer tptr, const void* heap_record, int output_flags);
+void destroy_scan_dml_output_tuple_def(tuple_def* output_tuple_def);
+
 #endif

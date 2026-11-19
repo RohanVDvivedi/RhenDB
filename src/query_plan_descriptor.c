@@ -295,60 +295,9 @@ operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetch
 
 	operator_resource_counter result = {.buffer_counter = 2, .thread_counter = 1};
 
-	tuple_def* output_tuple_def = NULL;
-
-	if(output_flags != 0)
-	{
-		output_tuple_def = malloc(sizeof(tuple_def));
-		data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(10)); // over allocation for being safe from future changes
-
-		uint32_t output_dti_element_count = 0;
-		uint64_t output_tuple_max_size = 8;
-
-		if(MUST_OUTPUT_TABLE_ID(output_flags))
-		{
-			strncpy(output_dti->containees[output_dti_element_count].field_name, "table_id", 64);
-			output_dti->containees[output_dti_element_count].al.type_info = UINT_NON_NULLABLE[8];
-
-			output_tuple_max_size += 8;
-			output_dti_element_count++;
-		}
-
-		if(MUST_OUTPUT_PARTITION_ID(output_flags))
-		{
-			strncpy(output_dti->containees[output_dti_element_count].field_name, "partition_id", 64);
-			output_dti->containees[output_dti_element_count].al.type_info = UINT_NON_NULLABLE[8];
-
-			output_tuple_max_size += 8;
-			output_dti_element_count++;
-		}
-
-		if(MUST_OUTPUT_TUPLE_POINTER_ID(output_flags))
-		{
-			strncpy(output_dti->containees[output_dti_element_count].field_name, "tuple_pointer", 64);
-			output_dti->containees[output_dti_element_count].al.type_info = &(qpd->curr_tx->rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_type_info);
-
-			output_tuple_max_size += sizeof(tuple_pointer);
-			output_dti_element_count++;
-		}
-
-		if(MUST_OUTPUT_HEAP_TUPLE(output_flags))
-		{
-			strncpy(output_dti->containees[output_dti_element_count].field_name, ftabl->table_info.name, 64);
-			output_dti->containees[output_dti_element_count].al.type_info = ftabl->final_readers_tuple_def.type_info;
-
-			output_tuple_max_size += 8 + get_maximum_tuple_size(&(ftabl->final_readers_tuple_def));
-			output_dti_element_count++;
-		}
-
-		initialize_tuple_data_type_info(output_dti, "scanned_tuple_context", 0, output_tuple_max_size, output_dti_element_count);
-
-		initialize_tuple_def(output_tuple_def, output_dti);
-	}
-
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_SCAN);
 	d->params.scan = (scan_operator_params){ftabl, output_flags, additional_flags};
-	d->output_tuple_def = output_tuple_def;
+	d->output_tuple_def = get_scan_dml_output_tuple_def(qpd->curr_tx->rdb, ftabl, output_flags);
 	d->resource_counter = result;
 
 	qpd->output_tuple_def = d->output_tuple_def;
@@ -1642,62 +1591,6 @@ operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, o
 // table write / lookup ops : output schema is the same flag-based context tuple as the scan operator
 // ---------------------------------------------------------------------------------------------------
 
-// builds the flag-based (table_id / partition_id / tuple_pointer / heap_tuple) output context tuple_def, exactly
-// as the scan / pointer_lookup operators build it; all its columns are borrowed dtis
-tuple_def* build_table_operator_output_tuple_def(rhendb* rdb, const fetched_table* ftabl, int output_flags, const char* context_name)
-{
-	if(output_flags == 0)
-		return NULL;
-
-	tuple_def* output_tuple_def = malloc(sizeof(tuple_def));
-	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(10)); // over allocation for being safe from future changes
-
-	uint32_t output_dti_element_count = 0;
-	uint64_t output_tuple_max_size = 8;
-
-	if(MUST_OUTPUT_TABLE_ID(output_flags))
-	{
-		strncpy(output_dti->containees[output_dti_element_count].field_name, "table_id", 64);
-		output_dti->containees[output_dti_element_count].al.type_info = UINT_NON_NULLABLE[8];
-
-		output_tuple_max_size += 8;
-		output_dti_element_count++;
-	}
-
-	if(MUST_OUTPUT_PARTITION_ID(output_flags))
-	{
-		strncpy(output_dti->containees[output_dti_element_count].field_name, "partition_id", 64);
-		output_dti->containees[output_dti_element_count].al.type_info = UINT_NON_NULLABLE[8];
-
-		output_tuple_max_size += 8;
-		output_dti_element_count++;
-	}
-
-	if(MUST_OUTPUT_TUPLE_POINTER_ID(output_flags))
-	{
-		strncpy(output_dti->containees[output_dti_element_count].field_name, "tuple_pointer", 64);
-		output_dti->containees[output_dti_element_count].al.type_info = &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_type_info);
-
-		output_tuple_max_size += sizeof(tuple_pointer);
-		output_dti_element_count++;
-	}
-
-	if(MUST_OUTPUT_HEAP_TUPLE(output_flags))
-	{
-		strncpy(output_dti->containees[output_dti_element_count].field_name, ftabl->table_info.name, 64);
-		output_dti->containees[output_dti_element_count].al.type_info = ftabl->final_readers_tuple_def.type_info;
-
-		output_tuple_max_size += 8 + get_maximum_tuple_size(&(ftabl->final_readers_tuple_def));
-		output_dti_element_count++;
-	}
-
-	initialize_tuple_data_type_info(output_dti, context_name, 0, output_tuple_max_size, output_dti_element_count);
-
-	initialize_tuple_def(output_tuple_def, output_dti);
-
-	return output_tuple_def;
-}
-
 operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags)
 {
 	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
@@ -1736,11 +1629,17 @@ operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, o
 		return NULL;
 	}
 
+	if(output_flags == 0)
+	{
+		printf("must have non-zero output_flags for scan_operator_descriptor\n");
+		return NULL;
+	}
+
 	operator_resource_counter result = {.buffer_counter = 1, .job_counter = 1, .thread_counter = 1}; // read lock a page, read tuples and exit, so 1 buffer atmost
 
 	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_POINTER_LOOKUP);
 	d->params.pointer_lookup = (pointer_lookup_operator_params){input_operator_desc->index, deep_clone_positional_accessors(partition_id_from_source_positional_accessor, 1), deep_clone_positional_accessors(tuple_pointer_from_source_positional_accessor, 1), ftabl, lookup_batch_size, output_flags, additional_flags};
-	d->output_tuple_def = build_table_operator_output_tuple_def(qpd->curr_tx->rdb, ftabl, output_flags, "looked_up_tuple_context");
+	d->output_tuple_def = get_scan_dml_output_tuple_def(qpd->curr_tx->rdb, ftabl, output_flags);
 	d->resource_counter = result;
 
 	input_operator_desc->consumers_count++;
@@ -1822,12 +1721,8 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 			case OP_SCAN :
 			case OP_POINTER_LOOKUP :
 			{
-				// the table op's output context tuple_def borrows every column dti, exactly like the scan op
 				if(output_tuple_def != NULL)
-				{
-					free((data_type_info*) output_tuple_def->type_info);
-					free(output_tuple_def);
-				}
+					destroy_scan_dml_output_tuple_def(output_tuple_def);
 				break;
 			}
 			default :

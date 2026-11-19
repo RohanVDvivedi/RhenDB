@@ -5,7 +5,7 @@
 #include<rhendb/tuples_down_counter.h>
 #include<rhendb/join_type.h>
 #include<rhendb/projection_type.h>
-#include<rhendb/table_operator_output_type.h>
+#include<rhendb/scan_dml_output_type.h>
 #include<rhendb/fetched_table.h>
 #include<rhendb/interim_tuple_store.h>
 

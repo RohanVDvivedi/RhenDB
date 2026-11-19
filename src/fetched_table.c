@@ -129,20 +129,11 @@ void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void*
 	uint32_t partition_element_count = ftabl->attributes_count_per_partition[partition_index_in_info];
 	uint32_t final_element_count = ftabl->attributes_count_per_partition[ftabl->partitions_count - 1];
 
-	uint32_t projected_tuple_size = get_minimum_tuple_size(final_readers_tuple_def);
-	uint64_t projected_tuple_capacity = projected_tuple_size;
-	void* projected_tuple = malloc(projected_tuple_capacity);
-	if(projected_tuple == NULL)
-		exit(-1);
+	void* projected_tuple = malloc(get_maximum_tuple_size(final_readers_tuple_def));
 	init_tuple(final_readers_tuple_def, projected_tuple);
 
 	// the mvcc_header at position 0 is common to every partition, so it is always copied over
-	while(!set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(0), projected_tuple, partition_tuple_def, STATIC_POSITION(0), partition_tuple, projected_tuple_capacity - projected_tuple_size))
-	{
-		projected_tuple_capacity = min(projected_tuple_capacity * 2, get_maximum_tuple_size(final_readers_tuple_def));
-		projected_tuple = realloc(projected_tuple, projected_tuple_capacity);
-	}
-	projected_tuple_size = get_tuple_size(final_readers_tuple_def, projected_tuple);
+	set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(0), projected_tuple, partition_tuple_def, STATIC_POSITION(0), partition_tuple, UINT32_MAX);
 
 	// both the attributes arrays are ordered by their rel_pos_in_owner, so they are walked over
 	// together in a merge like O(N) fashion, matching the attributes that have identical rel_pos_in_owner
@@ -168,29 +159,14 @@ void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void*
 
 		if(is_unified_type_info(final_readers_tuple_def->type_info->containees[f].al.type_info))
 		{
-			while(!set_element_in_tuple(final_readers_tuple_def, STATIC_POSITION(f), projected_tuple, EMPTY_DATUM, projected_tuple_capacity - projected_tuple_size))
-			{
-				projected_tuple_capacity = min(projected_tuple_capacity * 2, get_maximum_tuple_size(final_readers_tuple_def));
-				projected_tuple = realloc(projected_tuple, projected_tuple_capacity);
-			}
-			projected_tuple_size = get_tuple_size(final_readers_tuple_def, projected_tuple);
+			set_element_in_tuple(final_readers_tuple_def, STATIC_POSITION(f), projected_tuple, EMPTY_DATUM, UINT32_MAX);
 
-			while(!set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(f, 1), projected_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, projected_tuple_capacity - projected_tuple_size))
-			{
-				projected_tuple_capacity = min(projected_tuple_capacity * 2, get_maximum_tuple_size(final_readers_tuple_def));
-				projected_tuple = realloc(projected_tuple, projected_tuple_capacity);
-			}
-			projected_tuple_size = get_tuple_size(final_readers_tuple_def, projected_tuple);
+			set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(f, 1), projected_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, UINT32_MAX);
 		}
 		else
 		{
 			// identical rel_pos_in_owner, so this is the very same attribute, insert it
-			while(!set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(f), projected_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, projected_tuple_capacity - projected_tuple_size))
-			{
-				projected_tuple_capacity = min(projected_tuple_capacity * 2, get_maximum_tuple_size(final_readers_tuple_def));
-				projected_tuple = realloc(projected_tuple, projected_tuple_capacity);
-			}
-			projected_tuple_size = get_tuple_size(final_readers_tuple_def, projected_tuple);
+			set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(f), projected_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, UINT32_MAX);
 		}
 
 		p++;
@@ -198,7 +174,7 @@ void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void*
 	}
 
 	// skip the rest i.e. let then be NULL
-
+	projected_tuple = realloc(projected_tuple, get_tuple_size(final_readers_tuple_def, projected_tuple));
 	return projected_tuple;
 }
 
@@ -236,4 +212,157 @@ void destroy_fetched_table(fetched_table* ftabl)
 	free(ftabl->table_partitions_info);
 
 	free(ftabl);
+}
+
+tuple_def* get_scan_dml_output_tuple_def(rhendb* rdb, const fetched_table* ftabl, int output_flags)
+{
+	if(output_flags == 0)
+		return NULL;
+
+	tuple_def* output_tuple_def = malloc(sizeof(tuple_def));
+	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(4)); // may be over allocation
+
+	uint32_t output_dti_element_count = 0;
+	uint64_t output_tuple_max_size = 8;
+
+	if(MUST_OUTPUT_TABLE_ID(output_flags))
+	{
+		strncpy(output_dti->containees[output_dti_element_count].field_name, "table_id", 64);
+		output_dti->containees[output_dti_element_count].al.type_info = UINT_NON_NULLABLE[8];
+
+		output_tuple_max_size += 8;
+		output_dti_element_count++;
+	}
+
+	if(MUST_OUTPUT_PARTITION_ID(output_flags))
+	{
+		strncpy(output_dti->containees[output_dti_element_count].field_name, "partition_id", 64);
+		output_dti->containees[output_dti_element_count].al.type_info = UINT_NON_NULLABLE[8];
+
+		output_tuple_max_size += 8;
+		output_dti_element_count++;
+	}
+
+	if(MUST_OUTPUT_TUPLE_POINTER_ID(output_flags))
+	{
+		strncpy(output_dti->containees[output_dti_element_count].field_name, "tuple_pointer", 64);
+		output_dti->containees[output_dti_element_count].al.type_info = &(rdb->persistent_acid_rage_engine.pam_p->pas.tuple_pointer_type_info);
+
+		output_tuple_max_size += sizeof(tuple_pointer);
+		output_dti_element_count++;
+	}
+
+	if(MUST_OUTPUT_HEAP_TUPLE(output_flags))
+	{
+		strncpy(output_dti->containees[output_dti_element_count].field_name, ftabl->table_info.name, 64);
+		output_dti->containees[output_dti_element_count].al.type_info = ftabl->final_readers_tuple_def.type_info;
+
+		output_tuple_max_size += 8 + get_maximum_tuple_size(&(ftabl->final_readers_tuple_def));
+		output_dti_element_count++;
+	}
+
+	initialize_tuple_data_type_info(output_dti, "table_tuple", 0, output_tuple_max_size, output_dti_element_count);
+
+	initialize_tuple_def(output_tuple_def, output_dti);
+
+	return output_tuple_def;
+}
+
+void* project_to_scan_dml_output_tuple_def(rhendb* rdb, const tuple_def* output_tuple_def, const fetched_table* ftabl, uint64_t partition_index_in_info, tuple_pointer tptr, const void* partition_tuple, int output_flags)
+{
+	void* output_tuple = malloc(get_maximum_tuple_size(output_tuple_def));
+	init_tuple(output_tuple_def, output_tuple);
+
+	uint32_t attr_index = 0;
+
+	if(MUST_OUTPUT_TABLE_ID(output_flags))
+	{
+		set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.uint_value = ftabl->table_info.id}), UINT32_MAX);
+		attr_index++;
+	}
+
+	if(MUST_OUTPUT_PARTITION_ID(output_flags))
+	{
+		set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.uint_value = ftabl->table_partitions_info[partition_index_in_info].partition_id}), UINT32_MAX);
+		attr_index++;
+	}
+
+	if(MUST_OUTPUT_TUPLE_POINTER_ID(output_flags))
+	{
+		char tptr_tpl[sizeof(tuple_pointer)];
+		set_tuple_pointer(tptr_tpl, tptr, &(rdb->persistent_acid_rage_engine.pam_p->pas));
+		set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.tuple_value = tptr_tpl}), UINT32_MAX);
+		attr_index++;
+	}
+
+	if(MUST_OUTPUT_HEAP_TUPLE(output_flags))
+	{
+		set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index), output_tuple, EMPTY_DATUM, UINT32_MAX);
+
+		{{
+			const tuple_def* partition_tuple_def = &(ftabl->table_partition_tuple_defs[partition_index_in_info]);
+			const tuple_def* final_readers_tuple_def = &(ftabl->final_readers_tuple_def);
+
+			const rhendb_attribute* partition_attrs = ftabl->table_partitions_attributes_info[partition_index_in_info];
+			const rhendb_attribute* final_attrs = ftabl->table_partitions_attributes_info[ftabl->partitions_count - 1];
+
+			uint32_t partition_element_count = ftabl->attributes_count_per_partition[partition_index_in_info];
+			uint32_t final_element_count = ftabl->attributes_count_per_partition[ftabl->partitions_count - 1];
+
+			// the mvcc_header at position 0 is common to every partition, so it is always copied over
+			set_element_in_tuple_from_tuple(output_tuple_def, STATIC_POSITION(attr_index, 0), output_tuple, partition_tuple_def, STATIC_POSITION(0), partition_tuple, UINT32_MAX);
+
+			// both the attributes arrays are ordered by their rel_pos_in_owner, so they are walked over
+			// together in a merge like O(N) fashion, matching the attributes that have identical rel_pos_in_owner
+			// p indexes the attributes of this partition, and f indexes the attributes of the last partition
+			uint32_t p = 1;
+			uint32_t f = 1;
+
+			while(p < partition_element_count && f < final_element_count)
+			{
+				// this attribute was dropped before the last partition, so it has no place to be projected to
+				if(partition_attrs[p].rel_pos_in_owner < final_attrs[f].rel_pos_in_owner)
+				{
+					p++;
+					continue;
+				}
+
+				// skipping is equal to setting it to NULL
+				if(final_attrs[f].rel_pos_in_owner < partition_attrs[p].rel_pos_in_owner)
+				{
+					f++;
+					continue;
+				}
+
+				if(is_unified_type_info(final_readers_tuple_def->type_info->containees[f].al.type_info))
+				{
+					set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index, f), output_tuple, EMPTY_DATUM, UINT32_MAX);
+
+					set_element_in_tuple_from_tuple(output_tuple_def, STATIC_POSITION(attr_index, f, 1), output_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, UINT32_MAX);
+				}
+				else
+				{
+					// identical rel_pos_in_owner, so this is the very same attribute, insert it
+					set_element_in_tuple_from_tuple(output_tuple_def, STATIC_POSITION(attr_index, f), output_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, UINT32_MAX);
+				}
+
+				p++;
+				f++;
+			}
+		}}
+
+		attr_index++;
+	}
+
+	output_tuple = realloc(output_tuple, get_tuple_size(output_tuple_def, output_tuple));
+	return output_tuple;
+}
+
+void destroy_scan_dml_output_tuple_def(tuple_def* output_tuple_def)
+{
+	if(output_tuple_def != NULL)
+	{
+		free(output_tuple_def->type_info);
+		free(output_tuple_def);
+	}
 }
