@@ -94,6 +94,8 @@ int main(int argc, char** argv)
 
 	destroy_query_plan_descriptor(qpd);
 
+	delete_interim_tuple_store(its_p);
+
 	if(filter_expr_sql != NULL)
 		delete_sql(filter_expr_sql);
 
