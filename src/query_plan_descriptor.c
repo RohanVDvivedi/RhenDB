@@ -1729,10 +1729,6 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 				break;
 		}
 
-		// delete the dataset created for the constant dataset operator
-		if(d->type == OP_CONSTANT_DATASET)
-			delete_interim_tuple_store(d->params.constant_dataset.constant_dataset_p);
-
 		// free the deep-cloned positional_accessors / compare_directions / arrays this operator descriptor owns.
 		// NOTE : freeing the aggregate_input_element_ids reads aggregate_functions[i]->input_type_infos_count, so it
 		// must run before the aggregate_functions are destroyed below.
