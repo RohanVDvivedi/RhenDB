@@ -1,7 +1,8 @@
 #include<rhendb/rhendb.h>
 
 #include<rhendb/transaction.h>
-#include<rhendb/query_plan_descriptor.h>
+#include<rhendb/query_plan.h>
+#include<rhendb/dml.h>
 
 #include<rhendb/util_transaction_ext_storer.h>
 
@@ -14,25 +15,24 @@
 
 #define USERS_COUNT 10
 
-rhendb rdb = {};
-transaction* txn;
-query_plan* qp = NULL;
+#define MIN_RUN_SIZE  (1024 * 1024)
+#define MIN_PART_SIZE (1024 * 1024)
 
 tuple_def record_def;
 
-void initialize_tuple_defs()
+void initialize_tuple_defs(rhendb* rdb)
 {
 	data_type_info* record_type_info = malloc(sizeof_tuple_data_type_info(3));
-	initialize_tuple_data_type_info(record_type_info, "record", 0, 8 + (rdb.union_text_type_info->max_size + 8) + (rdb.union_blob_type_info->max_size + 8) + (rdb.union_numeric_type_info->max_size + 8), 3);
+	initialize_tuple_data_type_info(record_type_info, "record", 0, 8 + (rdb->union_text_type_info->max_size + 8) + (rdb->union_blob_type_info->max_size + 8) + (rdb->union_numeric_type_info->max_size + 8), 3);
 
 	strcpy(record_type_info->containees[0].field_name, "key");
-	record_type_info->containees[0].al.type_info = rdb.union_text_type_info;
+	record_type_info->containees[0].al.type_info = rdb->union_text_type_info;
 
 	strcpy(record_type_info->containees[1].field_name, "value_blob");
-	record_type_info->containees[1].al.type_info = rdb.union_blob_type_info;
+	record_type_info->containees[1].al.type_info = rdb->union_blob_type_info;
 
 	strcpy(record_type_info->containees[2].field_name, "value_numeric");
-	record_type_info->containees[2].al.type_info = rdb.union_numeric_type_info;
+	record_type_info->containees[2].al.type_info = rdb->union_numeric_type_info;
 
 	initialize_tuple_def(&record_def, record_type_info);
 
@@ -40,18 +40,18 @@ void initialize_tuple_defs()
 	printf("\n\n");
 }
 
-void insert_in_interim_tuple_store(interim_tuple_store* its_p, const char* key, const char* value_blob, const char* value_numeric)
+void insert_in_interim_tuple_store(interim_tuple_store* its_p, const char* key, const char* value_blob, const char* value_numeric, transaction* tx)
 {
 	char record[900];
 	init_tuple(&record_def, record);
 
-	void* k = tx_temp_store_tbj(key, strlen(key), record_def.type_info->containees[0].al.type_info, txn);
-	void* vb = tx_temp_store_tbj(value_blob, strlen(value_blob), record_def.type_info->containees[1].al.type_info, txn);
+	void* k = tx_temp_store_tbj(key, strlen(key), record_def.type_info->containees[0].al.type_info, tx);
+	void* vb = tx_temp_store_tbj(value_blob, strlen(value_blob), record_def.type_info->containees[1].al.type_info, tx);
 	mpd_context_t ctx;
     mpd_maxcontext(&ctx);
 	mpd_t* number = mpd_new(&ctx);
 	mpd_set_string(number, value_numeric, &ctx);
-	void* vn = tx_temp_store_numeric(number, record_def.type_info->containees[2].al.type_info, txn);
+	void* vn = tx_temp_store_numeric(number, record_def.type_info->containees[2].al.type_info, tx);
 
 	set_element_in_tuple(&record_def, STATIC_POSITION(0), record, &(datum){.tuple_value = k}, UINT32_MAX);
 	set_element_in_tuple(&record_def, STATIC_POSITION(1), record, &(datum){.tuple_value = vb}, UINT32_MAX);
@@ -68,6 +68,7 @@ void insert_in_interim_tuple_store(interim_tuple_store* its_p, const char* key, 
 int main()
 {
 	// create rdb
+	rhendb rdb;
 	initialize_rhendb(&rdb, "./test.db",
 		6,
 		4096, 8, 80, 80,
@@ -78,12 +79,12 @@ int main()
 		USERS_COUNT);
 	printf("database initialized\n\n");
 
-	initialize_tuple_defs();
+	initialize_tuple_defs(&rdb);
 
 	// create a write only transaction
 	transaction tx;
 	initialize_transaction(&tx, &rdb);
-	txn = &tx;
+
 	// make it have a writer snapshot capable of writing
 	tx.snapshot = get_new_transaction_id(&(rdb.tx_table), NULL);
 
@@ -115,49 +116,16 @@ int main()
 
 	// create sample interim tuple store for constant dataset operator for insertion
 	interim_tuple_store* its_p = get_new_interim_tuple_store(4096);
-	insert_in_interim_tuple_store(its_p, "Rohan", "\xdd\x11\xdd\x11", "29.5");
-	insert_in_interim_tuple_store(its_p, "Devashree", "\x44\x10\x01\x55\x11\x11", "40.2");
-	insert_in_interim_tuple_store(its_p, "Rupa", "\x44\x10\x01\x55\x11\x11\xdd\x11\xdd\x11", "60");
+	insert_in_interim_tuple_store(its_p, "Rohan", "\xdd\x11\xdd\x11", "29.5", &tx);
+	insert_in_interim_tuple_store(its_p, "Devashree", "\x44\x10\x01\x55\x11\x11", "40.2", &tx);
+	insert_in_interim_tuple_store(its_p, "Rupa", "\x44\x10\x01\x55\x11\x11\xdd\x11\xdd\x11", "60", &tx);
 
-	{
-		query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
+	positional_accessor input_positions[3] = {STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2)};
+	int dml_error = 0;
+	uint64_t inserts_done = dml_insert(NULL, its_p, &record_def, input_positions, ftbl, &tx, 0, 0, &dml_error);
+	printf("inserts_done = %"PRIu64", dml_error = %d\n", inserts_done, dml_error);
 
-		positional_accessor input_positions[3] = {STATIC_POSITION(0), STATIC_POSITION(1), STATIC_POSITION(2)};
-		// insert these rows into the table
-		{
-			const operator_desc* cdata = insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def);
-
-			const operator_desc* insertions = insert_insertion_operator_descriptor(qpd, cdata, input_positions, ftbl, TABLE_ID_IN_OUTPUT | PARTITION_ID_IN_OUTPUT | TUPLE_POINTER_IN_OUTPUT | HEAP_TUPLE_IN_OUTPUT, NULL, SAVEPOINT_LOGGING_ENABLED);
-
-			insert_consumer_operator_descriptor(qpd, insertions, print_consumer, NULL);
-		}
-
-		qp = create_query_plan(qpd, NULL);
-		register_query_plan(&tx, qp);
-
-		start_all_operators_for_query_plan(qp);
-
-		wait_for_shutdown_of_query_plan(qp);
-
-		deregister_query_plan(&tx, qp);
-		if(qp->query_errored)
-		{
-			dstring kill_reasons = new_dstring("", 0);
-			destroy_query_plan(qp, &kill_reasons);
-
-			printf("\n\nKILL REASONS : \n");
-			printf_dstring(&kill_reasons);
-			deinit_dstring(&kill_reasons);
-			printf("\n\nKILL REASONS END\n\n");
-		}
-		else
-		{
-			printf("QUERY SUCCESSFULL\n");
-			destroy_query_plan(qp, NULL);
-		}
-
-		destroy_query_plan_descriptor(qpd);
-	}
+	delete_interim_tuple_store(its_p);
 
 	// a query completed so reset it's ext stores
 	reset_temp_ext_stores_in_transaction(&tx);
@@ -229,35 +197,21 @@ int main()
 	{
 		query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
-		{
-			const operator_desc* scanner = insert_scan_operator_descriptor(qpd, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0);
+		insert_scan_operator_descriptor(qpd, ftbl, HEAP_TUPLE_IN_OUTPUT, 0);
 
-			insert_consumer_operator_descriptor(qpd, scanner, print_consumer, NULL);
+		query_plan* qp = get_new_query_plan(qpd);
+
+		while(1)
+		{
+			int error_code = 0;
+			void* tuple = next_tuple_from_query_plan(qp, &error_code);
+			if(tuple == NULL)
+				break;
+			print_tuple(tuple, qp->desc->output_tuple_def);
+			free(tuple);
 		}
 
-		qp = create_query_plan(qpd, NULL);
-		register_query_plan(&tx, qp);
-
-		start_all_operators_for_query_plan(qp);
-
-		wait_for_shutdown_of_query_plan(qp);
-
-		deregister_query_plan(&tx, qp);
-		if(qp->query_errored)
-		{
-			dstring kill_reasons = new_dstring("", 0);
-			destroy_query_plan(qp, &kill_reasons);
-
-			printf("\n\nKILL REASONS : \n");
-			printf_dstring(&kill_reasons);
-			deinit_dstring(&kill_reasons);
-			printf("\n\nKILL REASONS END\n\n");
-		}
-		else
-		{
-			printf("QUERY SUCCESSFULL\n");
-			destroy_query_plan(qp, NULL);
-		}
+		destroy_query_plan(qp);
 
 		destroy_query_plan_descriptor(qpd);
 	}
@@ -267,9 +221,9 @@ int main()
 
 	// create another dataset for constant dataset operator
 	its_p = get_new_interim_tuple_store(4096);
-	insert_in_interim_tuple_store(its_p, "Rohan", "\xdd\x11\xdd\x11", "29.5");
-	insert_in_interim_tuple_store(its_p, "Devashree", "\x44\x10\x01\x55\x11\x11", "40.2");
-	insert_in_interim_tuple_store(its_p, "Vipulkumar", "\x44\xdd\x11\xdd\x11", "59.6");
+	insert_in_interim_tuple_store(its_p, "Rohan", "\xdd\x11\xdd\x11", "29.5", &tx);
+	insert_in_interim_tuple_store(its_p, "Devashree", "\x44\x10\x01\x55\x11\x11", "40.2", &tx);
+	insert_in_interim_tuple_store(its_p, "Vipulkumar", "\x44\xdd\x11\xdd\x11", "59.6", &tx);
 
 	// run a sample pipeline
 	{
@@ -305,50 +259,40 @@ int main()
 		compare_direction CMP_DIR[1] = {ASC};
 
 		{
-			const operator_desc* scanner = insert_scan_operator_descriptor(qpd, ftbl, 1, HEAP_TUPLE_IN_OUTPUT, 0);
+			operator_desc* scanner = insert_scan_operator_descriptor(qpd, ftbl, HEAP_TUPLE_IN_OUTPUT, 0);
 
-			const operator_desc* proj = insert_projection_operator_descriptor(qpd, scanner, "projecteds", (projection_description[]){
+			operator_desc* proj = insert_projection_operator_descriptor(qpd, scanner, "projecteds", (projection_description[]){
 				project_from("column1", STATIC_POSITION(0,1)),
 				project_from("column2", STATIC_POSITION(0,2)),
 				project_from("column3", STATIC_POSITION(0,3)),
 			}, 3);
 
-			const operator_desc* cdata = insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def);
+			operator_desc* cdata = insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def);
 
-			const operator_desc* union_op = insert_union_operator_descriptor(qpd, (const operator_desc* []){proj, cdata}, 2);
+			operator_desc* union_op = insert_union_operator_descriptor(qpd, (operator_desc* []){proj, cdata}, 2);
 
-			const operator_desc* agg = insert_hash_aggregation_operator_descriptor(qpd, union_op, 1, key_pos, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, 4, 1, 1, 1000);
+			operator_desc* agg = insert_hash_aggregation_operator_descriptor(qpd, union_op, 1, key_pos, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, MIN_PART_SIZE);
 
-			const operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, agg, 1, key_pos, CMP_DIR, 10, 2, 1);
-
-			insert_consumer_operator_descriptor(qpd, sort, print_consumer, NULL);
+			operator_desc* sort = insert_sort_operator_descriptor(qpd, TUPLES_DOWN_COUNTER_INF, agg, 1, key_pos, CMP_DIR, 10, MIN_RUN_SIZE);
 		}
 
-		qp = create_query_plan(qpd, NULL);
-		register_query_plan(&tx, qp);
+		query_plan* qp = get_new_query_plan(qpd);
 
-		start_all_operators_for_query_plan(qp);
-
-		wait_for_shutdown_of_query_plan(qp);
-
-		deregister_query_plan(&tx, qp);
-		if(qp->query_errored)
+		while(1)
 		{
-			dstring kill_reasons = new_dstring("", 0);
-			destroy_query_plan(qp, &kill_reasons);
+			int error_code = 0;
+			void* tuple = next_tuple_from_query_plan(qp, &error_code);
+			if(tuple == NULL)
+				break;
+			print_tuple(tuple, qp->desc->output_tuple_def);
+			free(tuple);
+		}
 
-			printf("\n\nKILL REASONS : \n");
-			printf_dstring(&kill_reasons);
-			deinit_dstring(&kill_reasons);
-			printf("\n\nKILL REASONS END\n\n");
-		}
-		else
-		{
-			printf("QUERY SUCCESSFULL\n");
-			destroy_query_plan(qp, NULL);
-		}
+		destroy_query_plan(qp);
 
 		destroy_query_plan_descriptor(qpd);
+
+		delete_interim_tuple_store(its_p);
 	}
 
 	// a query completed so reset it's ext stores
