@@ -480,6 +480,11 @@ uint64_t dml_insert(
 							goto ABORT_ERROR;
 						if(is_persistent_page_NULL(&ppage, engine->pam_p))
 							will_fail_finding_free_enough_page_on_required_space = min(required_space, will_fail_finding_free_enough_page_on_required_space);
+						else
+						{
+							local_heap_htan.locked_page_ids[local_heap_htan.locked_page_ids_count++] = ppage.page_id;
+							remove_from_heap_table_accumulative_notifier(&local_heap_htan, ppage.page_id);
+						}
 					}
 					if(is_persistent_page_NULL(&ppage, engine->pam_p))
 					{
@@ -487,6 +492,7 @@ uint64_t dml_insert(
 						if(abort_error)
 							goto ABORT_ERROR;
 						is_new_page = 1;
+						local_heap_htan.locked_page_ids[local_heap_htan.locked_page_ids_count++] = ppage.page_id;
 					}
 
 					possible_insertion_index = 0;
@@ -510,6 +516,7 @@ uint64_t dml_insert(
 				release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
 				if(abort_error)
 					goto ABORT_ERROR;
+				local_heap_htan.locked_page_ids_count = 0;
 				possible_insertion_index = 0;
 				is_ppage_self_created_new_page = 0;
 				ppage_unused_space_in_entry = 0;
@@ -532,6 +539,7 @@ uint64_t dml_insert(
 				release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
 				if(abort_error)
 					goto ABORT_ERROR;
+				local_heap_htan.locked_page_ids_count = 0;
 				possible_insertion_index = 0;
 				is_ppage_self_created_new_page = 0;
 				ppage_unused_space_in_entry = 0;
@@ -548,6 +556,7 @@ uint64_t dml_insert(
 
 			if(!is_persistent_page_NULL(&ppage, engine->pam_p))
 				release_lock_on_persistent_page(engine->pam_p, min_tx_id, &ppage, NONE_OPTION, &abort_error);
+			local_heap_htan.locked_page_ids_count = 0;
 			possible_insertion_index = 0;
 			is_ppage_self_created_new_page = 0;
 			ppage_unused_space_in_entry = 0;
