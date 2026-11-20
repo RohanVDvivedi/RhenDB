@@ -22,7 +22,11 @@ struct op_state
 
 	uint64_t total_sorted_runs_count;
 
-	interim_tuple_store* output_run; // NULL until all the tuples are produced
+	// once everything is almost merged, put all the remaining runs here to consume and produce outputs
+	pheap output_runs;
+	uint64_t output_runs_count;
+	datum* output_runs_keys;
+	tuples_down_counter output_runs_result_counter;
 
 	// derieved information
 	const data_type_info** key_dtis;
@@ -179,6 +183,74 @@ static uint64_t merge_runs_into_run_job(operator* o, linkedlist* input_runs)
 	return level;
 }
 
+static void insert_one_in_output_runs(operator* o, interim_tuple_store* its_p)
+{
+	op_state* this_state = o->state;
+
+	if(this_state->output_runs_keys == NULL)
+		this_state->output_runs_keys = malloc(o->desc->params.sort.N_way_sort * o->desc->params.sort.key_element_count * sizeof(datum));
+
+	// we need the run open for merging it, sorter makes sure to open and close runs to reduce file descriptor ulimit usage
+	open_file_for_interim_tuple_store(its_p);
+
+	if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), 0, &(o->desc->output_tuple_def->size_def), o->desc->params.sort.min_run_size))
+		delete_interim_tuple_store(its_p);
+	else
+	{
+		// comes here only if mmap succeeds, will happen always, unless the run is empty
+
+		// embed_ptrs[0] is used to store the materialized keys
+		its_p->embed_ptrs[0] = &(this_state->output_runs_keys[this_state->output_runs_count * o->desc->params.sort.key_element_count]);
+
+		// revise materialized keys before pushing it to output_runs
+		revise_materialized_keys_in_interim_tuple_store(o, its_p);
+
+		push_to_pheap(&(this_state->output_runs), its_p);
+
+		this_state->output_runs_count++;
+	}
+}
+
+static void* get_one_from_output_runs(operator* o)
+{
+	op_state* this_state = o->state;
+
+	if(is_empty_pheap(&(this_state->output_runs)))
+		return NULL;
+
+	if(!can_decrement_tuples_down_counter(&(this_state->output_runs_result_counter)))
+		return NULL;
+
+	interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&(this_state->output_runs));
+
+	// copy the top tuple of its_p into output_tuple
+	decrement_tuples_down_counter(&(this_state->output_runs_result_counter));
+	void* output_tuple = malloc(get_tuple_size(o->desc->output_tuple_def, its_p->embed_regions[0].tuple));
+	memory_move(output_tuple, its_p->embed_regions[0].tuple, get_tuple_size(o->desc->output_tuple_def, its_p->embed_regions[0].tuple));
+
+	// go next on its_p, and insert it back into mergeable_open_runs
+	{
+		uint64_t next_tuple_offset = next_tuple_offset_for_interim_tuple_region(&(its_p->embed_regions[0]));
+		if(!mmap_for_reading_tuple(its_p, &(its_p->embed_regions[0]), next_tuple_offset, &(o->desc->output_tuple_def->size_def), o->desc->params.sort.min_run_size))
+		{
+			this_state->output_runs_count--;
+			remove_from_pheap(&(this_state->output_runs), its_p);
+
+			unmap_all_embed_regions_in_interim_tuple_store(its_p);
+			delete_interim_tuple_store(its_p);
+		}
+		else
+		{
+			// revise materialized keys before heapify-ing it in mergeable_open_runs
+			revise_materialized_keys_in_interim_tuple_store(o, its_p);
+
+			heapify_for_in_pheap(&(this_state->output_runs), its_p);
+		}
+	}
+
+	return output_tuple;
+}
+
 static void* next_tuple(operator* o, int* error_code)
 {
 	// already dead
@@ -187,10 +259,8 @@ static void* next_tuple(operator* o, int* error_code)
 
 	op_state* this_state = o->state;
 
-	if(this_state->output_run == NULL)
+	if(this_state->input_operator != NULL)
 	{
-		uint32_t output_run_level = 0;
-
 		while(1)
 		{
 			// get next tuple until we get tuples from input_operator
@@ -205,7 +275,11 @@ static void* next_tuple(operator* o, int* error_code)
 					return NULL;
 				}
 				else // input exhausted
+				{
+					this_state->input_operator->destroy_state(this_state->input_operator);
+					this_state->input_operator = NULL;
 					break;
+				}
 			}
 
 			// insert it in unsorted_run
@@ -218,7 +292,6 @@ static void* next_tuple(operator* o, int* error_code)
 			if(this_state->unsorted_run->next_tuple_offset >= o->desc->params.sort.min_run_size)
 			{
 				uint64_t level = sort_unsorted_run_and_produce_sorted_run(o);
-				output_run_level = level; // this could be the last and only run, so note down it's level
 
 				// now run a merging loop and keep updating the level, until the level in context has more than or equal to the N_way_sort number of runs
 				while(this_state->sorted_runs_count[level] >= o->desc->params.sort.N_way_sort)
@@ -231,14 +304,29 @@ static void* next_tuple(operator* o, int* error_code)
 					this_state->sorted_runs_count[level] = 0;
 
 					level = merge_runs_into_run_job(o, &runs_to_merge);
-					output_run_level = level; // this could be the last and only run, so note down it's level
 				}
 			}
 		}
 
 		// sort the final partial run, if any tuples remain in it
+		// and do exactly what you do when unsorted_run overflows
 		if(this_state->unsorted_run != NULL)
-			output_run_level = sort_unsorted_run_and_produce_sorted_run(o); // this could be the last and only run, so note down it's level
+		{
+			uint64_t level = sort_unsorted_run_and_produce_sorted_run(o);
+
+			// now run a merging loop and keep updating the level, until the level in context has more than or equal to the N_way_sort number of runs
+			while(this_state->sorted_runs_count[level] >= o->desc->params.sort.N_way_sort)
+			{
+				linkedlist runs_to_merge;
+				initialize_linkedlist(&runs_to_merge, offsetof(interim_tuple_store, embed_node_ll));
+				insert_all_at_head_in_linkedlist(&runs_to_merge, &(this_state->sorted_runs[level]));
+
+				this_state->total_sorted_runs_count -= this_state->sorted_runs_count[level];
+				this_state->sorted_runs_count[level] = 0;
+
+				level = merge_runs_into_run_job(o, &runs_to_merge);
+			}
+		}
 
 		// if no tuple was ever produced (this_state->total_sorted_runs_count == 0 and unsorted_run == NULL), destroy and exit
 		if(this_state->total_sorted_runs_count == 0)
@@ -247,9 +335,9 @@ static void* next_tuple(operator* o, int* error_code)
 			return NULL;
 		}
 
-		while(this_state->total_sorted_runs_count > 1)
+		while(this_state->total_sorted_runs_count > o->desc->params.sort.N_way_sort)
 		{
-			// now run a loop on all levels, and put then in linkedlist and ask to be merged
+			// now run a loop on all levels, and put them in linkedlist and ask to be merged
 			// gather at most N_way_sort runs (the keys buffer in a merge job is sized for N_way_sort runs)
 			linkedlist runs_to_merge;
 			initialize_linkedlist(&runs_to_merge, offsetof(interim_tuple_store, embed_node_ll));
@@ -268,44 +356,31 @@ static void* next_tuple(operator* o, int* error_code)
 				}
 			}
 
-			// merge job re-inserts the single merged run and note it's level
-			output_run_level = merge_runs_into_run_job(o, &runs_to_merge); // this could be the last and only run, so note down it's level
+			// merge job re-inserts the single merged run
+			merge_runs_into_run_job(o, &runs_to_merge);
 		}
 
-		// and move last run into the output_run
-		this_state->output_run = (interim_tuple_store*) get_head_of_linkedlist(&(this_state->sorted_runs[output_run_level]));
-		remove_head_from_linkedlist(&(this_state->sorted_runs[output_run_level]));
-		this_state->sorted_runs_count[output_run_level]--;
-		this_state->total_sorted_runs_count--;
+		// now collect them all in output_runs to start producing them
+		for(uint32_t level = 0; level < MAX_LEVELS; level++)
+		{
+			while(!is_empty_linkedlist(&(this_state->sorted_runs[level])))
+			{
+				interim_tuple_store* run = (interim_tuple_store*) get_head_of_linkedlist(&(this_state->sorted_runs[level]));
+				remove_head_from_linkedlist(&(this_state->sorted_runs[level]));
+				this_state->sorted_runs_count[level]--;
+				this_state->total_sorted_runs_count--;
 
-		// we need the output_run open for producing output tuples from it, sorter makes sure to open and close runs to reduce file descriptor ulimit usage
-		open_file_for_interim_tuple_store(this_state->output_run);
-
-		// store 0 into the output_run->embed_uints = 0, using it as next offset to produce the tuple
-		this_state->output_run->embed_uints[0] = 0;
+				insert_one_in_output_runs(o, run);
+			}
+		}
 	}
 
-	if(this_state->output_run->embed_uints[0] >= this_state->output_run->next_tuple_offset)
+	void* output_tuple = get_one_from_output_runs(o);
+	if(output_tuple == NULL)
 	{
-		// no more tuples in the output run
 		o->destroy_state(o);
 		return NULL;
 	}
-
-	// copy the return the next tuple in output_run and advance the offset
-	interim_tuple_region* read_region = &(this_state->output_run->embed_regions[0]);
-	if(!mmap_for_reading_tuple(this_state->output_run, read_region, this_state->output_run->embed_uints[0], &(o->desc->output_tuple_def->size_def), o->desc->params.sort.min_run_size))
-	{
-		// no more tuples in the output run
-		o->destroy_state(o);
-		return NULL;
-	}
-
-	uint32_t tuple_size = get_tuple_size(o->desc->output_tuple_def, read_region->tuple);
-	void* output_tuple = malloc(tuple_size);
-	memcpy(output_tuple, read_region->tuple, tuple_size);
-
-	this_state->output_run->embed_uints[0] = next_tuple_offset_for_interim_tuple_region(read_region);
 
 	return output_tuple;
 }
@@ -316,7 +391,8 @@ static void destroy_state(operator* o)
 	{
 		op_state* this_state = o->state;
 
-		this_state->input_operator->destroy_state(this_state->input_operator);
+		if(this_state->input_operator != NULL)
+			this_state->input_operator->destroy_state(this_state->input_operator);
 
 		if(this_state->unsorted_run != NULL)
 		{
@@ -333,11 +409,11 @@ static void destroy_state(operator* o)
 				delete_interim_tuple_store(its_p);
 			}
 
-		if(this_state->output_run != NULL)
-		{
-			open_file_for_interim_tuple_store(this_state->output_run);
-			delete_interim_tuple_store(this_state->output_run);
-		}
+		if(!is_empty_pheap(&(this_state->output_runs)))
+			remove_all_from_pheap(&(this_state->output_runs), DELETE_ON_NOTIFY_FOR_INTERIM_TUPLE_STORE);
+
+		if(this_state->output_runs_keys != NULL)
+			free(this_state->output_runs_keys);
 
 		free(this_state->key_dtis);
 
@@ -364,7 +440,10 @@ void open_sort_operator(operator* o)
 
 	this_state->total_sorted_runs_count = 0;
 
-	this_state->output_run = NULL;
+	initialize_pheap(&(this_state->output_runs), MIN_HEAP, LEFTIST, &contexted_comparator(o, compare_interim_tuple_stores_for_pheap_runs), offsetof(interim_tuple_store, embed_node_php));
+	this_state->output_runs_count = 0;
+	this_state->output_runs_keys = NULL;
+	this_state->output_runs_result_counter = o->desc->params.sort.result_counter;
 
 	this_state->key_dtis = malloc(sizeof(data_type_info*) * o->desc->params.sort.key_element_count);
 	for(uint32_t j = 0; j < o->desc->params.sort.key_element_count; j++)
