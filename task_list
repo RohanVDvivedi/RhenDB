@@ -1,10 +1,5 @@
 PICKED TASKS
 
-* also cache materialized values by chunk_pointer and by what rage_engine pointer they live in
- * resets everytime new input_tuples are set
-
------------------------------------------------------------------
-
 * index creation and usage operators
 
   * btree_index_insertion_operator
@@ -63,3 +58,5 @@ FUTURE TASKS
   * implement get date, time, with timezone, and time in string to unix epoch
 
  8.* support for user-defined expressioned-functions and aggregate-functions
+
+ 9.* additional responsibility for the grabage collector, to renew old tuples in older partition, and put them in newer latest partition to allow scan optimization over latter queries
