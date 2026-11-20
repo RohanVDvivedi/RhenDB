@@ -115,6 +115,7 @@ static int build_heap_record_without_extensions(const tuple_def* partition_tuple
 			case NUMERIC_INSERTION_CASE :
 			{
 				set_element_in_tuple(partition_tuple_def, STATIC_POSITION(i), heap_record_without_extensions, EMPTY_DATUM, UINT32_MAX);
+				set_element_in_tuple(partition_tuple_def, STATIC_POSITION(i, 1), heap_record_without_extensions, EMPTY_DATUM, UINT32_MAX);
 
 				extended_column_data e = {
 					.index = i,
@@ -130,7 +131,7 @@ static int build_heap_record_without_extensions(const tuple_def* partition_tuple
 
 				numeric_sign_bits sign_bits; int16_t exponent;
 				get_sign_bits_and_exponent_for_materialized_numeric(&m, &sign_bits, &exponent);
-				set_sign_bits_and_exponent_for_numeric(sign_bits, exponent, heap_record_without_extensions, partition_tuple_def, STATIC_POSITION(i));
+				set_sign_bits_and_exponent_for_numeric(sign_bits, exponent, heap_record_without_extensions, partition_tuple_def, STATIC_POSITION(i, 1));
 
 				uint32_t digit_count = get_digits_count_for_materialized_numeric(&m);
 				if(digit_count == 0) // sign and exponent describe it fully, nothing to stream
@@ -148,6 +149,7 @@ static int build_heap_record_without_extensions(const tuple_def* partition_tuple
 			case JSONB_INSERTION_CASE :
 			{
 				set_element_in_tuple(partition_tuple_def, STATIC_POSITION(i), heap_record_without_extensions, EMPTY_DATUM, UINT32_MAX);
+				set_element_in_tuple(partition_tuple_def, STATIC_POSITION(i, 1), heap_record_without_extensions, EMPTY_DATUM, UINT32_MAX);
 
 				extended_column_data e = {
 					.index = i,
@@ -208,7 +210,7 @@ static void build_heap_record_with_prefix_bytes(const tuple_def* partition_tuple
 
 		if(e->is_numeric)
 		{
-			digit_write_iterator* it = get_new_digit_write_iterator(heap_record_with_extensions, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
+			digit_write_iterator* it = get_new_digit_write_iterator(heap_record_with_extensions, partition_tuple_def, STATIC_POSITION(e->index, 1), insertion_table_partition->blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 			while(e->written_size < limit)
 			{
 				cy_uint next_digits_count = 0;
@@ -230,7 +232,7 @@ static void build_heap_record_with_prefix_bytes(const tuple_def* partition_tuple
 		}
 		else
 		{
-			binary_write_iterator* it = get_new_binary_write_iterator(heap_record_with_extensions, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
+			binary_write_iterator* it = get_new_binary_write_iterator(heap_record_with_extensions, partition_tuple_def, STATIC_POSITION(e->index, 1), insertion_table_partition->blobs_root_page_id, get_NULL_tuple_pointer(&(engine->pam_p->pas)), e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 			while(e->written_size < limit)
 			{
 				uint32_t wrote = append_to_binary_write_iterator(it, (const char*)e->value + e->written_size, (uint32_t)(limit - e->written_size), &HEAP_TABLE_ACCUMULATIVE_NOTIFIER(local_blob_htan), min_tx_id, abort_error);
@@ -307,13 +309,13 @@ uint64_t dml_insert(
 		const data_type_info* col_dti = get_type_info_for_element_from_tuple_def(partition_tuple_def, STATIC_POSITION(i));
 		if(is_primitive_numeral_type_info(col_dti))
 			column_kinds[i] = PRIMITIVE_NUMERAL_INSERTION_CASE;
-		else if(is_text_extended_type_info(col_dti))
+		else if(is_text_type_info(col_dti))
 			column_kinds[i] = TEXT_INSERTION_CASE;
-		else if(is_blob_extended_type_info(col_dti))
+		else if(is_blob_type_info(col_dti))
 			column_kinds[i] = BLOB_INSERTION_CASE;
-		else if(is_numeric_extended_type_info(col_dti))
+		else if(is_numeric_type_info(col_dti))
 			column_kinds[i] = NUMERIC_INSERTION_CASE;
-		else if(is_jsonb_extended_type_info(col_dti))
+		else if(is_jsonb_type_info(col_dti))
 			column_kinds[i] = JSONB_INSERTION_CASE;
 		else
 		{
@@ -531,7 +533,7 @@ uint64_t dml_insert(
 
 				if(e->is_numeric)
 				{
-					digit_write_iterator* it = get_new_digit_write_iterator(heap_record_with_extensions, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, e->tail_chunk_pointer, e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
+					digit_write_iterator* it = get_new_digit_write_iterator(heap_record_with_extensions, partition_tuple_def, STATIC_POSITION(e->index, 1), insertion_table_partition->blobs_root_page_id, e->tail_chunk_pointer, e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 					uint64_t curr_written_size = e->written_size;
 					while(curr_written_size < e->total_size)
 					{
@@ -554,7 +556,7 @@ uint64_t dml_insert(
 				}
 				else
 				{
-					binary_write_iterator* it = get_new_binary_write_iterator(heap_record_with_extensions, partition_tuple_def, STATIC_POSITION(e->index), insertion_table_partition->blobs_root_page_id, e->tail_chunk_pointer, e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
+					binary_write_iterator* it = get_new_binary_write_iterator(heap_record_with_extensions, partition_tuple_def, STATIC_POSITION(e->index, 1), insertion_table_partition->blobs_root_page_id, e->tail_chunk_pointer, e->prefix_size, &(engine->bstd), engine->pam_p, engine->pmm_p);
 					uint64_t curr_written_size = e->written_size;
 					while(curr_written_size < e->total_size)
 					{

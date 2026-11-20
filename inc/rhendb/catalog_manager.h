@@ -126,6 +126,12 @@ struct catalog_manager
 	// this where new ids come from, each id in the schema is unique across all entities, unless it has partitions
 	pthread_mutex_t global_unique_schema_id_lock;
 	uint64_t global_unique_schema_id; // starts with FIRST_SCHEMA_UNIQUE_ID
+
+	// type infos for the extended types, for the attribute of the tuple
+	data_type_info* union_text_type_info;
+	data_type_info* union_blob_type_info;
+	data_type_info* union_numeric_type_info;
+	data_type_info* union_jsonb_type_info;
 };
 
 typedef enum rhendb_base_type rhendb_base_type;
@@ -240,8 +246,10 @@ struct rhendb_table
 	char name[64];
 };
 
+typedef struct rhendb rhendb;
+
 // here the root_page_id is an in-out parameter, pass it as NULL_PAGE_ID to create a new transaction table, or an existing one to open that particular transaction_table
-void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine, transaction_status_getter* tsg_p);
+void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine, transaction_status_getter* tsg_p, rhendb* rdb);
 
 // note:: must exclusive_lock table/index by it's name before calling this DDL-write-like functions, and keep it locked until the transaction ends, for the below functions
 

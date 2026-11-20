@@ -1,5 +1,7 @@
 #include<rhendb/catalog_manager.h>
 
+#include<rhendb/rhendb.h>
+
 #include<tupleindexer/page_table/page_table.h>
 #include<tupleindexer/heap_page/heap_page.h>
 #include<tupleindexer/hash_table/hash_table.h>
@@ -709,8 +711,13 @@ const positional_accessor key_element_ids1[] = {STATIC_POSITION(1), STATIC_POSIT
 #define OWNER_TO_ATTRIBUTES_IDX_ROOT_PAGE_ID_POS   8
 #define EXT_STORE_ROOT_PAGE_ID_ROOT_PAGE_ID_POS    9
 
-void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine, transaction_status_getter* tsg_p)
+void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine, transaction_status_getter* tsg_p, rhendb* rdb)
 {
+	catmgr_p->union_text_type_info = rdb->union_text_type_info;
+	catmgr_p->union_blob_type_info = rdb->union_blob_type_info;
+	catmgr_p->union_numeric_type_info = rdb->union_numeric_type_info;
+	catmgr_p->union_jsonb_type_info = rdb->union_jsonb_type_info;
+
 	data_type_info* obj_type_dti_p = UINT_NON_NULLABLE[2];
 
 	data_type_info* id_dti_p = UINT_NON_NULLABLE[ID_n_REL_POS_BYTES];
@@ -2142,69 +2149,34 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 		case RHENDB_BIT_FIELD :
 		{
 			if(0 < attr.size && attr.size <= 64)
-			{
-				if(attr.is_nullable)
-					return BIT_FIELD_NULLABLE[attr.size];
-				else
-					return BIT_FIELD_NON_NULLABLE[attr.size];
-			}
+				return BIT_FIELD_NULLABLE[attr.size];
 			return NULL;
 		}
 
 		case RHENDB_UINT :
 		{
-			if(attr.is_nullable)
-			{
-				if(0 < attr.size && attr.size <= 8)
-					return UINT_NULLABLE[attr.size];
-				else if(0 < attr.size && attr.size <= 32)
-					return LARGE_UINT_NULLABLE[attr.size];
-			}
-			else
-			{
-				if(0 < attr.size && attr.size <= 8)
-					return UINT_NON_NULLABLE[attr.size];
-				else if(0 < attr.size && attr.size <= 32)
-					return LARGE_UINT_NON_NULLABLE[attr.size];
-			}
+			if(0 < attr.size && attr.size <= 8)
+				return UINT_NULLABLE[attr.size];
+			else if(0 < attr.size && attr.size <= 32)
+				return LARGE_UINT_NULLABLE[attr.size];
 			return NULL;
 		}
 
 		case RHENDB_INT :
 		{
-			if(attr.is_nullable)
-			{
-				if(0 < attr.size && attr.size <= 8)
-					return INT_NULLABLE[attr.size];
-				else if(0 < attr.size && attr.size <= 32)
-					return LARGE_INT_NULLABLE[attr.size];
-			}
-			else
-			{
-				if(0 < attr.size && attr.size <= 8)
-					return INT_NON_NULLABLE[attr.size];
-				else if(0 < attr.size && attr.size <= 32)
-					return LARGE_INT_NON_NULLABLE[attr.size];
-			}
+			if(0 < attr.size && attr.size <= 8)
+				return INT_NULLABLE[attr.size];
+			else if(0 < attr.size && attr.size <= 32)
+				return LARGE_INT_NULLABLE[attr.size];
 			return NULL;
 		}
 
 		case RHENDB_FLOAT :
 		{
-			if(attr.is_nullable)
-			{
-				if(attr.size == sizeof(float))
-					return FLOAT_float_NULLABLE;
-				else if(attr.size == sizeof(double))
-					return FLOAT_double_NULLABLE;
-			}
-			else
-			{
-				if(attr.size == sizeof(float))
-					return FLOAT_float_NON_NULLABLE;
-				else if(attr.size == sizeof(double))
-					return FLOAT_double_NON_NULLABLE;
-			}
+			if(attr.size == sizeof(float))
+				return FLOAT_float_NULLABLE;
+			else if(attr.size == sizeof(double))
+				return FLOAT_double_NULLABLE;
 			return NULL;
 		}
 
@@ -2224,16 +2196,16 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 			return get_numeric_inline_type_info(attr.size); break;
 
 		case RHENDB_TEXT :
-			return catmgr_p->catmgr_engine->text_extended_type_info; break;
+			return catmgr_p->union_text_type_info; break;
 
 		case RHENDB_BLOB :
-			return catmgr_p->catmgr_engine->blob_extended_type_info; break;
+			return catmgr_p->union_blob_type_info; break;
 
 		case RHENDB_NUMERIC :
-			return catmgr_p->catmgr_engine->numeric_extended_type_info; break;
+			return catmgr_p->union_numeric_type_info; break;
 
 		case RHENDB_JSONB :
-			return catmgr_p->catmgr_engine->jsonb_extended_type_info; break;
+			return catmgr_p->union_jsonb_type_info; break;
 	}
 
 	return NULL;

@@ -10,51 +10,6 @@
 
 #include<string.h>
 
-// builds the final_readers_tuple_def out of the type_info of the last (latest) visible partition,
-// it is an almost identical version of that partition's type_info, where every attribute, except for
-// the mvcc_header at position 0, is a shallow cloned nullable type
-// this is the same construction that the insertion_operator does for its heap tuple output
-static void initialize_final_readers_tuple_def(rhendb* rdb, fetched_table* ftabl, const data_type_info* last_partition_type_info)
-{
-	data_type_info* final_readers_data_type_info = malloc(sizeof_tuple_data_type_info(last_partition_type_info->element_count));
-	if(final_readers_data_type_info == NULL)
-		exit(-1);
-
-	uint32_t final_readers_data_type_info_max_size = 8 + sizeof(mvcc_header);
-
-	// the first element is always the mvcc_header, and it is never made nullable, so it is taken as is
-	strncpy(final_readers_data_type_info->containees[0].field_name, last_partition_type_info->containees[0].field_name, sizeof(final_readers_data_type_info->containees[0].field_name));
-	final_readers_data_type_info->containees[0].al.type_info = last_partition_type_info->containees[0].al.type_info;
-
-	// clone the rest while making them nullable shallowly with same field and type names
-	for(uint32_t i = 1; i < last_partition_type_info->element_count; i++)
-	{
-		data_type_info* final_readers_column_data_type_info = NULL;
-		if(is_text_type_info(last_partition_type_info->containees[i].al.type_info)) // RHENDB_TEXT
-			final_readers_column_data_type_info = rdb->union_text_type_info;
-		else if(is_blob_type_info(last_partition_type_info->containees[i].al.type_info)) // RHENDB_BLOB
-			final_readers_column_data_type_info = rdb->union_blob_type_info;
-		else if(is_numeric_type_info(last_partition_type_info->containees[i].al.type_info)) // RHENDB_NUMERIC
-			final_readers_column_data_type_info = rdb->union_numeric_type_info;
-		else if(is_jsonb_type_info(last_partition_type_info->containees[i].al.type_info)) // RHENDB_JSONB
-			final_readers_column_data_type_info = rdb->union_jsonb_type_info;
-		else // rest all make them NULLABLE
-			final_readers_column_data_type_info = shallow_clone_into_nullable_type(last_partition_type_info->containees[i].al.type_info);
-
-		if(final_readers_column_data_type_info->type == BIT_FIELD)
-			final_readers_data_type_info_max_size += 9;
-		else
-			final_readers_data_type_info_max_size += final_readers_column_data_type_info->is_variable_sized ? (8 + final_readers_column_data_type_info->max_size) : (1 + final_readers_column_data_type_info->size);
-
-		strncpy(final_readers_data_type_info->containees[i].field_name, last_partition_type_info->containees[i].field_name, sizeof(final_readers_data_type_info->containees[i].field_name));
-		final_readers_data_type_info->containees[i].al.type_info = final_readers_column_data_type_info;
-	}
-
-	initialize_tuple_data_type_info(final_readers_data_type_info, ftabl->table_info.name, 0, final_readers_data_type_info_max_size, last_partition_type_info->element_count);
-
-	initialize_tuple_def(&(ftabl->final_readers_tuple_def), final_readers_data_type_info);
-}
-
 fetched_table* fetch_table_from_catalog_manager(rhendb* rdb, const mvcc_snapshot* ss_p, char* table_name, uint64_t table_id)
 {
 	// fetch the table itself, by name if we were given one, else by its id
@@ -112,87 +67,13 @@ fetched_table* fetch_table_from_catalog_manager(rhendb* rdb, const mvcc_snapshot
 		initialize_tuple_def(&(ftabl->table_partition_tuple_defs[i]), partition_type_info);
 	}
 
-	// the final_readers_tuple_def is completely based off the last visible partition to this query
-	initialize_final_readers_tuple_def(rdb, ftabl, ftabl->table_partition_tuple_defs[ftabl->partitions_count - 1].type_info);
-
 	return ftabl;
-}
-
-void* project_to_final_readers_tuple_def(const fetched_table* ftabl, const void* partition_tuple, uint64_t partition_index_in_info)
-{
-	const tuple_def* partition_tuple_def = &(ftabl->table_partition_tuple_defs[partition_index_in_info]);
-	const tuple_def* final_readers_tuple_def = &(ftabl->final_readers_tuple_def);
-
-	const rhendb_attribute* partition_attrs = ftabl->table_partitions_attributes_info[partition_index_in_info];
-	const rhendb_attribute* final_attrs = ftabl->table_partitions_attributes_info[ftabl->partitions_count - 1];
-
-	uint32_t partition_element_count = ftabl->attributes_count_per_partition[partition_index_in_info];
-	uint32_t final_element_count = ftabl->attributes_count_per_partition[ftabl->partitions_count - 1];
-
-	void* projected_tuple = malloc(get_maximum_tuple_size(final_readers_tuple_def));
-	init_tuple(final_readers_tuple_def, projected_tuple);
-
-	// the mvcc_header at position 0 is common to every partition, so it is always copied over
-	set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(0), projected_tuple, partition_tuple_def, STATIC_POSITION(0), partition_tuple, UINT32_MAX);
-
-	// both the attributes arrays are ordered by their rel_pos_in_owner, so they are walked over
-	// together in a merge like O(N) fashion, matching the attributes that have identical rel_pos_in_owner
-	// p indexes the attributes of this partition, and f indexes the attributes of the last partition
-	uint32_t p = 1;
-	uint32_t f = 1;
-
-	while(p < partition_element_count && f < final_element_count)
-	{
-		// this attribute was dropped before the last partition, so it has no place to be projected to
-		if(partition_attrs[p].rel_pos_in_owner < final_attrs[f].rel_pos_in_owner)
-		{
-			p++;
-			continue;
-		}
-
-		// skipping is equal to setting it to NULL
-		if(final_attrs[f].rel_pos_in_owner < partition_attrs[p].rel_pos_in_owner)
-		{
-			f++;
-			continue;
-		}
-
-		if(is_unified_type_info(final_readers_tuple_def->type_info->containees[f].al.type_info))
-		{
-			set_element_in_tuple(final_readers_tuple_def, STATIC_POSITION(f), projected_tuple, EMPTY_DATUM, UINT32_MAX);
-
-			set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(f, 1), projected_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, UINT32_MAX);
-		}
-		else
-		{
-			// identical rel_pos_in_owner, so this is the very same attribute, insert it
-			set_element_in_tuple_from_tuple(final_readers_tuple_def, STATIC_POSITION(f), projected_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, UINT32_MAX);
-		}
-
-		p++;
-		f++;
-	}
-
-	// skip the rest i.e. let then be NULL
-	projected_tuple = realloc(projected_tuple, get_tuple_size(final_readers_tuple_def, projected_tuple));
-	return projected_tuple;
 }
 
 void destroy_fetched_table(fetched_table* ftabl)
 {
 	if(ftabl == NULL)
 		return ;
-
-	// the first element of the final_readers_tuple_def is not a shallow clone, it is the mvcc_header
-	// of the last partition itself, hence it is not to be destroyed here
-	for(uint32_t i = 1; i < ftabl->final_readers_tuple_def.type_info->element_count; i++)
-	{
-		if(is_unified_type_info(ftabl->final_readers_tuple_def.type_info->containees[i].al.type_info))
-			continue;
-		else
-			free((void*)(ftabl->final_readers_tuple_def.type_info->containees[i].al.type_info));
-	}
-	free((void*)(ftabl->final_readers_tuple_def.type_info));
 
 	for(uint64_t i = 0; i < ftabl->partitions_count; i++)
 	{
@@ -255,9 +136,9 @@ tuple_def* get_scan_dml_output_tuple_def(rhendb* rdb, const fetched_table* ftabl
 	if(MUST_OUTPUT_HEAP_TUPLE(output_flags))
 	{
 		strncpy(output_dti->containees[output_dti_element_count].field_name, ftabl->table_info.name, 64);
-		output_dti->containees[output_dti_element_count].al.type_info = ftabl->final_readers_tuple_def.type_info;
+		output_dti->containees[output_dti_element_count].al.type_info = ftabl->table_partition_tuple_defs[ftabl->partitions_count-1].type_info;
 
-		output_tuple_max_size += 8 + get_maximum_tuple_size(&(ftabl->final_readers_tuple_def));
+		output_tuple_max_size += 8 + get_maximum_tuple_size(&(ftabl->table_partition_tuple_defs[ftabl->partitions_count-1]));
 		output_dti_element_count++;
 	}
 
@@ -297,11 +178,15 @@ void* project_to_scan_dml_output_tuple_def(rhendb* rdb, const tuple_def* output_
 
 	if(MUST_OUTPUT_HEAP_TUPLE(output_flags))
 	{
-		set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index), output_tuple, EMPTY_DATUM, UINT32_MAX);
+		if(partition_index_in_info == ftabl->partitions_count-1) // same partition output tuple as is
+		{
+			set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.tuple_value = partition_tuple}), UINT32_MAX);
+		}
+		else
+		{
+			set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index), output_tuple, EMPTY_DATUM, UINT32_MAX);
 
-		{{
 			const tuple_def* partition_tuple_def = &(ftabl->table_partition_tuple_defs[partition_index_in_info]);
-			const tuple_def* final_readers_tuple_def = &(ftabl->final_readers_tuple_def);
 
 			const rhendb_attribute* partition_attrs = ftabl->table_partitions_attributes_info[partition_index_in_info];
 			const rhendb_attribute* final_attrs = ftabl->table_partitions_attributes_info[ftabl->partitions_count - 1];
@@ -334,22 +219,12 @@ void* project_to_scan_dml_output_tuple_def(rhendb* rdb, const tuple_def* output_
 					continue;
 				}
 
-				if(is_unified_type_info(final_readers_tuple_def->type_info->containees[f].al.type_info))
-				{
-					set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index, f), output_tuple, EMPTY_DATUM, UINT32_MAX);
-
-					set_element_in_tuple_from_tuple(output_tuple_def, STATIC_POSITION(attr_index, f, 1), output_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, UINT32_MAX);
-				}
-				else
-				{
-					// identical rel_pos_in_owner, so this is the very same attribute, insert it
-					set_element_in_tuple_from_tuple(output_tuple_def, STATIC_POSITION(attr_index, f), output_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, UINT32_MAX);
-				}
+				set_element_in_tuple_from_tuple(output_tuple_def, STATIC_POSITION(attr_index, f), output_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, UINT32_MAX);
 
 				p++;
 				f++;
 			}
-		}}
+		}
 
 		attr_index++;
 	}
