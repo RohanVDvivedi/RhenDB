@@ -46,6 +46,10 @@ int compare_datum_rhendb(const datum* uval1, const data_type_info* dti1, const d
 	else if(!is_datum_NULL(uval1) && is_datum_NULL(uval2))
 		return 1;
 
+	// fast path
+	if(dti1->fast_path_compare != NULL && dti1->fast_path_compare == dti2->fast_path_compare)
+		return dti1->fast_path_compare(uval1, uval2);
+
 	datum child_value1;
 	if(is_unified_type_info(dti1))
 	{
@@ -216,6 +220,10 @@ int compare_datum2_rhendb(const datum* uval1, const datum* uval2, const data_typ
 		return -1;
 	else if(!is_datum_NULL(uval1) && is_datum_NULL(uval2))
 		return 1;
+
+	// fast path
+	if(dti->fast_path_compare != NULL)
+		return dti->fast_path_compare(uval1, uval2);
 
 	if(is_unified_type_info(dti))
 		return compare_datum_rhendb(uval1, dti, uval2, dti, tx);
