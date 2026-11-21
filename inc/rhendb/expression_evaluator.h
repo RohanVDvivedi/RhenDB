@@ -132,6 +132,9 @@ struct rhendb_expr_eval_context
 	// FREE LIST OF RECYCLED expr_value-s, owned by this context
 	// every delete pushes to it, every allocate first tries to allocate by getting one from this list.
 	void* free_list_for_expr_value;
+
+	// mpd context for decimal and numeric computation using libmpdec
+	mpd_context_t mpd_ctx;
 };
 
 // error codes written into *error_code by the rhendb expression-evaluation callbacks.

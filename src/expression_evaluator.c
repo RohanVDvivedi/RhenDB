@@ -28,7 +28,7 @@
  * DECIMAL maxima of common SQL engines) and value-dependent rather than representation-dependent.
  * Tune to taste for a stricter DECIMAL(p,s) policy. */
 #ifndef RHENDB_EE_DIV_PREC
-#define RHENDB_EE_DIV_PREC 100
+#define RHENDB_EE_DIV_PREC 30
 #endif
 
 static expr_type_info rhendb_bool_type = {};
@@ -673,13 +673,13 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 			return NULL;
 		}
 
-		mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
+		mpd_context_t* ctx = &(((rhendb_expr_eval_context*)(ec_p->context_p))->mpd_ctx); uint32_t st = 0;
 		mpd_t result;
 		if(!ee_mpd_new(&result)){ if(oa) mpd_del(&sa); if(ob) mpd_del(&sb); *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
 		switch(op){
-			case OP_ADD: mpd_qadd(&result, pa, pb, &ctx, &st); break;
-			case OP_SUB: mpd_qsub(&result, pa, pb, &ctx, &st); break;
-			case OP_MUL: mpd_qmul(&result, pa, pb, &ctx, &st); break;
+			case OP_ADD: mpd_qadd(&result, pa, pb, ctx, &st); break;
+			case OP_SUB: mpd_qsub(&result, pa, pb, ctx, &st); break;
+			case OP_MUL: mpd_qmul(&result, pa, pb, ctx, &st); break;
 			case OP_DIV:
 			{
 				/* Divide at a precision bounded by the operands' own length (plus guard digits), NOT the
@@ -687,12 +687,12 @@ static void* do_arith(void* d1, void* d2, arith_op op, const sql_expr_eval_conte
 				 * comes out exact; a non-terminating one rounds to a finite length the way a real DECIMAL
 				 * engine does, instead of trying to emit millions of digits -- which made every inexact
 				 * division (e.g. 1/3) effectively hang. */
-				mpd_context_t dctx = ctx;
+				mpd_context_t dctx = *ctx;
 				dctx.prec = pa->digits + pb->digits + RHENDB_EE_DIV_PREC;
 				mpd_qdiv(&result, pa, pb, &dctx, &st);
 				break;
 			}
-			case OP_MOD: mpd_qrem(&result, pa, pb, &ctx, &st); break;
+			case OP_MOD: mpd_qrem(&result, pa, pb, ctx, &st); break;
 		}
 		if(oa)
 			mpd_del(&sa);
@@ -1325,11 +1325,11 @@ static char* sb_to_cstring(const expr_value* a)
 }
 
 /* converts a decimal valid c string into an mpd_t */
-static int parse_numeric_string(const char* str, mpd_t* out)
+static int parse_numeric_string(const char* str, mpd_t* out, mpd_context_t* ctx)
 {
 	if(!ee_mpd_new(out)) return -1;
-	mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
-	mpd_qset_string(out, str, &ctx, &st);
+	uint32_t st = 0;
+	mpd_qset_string(out, str, ctx, &st);
 	if(st & MPD_Conversion_syntax){ mpd_del(out); return 0; }
 	return 1;
 }
@@ -1337,7 +1337,7 @@ static int parse_numeric_string(const char* str, mpd_t* out)
 /* plain decimal text of a number/numeric operand, as a malloc'd NUL-terminated string (caller frees with
  * free()). integers (native and 256-bit) are exact; floats and NUMERIC go through an mpd_t and the 'f'
  * (fixed-point) format, so the result is always ordinary decimal, never scientific. returns NULL on OOM. */
-static char* number_to_decimal_cstring(const expr_value* a)
+static char* number_to_decimal_cstring(const expr_value* a, mpd_context_t* ctx)
 {
 	char stack[512];
 	switch(a->type_info.type)
@@ -1387,8 +1387,8 @@ static char* number_to_decimal_cstring(const expr_value* a)
 				if(!number_to_mpd(a, &scratch)) return NULL;
 				d = &scratch;
 			}
-			mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx); uint32_t st = 0;
-			char* mpd_str = mpd_qformat(d, "f", &ctx, &st);
+			uint32_t st = 0;
+			char* mpd_str = mpd_qformat(d, "f", ctx, &st);
 			if(d == &scratch) mpd_del(&scratch);
 			if(mpd_str == NULL) return NULL;
 			// normalize to a free()-able buffer : mpd_qformat allocates with mpd_free, unlike the paths above.
@@ -1407,7 +1407,7 @@ static char* number_to_decimal_cstring(const expr_value* a)
  * native number or a parsed string builds a fresh mpd into *scratch (*owns = 1, release with mpd_del).
  * returns 1 on success, 0 on OOM / unsupported source, -1 when a string source is not a number; sets
  * *error_code on any failure. */
-static int cast_operand_to_mpd(expr_value* a, mpd_t* scratch, const mpd_t** m, int* owns, int* error_code)
+static int cast_operand_to_mpd(expr_value* a, mpd_t* scratch, const mpd_t** m, int* owns, int* error_code, mpd_context_t* ctx)
 {
 	*owns = 0;
 	if(a->type_info.type == RHENDB_EXPR_NUMERIC)
@@ -1423,7 +1423,7 @@ static int cast_operand_to_mpd(expr_value* a, mpd_t* scratch, const mpd_t** m, i
 	{
 		char* s = sb_to_cstring(a);
 		if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
-		int pr = parse_numeric_string(s, scratch);
+		int pr = parse_numeric_string(s, scratch, ctx);
 		free(s);
 		if(pr < 0){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return 0; }
 		if(pr == 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return -1; }
@@ -1437,6 +1437,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 	expr_value* a = data;
 	const expr_type_info* to = to_type;
 	expr_type target = to->type;
+	mpd_context_t* ctx = &(((rhendb_expr_eval_context*)(ec_p->context_p))->mpd_ctx);
 
 	/* a jsonb leaf casts to the native form implied by the leaf's OWN type :
 	 *   JSONB_TRUE / JSONB_FALSE -> the native boolean singletons (ec_p->true_bool / false_bool)
@@ -1504,7 +1505,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		const data_type_info* tdti = to->dti_p;
 
 		mpd_t scratch; const mpd_t* m; int owns;
-		if(cast_operand_to_mpd(a, &scratch, &m, &owns, error_code) <= 0) return NULL;
+		if(cast_operand_to_mpd(a, &scratch, &m, &owns, error_code, ctx) <= 0) return NULL;
 
 		int ec = 0;
 		datum result = numeric_to_primitive_numeral(tdti, m, &ec);
@@ -1525,7 +1526,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		else
 		{
 			mpd_t scratch; const mpd_t* m; int owns;
-			if(cast_operand_to_mpd(a, &scratch, &m, &owns, error_code) <= 0) return NULL;
+			if(cast_operand_to_mpd(a, &scratch, &m, &owns, error_code, ctx) <= 0) return NULL;
 			d = mpd_to_double(m);
 			if(owns) mpd_del(&scratch);
 		}
@@ -1551,7 +1552,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		{
 			char* s = sb_to_cstring(a);
 			if(s == NULL){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
-			int pr = parse_numeric_string(s, &d);
+			int pr = parse_numeric_string(s, &d, ctx);
 			free(s);
 			if(pr < 0){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
 			if(pr == 0){ *error_code = RHENDB_EE_INVALID_CAST_VALUE; return NULL; }
@@ -1573,7 +1574,7 @@ static void* rhendb_cast(void* data, const void* to_type, const sql_expr_eval_co
 		}
 		else if(src_is_numeric || src_is_number)
 		{
-			char* cstr = number_to_decimal_cstring(a);
+			char* cstr = number_to_decimal_cstring(a, ctx);
 			if(!init_dstring(&result, cstr, strlen(cstr))){ free(cstr); *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
 			free(cstr);
 		}
@@ -2245,17 +2246,18 @@ static void* numeric_only_function_call_function(void* function_context_handle, 
 	/* use bounded precision like division: input's own digits + guard digits.
 	 * mpd_qln / mpd_qexp / mpd_qsqrt at the full materialized-numeric precision (12M digits)
 	 * would hang for non-trivial inputs; this keeps transcendental functions fast. */
-	mpd_context_t ctx; get_mpd_context_for_materialized_numeric(&ctx);
-	ctx.prec = input_0->numeric_value.digits + RHENDB_EE_DIV_PREC;
+	mpd_context_t* ctx = &(((rhendb_expr_eval_context*)(ec_p->context_p))->mpd_ctx);
+	mpd_context_t dctx = *ctx;
+	dctx.prec = input_0->numeric_value.digits + RHENDB_EE_DIV_PREC;
 
 	uint32_t st = 0;
 	mpd_t result;
 	if(!ee_mpd_new(&result)){ *error_code = RHENDB_EE_OUT_OF_MEMORY; return NULL; }
 
 	if(function_context_handle == mpd_qpow)
-		((mpd_binary_fn_t)function_context_handle)(&result, &(input_0->numeric_value), &(input_1->numeric_value), &ctx, &st);
+		((mpd_binary_fn_t)function_context_handle)(&result, &(input_0->numeric_value), &(input_1->numeric_value), &dctx, &st);
 	else
-		((mpd_unary_fn_t)function_context_handle)(&result, &(input_0->numeric_value), &ctx, &st);
+		((mpd_unary_fn_t)function_context_handle)(&result, &(input_0->numeric_value), &dctx, &st);
 
 	expr_value* output = new_val(RHENDB_EXPR_NUMERIC, ec_p);
 	output->numeric_value = result;
@@ -3700,6 +3702,8 @@ sql_expr_eval_context get_sql_expr_eval_context_for_rhendb(tuple_def** input_tup
 	context_p->tx = tx;
 
 	context_p->this_sub_query_expr_eval_context = this_sub_query_expr_eval_context;
+
+	get_mpd_context_for_materialized_numeric(&(context_p->mpd_ctx));
 
 	return eval_context;
 }
