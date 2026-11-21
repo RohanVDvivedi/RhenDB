@@ -2083,7 +2083,7 @@ static void* rhendb_get_variable(const dstring* identifier_bytes, const sql_expr
 	else if(dti->type == STRING || dti->type == BINARY)
 	{
 		v->type_info.type = expr_type_for_column(dti);
-		v->type_info.dti_p = NULL;
+		v->type_info.dti_p = (data_type_info*)dti; // optional but better if present
 		v->string_value = get_dstring_pointing_to(d.string_or_binary_value, d.string_or_binary_size);
 	}
 	else
@@ -2764,8 +2764,7 @@ static void* string_to_string_call_function(void* function_context_handle, void*
 		return NULL;
 
 	expr_value* output = new_val(RHENDB_EXPR_STRING, ec_p);
-	output->string_value = str_v->string_value;
-	init_dstring(&(str_v->string_value), NULL, 0);
+	init_copy_dstring(&(output->string_value), &(str_v->string_value));
 
 	((void(*)(dstring*))function_context_handle)(&(output->string_value));
 
@@ -3420,7 +3419,7 @@ void* rhendb_next_data_from_sub_query(void* sub_query, int* end_of_results, cons
 	else if(dti->type == STRING || dti->type == BINARY)
 	{
 		v->type_info.type = expr_type_for_column(dti);
-		v->type_info.dti_p = NULL;
+		v->type_info.dti_p = (data_type_info*)dti; // optional but better if present
 		v->string_value = get_dstring_pointing_to(d.string_or_binary_value, d.string_or_binary_size);
 		v->buffer_to_free = sub_query_tuple;
 	}
