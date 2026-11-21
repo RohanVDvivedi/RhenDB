@@ -1248,6 +1248,8 @@ static void rhendb_concat(void** data1_p, void* data2, const sql_expr_eval_conte
 	int b_ok = (b->type_info.type == RHENDB_EXPR_STRING || b->type_info.type == RHENDB_EXPR_BINARY);
 	if(!a_ok || !b_ok){ *error_code = RHENDB_EE_NON_STRING_OPERAND; return; }
 
+	// the result will not have a dti_p assigned to it
+	a->type_info.dti_p = NULL;
 
 	if(get_dstring_type(&(a->string_value)) == POINT_DSTR)
 	{
