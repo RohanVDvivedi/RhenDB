@@ -402,6 +402,21 @@ uint64_t append_tuple_to_interim_tuple_store2(interim_tuple_store* its_p, interi
 	return curr_tuple_offset_for_interim_tuple_region(itr_p);
 }
 
+uint64_t append_tuple_to_interim_tuple_store3(interim_tuple_store* its_p, interim_tuple_region* itr_p, const rhendb_datum* rtuple, const tuple_def* rdef, uint32_t min_bytes_to_mmap)
+{
+	// mmap the large enough region
+	mmap_for_writing_tuple(its_p, itr_p, &(rdef->size_def), get_maximum_tuple_size(rdef), min_bytes_to_mmap);
+
+	// build the tuple there itself
+	build_tuple_from_rhendb_datum(itr_p->tuple, rtuple, rdef);
+
+	// finalize the tuple appended
+	finalize_written_tuple(its_p, itr_p);
+
+	// return the offset that this tuple got inserted at
+	return curr_tuple_offset_for_interim_tuple_region(itr_p);
+}
+
 uint64_t append_all_from_another_interim_tuple_store(interim_tuple_store* its_p, const interim_tuple_store* other_its_p)
 {
 	return append_all_from_another_interim_tuple_store2(its_p, other_its_p, 0, 0);
