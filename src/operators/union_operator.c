@@ -8,7 +8,7 @@ struct op_state
 	uint64_t curr_input_operator_index;
 };
 
-static void* next_tuple(operator* o, int* error_code)
+static const rhendb_datum* next_tuple(operator* o, int* error_code)
 {
 	// already dead
 	if(o->state == NULL)
@@ -26,8 +26,8 @@ static void* next_tuple(operator* o, int* error_code)
 
 		operator* input_operator = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.union_op.input_operator_indices[this_state->curr_input_operator_index]);
 
-		void* tuple = input_operator->next_tuple(input_operator, error_code);
-		if(tuple == NULL)
+		const rhendb_datum* rtuple = input_operator->next_tuple(input_operator, error_code);
+		if(rtuple == NULL)
 		{
 			if(*error_code)
 			{
@@ -40,7 +40,7 @@ static void* next_tuple(operator* o, int* error_code)
 				continue;
 			}
 		}
-		return tuple;
+		return rtuple;
 	}
 
 	return NULL;
