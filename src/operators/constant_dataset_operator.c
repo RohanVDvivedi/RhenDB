@@ -7,11 +7,14 @@ struct op_state
 {
 	interim_tuple_region current_region;
 	uint64_t next_tuple_offset;
+
+	// return this from next_tuple
+	rhendb_datum rtuple;
 };
 
 #define MIN_BYTES_TO_MMAP 1024*1024
 
-static void* next_tuple(operator* o, int* error_code)
+static const rhendb_datum* next_tuple(operator* o, int* error_code)
 {
 	// already dead
 	if(o->state == NULL)
@@ -19,21 +22,19 @@ static void* next_tuple(operator* o, int* error_code)
 
 	op_state* this_state = o->state;
 
-	if(this_state->next_tuple_offset == o->desc->params.constant_dataset.constant_dataset_p->next_tuple_offset)
+	if(!mmap_for_reading_tuple(o->desc->params.constant_dataset.constant_dataset_p, &(this_state->current_region), this_state->next_tuple_offset, &(o->desc->params.constant_dataset.record_def->size_def), MIN_BYTES_TO_MMAP))
 	{
 		o->destroy_state(o);
 		return NULL;
 	}
 
-	mmap_for_reading_tuple(o->desc->params.constant_dataset.constant_dataset_p, &(this_state->current_region), this_state->next_tuple_offset, &(o->desc->params.constant_dataset.record_def->size_def), MIN_BYTES_TO_MMAP);
+	this_state->rtuple.type = RAW_DATUM;
+	this_state->rtuple.as_raw_datum.value = (datum){.tuple_value = this_state->current_region.tuple};
 
-	uint32_t tuple_size = get_tuple_size((const tuple_def*)(o->desc->params.constant_dataset.record_def), this_state->current_region.tuple);
-	void* tuple = malloc(tuple_size);
-	memcpy(tuple, this_state->current_region.tuple, tuple_size);
+	// compute the next_tuple_offset, but do not mmap
+	this_state->next_tuple_offset = next_tuple_offset_for_interim_tuple_region(&(this_state->current_region));
 
-	this_state->next_tuple_offset += tuple_size;
-
-	return tuple;
+	return &(this_state->rtuple);
 }
 
 static void destroy_state(operator* o)
