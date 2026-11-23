@@ -12,9 +12,9 @@ struct mergeable_tuple
 {
 	operator* source;
 
-	void* tuple;
+	const rhendb_datum* rtuple;
 
-	datum* keys;
+	rhendb_datum* keys;
 
 	phpnode embed_node;
 };
@@ -27,7 +27,7 @@ struct op_state
 	const data_type_info** key_dtis;
 
 	// backing allocations
-	datum* keys;              // key_element_count * input_operators_count
+	rhendb_datum* keys;       // key_element_count * input_operators_count
 	mergeable_tuple* mtuples; // input_operators_count
 
 	// the heap is primed (one tuple pulled from each input) lazily on the first next_tuple,
@@ -43,7 +43,7 @@ static int compare_mergeable_tuples(const void* context_p, const void* mt1_vp, c
 	const mergeable_tuple* mt1 = mt1_vp;
 	const mergeable_tuple* mt2 = mt2_vp;
 
-	return compare_datums3_rhendb(mt1->keys, mt2->keys, this_state->key_dtis, o->desc->params.merge_sorted_inputs.key_compare_direction, o->desc->params.merge_sorted_inputs.key_element_count, o->self_query_plan->desc->curr_tx);
+	return compare_rhendb_datums(mt1->keys, this_state->key_dtis, mt2->keys, this_state->key_dtis, o->desc->params.merge_sorted_inputs.key_compare_direction, o->desc->params.merge_sorted_inputs.key_element_count, o->self_query_plan->desc->curr_tx);
 }
 
 static void materialize_keys(operator* o, mergeable_tuple* mt)
@@ -54,12 +54,12 @@ static void materialize_keys(operator* o, mergeable_tuple* mt)
 	for(uint32_t j = 0; j < key_element_count; j++)
 	{
 		const data_type_info* dti_temp;
-		if(!get_value_from_element_from_tuple(&(mt->keys[j]), &dti_temp, o->desc->output_tuple_def, key_element_ids[j], mt->tuple))
-			mt->keys[j] = (*NULL_DATUM);
+		if(!get_nested_containee_from_rhendb_datum(&(mt->keys[j]), &dti_temp, mt->rtuple, o->desc->output_tuple_def->type_info, key_element_ids[j]))
+			mt->keys[j] = (rhendb_datum){.type = RAW_DATUM, .as_raw_datum.value = (*NULL_DATUM)};
 	}
 }
 
-static void* next_tuple(operator* o, int* error_code)
+static const rhendb_datum* next_tuple(operator* o, int* error_code)
 {
 	// already dead
 	if(o->state == NULL)
@@ -76,8 +76,8 @@ static void* next_tuple(operator* o, int* error_code)
 		{
 			mergeable_tuple* mt = &(this_state->mtuples[i]);
 
-			void* tuple = mt->source->next_tuple(mt->source, error_code);
-			if(tuple == NULL)
+			mt->rtuple = mt->source->next_tuple(mt->source, error_code);
+			if(mt->rtuple == NULL)
 			{
 				if(*error_code)
 				{
@@ -87,12 +87,37 @@ static void* next_tuple(operator* o, int* error_code)
 				continue; // this input was empty, keep it out of the heap
 			}
 
-			mt->tuple = tuple;
 			materialize_keys(o, mt);
 			push_to_pheap(&(this_state->merge_heap), mt);
 		}
 
 		this_state->primed = 1;
+	}
+	else
+	{
+		// go next on the top
+
+		// remove top
+		mergeable_tuple* mt = (mergeable_tuple*) get_top_of_pheap(&(this_state->merge_heap));
+		pop_from_pheap(&(this_state->merge_heap));
+
+		mt->rtuple = mt->source->next_tuple(mt->source, error_code);
+		if(mt->rtuple == NULL)
+		{
+			if(*error_code)
+			{
+				o->destroy_state(o);
+				return NULL;
+			}
+
+			mt->source->destroy_state(mt->source);
+			mt->source = NULL;
+		}
+		else // a valid key was received so push it back in
+		{
+			materialize_keys(o, mt);
+			push_to_pheap(&(this_state->merge_heap), mt);
+		}
 	}
 
 	// every input is exhausted -> we are done
@@ -104,36 +129,8 @@ static void* next_tuple(operator* o, int* error_code)
 
 	// the smallest head tuple across all inputs is the next output
 	mergeable_tuple* mt = (mergeable_tuple*) get_top_of_pheap(&(this_state->merge_heap));
-	void* out = mt->tuple;
 
-	// advance the input that produced the output tuple
-	void* next = mt->source->next_tuple(mt->source, error_code);
-	if(next == NULL)
-	{
-		if(*error_code)
-		{
-			free(out);
-			mt->tuple = NULL;
-			pop_from_pheap(&(this_state->merge_heap));
-			o->destroy_state(o);
-			return NULL;
-		}
-
-		// this input is drained -> remove it from the heap
-		mt->tuple = NULL;
-		pop_from_pheap(&(this_state->merge_heap));
-		mt->source->destroy_state(mt->source);
-		mt->source = NULL;
-	}
-	else
-	{
-		// replace this input's head with its next tuple and restore the heap order
-		mt->tuple = next;
-		materialize_keys(o, mt);
-		heapify_for_in_pheap(&(this_state->merge_heap), mt);
-	}
-
-	return out;
+	return mt->rtuple;
 }
 
 static void destroy_state(operator* o)
@@ -148,8 +145,6 @@ static void destroy_state(operator* o)
 		{
 			if(this_state->mtuples[i].source != NULL)
 				this_state->mtuples[i].source->destroy_state(this_state->mtuples[i].source);
-			if(this_state->mtuples[i].tuple != NULL)
-				free(this_state->mtuples[i].tuple);
 		}
 
 		free(this_state->key_dtis);
@@ -183,7 +178,7 @@ void open_merge_sorted_inputs_operator(operator* o)
 		mergeable_tuple* mt = &(this_state->mtuples[i]);
 
 		mt->source = (operator*) get_from_front_of_arraylist(&(o->self_query_plan->operators), o->desc->params.merge_sorted_inputs.input_operator_indices[i]);
-		mt->tuple = NULL;
+		mt->rtuple = NULL;
 		mt->keys = &(this_state->keys[i * key_element_count]);
 		initialize_phpnode(&(mt->embed_node));
 	}
