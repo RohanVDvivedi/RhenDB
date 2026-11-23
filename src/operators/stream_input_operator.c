@@ -7,8 +7,14 @@
 
 fail_build_on(sizeof(uint32_t) > sizeof(cy_uint))
 
-// pointer to this byte means continue generation, and a NULL in the state means completed
-static char GENERATE_DATA;
+typedef struct op_state op_state;
+struct op_state
+{
+	void* curr_tuple;
+
+	// return this from next_tuple
+	rhendb_datum rtuple;
+};
 
 static uint32_t read_tuple_prefix_from_stream(void* context_p, void* data, uint32_t data_size)
 {
@@ -32,11 +38,13 @@ static uint32_t read_tuple_prefix_from_stream(void* context_p, void* data, uint3
 	return bytes_read;
 }
 
-static void* next_tuple(operator* o, int* error_code)
+static const rhendb_datum* next_tuple(operator* o, int* error_code)
 {
 	// already dead
 	if(o->state == NULL)
 		return NULL;
+
+	op_state* this_state = o->state;
 
 	uint32_t tuple_size = get_tuple_size_using_tuple_size_def2(&(o->desc->params.stream_input.input_tuple_def->size_def), o->desc->params.stream_input.in_strm, read_tuple_prefix_from_stream);
 	if(tuple_size == 0)
@@ -54,15 +62,13 @@ static void* next_tuple(operator* o, int* error_code)
 		}
 	}
 
-	void* curr_tuple = malloc(tuple_size);
 	int strm_error = 0;
 	cy_uint bytes_read = 0;
 	while(bytes_read < tuple_size)
 	{
-		cy_uint bytes_read_this_iteration = read_from_stream(o->desc->params.stream_input.in_strm, curr_tuple + bytes_read, tuple_size - bytes_read, &strm_error);
+		cy_uint bytes_read_this_iteration = read_from_stream(o->desc->params.stream_input.in_strm, this_state->curr_tuple + bytes_read, tuple_size - bytes_read, &strm_error);
 		if(strm_error)
 		{
-			free(curr_tuple);
 			o->destroy_state(o);
 			(*error_code) = STREAM_ERROR_IN_OPERATOR;
 			return NULL;
@@ -73,29 +79,44 @@ static void* next_tuple(operator* o, int* error_code)
 	}
 	if(bytes_read == 0)
 	{
-		free(curr_tuple);
 		o->destroy_state(o);
 		return NULL;
 	}
 	if(tuple_size != bytes_read)
 	{
-		free(curr_tuple);
 		o->destroy_state(o);
 		(*error_code) = STREAM_ERROR_IN_OPERATOR;
 		return NULL;
 	}
 
-	return curr_tuple;
+	return &(this_state->rtuple);
 }
 
 static void destroy_state(operator* o)
 {
+	if(o->state != NULL)
+	{
+		op_state* this_state = o->state;
+
+		if(this_state->curr_tuple)
+			free(this_state->curr_tuple);
+
+		free(this_state);
+	}
 	o->state = NULL;
 }
 
 void open_stream_input_operator(operator* o)
 {
-	o->state = &GENERATE_DATA;
+	o->state = malloc(sizeof(op_state));
+
+	op_state* this_state = o->state;
+
+	this_state->curr_tuple = malloc(get_maximum_tuple_size(o->desc->params.stream_input.input_tuple_def));
+
+	this_state->rtuple.type = RAW_DATUM;
+	this_state->rtuple.as_raw_datum.value.tuple_value = this_state->curr_tuple;
+
 	o->next_tuple = next_tuple;
 	o->destroy_state = destroy_state;
 }
