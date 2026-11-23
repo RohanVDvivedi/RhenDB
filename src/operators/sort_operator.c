@@ -30,6 +30,9 @@ struct op_state
 
 	// derieved information
 	const data_type_info** key_dtis;
+
+	// output from this operator
+	rhendb_datum rtuple;
 };
 
 // returns the level it was put in
@@ -211,22 +214,29 @@ static void insert_one_in_output_runs(operator* o, interim_tuple_store* its_p)
 	}
 }
 
-static void* get_one_from_output_runs(operator* o)
+static void get_one_from_output_runs(operator* o)
+{
+	op_state* this_state = o->state;
+
+	this_state->rtuple.as_raw_datum.value.tuple_value = NULL;
+
+	if(is_empty_pheap(&(this_state->output_runs)))
+		return ;
+
+	interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&(this_state->output_runs));
+
+	if(its_p != NULL)
+		this_state->rtuple.as_raw_datum.value.tuple_value = its_p->embed_regions[0].tuple;
+}
+
+static void go_next_in_output_runs(operator* o)
 {
 	op_state* this_state = o->state;
 
 	if(is_empty_pheap(&(this_state->output_runs)))
-		return NULL;
-
-	if(!can_decrement_tuples_down_counter(&(this_state->output_runs_result_counter)))
-		return NULL;
+		return ;
 
 	interim_tuple_store* its_p = (interim_tuple_store*) get_top_of_pheap(&(this_state->output_runs));
-
-	// copy the top tuple of its_p into output_tuple
-	decrement_tuples_down_counter(&(this_state->output_runs_result_counter));
-	void* output_tuple = malloc(get_tuple_size(o->desc->output_tuple_def, its_p->embed_regions[0].tuple));
-	memory_move(output_tuple, its_p->embed_regions[0].tuple, get_tuple_size(o->desc->output_tuple_def, its_p->embed_regions[0].tuple));
 
 	// go next on its_p, and insert it back into mergeable_open_runs
 	{
@@ -247,11 +257,9 @@ static void* get_one_from_output_runs(operator* o)
 			heapify_for_in_pheap(&(this_state->output_runs), its_p);
 		}
 	}
-
-	return output_tuple;
 }
 
-static void* next_tuple(operator* o, int* error_code)
+static const rhendb_datum* next_tuple(operator* o, int* error_code)
 {
 	// already dead
 	if(o->state == NULL)
@@ -266,8 +274,8 @@ static void* next_tuple(operator* o, int* error_code)
 			// get next tuple until we get tuples from input_operator
 			// if there is no more tuple break out of the loop
 			// on error, destroy state and exit
-			void* tuple = this_state->input_operator->next_tuple(this_state->input_operator, error_code);
-			if(tuple == NULL)
+			const rhendb_datum* rtuple = this_state->input_operator->next_tuple(this_state->input_operator, error_code);
+			if(rtuple == NULL)
 			{
 				if(*error_code)
 				{
@@ -285,8 +293,7 @@ static void* next_tuple(operator* o, int* error_code)
 			// insert it in unsorted_run
 			if(this_state->unsorted_run == NULL)
 				this_state->unsorted_run = get_new_interim_tuple_store(o->desc->params.sort.min_run_size);
-			append_tuple_to_interim_tuple_store2(this_state->unsorted_run, &(this_state->unsorted_run->embed_regions[0]), tuple, &(o->desc->output_tuple_def->size_def), o->desc->params.sort.min_run_size);
-			free(tuple);
+			append_tuple_to_interim_tuple_store3(this_state->unsorted_run, &(this_state->unsorted_run->embed_regions[0]), rtuple, o->desc->output_tuple_def, o->desc->params.sort.min_run_size);
 
 			// if the unsorted run exceeds make it sorted and record it's level
 			if(this_state->unsorted_run->next_tuple_offset >= o->desc->params.sort.min_run_size)
@@ -373,16 +380,28 @@ static void* next_tuple(operator* o, int* error_code)
 				insert_one_in_output_runs(o, run);
 			}
 		}
+
+		get_one_from_output_runs(o);
+	}
+	else
+	{
+		go_next_in_output_runs(o);
+		get_one_from_output_runs(o);
 	}
 
-	void* output_tuple = get_one_from_output_runs(o);
-	if(output_tuple == NULL)
+	if(!decrement_tuples_down_counter(&(this_state->output_runs_result_counter)))
 	{
 		o->destroy_state(o);
 		return NULL;
 	}
 
-	return output_tuple;
+	if(this_state->rtuple.as_raw_datum.value.tuple_value == NULL)
+	{
+		o->destroy_state(o);
+		return NULL;
+	}
+
+	return &(this_state->rtuple);
 }
 
 static void destroy_state(operator* o)
@@ -448,6 +467,8 @@ void open_sort_operator(operator* o)
 	this_state->key_dtis = malloc(sizeof(data_type_info*) * o->desc->params.sort.key_element_count);
 	for(uint32_t j = 0; j < o->desc->params.sort.key_element_count; j++)
 		this_state->key_dtis[j] = get_type_info_for_element_from_tuple_def(o->desc->output_tuple_def, o->desc->params.sort.key_element_ids[j]);
+
+	this_state->rtuple.type = RAW_DATUM;
 
 	o->next_tuple = next_tuple;
 	o->destroy_state = destroy_state;
