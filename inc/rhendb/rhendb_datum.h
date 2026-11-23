@@ -46,7 +46,11 @@ int get_nested_containee_from_rhendb_datum(rhendb_datum* uval_c, const data_type
 
 uint64_t hash_rhendb_datum(const rhendb_datum* uval, const data_type_info* dti, tuple_hasher* th, transaction* tx);
 
+uint64_t hash_rhendb_tuple(const rhendb_datum* uval, const data_type_info* dti, const positional_accessor* element_ids, tuple_hasher* th, uint32_t element_count, transaction* tx);
+
 int compare_rhendb_datum(const rhendb_datum* uval1, const data_type_info* dti1, const rhendb_datum* uval2, const data_type_info* dti2, transaction* tx);
+
+int compare_rhendb_tuples(const rhendb_datum* uval1, const data_type_info* dti1, const positional_accessor* element_ids1, const rhendb_datum* uval2, const data_type_info* dti2, const positional_accessor* element_ids2, const compare_direction* cmp_dir, uint32_t element_count, transaction* tx);
 
 // must be called only on the root rhendb_datum
 void build_tuple_from_rhendb_datum(void* dest_tuple, const rhendb_datum* uval, const tuple_def* def);

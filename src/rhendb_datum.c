@@ -100,6 +100,23 @@ uint64_t hash_rhendb_datum(const rhendb_datum* uval, const data_type_info* dti, 
 	}
 }
 
+uint64_t hash_rhendb_tuple(const rhendb_datum* uval, const data_type_info* dti, const positional_accessor* element_ids, tuple_hasher* th, uint32_t element_count, transaction* tx)
+{
+	uint64_t hash_value = th->hash;
+
+	for(uint32_t i = 0; i < element_count; i++)
+	{
+		rhendb_datum uval_c;
+		const data_type_info* dti_c;
+		if(!get_nested_containee_from_rhendb_datum(&uval_c, &dti_c, uval, dti, (element_ids != NULL) ? element_ids[i] : STATIC_POSITION(i)))
+			uval_c = (rhendb_datum){.type = RAW_DATUM, .as_raw_datum.value = (*NULL_DATUM)};
+
+		hash_value = hash_rhendb_datum(&uval_c, dti_c, th, tx);
+	}
+
+	return hash_value;
+}
+
 int compare_rhendb_datum(const rhendb_datum* uval1, const data_type_info* dti1, const rhendb_datum* uval2, const data_type_info* dti2, transaction* tx)
 {
 	if(uval1->type == RAW_DATUM && uval2->type == RAW_DATUM)
@@ -142,6 +159,31 @@ int compare_rhendb_datum(const rhendb_datum* uval1, const data_type_info* dti1, 
 
 		return cmp;
 	}
+}
+
+int compare_rhendb_tuples(const rhendb_datum* uval1, const data_type_info* dti1, const positional_accessor* element_ids1, const rhendb_datum* uval2, const data_type_info* dti2, const positional_accessor* element_ids2, const compare_direction* cmp_dir, uint32_t element_count, transaction* tx)
+{
+	int cmp = 0;
+
+	for(uint32_t i = 0; i < element_count && cmp == 0; i++)
+	{
+		rhendb_datum uval_c1;
+		const data_type_info* dti_c1;
+		if(!get_nested_containee_from_rhendb_datum(&uval_c1, &dti_c1, uval1, dti1, (element_ids1 != NULL) ? element_ids1[i] : STATIC_POSITION(i)))
+			uval_c1 = (rhendb_datum){.type = RAW_DATUM, .as_raw_datum.value = (*NULL_DATUM)};
+
+		rhendb_datum uval_c2;
+		const data_type_info* dti_c2;
+		if(!get_nested_containee_from_rhendb_datum(&uval_c2, &dti_c2, uval2, dti1, (element_ids2 != NULL) ? element_ids2[i] : STATIC_POSITION(i)))
+			uval_c2 = (rhendb_datum){.type = RAW_DATUM, .as_raw_datum.value = (*NULL_DATUM)};
+
+		cmp = compare_rhendb_datum(&uval_c1, dti_c1, &uval_c2, dti_c2, tx);
+
+		if(cmp_dir)
+			cmp = cmp * cmp_dir[i];
+	}
+
+	return cmp;
 }
 
 static void set_in_tuple_from_rhendb_datum(void* dest_tuple, const tuple_def* def, positional_accessor* pa, uint32_t* pa_capacity, const rhendb_datum* uval, const data_type_info* dti)
