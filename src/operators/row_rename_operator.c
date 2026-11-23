@@ -1,6 +1,6 @@
 #include<rhendb/query_plan.h>
 
-static void* next_tuple(operator* o, int* error_code)
+static const rhendb_datum* next_tuple(operator* o, int* error_code)
 {
 	// already dead
 	if(o->state == NULL)
@@ -8,11 +8,11 @@ static void* next_tuple(operator* o, int* error_code)
 
 	operator* input_operator = o->state;
 
-	void* tuple = input_operator->next_tuple(input_operator, error_code);
-	if(tuple == NULL)
+	const rhendb_datum* rtuple = input_operator->next_tuple(input_operator, error_code);
+	if(rtuple == NULL)
 		o->destroy_state(o);
 
-	return tuple;
+	return rtuple;
 }
 
 static void destroy_state(operator* o)
