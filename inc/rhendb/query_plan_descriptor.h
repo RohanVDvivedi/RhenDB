@@ -240,18 +240,6 @@ struct scan_operator_params
 	int additional_flags;
 };
 
-typedef struct pointer_lookup_operator_params pointer_lookup_operator_params;
-struct pointer_lookup_operator_params
-{
-	uint64_t input_operator_index;
-	positional_accessor* partition_id_from_source_positional_accessor;
-	positional_accessor* tuple_pointer_from_source_positional_accessor;
-	const fetched_table* ftabl;
-	uint64_t lookup_batch_size;
-	int output_flags;
-	int additional_flags;
-};
-
 // ===================================================================================================
 // descriptor types
 // ===================================================================================================
@@ -291,7 +279,6 @@ enum operator_descriptor_type
 	OP_HASH_SEMI_JOIN,
 
 	OP_SCAN,
-	OP_POINTER_LOOKUP,
 };
 
 typedef struct operator_desc operator_desc;
@@ -335,7 +322,6 @@ struct operator_desc
 		hash_semi_join_operator_params                hash_semi_join;
 
 		scan_operator_params                          scan;
-		pointer_lookup_operator_params                pointer_lookup;
 	} params;
 
 	const tuple_def* output_tuple_def;
@@ -401,7 +387,6 @@ operator_desc* insert_sort_merge_semi_join_operator_descriptor(query_plan_desc* 
 operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, operator_desc* left_input_operator_desc, const positional_accessor* left_key_element_ids, operator_desc* right_input_operator_desc, const positional_accessor* right_key_element_ids, uint32_t key_element_count, semi_join_type stype, uint32_t min_part_size);
 
 operator_desc* insert_scan_operator_descriptor(query_plan_desc* qpd, const fetched_table* ftabl, int output_flags, int additional_flags);
-operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags);
 
 void destroy_query_plan_descriptor(query_plan_desc* qpd);
 

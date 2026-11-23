@@ -1588,68 +1588,6 @@ operator_desc* insert_hash_semi_join_operator_descriptor(query_plan_desc* qpd, o
 }
 
 // ---------------------------------------------------------------------------------------------------
-// table write / lookup ops : output schema is the same flag-based context tuple as the scan operator
-// ---------------------------------------------------------------------------------------------------
-
-operator_desc* insert_pointer_lookup_operator_descriptor(query_plan_desc* qpd, operator_desc* input_operator_desc, const positional_accessor* partition_id_from_source_positional_accessor, const positional_accessor* tuple_pointer_from_source_positional_accessor, const fetched_table* ftabl, uint64_t lookup_batch_size, int output_flags, int additional_flags)
-{
-	if(input_operator_desc == NULL || !does_query_plan_descriptor_contains_operator_descriptor(qpd, input_operator_desc))
-	{
-		printf("input_operator_desc invalid for pointer_lookup_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(input_operator_desc->consumers_count > 0)
-	{
-		printf("an input_operator_desc already has a consumer for pointer_lookup_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(qpd->curr_tx->snapshot == NULL)
-	{
-		printf("must have a snapshot for pointer_lookup_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(ftabl == NULL)
-	{
-		printf("ftabl can not be NULL for pointer_lookup_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(lookup_batch_size == 0)
-	{
-		printf("must have a non-zero lookup_batch_size for pointer_lookup_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(input_operator_desc->output_tuple_def == NULL)
-	{
-		printf("input operator descriptor has no output_tuple_def for pointer_lookup_operator_descriptor\n");
-		return NULL;
-	}
-
-	if(output_flags == 0)
-	{
-		printf("must have non-zero output_flags for scan_operator_descriptor\n");
-		return NULL;
-	}
-
-	operator_resource_counter result = {.buffer_counter = 1, .job_counter = 1, .thread_counter = 1}; // read lock a page, read tuples and exit, so 1 buffer atmost
-
-	operator_desc* d = get_new_registered_operator_descriptor_for_query_plan_descriptor(qpd, OP_POINTER_LOOKUP);
-	d->params.pointer_lookup = (pointer_lookup_operator_params){input_operator_desc->index, deep_clone_positional_accessors(partition_id_from_source_positional_accessor, 1), deep_clone_positional_accessors(tuple_pointer_from_source_positional_accessor, 1), ftabl, lookup_batch_size, output_flags, additional_flags};
-	d->output_tuple_def = get_scan_dml_output_tuple_def(qpd->curr_tx->rdb, ftabl, output_flags);
-	d->resource_counter = result;
-
-	input_operator_desc->consumers_count++;
-
-	qpd->output_tuple_def = d->output_tuple_def;
-
-	return d;
-}
-
-// ---------------------------------------------------------------------------------------------------
 // destroy : free everything the descriptor owns, like each operator's free_resources() does
 // ---------------------------------------------------------------------------------------------------
 
@@ -1719,7 +1657,6 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 				break;
 			}
 			case OP_SCAN :
-			case OP_POINTER_LOOKUP :
 			{
 				if(output_tuple_def != NULL)
 					destroy_scan_dml_output_tuple_def(output_tuple_def);
@@ -1773,10 +1710,6 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 			case OP_HASH_SEMI_JOIN :
 				free_positional_accessors(d->params.hash_semi_join.left_key_element_ids, d->params.hash_semi_join.key_element_count);
 				free_positional_accessors(d->params.hash_semi_join.right_key_element_ids, d->params.hash_semi_join.key_element_count);
-				break;
-			case OP_POINTER_LOOKUP :
-				free_positional_accessors(d->params.pointer_lookup.partition_id_from_source_positional_accessor, 1);
-				free_positional_accessors(d->params.pointer_lookup.tuple_pointer_from_source_positional_accessor, 1);
 				break;
 			default :
 				break;

@@ -62,6 +62,5 @@ void open_hash_semi_join_operator(operator* o);
 //-------------------------------------
 
 void open_scan_operator(operator* o);
-static void open_pointer_lookup_operator(operator* o){}
 
 #endif

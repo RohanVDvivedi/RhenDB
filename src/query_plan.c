@@ -183,9 +183,6 @@ query_plan* get_new_query_plan(const query_plan_desc* desc)
 			case OP_SCAN :
 				open_scan_operator(o);
 				break;
-			case OP_POINTER_LOOKUP :
-				open_pointer_lookup_operator(o);
-				break;
 		}
 
 		if(!push_back_to_arraylist(&(qp->operators), o))
