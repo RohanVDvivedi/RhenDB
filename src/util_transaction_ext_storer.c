@@ -54,7 +54,7 @@ void* tx_temp_store_tbj(const char* data, uint32_t data_size, const data_type_in
 					break;
 				bytes_written += bytes_written_this_iteration;
 
-				fix_unused_space_entries_in_store(tx, temp_ext_store);
+				//fix_unused_space_entries_in_store(tx, temp_ext_store);
 			}
 		}
 
@@ -140,7 +140,7 @@ void* tx_temp_store_numeric(mpd_t* number, const data_type_info* ext_type_info, 
 						break;
 					digits_written += digits_written_this_iteration;
 
-					fix_unused_space_entries_in_store(tx, temp_ext_store);
+					//fix_unused_space_entries_in_store(tx, temp_ext_store);
 				}
 			}
 

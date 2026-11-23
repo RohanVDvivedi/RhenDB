@@ -110,7 +110,7 @@ static int append_bytes(const aggregate_function* af_p, concat_state* state, con
 					bytes_written += bytes_written_this_iteration;
 					state->bytes_appended += bytes_written_this_iteration;
 
-					fix_unused_space_entries_in_store(cc->tx, state->temp_ext_store);
+					//fix_unused_space_entries_in_store(cc->tx, state->temp_ext_store);
 				}
 			}
 		}
@@ -121,7 +121,10 @@ static int append_bytes(const aggregate_function* af_p, concat_state* state, con
 	delete_binary_write_iterator(wr, NULL, &abort_error_dummy);
 
 	if(state->temp_ext_store != NULL)
+	{
+		fix_unused_space_entries_in_store(cc->tx, state->temp_ext_store);
 		write_unlock(&(state->temp_ext_store->blob_store_lock));
+	}
 
 	return 1;
 }
