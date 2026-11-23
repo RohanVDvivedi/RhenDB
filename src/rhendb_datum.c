@@ -27,6 +27,16 @@ static int get_containee_from_rhendb_datum(rhendb_datum* uval_c, const data_type
 			(*dti_c) = get_data_type_info_for_containee_of_container_without_data(dti, index);
 			(*uval_c) = (*(uval->as_arr_datum[index]));
 
+			while(uval_c->type == REF_DATUM)
+			{
+				rhendb_datum src_uval;
+				const data_type_info* dti_temp;
+				if(!get_nested_containee_from_rhendb_datum(&src_uval, &dti_temp, uval_c->as_ref_datum.src_datum, uval_c->as_ref_datum.src_dti, *(uval_c->as_ref_datum.src_pos)))
+					return 0;
+
+				(*uval_c) = src_uval;
+			}
+
 			return 1;
 		}
 		default :
