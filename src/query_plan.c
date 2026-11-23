@@ -195,7 +195,7 @@ query_plan* get_new_query_plan(const query_plan_desc* desc)
 	return qp;
 }
 
-void* next_tuple_from_query_plan(query_plan* qp, int* error_code)
+const rhendb_datum* next_tuple_from_query_plan(query_plan* qp, int* error_code)
 {
 	operator* o = (operator*) get_back_of_arraylist(&(qp->operators));
 	return o->next_tuple(o, error_code);

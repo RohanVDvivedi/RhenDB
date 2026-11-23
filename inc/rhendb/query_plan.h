@@ -3,6 +3,8 @@
 
 #include<rhendb/query_plan_descriptor.h>
 
+#include<rhendb/rhendb_datum.h>
+
 #include<tuplestore/tuple_def.h>
 #include<tuplestore/tuple.h>
 
@@ -30,8 +32,10 @@ struct operator
 	// this includes the spilling state for the sort, hash joins, keyed-aggregations
 	void* state;
 
-	// the operator's main function that produces tuples until it dies or has nothing in it's input operators 
-	void* (*next_tuple)(operator* o, int* error_code);
+	// the operator's main function that produces tuples until it dies or has nothing in it's input operators
+	// the returned value is a pointer to rhendb_datum, and is managed by the returning operator
+	// NULL is returned on completion or on error
+	const rhendb_datum* (*next_tuple)(operator* o, int* error_code);
 
 	// destroy state of this operator
 	void (*destroy_state)(operator* o);
@@ -57,7 +61,7 @@ struct query_plan
 query_plan* get_new_query_plan(const query_plan_desc* desc);
 
 // calls next on the last operator of the query_plan
-void* next_tuple_from_query_plan(query_plan* qp, int* error_code);
+const rhendb_datum* next_tuple_from_query_plan(query_plan* qp, int* error_code);
 
 // calls destroy state on all and destroys the query_plan
 void destroy_query_plan(query_plan* qp);
