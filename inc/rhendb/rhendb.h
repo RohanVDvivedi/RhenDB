@@ -59,9 +59,6 @@ struct rhendb
 	// needs locks on table_names and type_names to synchronize itself
 	catalog_manager cat_mgr;
 
-	// hash_table_tuple+defs for use internal to the rash_table
-	hash_table_tuple_defs rash_httd;
-
 	// union type infos that are composed of volatile_rage_engine->*_extended_type_info and persistent_acid_rage_engine->*_extended_type_info
 	// the selected type will always be non-NULL, it acts like a union and when it is NULL, the whole type is NULL
 	// they only are created and come into existence as part of union_operator and merge_sorted_inputs_operator

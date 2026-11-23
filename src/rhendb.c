@@ -5,8 +5,6 @@
 
 #include<rhendb/transaction.h>
 
-#include<rhendb/rash_table.h>
-
 #include<rhendb/temp_file_dir_path.h>
 #include<rhendb/dir_clean_up.h>
 
@@ -279,9 +277,6 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 	// for lck_table
 	pthread_mutex_init(&(rdb->lock_manager_external_lock), NULL);
 	initialize_lock_manager(&(rdb->lck_table), &(rdb->lock_manager_external_lock), &((const lock_manager_notifier){rdb, notify_unblocked, notify_deadlocked}), &(rdb->volatile_rage_engine));
-
-	// for hash based query executions (hash-join, hash-groupby), we will need rash_table which needs rash_httd, hich get's initialized here, in this function
-	initialize_hash_table_tuple_defs_for_using_rash_table(rdb);
 }
 
 int is_unified_type_info(const data_type_info* dti_p)
