@@ -50,6 +50,8 @@ uint64_t hash_rhendb_tuple(const rhendb_datum* uval, const data_type_info* dti, 
 
 int compare_rhendb_datum(const rhendb_datum* uval1, const data_type_info* dti1, const rhendb_datum* uval2, const data_type_info* dti2, transaction* tx);
 
+int compare_rhendb_datums(const rhendb_datum* uvals1, data_type_info const * const * dtis1, const rhendb_datum* uvals2, data_type_info const * const * dtis2, const compare_direction* cmp_dir, uint32_t element_count, transaction* tx);
+
 int compare_rhendb_tuples(const rhendb_datum* uval1, const data_type_info* dti1, const positional_accessor* element_ids1, const rhendb_datum* uval2, const data_type_info* dti2, const positional_accessor* element_ids2, const compare_direction* cmp_dir, uint32_t element_count, transaction* tx);
 
 // must be called only on the root rhendb_datum
