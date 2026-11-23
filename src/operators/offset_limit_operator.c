@@ -12,7 +12,7 @@ struct op_state
 	tuples_down_counter limit_counter;
 };
 
-static void* next_tuple(operator* o, int* error_code)
+static const rhendb_datum* next_tuple(operator* o, int* error_code)
 {
 	// already dead
 	if(o->state == NULL)
@@ -22,13 +22,12 @@ static void* next_tuple(operator* o, int* error_code)
 
 	while(can_decrement_tuples_down_counter(&(this_state->offset_counter)))
 	{
-		void* tuple = this_state->input_operator->next_tuple(this_state->input_operator, error_code);
-		if(tuple == NULL)
+		const rhendb_datum* rtuple = this_state->input_operator->next_tuple(this_state->input_operator, error_code);
+		if(rtuple == NULL)
 		{
 			o->destroy_state(o);
 			return NULL;
 		}
-		free(tuple);
 		decrement_tuples_down_counter(&(this_state->offset_counter));
 	}
 
@@ -38,14 +37,14 @@ static void* next_tuple(operator* o, int* error_code)
 		return NULL;
 	}
 
-	void* tuple = this_state->input_operator->next_tuple(this_state->input_operator, error_code);
-	if(tuple == NULL)
+	const rhendb_datum* rtuple = this_state->input_operator->next_tuple(this_state->input_operator, error_code);
+	if(rtuple == NULL)
 	{
 		o->destroy_state(o);
 		return NULL;
 	}
 	decrement_tuples_down_counter(&(this_state->limit_counter));
-	return tuple;
+	return rtuple;
 }
 
 static void destroy_state(operator* o)
