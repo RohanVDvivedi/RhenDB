@@ -98,7 +98,7 @@ static void destroy_state(operator* o)
 	{
 		op_state* this_state = o->state;
 
-		if(this_state->curr_tuple)
+		if(this_state->curr_tuple != NULL)
 			free(this_state->curr_tuple);
 
 		free(this_state);
