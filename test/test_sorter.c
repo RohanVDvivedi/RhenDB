@@ -40,11 +40,11 @@ int main(int argc, char** argv)
 
 	rhendb rdb;
 	initialize_rhendb(&rdb, "./test.db",
-		5,
-		512, 8, 80, 80,
+		8,
+		8192, 16, 128 * 1024 * 1024 / 4096, 32 * 1024 * 1024 / 512,
 			10000ULL, 100000ULL,
 			10000000ULL,
-		4096,
+		8192,
 			10000000ULL,
 		USERS_COUNT);
 	printf("database initialized\n\n");
