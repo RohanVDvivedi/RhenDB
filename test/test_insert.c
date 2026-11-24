@@ -187,15 +187,18 @@ int main()
 
 		query_plan* qp = get_new_query_plan(qpd);
 
+		uint64_t scan_counter = 0;
 		while(1)
 		{
 			int error_code = 0;
 			void* tuple = next_tuple_from_query_plan(qp, &error_code);
 			if(tuple == NULL)
 				break;
+			scan_counter++;
 			print_tuple(tuple, qp->desc->output_tuple_def);
 			free(tuple);
 		}
+		printf("post scan counted %"PRIu64" tuples\n", scan_counter);
 
 		destroy_query_plan(qp);
 
