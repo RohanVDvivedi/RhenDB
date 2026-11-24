@@ -142,7 +142,7 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p, int f
 		interim_tuple_store** part = &(partitions[child_partition_in_collection(hash_value, gtn_p->level)]);
 
 		if((*part) == NULL)
-			(*part) = get_new_interim_tuple_store(gt_p->min_bytes_to_mmap);
+			(*part) = get_new_interim_tuple_store(get_total_bytes_in_interim_tuple_store(gtn_p->partition) / PARTITIONS_PER_COLLECTION);
 
 		// append both the hash value and value tuple to this partition
 
