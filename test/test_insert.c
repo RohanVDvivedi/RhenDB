@@ -18,7 +18,7 @@
 
 #define USERS_COUNT 10
 
-#define SCAN_POST_INSERTS
+//#define SCAN_POST_INSERTS
 
 #define MIN_RUN_SIZE  (1024 * 1024)
 #define MIN_PART_SIZE (1024 * 1024)
@@ -151,7 +151,7 @@ int main()
 			void* tuple = next_tuple_from_query_plan(qp, &error_code);
 			if(tuple == NULL)
 				break;
-			print_tuple(tuple, qp->desc->output_tuple_def);
+			//print_tuple(tuple, qp->desc->output_tuple_def);
 			append_tuple_to_interim_tuple_store2(its_p, &(its_p->embed_regions[0]), tuple, &(qp->desc->output_tuple_def->size_def), 1024 * 1024);
 			free(tuple);
 		}
