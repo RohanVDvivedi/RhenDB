@@ -290,7 +290,13 @@ void deinitialize_rhendb(rhendb* rdb)
 
 	delete_resource_usage_limiter(rdb->bufferpool_usage_limiter, 0);
 
-	deinitialize_mini_transaction_engine((mini_transaction_engine*)(rdb->persistent_acid_rage_engine.context));
+	rdb->persistent_acid_rage_engine.destroy_rage_engine(&(rdb->persistent_acid_rage_engine));
+	rdb->volatile_rage_engine.destroy_rage_engine(&(rdb->volatile_rage_engine));
 
-	deinitialize_volatile_page_store((volatile_page_store*)(rdb->volatile_rage_engine.context));
+	free(rdb->union_text_type_info);
+	free(rdb->union_blob_type_info);
+	free(rdb->union_numeric_type_info);
+	free(rdb->union_jsonb_type_info);
+
+	free(rdb->mvcc_hdr_type_info);
 }
