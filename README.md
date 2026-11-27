@@ -5,12 +5,13 @@ A relational database storage engine, akin to InnoDB and PostgreSQL's storage en
 **Install dependencies :**
  * [Cutlery](https://github.com/RohanVDvivedi/Cutlery)
  * [ReaderWriterLock](https://github.com/RohanVDvivedi/ReaderWriterLock)
+ * [SerializableInteger](https://github.com/RohanVDvivedi/SerializableInteger)
  * [TupleStore](https://github.com/RohanVDvivedi/TupleStore)
  * [TupleIndexer](https://github.com/RohanVDvivedi/TupleIndexer)
  * [TupleLargeTypes](https://github.com/RohanVDvivedi/TupleLargeTypes)
  * [MinTxEngine](https://github.com/RohanVDvivedi/MinTxEngine)
  * [VolatilePageStore](https://github.com/RohanVDvivedi/VolatilePageStore)
- * [SerializableInteger](https://github.com/RohanVDvivedi/SerializableInteger)
+ * [RageEngine](https://github.com/RohanVDvivedi/RageEngine)
 
 **Download source code :**
  * `git clone https://github.com/RohanVDvivedi/RhenDB.git`
@@ -24,7 +25,7 @@ A relational database storage engine, akin to InnoDB and PostgreSQL's storage en
  * ***Once you have installed from source, you may discard the build by*** `make clean`
 
 ## Using The library
- * add `-lrhendb -lsqltoast -lmintxengine -ltuplelargetypes -lmpdec -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lm -lz` linker flag, while compiling your application
+ * add `-lrhendb -lsqltoast -lrageengine -lmintxengine -ltuplelargetypes -lmpdec -lvolatilepagestore -ltupleindexer -ltuplestore -lbufferpool -lwale -lblockio -llockking -lboompar -lcutlery -lm -lz` linker flag, while compiling your application
  * do not forget to include appropriate public api headers as and when needed. this includes
    * `#include<rhendb/rhendb.h>`
    * `#include<rhendb/transaction_table.h>`

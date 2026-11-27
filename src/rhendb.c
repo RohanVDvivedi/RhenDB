@@ -1,8 +1,5 @@
 #include<rhendb/rhendb.h>
 
-#include<rhendb/rage_engine_min_tx_engine.h>
-#include<rhendb/rage_engine_volatile_page_store.h>
-
 #include<rhendb/transaction.h>
 
 #include<rhendb/temp_file_dir_path.h>
@@ -219,7 +216,7 @@ void initialize_rhendb(rhendb* rdb, const char* database_file_name,
 	// allocate 45% more bufferpool buffers to avail some buffers to be used even when there is flush going on on 30% of the pages
 	rdb->persistent_acid_rage_engine = get_rage_engine_for_min_tx_engine(database_file_name, page_size_mte, page_id_width, lsn_width, bufferpool_frame_count * 1.45, wale_buffer_count, page_latch_wait_us, page_lock_wait_us, checkpoint_period_us, 2 * 1000000, 200 * 1000000);
 
-	rdb->volatile_rage_engine = get_rage_engine_for_volatile_page_store(page_size_vps, page_id_width, truncator_period_us);
+	rdb->volatile_rage_engine = get_rage_engine_for_volatile_page_store(VOLATILE_PAGE_STORE_DIR_PATH, page_size_vps, page_id_width, truncator_period_us);
 
 	// create a type_info that can describe any mvcc_header in the system
 	rdb->mvcc_hdr_type_info = get_mvcc_header_type_info(TRANSACTION_ID_WIDTH);

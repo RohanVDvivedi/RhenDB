@@ -8,7 +8,9 @@
 #include<boompar/resource_usage_limiter.h>
 #include<boompar/executor.h>
 
-#include<rhendb/rage_engine.h>
+#include<rageengine/rage_engine.h>
+#include<rageengine/rage_engine_min_tx_engine.h>
+#include<rageengine/rage_engine_volatile_page_store.h>
 
 #include<tupleindexer/hash_table/hash_table.h>
 
