@@ -1,7 +1,7 @@
 #ifndef CATALOG_MANAGER_H
 #define CATALOG_MANAGER_H
 
-#include<rhendb/rage_engine.h>
+#include<rageengine/rage_engine.h>
 
 #include<rhendb/mvcc_header.h>
 #include<rhendb/mvcc_snapshot.h>

@@ -2,7 +2,7 @@
 #define TRANSACTION_H
 
 #include<rhendb/mvcc_snapshot.h>
-#include<rhendb/rage_engine.h>
+#include<rageengine/rage_engine.h>
 
 #include<lockking/rwlock.h>
 
