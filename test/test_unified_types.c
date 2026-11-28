@@ -259,12 +259,12 @@ int main()
 		compare_direction CMP_DIR[1] = {ASC};
 
 		{
-			operator_desc* scanner = insert_scan_operator_descriptor(qpd, ftbl, HEAP_TUPLE_IN_OUTPUT, 0);
+			operator_desc* scanner = insert_scan_operator_descriptor(qpd, ftbl, HEAP_TUPLE_ONLY_IN_OUTPUT, 0);
 
 			operator_desc* proj = insert_projection_operator_descriptor(qpd, scanner, "projecteds", (projection_description[]){
-				project_from("column1", STATIC_POSITION(0,1)),
-				project_from("column2", STATIC_POSITION(0,2)),
-				project_from("column3", STATIC_POSITION(0,3)),
+				project_from("column1", STATIC_POSITION(1)),
+				project_from("column2", STATIC_POSITION(2)),
+				project_from("column3", STATIC_POSITION(3)),
 			}, 3);
 
 			operator_desc* cdata = insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def);
