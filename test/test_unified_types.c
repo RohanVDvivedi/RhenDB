@@ -89,11 +89,7 @@ int main()
 	tx.snapshot = get_new_transaction_id(&(rdb.tx_table), NULL);
 
 	// create a table
-	uint64_t table_id = create_table(&(rdb.cat_mgr), tx.snapshot, "my_table", (const rhendb_attribute[4]){
-		{
-			.attribute_name = "mvcc_hdr",
-			.base_type = RHENDB_MVCC_HEADER,
-		},
+	uint64_t table_id = create_table(&(rdb.cat_mgr), tx.snapshot, "my_table", (const rhendb_attribute[3]){
 		{
 			.attribute_name = "key",
 			.base_type = RHENDB_TEXT,
@@ -106,7 +102,7 @@ int main()
 			.attribute_name = "value_numeric",
 			.base_type = RHENDB_NUMERIC,
 		},
-	}, 4);
+	}, 3);
 
 	// append 1 savepoint
 	insert_new_savepoint(&tx, &get_dstring_pointing_to_literal_cstring("savepoint-1"));

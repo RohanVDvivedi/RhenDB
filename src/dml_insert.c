@@ -98,7 +98,7 @@ static int build_heap_record_without_extensions(const tuple_def* partition_tuple
 	*ext_col_data_size = 0;
 	memmove(heap_record_without_extensions, inited_heap_record, inited_heap_record_size);
 
-	for(uint32_t i = 0; i < partition_tuple_def->type_info->element_count; i++)
+	for(uint32_t i = 0; i < partition_tuple_def->type_info->containees[1].al.type_info->element_count; i++)
 	{
 		const data_type_info* src_dti;
 		datum src;
@@ -331,8 +331,7 @@ uint64_t dml_insert(
 	initialize_heap_table_accumulative_notifier(&local_blob_htan, HTAN_CAPACITY);
 
 	// every record inserted by this call starts from this template: xmin = self transaction, xmax NULL
-	uint32_t inited_heap_record_size = get_minimum_tuple_size(partition_tuple_def);
-	void* inited_heap_record = malloc(inited_heap_record_size);
+	void* inited_heap_record = malloc(engine->pam_p->pas.page_size);
 	init_tuple(partition_tuple_def, inited_heap_record);
 	{
 		tuple_def mvcc_def;
@@ -349,6 +348,7 @@ uint64_t dml_insert(
 		set_element_in_tuple(partition_tuple_def, STATIC_POSITION(0), inited_heap_record, &(datum){.tuple_value = mvcc_header_serialized}, UINT32_MAX);
 	}
 	set_element_in_tuple(partition_tuple_def, STATIC_POSITION(1), inited_heap_record, EMPTY_DATUM, UINT32_MAX);
+	uint32_t inited_heap_record_size = get_tuple_size(partition_tuple_def, inited_heap_record);
 
 	void* heap_record_without_extensions = malloc(engine->pam_p->pas.page_size);
 	void* heap_record_with_extensions = malloc(engine->pam_p->pas.page_size);

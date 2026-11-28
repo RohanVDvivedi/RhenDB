@@ -156,7 +156,7 @@ tuple_def* get_scan_dml_output_tuple_def(rhendb* rdb, const fetched_table* ftabl
 
 		if(MUST_OUTPUT_MVCC_HEADER(output_flags))
 		{
-			strncpy(output_dti->containees[output_dti_element_count].field_name, "mvcc_hdr", 64);
+			strncpy(output_dti->containees[output_dti_element_count].field_name, "mvcc_header", 64);
 			output_dti->containees[output_dti_element_count].al.type_info = rdb->mvcc_hdr_type_info;
 
 			output_tuple_max_size += output_dti->containees[output_dti_element_count].al.type_info->is_variable_sized ? (8 + output_dti->containees[output_dti_element_count].al.type_info->max_size) : (1 + output_dti->containees[output_dti_element_count].al.type_info->size);

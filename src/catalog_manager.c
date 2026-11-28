@@ -2180,12 +2180,6 @@ static data_type_info* get_data_type_info_for_rhendb_attribute(catalog_manager* 
 			return NULL;
 		}
 
-		case RHENDB_TUPLE_POINTER :
-			return &(catmgr_p->catmgr_engine->pam_p->pas.tuple_pointer_type_info); break;
-
-		case RHENDB_MVCC_HEADER :
-			return catmgr_p->mvcc_header_tuple_def.type_info; break;
-
 		case RHENDB_STRING :
 			return get_text_inline_type_info(attr.size); break;
 
@@ -2254,15 +2248,45 @@ static data_type_info* get_data_type_info_for_rhendb_table_partition(catalog_man
 		exit(-1);
 	}
 
-	data_type_info* partition_dti_p = get_tuple_data_type_info_from_attributes(catmgr_p, ss_p, owning_table->name, 0, table_partition.table_id, table_partition.partition_id, min_tx_id, abort_error);
+	data_type_info* data_tuple_dti = get_tuple_data_type_info_from_attributes(catmgr_p, ss_p, owning_table->name, 0, table_partition.table_id, table_partition.partition_id, min_tx_id, abort_error);
+	if(*abort_error)
+	{
+		free(owning_table);
+		return NULL;
+	}
+
+	data_type_info* partition_dti_p = malloc(sizeof_tuple_data_type_info(2));
+
+	strncpy(partition_dti_p->containees[0].field_name, "mvcc_header", 64);
+	partition_dti_p->containees[0].al.type_info = catmgr_p->mvcc_header_tuple_def.type_info;
+
+	strncpy(partition_dti_p->containees[1].field_name, owning_table->name, 64);
+	partition_dti_p->containees[1].al.type_info = data_tuple_dti;
+
+	initialize_tuple_data_type_info(partition_dti_p, owning_table->name, 0, catmgr_p->catmgr_engine->pam_p->pas.page_size, 2);
+
 	free(owning_table);
 	return partition_dti_p;
 }
 
-// tuple data_type_info describing an index key, from the attributes owned by the index, labelled with the index's name
+// tuple data_type_info describing an index entry, from the attributes owned by the index, labelled with the index's name
 static data_type_info* get_data_type_info_for_rhendb_index(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, rhendb_index index, const void* min_tx_id, int* abort_error)
 {
-	return get_tuple_data_type_info_from_attributes(catmgr_p, ss_p, index.name, 0, index.id, 0, min_tx_id, abort_error);
+	data_type_info* data_tuple_dti = get_tuple_data_type_info_from_attributes(catmgr_p, ss_p, index.name, 0, index.id, 0, min_tx_id, abort_error);
+	if(*abort_error)
+		return NULL;
+
+	data_type_info* index_dti = malloc(sizeof_tuple_data_type_info(2));
+
+	strncpy(index_dti->containees[0].field_name, index.name, 64);
+	index_dti->containees[0].al.type_info = data_tuple_dti;
+
+	strncpy(index_dti->containees[1].field_name, "tuple_pointer", 64);
+	index_dti->containees[1].al.type_info = &(catmgr_p->catmgr_engine->pam_p->pas.tuple_pointer_type_info);
+
+	initialize_tuple_data_type_info(index_dti, index.name, 0, catmgr_p->catmgr_engine->pam_p->pas.page_size, 2);
+
+	return index_dti;
 }
 
 static int insert_in_catalog_heap_table(catalog_manager* catmgr_p, catalog_heap_table* hpt_p, tuple_pointer* tptr, void const * const * heap_tuples, uint32_t heap_tuples_count, const void* min_tx_id, int* abort_error)
@@ -2431,15 +2455,10 @@ static int do_attributes_have_unique_names(const rhendb_attribute* attrs, uint32
 
 uint64_t create_table(catalog_manager* catmgr_p, const mvcc_snapshot* ss_p, char* name, const rhendb_attribute* attrs, uint32_t attrs_count)
 {
-	if(attrs_count <= 1)
+	// takes only the real data columns (at least one), never a mvcc-header attribute
+	if(attrs_count == 0)
 	{
-		printf("ISSUE in (catalog_manager) :: create_table needs more than one attrs_count\n");
-		return 0; // logical failure, not a fatal bug
-	}
-
-	if(attrs[0].base_type != RHENDB_MVCC_HEADER)
-	{
-		printf("ISSUE in (catalog_manager) :: create_table needs first attribute as a mvcc-header\n");
+		printf("ISSUE in (catalog_manager) :: create_table needs a non-zero attrs_count\n");
 		return 0; // logical failure, not a fatal bug
 	}
 
@@ -2654,26 +2673,37 @@ static uint64_t create_index_fragment_root_page_id(catalog_manager* catmgr_p, co
 	if(*abort_error)
 		goto ABORT_ERROR;
 
-	uint32_t attribute_count = fragment_record_data_type_info->element_count;
+	// the external index type_info is [ mvcc_header , <data tuple> , tuple_pointer ]; the real key columns live inside the
+	// nested data tuple at top-level position 1, the implicit tuple_pointer is top-level position 2, and the mvcc header at
+	// position 0 is never part of a key. the data column count matches the stored index attributes.
+	uint32_t data_count = fragment_record_data_type_info->containees[1].al.type_info->element_count;
 
-	// the key is all the attributes, but for a hash index a trailing tuple_pointer attribute is not part of the key
-	uint32_t key_element_count = attribute_count;
-	if(index.access_method == RHENDB_HASH && attribute_count > 0 && fragment_record_data_type_info->containees[attribute_count - 1].al.type_info == &(engine->pam_p->pas.tuple_pointer_type_info))
-		key_element_count = attribute_count - 1;
+	// the key is all the data columns, and -- exactly as before -- the trailing tuple_pointer is part of the key for a
+	// b+tree index but not for a hash index
+	int tuple_pointer_in_key = (index.access_method != RHENDB_HASH);
+	uint32_t key_element_count = data_count + (tuple_pointer_in_key ? 1 : 0);
 
 	tuple_def fragment_record_def;
 	initialize_tuple_def(&fragment_record_def, fragment_record_data_type_info);
 
 	key_element_ids = malloc(sizeof(positional_accessor) * key_element_count);
 	key_compare_directions = malloc(sizeof(compare_direction) * key_element_count);
-	// STATIC_POSITION builds a positional_accessor pointing at a block scoped temporary, so it cannot be stored,
-	// we keep the positions in a persistent array of our own and point the accessors at it
-	key_element_positions = malloc(sizeof(uint32_t) * key_element_count);
-	for(uint32_t i = 0; i < key_element_count; i++)
+	// STATIC_POSITION builds a positional_accessor pointing at a block scoped temporary, so it cannot be stored, we keep
+	// the positions in a persistent array of our own and point the accessors at it.
+	key_element_positions = malloc(sizeof(uint32_t) * 2 * key_element_count);
+	for(uint32_t i = 0; i < data_count; i++)
 	{
-		key_element_positions[i] = i;
-		key_element_ids[i] = (positional_accessor){.positions_length = 1, .positions = &(key_element_positions[i])};
+		key_element_positions[2 * i + 0] = 1; // the data tuple is top-level element 1
+		key_element_positions[2 * i + 1] = i; // the i-th data column within it
+		key_element_ids[i] = (positional_accessor){.positions_length = 2, .positions = &(key_element_positions[2 * i])};
 		key_compare_directions[i] = index_attributes[i].cmp_dir;
+	}
+	if(tuple_pointer_in_key)
+	{
+		uint32_t k = data_count;
+		key_element_positions[2 * k + 0] = 2; // the tuple_pointer is top-level element 2
+		key_element_ids[k] = (positional_accessor){.positions_length = 1, .positions = &(key_element_positions[2 * k])};
+		key_compare_directions[k] = ASC;
 	}
 
 	if(index.access_method == RHENDB_HASH)

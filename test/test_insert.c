@@ -51,11 +51,7 @@ int main()
 	tx.snapshot = get_new_transaction_id(&(rdb.tx_table), NULL);
 
 	// create a table
-	uint64_t table_id = create_table(&(rdb.cat_mgr), tx.snapshot, "records", (const rhendb_attribute[13]){
-		{
-			.attribute_name = "mvcc_hdr",
-			.base_type = RHENDB_MVCC_HEADER,
-		},
+	uint64_t table_id = create_table(&(rdb.cat_mgr), tx.snapshot, "records", (const rhendb_attribute[12]){
 		{
 			.attribute_name = "num",
 			.base_type = RHENDB_UINT,
@@ -113,7 +109,7 @@ int main()
 			.base_type = RHENDB_FLOAT,
 			.size = sizeof(float),
 		},
-	}, 13);
+	}, 12);
 
 	// read cache version of the table called ftbl
 	fetched_table* ftbl = fetch_table_from_catalog_manager(&rdb, tx.snapshot, "records", table_id);
@@ -183,7 +179,7 @@ int main()
 	{
 		query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
-		insert_scan_operator_descriptor(qpd, ftbl, TABLE_ID_IN_OUTPUT | PARTITION_ID_OUTPUT | TUPLE_POINTER_IN_OUTPUT | MVCC_HEADER_IN_OUTPUT | HEAP_TUPLE_IN_OUTPUT, 0);
+		insert_scan_operator_descriptor(qpd, ftbl, TABLE_ID_IN_OUTPUT | PARTITION_ID_IN_OUTPUT | TUPLE_POINTER_IN_OUTPUT | MVCC_HEADER_IN_OUTPUT | HEAP_TUPLE_IN_OUTPUT, 0);
 
 		query_plan* qp = get_new_query_plan(qpd);
 
