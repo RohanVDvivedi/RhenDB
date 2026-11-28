@@ -2215,6 +2215,8 @@ static data_type_info* get_tuple_data_type_info_from_attributes(catalog_manager*
 	if(*abort_error)
 		return NULL;
 
+	uint32_t max_size = 8;
+
 	data_type_info* tuple_dti_p = malloc(sizeof_tuple_data_type_info(attrs_count));
 	for(uint32_t i = 0; i < attrs_count; i++)
 	{
@@ -2229,8 +2231,15 @@ static data_type_info* get_tuple_data_type_info_from_attributes(catalog_manager*
 		}
 		strncpy(tuple_dti_p->containees[i].field_name, attrs[i].attribute_name, 64);
 		tuple_dti_p->containees[i].al.type_info = containee_dti_p;
+
+		if(tuple_dti_p->containees[i].al.type_info->type == BIT_FIELD)
+			max_size += 9;
+		else
+			max_size += tuple_dti_p->containees[i].al.type_info->is_variable_sized ? (8 + tuple_dti_p->containees[i].al.type_info->max_size) : (1 + tuple_dti_p->containees[i].al.type_info->size);
 	}
-	initialize_tuple_data_type_info(tuple_dti_p, type_name, is_nullable, catmgr_p->catmgr_engine->pam_p->pas.page_size, attrs_count);
+
+	initialize_tuple_data_type_info(tuple_dti_p, type_name, is_nullable, max_size, attrs_count);
+
 	free(attrs);
 	return tuple_dti_p;
 }
