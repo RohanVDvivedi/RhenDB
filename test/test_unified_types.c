@@ -197,7 +197,7 @@ int main()
 	{
 		query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
-		insert_scan_operator_descriptor(qpd, ftbl, HEAP_TUPLE_IN_OUTPUT, 0);
+		insert_scan_operator_descriptor(qpd, ftbl, HEAP_TUPLE_ONLY_IN_OUTPUT, 0);
 
 		query_plan* qp = get_new_query_plan(qpd);
 
@@ -261,15 +261,9 @@ int main()
 		{
 			operator_desc* scanner = insert_scan_operator_descriptor(qpd, ftbl, HEAP_TUPLE_ONLY_IN_OUTPUT, 0);
 
-			operator_desc* proj = insert_projection_operator_descriptor(qpd, scanner, "projecteds", (projection_description[]){
-				project_from("column1", STATIC_POSITION(1)),
-				project_from("column2", STATIC_POSITION(2)),
-				project_from("column3", STATIC_POSITION(3)),
-			}, 3);
-
 			operator_desc* cdata = insert_constant_dataset_operator_descriptor(qpd, its_p, &record_def);
 
-			operator_desc* union_op = insert_union_operator_descriptor(qpd, (operator_desc* []){proj, cdata}, 2);
+			operator_desc* union_op = insert_union_operator_descriptor(qpd, (operator_desc* []){scanner, cdata}, 2);
 
 			operator_desc* agg = insert_hash_aggregation_operator_descriptor(qpd, union_op, 1, key_pos, sizeof(AGGREGATES) / sizeof(aggregate_function*), AGGREGATES, AGGREGATE_INPUTS, MIN_PART_SIZE);
 

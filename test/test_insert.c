@@ -183,7 +183,7 @@ int main()
 	{
 		query_plan_desc* qpd = get_new_query_plan_descriptor(&tx, NULL);
 
-		insert_scan_operator_descriptor(qpd, ftbl, HEAP_TUPLE_IN_OUTPUT, 0);
+		insert_scan_operator_descriptor(qpd, ftbl, TABLE_ID_IN_OUTPUT | PARTITION_ID_OUTPUT | TUPLE_POINTER_IN_OUTPUT | MVCC_HEADER_IN_OUTPUT | HEAP_TUPLE_IN_OUTPUT, 0);
 
 		query_plan* qp = get_new_query_plan(qpd);
 
