@@ -113,6 +113,9 @@ tuple_def* get_scan_dml_output_tuple_def(rhendb* rdb, const fetched_table* ftabl
 	if(output_flags == 0)
 		return NULL;
 
+	if(MUST_OUTPUT_HEAP_TUPLE_ONLY(output_flags))
+		return &(ftabl->table_partition_tuple_defs[ftabl->partitions_count-1]);
+
 	tuple_def* output_tuple_def = malloc(sizeof(tuple_def));
 	data_type_info* output_dti = malloc(sizeof_tuple_data_type_info(4)); // may be over allocation
 
@@ -164,6 +167,63 @@ tuple_def* get_scan_dml_output_tuple_def(rhendb* rdb, const fetched_table* ftabl
 
 void* project_to_scan_dml_output_tuple_def(rhendb* rdb, const tuple_def* output_tuple_def, const fetched_table* ftabl, uint64_t partition_index_in_info, tuple_pointer tptr, const void* partition_tuple, int output_flags)
 {
+	if(MUST_OUTPUT_HEAP_TUPLE_ONLY(output_flags))
+	{
+		if((partition_index_in_info == (ftabl->partitions_count-1)) || (ftabl->table_partition_tuple_defs[partition_index_in_info].type_info == ftabl->table_partition_tuple_defs[ftabl->partitions_count-1].type_info)) // same partition output tuple as is
+		{
+			uint32_t tuple_size = get_tuple_size(&(ftabl->table_partition_tuple_defs[partition_index_in_info]), partition_tuple);
+			void* output_tuple = malloc(tuple_size);
+			memmove(output_tuple, partition_tuple, tuple_size);
+			return output_tuple;
+		}
+		else
+		{
+			void* output_tuple = malloc(get_maximum_tuple_size(output_tuple_def));
+			init_tuple(output_tuple_def, output_tuple);
+
+			const tuple_def* partition_tuple_def = &(ftabl->table_partition_tuple_defs[partition_index_in_info]);
+
+			const rhendb_attribute* partition_attrs = ftabl->table_partitions_attributes_info[partition_index_in_info];
+			const rhendb_attribute* final_attrs = ftabl->table_partitions_attributes_info[ftabl->partitions_count - 1];
+
+			uint32_t partition_element_count = ftabl->attributes_count_per_partition[partition_index_in_info];
+			uint32_t final_element_count = ftabl->attributes_count_per_partition[ftabl->partitions_count - 1];
+
+			// the mvcc_header at position 0 is common to every partition, so it is always copied over
+			set_element_in_tuple_from_tuple(output_tuple_def, STATIC_POSITION(0), output_tuple, partition_tuple_def, STATIC_POSITION(0), partition_tuple, UINT32_MAX);
+
+			// both the attributes arrays are ordered by their rel_pos_in_owner, so they are walked over
+			// together in a merge like O(N) fashion, matching the attributes that have identical rel_pos_in_owner
+			// p indexes the attributes of this partition, and f indexes the attributes of the last partition
+			uint32_t p = 1;
+			uint32_t f = 1;
+
+			while(p < partition_element_count && f < final_element_count)
+			{
+				// this attribute was dropped before the last partition, so it has no place to be projected to
+				if(partition_attrs[p].rel_pos_in_owner < final_attrs[f].rel_pos_in_owner)
+				{
+					p++;
+					continue;
+				}
+
+				// skipping is equal to setting it to NULL
+				if(final_attrs[f].rel_pos_in_owner < partition_attrs[p].rel_pos_in_owner)
+				{
+					f++;
+					continue;
+				}
+
+				set_element_in_tuple_from_tuple(output_tuple_def, STATIC_POSITION(f), output_tuple, partition_tuple_def, STATIC_POSITION(p), partition_tuple, UINT32_MAX);
+
+				p++;
+				f++;
+			}
+
+			return output_tuple;
+		}
+	}
+
 	void* output_tuple = malloc(get_maximum_tuple_size(output_tuple_def));
 	init_tuple(output_tuple_def, output_tuple);
 
@@ -246,11 +306,11 @@ void* project_to_scan_dml_output_tuple_def(rhendb* rdb, const tuple_def* output_
 	return output_tuple;
 }
 
-void destroy_scan_dml_output_tuple_def(tuple_def* output_tuple_def)
+void destroy_scan_dml_output_tuple_def(tuple_def* output_tuple_def, int output_flags)
 {
-	if(output_tuple_def != NULL)
-	{
-		free(output_tuple_def->type_info);
-		free(output_tuple_def);
-	}
+	if(output_tuple_def == NULL || MUST_OUTPUT_HEAP_TUPLE_ONLY(output_flags))
+		return ;
+
+	free(output_tuple_def->type_info);
+	free(output_tuple_def);
 }

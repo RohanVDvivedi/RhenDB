@@ -1722,7 +1722,7 @@ void destroy_query_plan_descriptor(query_plan_desc* qpd)
 			case OP_POINTER_LOOKUP :
 			{
 				if(output_tuple_def != NULL)
-					destroy_scan_dml_output_tuple_def(output_tuple_def);
+					destroy_scan_dml_output_tuple_def(output_tuple_def, d->params.scan.output_flags);
 				break;
 			}
 			default :

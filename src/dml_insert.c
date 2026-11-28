@@ -617,7 +617,7 @@ uint64_t dml_insert(
 		deinit_extended_column_data(&(ext_col_data[k]));
 	free(ext_col_data);
 	if(output_tuple_def != NULL)
-		destroy_scan_dml_output_tuple_def(output_tuple_def);
+		destroy_scan_dml_output_tuple_def(output_tuple_def, output_flags);
 
 	unmap_all_embed_regions_in_interim_tuple_store(its_p);
 	if(do_output)

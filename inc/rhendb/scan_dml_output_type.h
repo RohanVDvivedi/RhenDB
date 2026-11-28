@@ -1,10 +1,13 @@
 #ifndef TABLE_OPERATOR_OUTPUT_TYPE_H
 #define TABLE_OPERATOR_OUTPUT_TYPE_H
 
-#define TABLE_ID_IN_OUTPUT       1
-#define PARTITION_ID_IN_OUTPUT   2
-#define TUPLE_POINTER_IN_OUTPUT  4
-#define HEAP_TUPLE_IN_OUTPUT     8
+#define TABLE_ID_IN_OUTPUT           1
+#define PARTITION_ID_IN_OUTPUT       2
+#define TUPLE_POINTER_IN_OUTPUT      4
+#define HEAP_TUPLE_IN_OUTPUT         8
+#define HEAP_TUPLE_ONLY_IN_OUTPUT   16
+
+#define MUST_OUTPUT_HEAP_TUPLE_ONLY(flags)    ((flags) & HEAP_TUPLE_ONLY_IN_OUTPUT)
 
 #define MUST_OUTPUT_TABLE_ID(flags)           ((flags) & TABLE_ID_IN_OUTPUT)
 #define MUST_OUTPUT_PARTITION_ID(flags)       ((flags) & PARTITION_ID_IN_OUTPUT)

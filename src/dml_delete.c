@@ -257,7 +257,7 @@ uint64_t dml_delete(
 
 	deinitialize_pending_deletions(&to_be_deleted);
 	if(output_tuple_def != NULL)
-		destroy_scan_dml_output_tuple_def(output_tuple_def);
+		destroy_scan_dml_output_tuple_def(output_tuple_def, output_flags);
 
 	unmap_all_embed_regions_in_interim_tuple_store(its_p);
 	if(do_output)
