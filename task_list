@@ -1,29 +1,22 @@
 PICKED TASKS
 
- * scan operator to select and scan a few partitions
+ * scan operator to take input array of partitions_indices to scan, if NULL scan all of them
+ * pass an additional_flags to skip MVCC_VISIBILITY
 
  * pointer lookup operator on ftable, to take in partition_id and tuple pointer and batch it and look it up and return a tuple
+ * same output_flags and additional_flags to be supported
 
  * generate fetched_index that points to the fetched_table
 
  * dml_insert_index to take in FULL output of dml_insert and filter and project to get the tuple to be inserted
  * always insert text, blob and numeric by prefixing the bytes
+ * filter on predicate expression and project using derived expression into tuple layout, next_tuple one by one and insert into b+tree index
 
------------------------------------------------------------------
+ * index lookup operator
+   * int is_start_inclusive, datum* start, int is_last_inclusive, datum* last, key_element_count
 
-* index creation and usage operators
-
-  * btree_index_insertion_operator
-  * hash_index_insertion_operator
-
-  * index scan operators, do not check mvcc, and may need to recheck the expression once tuple_pointers are produced
-    * takes worker_count 1 for each partition
-    * btree_index_scan_operator
-    * hash_index_scan_operator
-
-  * index lookup functions that give out iterator on plausible results, may have false positives
-    * btree_index_nested_loop_join_operator
-    * hash_index_nested_loop_join_operator
+ * index_nested_loop_join -> left lookup, for each exists in right index, and right_expr != NULL and is true, output left
+ * index_nested_loop_semi_join -> left lookup, if exists in right index, and right_expr != NULL and is true, output left
 
 -----------------------------------------------------------------
 
@@ -71,3 +64,5 @@ FUTURE TASKS
  8.* support for user-defined expressioned-functions and aggregate-functions
 
  9.* additional responsibility for the grabage collector, to renew old tuples in older partition, and put them in newer latest partition to allow scan optimization over latter queries
+
+ 10.* hash index support
