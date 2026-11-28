@@ -67,6 +67,17 @@ fetched_table* fetch_table_from_catalog_manager(rhendb* rdb, const mvcc_snapshot
 		initialize_tuple_def(&(ftabl->table_partition_tuple_defs[i]), partition_type_info);
 	}
 
+	// reuse the last partition's type info if it is equal to any of the partitions before it
+	for(uint64_t i = 0; i < ftabl->partitions_count-1; i++)
+	{
+		// if i-th partition_id's type_info is identical to the last partition, then reuse it's type_info
+		if(are_identical_type_info(ftabl->table_partition_tuple_defs[i].type_info, ftabl->table_partition_tuple_defs[ftabl->partitions_count-1].type_info))
+		{
+			destroy_type_info_recursively(ftabl->table_partition_tuple_defs[i].type_info, NULL);
+			ftabl->table_partition_tuple_defs[i].type_info = ftabl->table_partition_tuple_defs[ftabl->partitions_count-1].type_info;
+		}
+	}
+
 	return ftabl;
 }
 
@@ -77,7 +88,9 @@ void destroy_fetched_table(fetched_table* ftabl)
 
 	for(uint64_t i = 0; i < ftabl->partitions_count; i++)
 	{
-		destroy_type_info_recursively(ftabl->table_partition_tuple_defs[i].type_info, NULL);
+		// must destroy the ith partition)id's type_info, only if it is last partitoon or is not the same as the last partition
+		if((i == (ftabl->partitions_count-1)) || (ftabl->table_partition_tuple_defs[i].type_info != ftabl->table_partition_tuple_defs[ftabl->partitions_count-1].type_info))
+			destroy_type_info_recursively(ftabl->table_partition_tuple_defs[i].type_info, NULL);
 
 		for(uint32_t j = 0; j < ftabl->attributes_count_per_partition[i]; j++)
 		{
@@ -178,7 +191,7 @@ void* project_to_scan_dml_output_tuple_def(rhendb* rdb, const tuple_def* output_
 
 	if(MUST_OUTPUT_HEAP_TUPLE(output_flags))
 	{
-		if(partition_index_in_info == ftabl->partitions_count-1) // same partition output tuple as is
+		if((partition_index_in_info == (ftabl->partitions_count-1)) || (ftabl->table_partition_tuple_defs[partition_index_in_info].type_info == ftabl->table_partition_tuple_defs[ftabl->partitions_count-1].type_info)) // same partition output tuple as is
 		{
 			set_element_in_tuple(output_tuple_def, STATIC_POSITION(attr_index), output_tuple, &((datum){.tuple_value = partition_tuple}), UINT32_MAX);
 		}
