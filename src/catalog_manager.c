@@ -2682,9 +2682,8 @@ static uint64_t create_index_fragment_root_page_id(catalog_manager* catmgr_p, co
 	if(*abort_error)
 		goto ABORT_ERROR;
 
-	// the external index type_info is [ mvcc_header , <data tuple> , tuple_pointer ]; the real key columns live inside the
-	// nested data tuple at top-level position 1, the implicit tuple_pointer is top-level position 2, and the mvcc header at
-	// position 0 is never part of a key. the data column count matches the stored index attributes.
+	// the external index type_info is [ <data tuple> , tuple_pointer ]; the real key columns live inside the
+	// nested data tuple at top-level position 0, the implicit tuple_pointer is top-level position 1.
 	uint32_t data_count = fragment_record_data_type_info->containees[0].al.type_info->element_count;
 
 	// the key is all the data columns, and -- exactly as before -- the trailing tuple_pointer is part of the key for a
