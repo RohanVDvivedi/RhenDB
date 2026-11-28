@@ -143,26 +143,22 @@ enum rhendb_base_type
 	RHENDB_INT = 2,          // size 1-32 in bytes
 	RHENDB_FLOAT = 3,        // either sizeof(float) or sizeof(double)
 
-	// default composite types
-	RHENDB_TUPLE_POINTER = 4,   // for index last attribute
-	RHENDB_MVCC_HEADER = 5,     // for mvcc headers as first attribute of the heap tuple
-
-	// inline basic variable length types, primarily used for indexing the below rhendb_base_types 9, 10 and 11
-	RHENDB_STRING = 6,
-	RHENDB_BINARY = 7,
-	RHENDB_NUMBER = 8,
+	// inline basic variable length types, primarily used for indexing the below rhendb_base_types 7, 8 and 9
+	RHENDB_STRING = 4,
+	RHENDB_BINARY = 5,
+	RHENDB_NUMBER = 6,
 
 	// non-extended types above
 	// extended types below
 
 	// extended versions of above types, these must go in the heap tables, inline versions to be used only for indexes
-	RHENDB_TEXT = 9,
-	RHENDB_BLOB = 10,
-	RHENDB_NUMERIC = 11,
+	RHENDB_TEXT = 7,
+	RHENDB_BLOB = 8,
+	RHENDB_NUMERIC = 9,
 
 	// any composition of the above types and the arrays for those types go here
 	// we do not have native composite types, instead a dynamic jsonb is used
-	RHENDB_JSONB = 12,
+	RHENDB_JSONB = 10,
 };
 
 typedef struct rhendb_attribute rhendb_attribute;
