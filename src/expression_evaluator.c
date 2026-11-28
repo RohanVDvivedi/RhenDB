@@ -3913,7 +3913,7 @@ projected_value project_using_evaluate_sql_expr_for_rhendb(sql_expression* expr,
 		if(v->type_info.type == RHENDB_EXPR_STRING || v->type_info.type == RHENDB_EXPR_BINARY)
 		{
 			res.buffer_to_free = malloc(get_char_count_dstring(&(v->string_value)));
-			memory_move(res.buffer_to_free, get_byte_array_dstring(&(v->string_value)), get_char_count_dstring(&(v->string_value)));
+			memmove(res.buffer_to_free, get_byte_array_dstring(&(v->string_value)), get_char_count_dstring(&(v->string_value)));
 			res.value = (datum){.string_or_binary_value = res.buffer_to_free, .string_or_binary_size = get_char_count_dstring(&(v->string_value))};
 		}
 		else

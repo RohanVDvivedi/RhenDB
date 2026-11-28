@@ -125,7 +125,7 @@ int partition_grash_table_node(grash_table* gt_p, grash_table_node* gtn_p, int f
 		// get hash value
 		mmap_for_reading_tuple(gtn_p->partition, &(gtn_p->partition->embed_regions[0]), offset, &(gt_p->hash_def.size_def), gt_p->min_bytes_to_mmap);
 		char hash_tuple_buffer[20];
-		memory_move(hash_tuple_buffer, gtn_p->partition->embed_regions[0].tuple, get_tuple_size(&(gt_p->hash_def), gtn_p->partition->embed_regions[0].tuple));
+		memmove(hash_tuple_buffer, gtn_p->partition->embed_regions[0].tuple, get_tuple_size(&(gt_p->hash_def), gtn_p->partition->embed_regions[0].tuple));
 		uint64_t hash_value = 0;
 		{
 			const data_type_info* dti_temp = NULL;

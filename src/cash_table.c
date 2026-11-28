@@ -94,7 +94,7 @@ cash_table_entry* get_new_cash_table_value_clone(const cash_table* ct_p, void* v
 {
 	uint32_t value_tuple_size = get_tuple_size(ct_p->value_def, value);
 	void* value_cloned = malloc(value_tuple_size);
-	memory_move(value_cloned, value, value_tuple_size);
+	memmove(value_cloned, value, value_tuple_size);
 	return get_new_cash_table_value_(ct_p, value_cloned, 1, optional_pre_computed_hash_value);
 }
 

@@ -226,7 +226,7 @@ static void* get_one_from_output_runs(operator* o)
 	// copy the top tuple of its_p into output_tuple
 	decrement_tuples_down_counter(&(this_state->output_runs_result_counter));
 	void* output_tuple = malloc(get_tuple_size(o->desc->output_tuple_def, its_p->embed_regions[0].tuple));
-	memory_move(output_tuple, its_p->embed_regions[0].tuple, get_tuple_size(o->desc->output_tuple_def, its_p->embed_regions[0].tuple));
+	memmove(output_tuple, its_p->embed_regions[0].tuple, get_tuple_size(o->desc->output_tuple_def, its_p->embed_regions[0].tuple));
 
 	// go next on its_p, and insert it back into mergeable_open_runs
 	{

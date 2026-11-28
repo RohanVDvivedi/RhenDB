@@ -327,7 +327,7 @@ static void* next_tuple(operator* o, int* error_code)
 				{
 					uint32_t left_tuple_size = get_tuple_size(this_state->left_tuple_def, left_tuple);
 					output_tuple = malloc(left_tuple_size);
-					memory_move(output_tuple, left_tuple, left_tuple_size);
+					memmove(output_tuple, left_tuple, left_tuple_size);
 				}
 			}
 			else
@@ -336,7 +336,7 @@ static void* next_tuple(operator* o, int* error_code)
 				{
 					uint32_t left_tuple_size = get_tuple_size(this_state->left_tuple_def, left_tuple);
 					output_tuple = malloc(left_tuple_size);
-					memory_move(output_tuple, left_tuple, left_tuple_size);
+					memmove(output_tuple, left_tuple, left_tuple_size);
 				}
 			}
 
