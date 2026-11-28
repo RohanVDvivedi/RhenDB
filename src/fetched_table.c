@@ -186,15 +186,25 @@ void* project_to_scan_dml_output_tuple_def(rhendb* rdb, const tuple_def* output_
 
 	if(MUST_OUTPUT_HEAP_TUPLE_ONLY(output_flags))
 	{
-		void* output_tuple = malloc(get_maximum_tuple_size(output_tuple_def));
-		init_tuple(output_tuple_def, output_tuple);
-
 		if((partition_index_in_info == (ftabl->partitions_count-1)) || (ftabl->table_partition_tuple_defs[partition_index_in_info].type_info == ftabl->table_partition_tuple_defs[ftabl->partitions_count-1].type_info)) // same partition output tuple as is
 		{
-			set_element_in_tuple_from_tuple(output_tuple_def, SELF, output_tuple, partition_tuple_def, STATIC_POSITION(1), partition_tuple, UINT32_MAX);
+			const data_type_info* dti_temp;
+			datum data_inside_partition_tuple;
+			get_value_from_element_from_tuple(&data_inside_partition_tuple, &dti_temp, partition_tuple_def, STATIC_POSITION(1), partition_tuple);
+
+			uint32_t output_tuple_size = get_tuple_size(output_tuple_def, data_inside_partition_tuple.tuple_value);
+
+			void* output_tuple = malloc(output_tuple_size);
+
+			memmove(output_tuple, data_inside_partition_tuple.tuple_value, output_tuple_size);
+
+			return output_tuple;
 		}
 		else
 		{
+			void* output_tuple = malloc(get_maximum_tuple_size(output_tuple_def));
+			init_tuple(output_tuple_def, output_tuple);
+
 			const rhendb_attribute* partition_attrs = ftabl->table_partitions_attributes_info[partition_index_in_info];
 			const rhendb_attribute* final_attrs = ftabl->table_partitions_attributes_info[ftabl->partitions_count - 1];
 
@@ -228,10 +238,10 @@ void* project_to_scan_dml_output_tuple_def(rhendb* rdb, const tuple_def* output_
 				p++;
 				f++;
 			}
-		}
 
-		output_tuple = realloc(output_tuple, get_tuple_size(output_tuple_def, output_tuple));
-		return output_tuple;
+			output_tuple = realloc(output_tuple, get_tuple_size(output_tuple_def, output_tuple));
+			return output_tuple;
+		}
 	}
 
 	void* output_tuple = malloc(get_maximum_tuple_size(output_tuple_def));
