@@ -2702,7 +2702,7 @@ static uint64_t create_index_fragment_root_page_id(catalog_manager* catmgr_p, co
 	key_element_positions = malloc(sizeof(uint32_t) * 2 * key_element_count);
 	for(uint32_t i = 0; i < data_count; i++)
 	{
-		key_element_positions[2 * i + 0] = 1; // the data tuple is top-level element 1
+		key_element_positions[2 * i + 0] = 0; // the data tuple is top-level element 0
 		key_element_positions[2 * i + 1] = i; // the i-th data column within it
 		key_element_ids[i] = (positional_accessor){.positions_length = 2, .positions = &(key_element_positions[2 * i])};
 		key_compare_directions[i] = index_attributes[i].cmp_dir;
@@ -2710,7 +2710,7 @@ static uint64_t create_index_fragment_root_page_id(catalog_manager* catmgr_p, co
 	if(tuple_pointer_in_key)
 	{
 		uint32_t k = data_count;
-		key_element_positions[2 * k + 0] = 2; // the tuple_pointer is top-level element 2
+		key_element_positions[2 * k + 0] = 1; // the tuple_pointer is top-level element 1
 		key_element_ids[k] = (positional_accessor){.positions_length = 1, .positions = &(key_element_positions[2 * k])};
 		key_compare_directions[k] = ASC;
 	}
