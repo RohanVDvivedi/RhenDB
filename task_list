@@ -20,17 +20,13 @@ PICKED TASKS
 
 -----------------------------------------------------------------
 
-*locking mechanisms
+* locking mechanisms
 
- * schema_lock (shared exclusive) for table/index -> "schema":name:id
- * tuple_locks (shared exclusive) -> lock "tuple":table_id:partition_id:tuple_pointer -> on update or delete, lock the older version, newer version is not even visible
- * key_locks (shared exclusive) -> lock "key":hash-of-key allows uniqueness constraint
-
- * for auto_increment store a counter in the db_table object and increment it and return it
- * for unique constraint maintain a lock in lock_manager and hold lock on the 80-bit serialized hash value and then only check the unique btree index
-
- * hook to lock the older version in shared or exclusive mode upon scan
- * deletion may be allowed to wait or skip tuple it can not delete, decide on this policy and get back
+ * SCAN/DELETE -> only need the table to exist, lowest level lock
+ * INSERT/UPDATE -> needs to be to exist and no concurrent index_build happenning
+ * ADD/DROP_COLUMN/PARTITION/DROP_INDEX -> no concurrent same schema operation
+ * INDEX_BUILD -> no concurrent schema change and no concurrent INSERT/UPDATE
+ * DROP_TABLE -> fully eclusive lock
 
 -----------------------------------------------------------------
 
@@ -66,3 +62,5 @@ FUTURE TASKS
  9.* additional responsibility for the grabage collector, to renew old tuples in older partition, and put them in newer latest partition to allow scan optimization over latter queries
 
  10.* hash index support
+
+ 11.* dml_delete to check if the tuple being marked to be deleted is safe, policy may to skip/wait/abort on such a tuple, we can block only here
