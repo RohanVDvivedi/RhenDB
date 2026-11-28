@@ -142,7 +142,7 @@ tuple_def* get_scan_dml_output_tuple_def(rhendb* rdb, const fetched_table* ftabl
 		output_dti_element_count++;
 	}
 
-	initialize_tuple_data_type_info(output_dti, "table_tuple", 0, output_tuple_max_size, output_dti_element_count);
+	initialize_tuple_data_type_info(output_dti, ftabl->table_info.name, 0, output_tuple_max_size, output_dti_element_count);
 
 	initialize_tuple_def(output_tuple_def, output_dti);
 
