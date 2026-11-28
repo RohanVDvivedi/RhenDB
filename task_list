@@ -1,7 +1,6 @@
 PICKED TASKS
 
  * scan operator to select and scan a few partitions
- * scan to also support outputing only tuple, directly and no nested ness
 
  * pointer lookup operator on ftable, to take in partition_id and tuple pointer and batch it and look it up and return a tuple
 
