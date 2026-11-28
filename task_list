@@ -28,6 +28,11 @@ PICKED TASKS
  * INDEX_BUILD -> no concurrent schema change and no concurrent INSERT/UPDATE
  * DROP_TABLE -> fully eclusive lock
 
+* tuple level locks (*later) (check if these lock can be released after the insert)
+ * uniqueness constraint, lock the unique key, check index and then insert
+ * auto-increment constraint, lock the table.column, make sure to get the associated counter increment and return that value
+ * tuple_pointer locks, lock the tuple pointer for serializable isolation level (surely can not release these locks)
+
 -----------------------------------------------------------------
 
 FUTURE TASKS
