@@ -245,7 +245,7 @@ struct rhendb_table
 typedef struct rhendb rhendb;
 
 // here the root_page_id is an in-out parameter, pass it as NULL_PAGE_ID to create a new transaction table, or an existing one to open that particular transaction_table
-void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine, transaction_status_getter* tsg_p, rhendb* rdb);
+void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, rage_engine* catmgr_engine, transaction_status_getter* tsg_p, rhendb* rdb);
 
 // note:: must exclusive_lock table/index by it's name before calling this DDL-write-like functions, and keep it locked until the transaction ends, for the below functions
 

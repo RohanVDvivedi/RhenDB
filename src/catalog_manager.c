@@ -711,8 +711,10 @@ const positional_accessor key_element_ids1[] = {STATIC_POSITION(1), STATIC_POSIT
 #define OWNER_TO_ATTRIBUTES_IDX_ROOT_PAGE_ID_POS   8
 #define EXT_STORE_ROOT_PAGE_ID_ROOT_PAGE_ID_POS    9
 
-void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, data_type_info* mvcc_hdr_dti_p, rage_engine* catmgr_engine, transaction_status_getter* tsg_p, rhendb* rdb)
+void initialize_catalog_manager(catalog_manager* catmgr_p, uint64_t* root_page_id, rage_engine* catmgr_engine, transaction_status_getter* tsg_p, rhendb* rdb)
 {
+	data_type_info* mvcc_hdr_dti_p = rdb->mvcc_hdr_type_info;
+
 	catmgr_p->union_text_type_info = rdb->union_text_type_info;
 	catmgr_p->union_blob_type_info = rdb->union_blob_type_info;
 	catmgr_p->union_numeric_type_info = rdb->union_numeric_type_info;
